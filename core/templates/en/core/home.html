@@ -1,0 +1,132 @@
+{% extends "base.html" %}
+{% load i18n %}
+
+{% block title %}{{ SITE_NAME }}{% endblock %}
+
+{% block content %}
+<!-- Hero Section -->
+<section class="bg-gray-50 border-b-2 border-gray-200">
+    <div class="container mx-auto px-4 py-20">
+        <div class="max-w-3xl">
+            <h1 class="text-5xl font-serif font-bold text-gray-900 mb-6">
+                {% trans "Welcome to" %} {{ SITE_NAME }}
+            </h1>
+            <p class="text-xl text-gray-700 mb-8 leading-relaxed">
+                {{ SITE_DESCRIPTION }}
+            </p>
+            <div class="flex gap-4">
+                <a href="{% url 'core:contact' %}" class="bg-primary text-white px-8 py-3 font-semibold hover:bg-opacity-90 transition-colors">
+                    {% trans "Contact Us" %}
+                </a>
+                <a href="{% url 'core:about' %}" class="border-2 border-primary text-primary px-8 py-3 font-semibold hover:bg-primary hover:text-white transition-colors">
+                    {% trans "Learn More" %}
+                </a>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Features Section -->
+<section class="py-16 bg-white">
+    <div class="container mx-auto px-4">
+        <div class="text-center mb-12">
+            <h2 class="text-4xl font-serif font-bold text-gray-900 mb-4">{% trans "Our Services" %}</h2>
+            <div class="w-24 h-1 bg-primary mx-auto"></div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+            <!-- Service 1 -->
+            <div class="border-2 border-gray-200 p-8 hover:border-primary transition-colors">
+                <div class="w-16 h-16 bg-primary text-white flex items-center justify-center mb-6 text-2xl font-bold">
+                    01
+                </div>
+                <h3 class="text-2xl font-serif font-bold text-gray-900 mb-4">{% trans "Professional Service" %}</h3>
+                <p class="text-gray-600 leading-relaxed">
+                    {% trans "Delivering excellence and professionalism in everything we do, with a focus on quality and customer satisfaction." %}
+                </p>
+            </div>
+
+            <!-- Service 2 -->
+            <div class="border-2 border-gray-200 p-8 hover:border-primary transition-colors">
+                <div class="w-16 h-16 bg-primary text-white flex items-center justify-center mb-6 text-2xl font-bold">
+                    02
+                </div>
+                <h3 class="text-2xl font-serif font-bold text-gray-900 mb-4">{% trans "Trusted Expertise" %}</h3>
+                <p class="text-gray-600 leading-relaxed">
+                    {% trans "Years of experience and industry knowledge ensure you receive the best guidance and solutions for your needs." %}
+                </p>
+            </div>
+
+            <!-- Service 3 -->
+            <div class="border-2 border-gray-200 p-8 hover:border-primary transition-colors">
+                <div class="w-16 h-16 bg-primary text-white flex items-center justify-center mb-6 text-2xl font-bold">
+                    03
+                </div>
+                <h3 class="text-2xl font-serif font-bold text-gray-900 mb-4">{% trans "Dedicated Support" %}</h3>
+                <p class="text-gray-600 leading-relaxed">
+                    {% trans "Our team is committed to providing ongoing support and assistance to help you achieve your goals." %}
+                </p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Call to Action -->
+<section class="bg-primary text-white py-16">
+    <div class="container mx-auto px-4 text-center">
+        <h2 class="text-3xl font-serif font-bold mb-6">
+            {% trans "Ready to work with us?" %}
+        </h2>
+        <p class="text-xl mb-8 max-w-2xl mx-auto opacity-90">
+            {% trans "Contact us today to discuss how we can help you achieve your business objectives." %}
+        </p>
+        <a href="{% url 'core:contact' %}" class="inline-block bg-white text-primary px-8 py-3 font-semibold hover:bg-gray-100 transition-colors">
+            {% trans "Get in Touch" %}
+        </a>
+    </div>
+</section>
+
+<!-- Testimonials Section -->
+<section class="py-16 bg-gray-50">
+    <div class="container mx-auto px-4">
+        <div class="text-center mb-12">
+            <h2 class="text-4xl font-serif font-bold text-gray-900 mb-4">{% trans "What Our Clients Say" %}</h2>
+            <div class="w-24 h-1 bg-primary mx-auto"></div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-5xl mx-auto">
+            <!-- Testimonial 1 -->
+            <div class="bg-white border-l-4 border-primary p-8 shadow-sm">
+                <p class="text-gray-700 italic mb-6 leading-relaxed">
+                    "{% trans "Outstanding service and professionalism. Highly recommended for anyone seeking quality and reliability." %}"
+                </p>
+                <div class="flex items-center">
+                    <div class="w-12 h-12 bg-primary text-white rounded-full flex items-center justify-center font-bold mr-4">
+                        JD
+                    </div>
+                    <div>
+                        <p class="font-semibold text-gray-900">John Doe</p>
+                        <p class="text-sm text-gray-600">CEO, Example Corp</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Testimonial 2 -->
+            <div class="bg-white border-l-4 border-primary p-8 shadow-sm">
+                <p class="text-gray-700 italic mb-6 leading-relaxed">
+                    "{% trans "Professional, efficient, and always delivering exceptional results. A pleasure to work with." %}"
+                </p>
+                <div class="flex items-center">
+                    <div class="w-12 h-12 bg-primary text-white rounded-full flex items-center justify-center font-bold mr-4">
+                        JS
+                    </div>
+                    <div>
+                        <p class="font-semibold text-gray-900">Jane Smith</p>
+                        <p class="text-sm text-gray-600">Director, Sample Inc</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+{% endblock %}

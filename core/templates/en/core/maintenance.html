@@ -1,0 +1,76 @@
+{% load static %}<!DOCTYPE html>
+<html lang="{{ LANGUAGE_CODE }}">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Maintenance - {{ SITE_NAME }}</title>
+    <meta name="robots" content="noindex, nofollow">
+    <link href="{% static 'css/styles.css' %}" rel="stylesheet">
+    <style>
+        .maintenance-icon {
+            font-size: 4rem;
+            margin-bottom: 1.5rem;
+            opacity: 0.8;
+        }
+        .pulse {
+            animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 0.8; }
+            50% { opacity: 0.5; }
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-blue-50 to-gray-100">
+    <div class="min-h-screen flex items-center justify-center px-4">
+        <div class="text-center max-w-2xl">
+            <!-- Maintenance Icon -->
+            <div class="maintenance-icon pulse">
+                🔧
+            </div>
+
+            <!-- Main Message -->
+            <h1 class="text-5xl font-bold text-gray-800 mb-4">
+                We'll be back soon!
+            </h1>
+
+            <p class="text-xl text-gray-600 mb-6">
+                Our site is currently undergoing scheduled maintenance.
+            </p>
+
+            <p class="text-gray-600 mb-8">
+                We apologize for any inconvenience. Please check back in a few moments.
+            </p>
+
+            <!-- Contact Info (if available) -->
+            {% if CONTACT_EMAIL %}
+            <div class="bg-white rounded-lg shadow-md p-6 inline-block">
+                <p class="text-sm text-gray-600 mb-2">Need immediate assistance?</p>
+                <p class="text-gray-800">
+                    <a href="mailto:{{ CONTACT_EMAIL }}" class="text-primary hover:underline font-semibold">
+                        {{ CONTACT_EMAIL }}
+                    </a>
+                </p>
+            </div>
+            {% endif %}
+
+            <!-- Retry Button -->
+            <div class="mt-8">
+                <button
+                    onclick="location.reload()"
+                    class="bg-primary text-white px-6 py-3 rounded-lg hover:bg-primary-dark transition-colors duration-200 font-semibold shadow-md"
+                >
+                    Try Again
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Auto-retry every 30 seconds
+        setTimeout(function() {
+            location.reload();
+        }, 30000);
+    </script>
+</body>
+</html>
