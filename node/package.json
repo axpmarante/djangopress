@@ -1,7 +1,7 @@
 {
-  "name": "get_algarve",
+  "name": "djangopress",
   "version": "1.0.0",
-  "description": "Corporate website",
+  "description": "DjangoPress - Reusable CMS blueprint with AI-powered content generation",
   "scripts": {
     "build:css": "tailwindcss -i ../static/css/tailwind.css -o ../static/css/styles.css --minify",
     "watch:css": "tailwindcss -i ../static/css/tailwind.css -o ../static/css/styles.css --watch"

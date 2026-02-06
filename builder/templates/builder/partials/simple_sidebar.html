@@ -1,0 +1,787 @@
+<!-- Simple Editor Sidebar -->
+<div id="editor-sidebar" class="editor-sidebar open">
+  <!-- Header -->
+  <div class="editor-sidebar-header">
+    <div class="editor-element-info">
+      <span class="editor-element-tag" id="editor-element-tag">Click an element</span>
+      <span class="editor-element-id" id="editor-element-id"></span>
+    </div>
+    <div class="editor-undo-redo">
+      <button id="editor-undo-btn" class="editor-icon-btn" title="Undo (Ctrl+Z)" disabled>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M3 7v6h6"/>
+          <path d="M21 17a9 9 0 00-9-9 9 9 0 00-6 2.3L3 13"/>
+        </svg>
+      </button>
+      <button id="editor-redo-btn" class="editor-icon-btn" title="Redo (Ctrl+Y)" disabled>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M21 7v6h-6"/>
+          <path d="M3 17a9 9 0 019-9 9 9 0 016 2.3l3 2.7"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- Tabs -->
+  <div class="editor-tabs">
+    <button class="editor-tab active" data-tab="content">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+        <path d="M2 4h12M2 8h12M2 12h8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+      </svg>
+      Content
+    </button>
+    <button class="editor-tab" data-tab="design">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+        <rect x="2" y="2" width="12" height="12" stroke="currentColor" stroke-width="2" fill="none"/>
+      </svg>
+      Design
+    </button>
+    <button class="editor-tab" data-tab="structure">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+        <path d="M2 2h12M2 8h12M6 2v12M10 2v12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+      </svg>
+      Structure
+    </button>
+    <button class="editor-tab editor-tab-ai" data-tab="ai" style="display: none;">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+        <circle cx="8" cy="5" r="2" fill="currentColor"/>
+        <circle cx="4" cy="11" r="2" fill="currentColor"/>
+        <circle cx="12" cy="11" r="2" fill="currentColor"/>
+        <path d="M8 7v2M6 11l2-2M10 11l-2-2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+      </svg>
+      AI
+    </button>
+  </div>
+
+  <!-- Tab Content -->
+  <div class="editor-tab-content">
+    <!-- Content Tab -->
+    <div id="editor-content-tab" class="editor-tab-panel active">
+      <div id="editor-content-fields">
+        <p class="editor-placeholder">Select an element to edit its content</p>
+      </div>
+    </div>
+
+    <!-- Design Tab -->
+    <div id="editor-design-tab" class="editor-tab-panel">
+      <div class="editor-field">
+        <label for="editor-classes-input">CSS Classes</label>
+        <textarea
+          id="editor-classes-input"
+          class="editor-textarea"
+          placeholder="text-4xl font-bold bg-blue-500..."
+          rows="4"
+        ></textarea>
+        <p class="editor-hint">Enter Tailwind CSS classes separated by spaces</p>
+      </div>
+    </div>
+
+    <!-- Structure Tab -->
+    <div id="editor-structure-tab" class="editor-tab-panel">
+      <!-- Parents (breadcrumb trail) -->
+      <div class="editor-structure-section">
+        <label class="editor-structure-label">Parents</label>
+        <div id="editor-parents-tree" class="editor-parents-tree">
+          <p class="editor-placeholder">Select an element to see its structure</p>
+        </div>
+      </div>
+
+      <!-- Current Element -->
+      <div class="editor-structure-section">
+        <label class="editor-structure-label">Current Element</label>
+        <div id="editor-current-element" class="editor-current-element">
+          <!-- Will be populated by JS -->
+        </div>
+      </div>
+
+      <!-- Children -->
+      <div class="editor-structure-section">
+        <label class="editor-structure-label">Children</label>
+        <div id="editor-children-tree" class="editor-children-tree">
+          <!-- Will be populated by JS -->
+        </div>
+      </div>
+    </div>
+
+    <!-- AI Tab -->
+    <div id="editor-ai-tab" class="editor-tab-panel">
+      <div class="editor-ai-intro">
+        <p class="editor-ai-description">
+          Use AI to refine this section's content, design, or structure.
+          Describe what you want to change and let AI help you.
+        </p>
+      </div>
+
+      <!-- Instructions -->
+      <div class="editor-field">
+        <label for="editor-ai-instructions">What would you like to change?</label>
+        <textarea
+          id="editor-ai-instructions"
+          class="editor-textarea editor-ai-textarea"
+          placeholder="Example: Make the title more compelling, add a blue gradient background, and improve the call-to-action button"
+          rows="6"
+        ></textarea>
+        <p class="editor-hint">Be specific about content, styling, or layout changes you want.</p>
+      </div>
+
+      <!-- Model Selection -->
+      <div class="editor-field">
+        <label for="editor-ai-model">AI Model</label>
+        <select id="editor-ai-model" class="editor-select">
+          <option value="gemini-flash">Gemini Flash (Fast)</option>
+          <option value="gemini-pro">Gemini Pro (Better Quality)</option>
+        </select>
+      </div>
+
+      <!-- Generate Button -->
+      <button id="editor-ai-generate-btn" class="editor-btn editor-btn-primary editor-ai-generate-btn">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="8" cy="8" r="6"/>
+          <path d="M8 5v6M5 8h6"/>
+        </svg>
+        Generate with AI
+      </button>
+
+      <!-- Loading State -->
+      <div id="editor-ai-loading" class="editor-ai-loading" style="display: none;">
+        <div class="editor-ai-spinner"></div>
+        <p>AI is thinking...</p>
+      </div>
+
+      <!-- Status Messages -->
+      <div id="editor-ai-status" class="editor-ai-status"></div>
+
+      <!-- AI Changes Info -->
+      <div id="editor-ai-changes-info" class="editor-ai-changes-info" style="display: none;">
+        <div class="editor-ai-alert editor-ai-alert-success">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="2"/>
+            <path d="M5 8l2 2 4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+          <div>
+            <strong>AI Changes Applied!</strong>
+            <p>Review the changes on the page. Click "Save Changes" below to keep them, or "Discard" to revert.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Footer Actions -->
+  <div class="editor-sidebar-footer">
+    <button id="editor-save-btn" class="editor-btn editor-btn-primary" disabled>
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+        <path d="M12 2H4C2.89543 2 2 2.89543 2 4V12C2 13.1046 2.89543 14 4 14H12C13.1046 14 14 13.1046 14 12V4C14 2.89543 13.1046 2 12 2Z" stroke="currentColor" stroke-width="2"/>
+        <path d="M5 8L7 10L11 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      Save Changes
+    </button>
+    <button id="editor-discard-btn" class="editor-btn editor-btn-secondary" disabled>
+      Discard
+    </button>
+    <div id="editor-status" class="editor-status"></div>
+  </div>
+</div>
+
+<!-- Sidebar Styles -->
+<style>
+/* Push content when in edit mode */
+body[data-edit-mode="true"] {
+  display: flex;
+}
+
+body[data-edit-mode="true"] main {
+  margin-left: 0 !important;
+  padding-left: 0 !important;
+}
+
+.editor-sidebar {
+  position: sticky;
+  top: 0;
+  left: 0;
+  width: 400px;
+  min-width: 400px;
+  height: 100vh;
+  background: white;
+  box-shadow: 2px 0 20px rgba(0, 0, 0, 0.1);
+  z-index: 999997;
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+}
+
+/* Content wrapper to fill remaining space */
+.editor-content-wrapper {
+  flex: 1;
+  min-width: 0;
+  overflow-x: hidden;
+}
+
+.editor-sidebar-header {
+  padding: 20px;
+  border-bottom: 1px solid #e5e7eb;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: #f9fafb;
+  gap: 12px;
+}
+
+.editor-element-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.editor-element-tag {
+  font-weight: 600;
+  font-size: 16px;
+  color: #111827;
+  font-family: 'Monaco', 'Courier New', monospace;
+}
+
+.editor-element-id {
+  font-size: 12px;
+  color: #6b7280;
+  font-family: 'Monaco', monospace;
+}
+
+.editor-undo-redo {
+  display: flex;
+  gap: 4px;
+}
+
+.editor-icon-btn {
+  background: white;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  padding: 8px;
+  cursor: pointer;
+  color: #374151;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.editor-icon-btn:hover:not(:disabled) {
+  background: #f3f4f6;
+  border-color: #9ca3af;
+  color: #111827;
+}
+
+.editor-icon-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  color: #9ca3af;
+}
+
+.editor-icon-btn svg {
+  display: block;
+}
+
+.editor-close-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 8px;
+  color: #6b7280;
+  border-radius: 4px;
+  transition: all 0.2s;
+}
+
+.editor-close-btn:hover {
+  background: #e5e7eb;
+  color: #111827;
+}
+
+.editor-tabs {
+  display: flex;
+  border-bottom: 1px solid #e5e7eb;
+  background: #f9fafb;
+  padding: 0 20px;
+}
+
+.editor-tab {
+  flex: 1;
+  padding: 12px 16px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  color: #6b7280;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-bottom: 2px solid transparent;
+  transition: all 0.2s;
+}
+
+.editor-tab:hover {
+  color: #111827;
+}
+
+.editor-tab.active {
+  color: #3b82f6;
+  border-bottom-color: #3b82f6;
+}
+
+.editor-tab-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px;
+}
+
+.editor-tab-panel {
+  display: none;
+}
+
+.editor-tab-panel.active {
+  display: block;
+}
+
+.editor-field {
+  margin-bottom: 20px;
+}
+
+.editor-field label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: #374151;
+  margin-bottom: 6px;
+}
+
+.editor-field input[type="text"],
+.editor-field input[type="url"],
+.editor-field textarea {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 14px;
+  font-family: inherit;
+  transition: all 0.2s;
+}
+
+.editor-field input:focus,
+.editor-field textarea:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.editor-textarea {
+  font-family: 'Monaco', 'Courier New', monospace;
+  font-size: 13px;
+  resize: vertical;
+  min-height: 100px;
+}
+
+.editor-hint {
+  font-size: 12px;
+  color: #6b7280;
+  margin-top: 4px;
+}
+
+.editor-placeholder {
+  text-align: center;
+  color: #9ca3af;
+  font-size: 14px;
+  padding: 40px 20px;
+}
+
+.editor-sidebar-footer {
+  padding: 20px;
+  border-top: 1px solid #e5e7eb;
+  background: #f9fafb;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.editor-btn {
+  padding: 10px 16px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.editor-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.editor-btn-primary {
+  background: #3b82f6;
+  color: white;
+}
+
+.editor-btn-primary:hover:not(:disabled) {
+  background: #2563eb;
+}
+
+.editor-btn-secondary {
+  background: white;
+  color: #6b7280;
+  border: 1px solid #d1d5db;
+}
+
+.editor-btn-secondary:hover:not(:disabled) {
+  background: #f3f4f6;
+  color: #111827;
+}
+
+.editor-status {
+  text-align: center;
+  font-size: 13px;
+  color: #6b7280;
+  min-height: 20px;
+}
+
+.editor-status.success {
+  color: #059669;
+}
+
+.editor-status.error {
+  color: #dc2626;
+}
+
+/* Rich text toolbar */
+.editor-richtext-toolbar {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 8px;
+  padding: 8px;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+}
+
+.editor-richtext-btn {
+  padding: 6px 10px;
+  background: white;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  color: #374151;
+  transition: all 0.2s;
+}
+
+.editor-richtext-btn:hover {
+  background: #e5e7eb;
+}
+
+.editor-richtext-btn.active {
+  background: #3b82f6;
+  color: white;
+  border-color: #3b82f6;
+}
+
+/* Image preview */
+.editor-image-preview {
+  width: 100%;
+  max-height: 200px;
+  object-fit: contain;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  margin-bottom: 12px;
+}
+
+/* Structure tab */
+.editor-structure-section {
+  margin-bottom: 24px;
+}
+
+.editor-structure-label {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 8px;
+}
+
+.editor-parents-tree {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.editor-tree-node {
+  padding: 8px 12px;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  font-size: 13px;
+  font-family: 'Monaco', monospace;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.editor-tree-node:hover {
+  background: #f3f4f6;
+  border-color: #3b82f6;
+}
+
+.editor-tree-node.current {
+  background: #dbeafe;
+  border-color: #3b82f6;
+  font-weight: 600;
+}
+
+.editor-tree-node-tag {
+  color: #3b82f6;
+  font-weight: 600;
+}
+
+.editor-tree-node-id {
+  color: #059669;
+}
+
+.editor-tree-node-classes {
+  color: #6b7280;
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+
+.editor-children-tree {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.editor-tree-child {
+  padding: 6px 12px;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 4px;
+  font-size: 12px;
+  font-family: 'Monaco', monospace;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.editor-tree-child:hover {
+  background: #f3f4f6;
+  border-color: #3b82f6;
+}
+
+.editor-tree-child-indent {
+  margin-left: 20px;
+}
+
+.editor-tree-expand-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  color: #6b7280;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+}
+
+.editor-tree-expand-btn:hover {
+  color: #111827;
+}
+
+.editor-tree-children-count {
+  color: #9ca3af;
+  font-size: 11px;
+  margin-left: auto;
+}
+
+.editor-current-element {
+  padding: 12px;
+  background: #dbeafe;
+  border: 2px solid #3b82f6;
+  border-radius: 6px;
+  font-family: 'Monaco', monospace;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.editor-current-element-tag {
+  color: #3b82f6;
+}
+
+.editor-current-element-id {
+  color: #059669;
+  margin-left: 8px;
+}
+
+.editor-current-element-classes {
+  display: block;
+  color: #6b7280;
+  font-size: 11px;
+  font-weight: normal;
+  margin-top: 4px;
+}
+
+/* AI tab */
+.editor-tab-ai {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white !important;
+  border-bottom-color: transparent;
+}
+
+.editor-tab-ai:hover {
+  opacity: 0.9;
+}
+
+.editor-tab-ai.active {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-bottom-color: #667eea !important;
+}
+
+.editor-ai-intro {
+  background: #f0f4ff;
+  border: 1px solid #c7d2fe;
+  border-radius: 6px;
+  padding: 12px;
+  margin-bottom: 20px;
+}
+
+.editor-ai-description {
+  font-size: 13px;
+  color: #4338ca;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.editor-ai-textarea {
+  min-height: 120px;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.editor-select {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 14px;
+  background: white;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.editor-select:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.editor-ai-generate-btn {
+  width: 100%;
+  margin-top: 8px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border: none;
+}
+
+.editor-ai-generate-btn:hover:not(:disabled) {
+  opacity: 0.9;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+}
+
+.editor-ai-loading {
+  text-align: center;
+  padding: 24px;
+  color: #6b7280;
+}
+
+.editor-ai-spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid #e5e7eb;
+  border-top-color: #667eea;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  margin: 0 auto 12px;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.editor-ai-status {
+  margin-top: 12px;
+  padding: 12px;
+  border-radius: 6px;
+  font-size: 13px;
+}
+
+.editor-ai-status.success {
+  background: #d1fae5;
+  border: 1px solid #6ee7b7;
+  color: #065f46;
+}
+
+.editor-ai-status.error {
+  background: #fee2e2;
+  border: 1px solid #fca5a5;
+  color: #991b1b;
+}
+
+.editor-ai-changes-info {
+  margin-top: 20px;
+}
+
+.editor-ai-alert {
+  padding: 16px;
+  border-radius: 8px;
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.editor-ai-alert-success {
+  background: #d1fae5;
+  border: 2px solid #10b981;
+  color: #065f46;
+}
+
+.editor-ai-alert svg {
+  flex-shrink: 0;
+  stroke: #10b981;
+}
+
+.editor-ai-alert strong {
+  display: block;
+  font-size: 14px;
+  margin-bottom: 4px;
+}
+
+.editor-ai-alert p {
+  font-size: 13px;
+  margin: 0;
+  line-height: 1.5;
+}
+</style>

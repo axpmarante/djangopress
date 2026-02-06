@@ -1,0 +1,463 @@
+{% extends 'backoffice/base.html' %}
+{% load i18n %}
+
+{% block title %}Edit Header{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <!-- Header -->
+    <div class="flex items-center justify-between">
+        <div>
+            <h2 class="text-3xl font-bold text-gray-900">Edit Header</h2>
+            <p class="text-gray-600 mt-1">Customize your site's header navigation and layout</p>
+        </div>
+        <div class="flex gap-3">
+            <a href="{% url 'backoffice:settings' %}"
+               class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+                ← Back to Settings
+            </a>
+        </div>
+    </div>
+
+    <!-- Info Alert -->
+    <div class="bg-blue-50 border-l-4 border-blue-500 p-4 rounded">
+        <div class="flex">
+            <div class="flex-shrink-0">
+                <svg class="h-5 w-5 text-blue-400" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"/>
+                </svg>
+            </div>
+            <div class="ml-3">
+                <p class="text-sm text-blue-700">
+                    <strong>Global Section:</strong> The header is stored in the database and cached for performance.
+                    Changes will be visible across all pages. The header uses Django template syntax and has access to all context variables like
+                    <code class="bg-blue-100 px-1 rounded">LOGO</code>, <code class="bg-blue-100 px-1 rounded">SITE_NAME</code>, etc.
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Form -->
+    <form method="post">
+        {% csrf_token %}
+
+        <!-- Header Settings -->
+        <div class="bg-white rounded-lg shadow overflow-hidden mb-6">
+            <div class="p-6 border-b border-gray-200">
+                <h3 class="text-lg font-semibold text-gray-900">Header Configuration</h3>
+                <p class="text-sm text-gray-600 mt-1">Basic settings for your header section</p>
+            </div>
+            <div class="p-6 space-y-6">
+                <!-- Name -->
+                <div>
+                    <label for="id_name" class="block text-sm font-medium text-gray-700 mb-2">
+                        Display Name
+                    </label>
+                    <input type="text"
+                           name="name"
+                           id="id_name"
+                           value="{{ header.name }}"
+                           class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                    <p class="mt-1 text-xs text-gray-500">Internal name for identification (e.g., "Main Header")</p>
+                </div>
+
+                <!-- Is Active -->
+                <div class="flex items-center">
+                    <input type="checkbox"
+                           name="is_active"
+                           id="id_is_active"
+                           {% if header.is_active %}checked{% endif %}
+                           class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
+                    <label for="id_is_active" class="ml-2 block text-sm text-gray-700">
+                        Active (Show header on the website)
+                    </label>
+                </div>
+
+                <!-- Cache Duration -->
+                <div>
+                    <label for="id_cache_duration" class="block text-sm font-medium text-gray-700 mb-2">
+                        Cache Duration (seconds)
+                    </label>
+                    <input type="number"
+                           name="cache_duration"
+                           id="id_cache_duration"
+                           value="{{ header.cache_duration }}"
+                           class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                    <p class="mt-1 text-xs text-gray-500">
+                        How long to cache the header (default: 3600 = 1 hour). Lower for frequent updates.
+                    </p>
+                </div>
+
+                <!-- Fallback Template -->
+                <div>
+                    <label for="id_fallback_template" class="block text-sm font-medium text-gray-700 mb-2">
+                        Fallback Template Path
+                    </label>
+                    <input type="text"
+                           name="fallback_template"
+                           id="id_fallback_template"
+                           value="{{ header.fallback_template }}"
+                           class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                    <p class="mt-1 text-xs text-gray-500">
+                        Template file to use if database template is empty or deactivated (e.g., "partials/header.html")
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <!-- HTML Template -->
+        <div class="bg-white rounded-lg shadow overflow-hidden mb-6">
+            <div class="p-6 border-b border-gray-200">
+                <h3 class="text-lg font-semibold text-gray-900">HTML Template</h3>
+                <p class="text-sm text-gray-600 mt-1">Edit the header's HTML template with Django template syntax</p>
+            </div>
+            <div class="p-6">
+                <div>
+                    <label for="id_html_template" class="block text-sm font-medium text-gray-700 mb-2">
+                        Header HTML
+                    </label>
+                    <textarea name="html_template"
+                              id="id_html_template"
+                              rows="25"
+                              class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-mono text-sm"
+                              placeholder="<header>
+    <!-- Your header HTML here -->
+</header>">{{ header.html_template }}</textarea>
+                    <div class="mt-2 text-xs text-gray-600 space-y-1">
+                        <p><strong>💡 Available Context Variables:</strong></p>
+                        <ul class="list-disc list-inside ml-4 space-y-1">
+                            <li><code class="bg-gray-100 px-1 rounded">{{ LOGO }}</code> - Main logo</li>
+                            <li><code class="bg-gray-100 px-1 rounded">{{ LOGO_DARK_BG }}</code> - Logo for dark backgrounds</li>
+                            <li><code class="bg-gray-100 px-1 rounded">{{ SITE_NAME }}</code> - Site name</li>
+                            <li><code class="bg-gray-100 px-1 rounded">{{ LANGUAGE_CODE }}</code> - Current language</li>
+                            <li><code class="bg-gray-100 px-1 rounded">{% url 'core:home' %}</code> - URL tags work</li>
+                            <li><code class="bg-gray-100 px-1 rounded">{% trans "Text" %}</code> - Translation tags work</li>
+                        </ul>
+                        <p class="mt-2">
+                            <strong>📖 Tip:</strong> If the template field is empty, the system will use the fallback template file.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- AI Refinement Section -->
+        <div class="bg-gradient-to-br from-purple-50 to-blue-50 rounded-lg shadow-sm border border-purple-200 overflow-hidden mb-6">
+            <div class="p-6 border-b border-purple-200 bg-white">
+                <div class="flex items-center">
+                    <svg class="w-6 h-6 text-purple-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                    </svg>
+                    <div>
+                        <h3 class="text-lg font-semibold text-gray-900">AI Refinement</h3>
+                        <p class="text-sm text-gray-600 mt-1">Use AI to generate or refine your header template</p>
+                    </div>
+                </div>
+            </div>
+            <div class="p-6 space-y-4">
+                <!-- Instructions -->
+                <div>
+                    <label for="ai_instructions" class="block text-sm font-medium text-gray-700 mb-2">
+                        Refinement Instructions
+                    </label>
+                    <textarea id="ai_instructions"
+                              rows="4"
+                              class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                              placeholder="Example: Create a modern header with navigation menu for Home, About, and Contact pages. Include the site logo and a mobile hamburger menu."></textarea>
+                    <p class="mt-1 text-xs text-gray-500">Describe what you want the AI to create or how to improve the current header.</p>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <!-- Model Selection -->
+                    {% if ai_models %}
+                    <div>
+                        <label for="ai_model" class="block text-sm font-medium text-gray-700 mb-2">
+                            AI Model
+                        </label>
+                        <select id="ai_model"
+                                class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-purple-500 focus:border-purple-500">
+                            {% for model in ai_models %}
+                            <option value="{{ model.0 }}" {% if model.0 == default_model %}selected{% endif %}>
+                                {{ model.1 }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    {% endif %}
+
+                    <!-- Prompt Version -->
+                    <div>
+                        <label for="ai_prompt_version" class="block text-sm font-medium text-gray-700 mb-2">
+                            Prompt Version
+                        </label>
+                        <select id="ai_prompt_version"
+                                class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-purple-500 focus:border-purple-500">
+                            <option value="v2" selected>V2 - Simplified</option>
+                            <option value="v1">V1 - Comprehensive</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Refine Button -->
+                <div class="pt-2">
+                    <button type="button"
+                            onclick="refineHeader()"
+                            class="w-full px-6 py-3 bg-gradient-to-r from-purple-600 to-blue-600 text-white text-sm font-medium rounded-lg hover:from-purple-700 hover:to-blue-700 transition-colors flex items-center justify-center">
+                        <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                        </svg>
+                        Refine Header with AI
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="flex items-center justify-between">
+            <a href="{% url 'backoffice:settings' %}"
+               class="px-6 py-2 text-sm font-medium text-gray-700 hover:text-gray-900">
+                Cancel
+            </a>
+            <div class="flex gap-3">
+                <button type="button"
+                        onclick="clearCache()"
+                        class="px-6 py-2 bg-yellow-600 text-white text-sm font-medium rounded-lg hover:bg-yellow-700 transition-colors">
+                    Clear Cache
+                </button>
+                <button type="submit"
+                        class="px-6 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors">
+                    Save Header
+                </button>
+            </div>
+        </div>
+    </form>
+
+    <!-- Loading Modal -->
+    <div id="loadingModal" class="hidden fixed inset-0 bg-gray-900 bg-opacity-50 z-50 flex items-center justify-center">
+        <div class="bg-white rounded-lg p-8 max-w-md w-full mx-4 shadow-2xl">
+            <div class="flex flex-col items-center">
+                <div class="relative">
+                    <div class="animate-spin rounded-full h-20 w-20 border-b-4 border-purple-600"></div>
+                    <svg class="w-10 h-10 text-purple-600 absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                    </svg>
+                </div>
+                <p class="mt-6 text-lg font-semibold text-gray-900">Refining your header...</p>
+                <p class="mt-2 text-sm text-gray-600 text-center">This may take 5-15 seconds depending on the model</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Results Modal -->
+    <div id="resultsModal" class="hidden fixed inset-0 bg-gray-900 bg-opacity-50 z-50 overflow-y-auto">
+        <div class="min-h-screen px-4 py-8 flex items-center justify-center">
+            <div class="bg-white rounded-lg max-w-6xl w-full shadow-2xl">
+                <!-- Modal Header -->
+                <div class="flex items-center justify-between p-6 border-b">
+                    <h3 class="text-xl font-semibold text-gray-900">Refined Header Preview</h3>
+                    <button onclick="closeResults()" class="text-gray-400 hover:text-gray-600">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                        </svg>
+                    </button>
+                </div>
+
+                <!-- Modal Body -->
+                <div id="resultsContent" class="p-6 max-h-[600px] overflow-y-auto">
+                    <!-- Results will be inserted here -->
+                </div>
+
+                <!-- Modal Footer -->
+                <div class="flex items-center justify-between p-6 border-t bg-gray-50">
+                    <button onclick="closeResults()"
+                            class="px-6 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-100">
+                        Cancel
+                    </button>
+                    <button onclick="applyRefinedHeader()"
+                            class="px-8 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 shadow-md hover:shadow-lg transition-all">
+                        Apply Changes
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let refinedHeaderData = null;
+
+function clearCache() {
+    if (confirm('Clear the header cache? This will force the header to regenerate on next page load.')) {
+        fetch('{% url "backoffice:api_update_site_settings" %}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': '{{ csrf_token }}'
+            },
+            body: JSON.stringify({
+                action: 'clear_header_cache'
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            alert('Cache cleared successfully!');
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Error clearing cache. Check console for details.');
+        });
+    }
+}
+
+async function refineHeader() {
+    const instructions = document.getElementById('ai_instructions').value.trim();
+
+    if (!instructions) {
+        alert('Please enter refinement instructions');
+        return;
+    }
+
+    const model = document.getElementById('ai_model').value;
+    const promptVersion = document.getElementById('ai_prompt_version').value;
+
+    const data = {
+        instructions: instructions,
+        model: model,
+        prompt_version: promptVersion
+    };
+
+    showLoading();
+
+    try {
+        const response = await fetch('/ai/api/refine-header/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            body: JSON.stringify(data)
+        });
+
+        const result = await response.json();
+        hideLoading();
+
+        if (result.success) {
+            refinedHeaderData = result.section;
+            displayResults(result.section);
+        } else {
+            alert('Error: ' + (result.error || 'Unknown error occurred'));
+        }
+    } catch (error) {
+        hideLoading();
+        console.error('Error refining header:', error);
+        alert('Error refining header: ' + error.message);
+    }
+}
+
+function showLoading() {
+    document.getElementById('loadingModal').classList.remove('hidden');
+}
+
+function hideLoading() {
+    document.getElementById('loadingModal').classList.add('hidden');
+}
+
+function displayResults(headerData) {
+    const currentTemplate = document.getElementById('id_html_template').value;
+    const newTemplate = headerData.html_template || '';
+
+    const container = document.getElementById('resultsContent');
+    container.innerHTML = `
+        <div class="space-y-6">
+            <div class="bg-green-50 border border-green-200 rounded-lg p-4">
+                <div class="flex items-center">
+                    <svg class="w-5 h-5 text-green-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                    <p class="text-green-800 font-medium">Header refined successfully!</p>
+                </div>
+            </div>
+
+            <!-- Side by side comparison -->
+            <div class="grid grid-cols-2 gap-6">
+                <!-- Original -->
+                <div>
+                    <h4 class="text-sm font-semibold text-gray-900 mb-3 flex items-center">
+                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                        Current Template
+                    </h4>
+                    <div class="border border-gray-300 rounded-lg p-4 bg-gray-50">
+                        <pre class="text-xs text-gray-700 whitespace-pre-wrap overflow-auto max-h-96 font-mono">${escapeHtml(currentTemplate || '(empty)')}</pre>
+                    </div>
+                </div>
+
+                <!-- Refined -->
+                <div>
+                    <h4 class="text-sm font-semibold text-gray-900 mb-3 flex items-center">
+                        <svg class="w-4 h-4 mr-2 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                        </svg>
+                        Refined Template
+                    </h4>
+                    <div class="border border-purple-300 rounded-lg p-4 bg-purple-50">
+                        <pre class="text-xs text-gray-700 whitespace-pre-wrap overflow-auto max-h-96 font-mono">${escapeHtml(newTemplate)}</pre>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <p class="text-sm text-blue-800">
+                    <strong>Next step:</strong> Click "Apply Changes" to update the header template in the form above. You can then review and save it.
+                </p>
+            </div>
+        </div>
+    `;
+    document.getElementById('resultsModal').classList.remove('hidden');
+}
+
+function applyRefinedHeader() {
+    if (!refinedHeaderData) {
+        alert('No refined header data available');
+        return;
+    }
+
+    // Update the HTML template textarea with the refined content
+    document.getElementById('id_html_template').value = refinedHeaderData.html_template || '';
+
+    closeResults();
+
+    // Scroll to the HTML template section
+    document.getElementById('id_html_template').scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+    // Show success message
+    alert('Refined header template has been applied! Review the changes and click "Save Header" to persist them.');
+}
+
+function closeResults() {
+    document.getElementById('resultsModal').classList.add('hidden');
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+</script>
+{% endblock %}

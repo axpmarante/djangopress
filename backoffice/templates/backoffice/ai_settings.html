@@ -1,0 +1,279 @@
+{% extends 'backoffice/base.html' %}
+
+{% block title %}AI Generation Settings{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <!-- Header -->
+    <div class="flex items-center justify-between">
+        <div class="flex items-center">
+            <a href="{% url 'backoffice:ai_management' %}"
+               class="mr-4 text-gray-600 hover:text-gray-900">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+                </svg>
+            </a>
+            <div>
+                <h2 class="text-3xl font-bold text-gray-900">AI Generation Settings</h2>
+                <p class="text-gray-600 mt-1">Configure design and content guidelines for AI</p>
+            </div>
+        </div>
+    </div>
+
+    {% if ai_not_installed %}
+    <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-6">
+        <p class="text-yellow-800">AI app is not installed.</p>
+    </div>
+    {% else %}
+
+    <form method="POST" class="space-y-6">
+        {% csrf_token %}
+
+        <!-- Design Context -->
+        <div class="bg-white rounded-lg shadow p-6">
+            <h3 class="text-lg font-semibold text-gray-900 mb-4">Design Context</h3>
+            <p class="text-sm text-gray-600 mb-4">Guidelines for visual design and layout</p>
+
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Industry</label>
+                    <input type="text"
+                           name="industry"
+                           value="{{ settings.industry|default:'' }}"
+                           placeholder="e.g., Sports scholarship agency for student athletes"
+                           class="w-full border border-gray-300 rounded-md px-3 py-2">
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Brand Personality</label>
+                    <textarea name="brand_personality"
+                              rows="3"
+                              placeholder="Describe brand character. e.g., Professional, inspiring, trustworthy..."
+                              class="w-full border border-gray-300 rounded-md px-3 py-2">{{ settings.brand_personality|default:'' }}</textarea>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Design Guidelines</label>
+                    <textarea name="design_guidelines"
+                              rows="5"
+                              placeholder="Design rules and preferences. e.g., Use full-width hero sections, bold typography..."
+                              class="w-full border border-gray-300 rounded-md px-3 py-2">{{ settings.design_guidelines|default:'' }}</textarea>
+                </div>
+            </div>
+        </div>
+
+        <!-- Content Context -->
+        <div class="bg-white rounded-lg shadow p-6">
+            <h3 class="text-lg font-semibold text-gray-900 mb-4">Content Context</h3>
+            <p class="text-sm text-gray-600 mb-4">Guidelines for copywriting and messaging</p>
+
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Tone of Voice</label>
+                    <textarea name="tone_of_voice"
+                              rows="2"
+                              placeholder="How content should sound. e.g., Professional but approachable, inspiring..."
+                              class="w-full border border-gray-300 rounded-md px-3 py-2">{{ settings.tone_of_voice|default:'' }}</textarea>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Key Messages</label>
+                    <textarea name="key_messages"
+                              rows="4"
+                              placeholder="Core messages to communicate (one per line)"
+                              class="w-full border border-gray-300 rounded-md px-3 py-2">{{ settings.key_messages|default:'' }}</textarea>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Content Guidelines</label>
+                    <textarea name="content_guidelines"
+                              rows="4"
+                              placeholder="What to include/avoid. e.g., Use statistics, avoid clichés..."
+                              class="w-full border border-gray-300 rounded-md px-3 py-2">{{ settings.content_guidelines|default:'' }}</textarea>
+                </div>
+            </div>
+        </div>
+
+        <!-- SEO -->
+        <div class="bg-white rounded-lg shadow p-6">
+            <h3 class="text-lg font-semibold text-gray-900 mb-4">SEO Keywords</h3>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Keywords (Portuguese)</label>
+                    <input type="text"
+                           name="seo_keywords_pt"
+                           value="{{ settings.seo_keywords_pt|default:'' }}"
+                           placeholder="bolsas de estudo, atletas, USA..."
+                           class="w-full border border-gray-300 rounded-md px-3 py-2">
+                    <p class="text-xs text-gray-500 mt-1">Comma-separated</p>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Keywords (English)</label>
+                    <input type="text"
+                           name="seo_keywords_en"
+                           value="{{ settings.seo_keywords_en|default:'' }}"
+                           placeholder="sports scholarships, athletes, USA..."
+                           class="w-full border border-gray-300 rounded-md px-3 py-2">
+                    <p class="text-xs text-gray-500 mt-1">Comma-separated</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Design References -->
+        <div class="bg-white rounded-lg shadow p-6">
+            <h3 class="text-lg font-semibold text-gray-900 mb-4">Design References</h3>
+            <p class="text-sm text-gray-600 mb-4">Reference materials for the LLM</p>
+
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Reference Websites</label>
+                    <textarea name="reference_websites"
+                              rows="3"
+                              placeholder="URLs of good design examples (one per line)"
+                              class="w-full border border-gray-300 rounded-md px-3 py-2">{{ settings.reference_websites|default:'' }}</textarea>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">HTML Examples</label>
+                    <textarea name="html_examples"
+                              rows="8"
+                              placeholder="HTML snippets the LLM can use as reference"
+                              class="w-full border border-gray-300 rounded-md px-3 py-2 font-mono text-sm">{{ settings.html_examples|default:'' }}</textarea>
+                </div>
+            </div>
+        </div>
+
+        <!-- Model Selection -->
+        <div class="bg-white rounded-lg shadow p-6">
+            <h3 class="text-lg font-semibold text-gray-900 mb-4">Model Selection</h3>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Design Model</label>
+                    <select name="design_model" class="w-full border border-gray-300 rounded-md px-3 py-2">
+                        <option value="claude" {% if settings.design_model == 'claude' or not settings %}selected{% endif %}>Claude Sonnet 4.5</option>
+                        <option value="gpt-5" {% if settings.design_model == 'gpt-5' %}selected{% endif %}>GPT-5</option>
+                        <option value="gemini-pro" {% if settings.design_model == 'gemini-pro' %}selected{% endif %}>Gemini Pro</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Content Model</label>
+                    <select name="content_model" class="w-full border border-gray-300 rounded-md px-3 py-2">
+                        <option value="gemini-flash" {% if settings.content_model == 'gemini-flash' or not settings %}selected{% endif %}>Gemini Flash</option>
+                        <option value="gemini-pro" {% if settings.content_model == 'gemini-pro' %}selected{% endif %}>Gemini Pro</option>
+                        <option value="claude" {% if settings.content_model == 'claude' %}selected{% endif %}>Claude Sonnet 4.5</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="flex items-center justify-between bg-gray-50 rounded-lg p-4">
+            <a href="{% url 'backoffice:ai_management' %}"
+               class="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50">
+                Cancel
+            </a>
+            <button type="submit"
+                    class="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 font-medium">
+                Save Settings
+            </button>
+        </div>
+    </form>
+
+    <!-- Design References List -->
+    <div class="bg-white rounded-lg shadow p-6">
+        <h3 class="text-lg font-semibold text-gray-900 mb-4">Attached References</h3>
+
+        {% if references %}
+        <div class="space-y-3">
+            {% for ref in references %}
+            <div class="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:bg-gray-50">
+                <div class="flex items-center space-x-4">
+                    {% if ref.reference_type == 'screenshot' and ref.image %}
+                    <img src="{{ ref.image.url }}" alt="{{ ref.title }}" class="w-16 h-16 object-cover rounded">
+                    {% else %}
+                    <div class="w-16 h-16 bg-gray-100 rounded flex items-center justify-center">
+                        <svg class="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"/>
+                        </svg>
+                    </div>
+                    {% endif %}
+                    <div>
+                        <div class="font-medium text-gray-900">{{ ref.title }}</div>
+                        <div class="text-sm text-gray-500">
+                            {{ ref.get_reference_type_display }}
+                            {% if ref.section_type %} • {{ ref.section_type }}{% endif %}
+                        </div>
+                    </div>
+                </div>
+                <form method="POST" action="{% url 'backoffice:delete_design_reference' ref.id %}"
+                      onsubmit="return confirm('Delete this reference?');">
+                    {% csrf_token %}
+                    <button type="submit" class="text-red-600 hover:text-red-800 text-sm">Delete</button>
+                </form>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <p class="text-gray-500 text-sm">No references added yet.</p>
+        {% endif %}
+
+        <!-- Add Reference Form -->
+        <div class="mt-6 border-t pt-6">
+            <h4 class="font-medium text-gray-900 mb-3">Add Reference</h4>
+            <form method="POST" action="{% url 'backoffice:add_design_reference' %}" enctype="multipart/form-data" class="space-y-3">
+                {% csrf_token %}
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Title *</label>
+                        <input type="text" name="title" required class="w-full border border-gray-300 rounded-md px-3 py-2">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Type</label>
+                        <select name="reference_type" id="refType" onchange="toggleRefFields()" class="w-full border border-gray-300 rounded-md px-3 py-2">
+                            <option value="template">HTML Template</option>
+                            <option value="screenshot">Screenshot</option>
+                        </select>
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Section Type</label>
+                    <input type="text" name="section_type" placeholder="e.g., hero, features, pricing" class="w-full border border-gray-300 rounded-md px-3 py-2">
+                </div>
+                <div id="templateField">
+                    <label class="block text-sm font-medium text-gray-700 mb-1">HTML Template</label>
+                    <textarea name="html_template" rows="4" class="w-full border border-gray-300 rounded-md px-3 py-2 font-mono text-sm"></textarea>
+                </div>
+                <div id="imageField" class="hidden">
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Screenshot</label>
+                    <input type="file" name="image" accept="image/*" class="w-full border border-gray-300 rounded-md px-3 py-2">
+                </div>
+                <button type="submit" class="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700">
+                    Add Reference
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <script>
+    function toggleRefFields() {
+        const type = document.getElementById('refType').value;
+        const templateField = document.getElementById('templateField');
+        const imageField = document.getElementById('imageField');
+
+        if (type === 'template') {
+            templateField.classList.remove('hidden');
+            imageField.classList.add('hidden');
+        } else {
+            templateField.classList.add('hidden');
+            imageField.classList.remove('hidden');
+        }
+    }
+    </script>
+
+    {% endif %}
+</div>
+{% endblock %}

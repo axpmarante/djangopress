@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% load i18n section_tags %}
+
+{% block title %}{{ page_obj.title_i18n|get_translation:LANGUAGE_CODE }}{% endblock %}
+
+{% block content %}
+<div {% if edit_mode %}data-page-id="{{ page_obj.id }}"{% endif %}>
+  {{ page_content }}
+</div>
+{% endblock %}

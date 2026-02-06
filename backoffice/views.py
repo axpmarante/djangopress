@@ -1,0 +1,788 @@
+from django.views.generic import TemplateView, ListView, CreateView
+from django.contrib.auth.mixins import LoginRequiredMixin
+from django.contrib.auth.decorators import login_required
+from django.views.decorators.http import require_http_methods
+from django.contrib import messages
+from django.shortcuts import redirect
+from django.urls import reverse_lazy
+
+from core.models import SiteSettings, SiteImage, Page, GOOGLE_FONTS_CHOICES, GlobalSection
+from core.utils import resize_and_compress_image
+from django.utils.text import slugify
+
+
+class DashboardView(LoginRequiredMixin, TemplateView):
+    """Main dashboard view"""
+    template_name = 'backoffice/dashboard.html'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+
+        # Get statistics
+        context['total_images'] = SiteImage.objects.count()
+        context['active_images'] = SiteImage.objects.filter(is_active=True).count()
+
+        # Page statistics
+        context['total_pages'] = Page.objects.count()
+        context['active_pages'] = Page.objects.filter(is_active=True).count()
+
+        # Recent activity
+        recent_images = list(SiteImage.objects.order_by('-uploaded_at')[:3])
+
+        # Create activity log
+        activity_log = []
+
+        for image in recent_images:
+            activity_log.append({
+                'type': 'image',
+                'title': image.title,
+                'action': 'uploaded',
+                'date': image.uploaded_at,
+                'url': '/backoffice/media/',
+                'icon': 'image'
+            })
+
+        # Sort by date and limit to 10
+        activity_log.sort(key=lambda x: x['date'], reverse=True)
+        context['activity_log'] = activity_log[:10]
+
+        return context
+
+
+class MediaView(LoginRequiredMixin, ListView):
+    """Media library management - list all site images"""
+    model = SiteImage
+    template_name = 'backoffice/media.html'
+    context_object_name = 'images'
+    paginate_by = 24
+
+    def get_queryset(self):
+        return SiteImage.objects.order_by('-id')
+
+
+class MediaUploadView(LoginRequiredMixin, CreateView):
+    """Upload new media/site image"""
+    model = SiteImage
+    template_name = 'backoffice/media_upload.html'
+    fields = ['title', 'key', 'image', 'alt_text', 'is_active']
+
+    def get_success_url(self):
+        return reverse_lazy('backoffice:media')
+
+    def form_valid(self, form):
+        response = super().form_valid(form)
+        messages.success(
+            self.request,
+            f'Image "{self.object.title}" uploaded successfully!'
+        )
+        return response
+
+
+class MediaBulkUploadView(LoginRequiredMixin, TemplateView):
+    """Bulk upload multiple images to media library"""
+    template_name = 'backoffice/media_bulk_upload.html'
+
+    def post(self, request, *args, **kwargs):
+        images = request.FILES.getlist('images')
+
+        if not images:
+            messages.error(request, 'No images were uploaded. Please try again.')
+            return redirect('backoffice:media_bulk_upload')
+
+        uploaded_count = 0
+        optimized_count = 0
+        skipped_count = 0
+
+        for idx, image in enumerate(images):
+            try:
+                # Get file size in KB
+                image_size_kb = image.size / 1024
+
+                # Auto-generate title and key from filename
+                filename_without_ext = image.name.rsplit('.', 1)[0]
+                title = filename_without_ext.replace('_', ' ').replace('-', ' ').title()
+                base_key = slugify(filename_without_ext)
+
+                # Ensure unique key
+                key = base_key
+                counter = 1
+                while SiteImage.objects.filter(key=key).exists():
+                    key = f"{base_key}-{counter}"
+                    counter += 1
+
+                # Check if image needs optimization (larger than 400KB)
+                if image_size_kb > 400:
+                    print(f"\n📊 Image '{image.name}' is {image_size_kb:.2f} KB - optimizing...")
+                    processed_image = resize_and_compress_image(image)
+                    optimized_count += 1
+                else:
+                    print(f"\n✅ Image '{image.name}' is {image_size_kb:.2f} KB - skipping optimization")
+                    processed_image = image
+                    skipped_count += 1
+
+                # Create SiteImage object
+                site_image = SiteImage(
+                    title=title,
+                    key=key,
+                    alt_text=title,
+                    is_active=True
+                )
+                site_image.image.save(image.name, processed_image, save=False)
+                site_image.save()
+
+                uploaded_count += 1
+
+            except Exception as e:
+                print(f"❌ Error uploading {image.name}: {str(e)}")
+                messages.error(
+                    request,
+                    f"Error uploading {image.name}: {str(e)}"
+                )
+
+        # Success message with details
+        if uploaded_count > 0:
+            details = []
+            if optimized_count > 0:
+                details.append(f"{optimized_count} optimized")
+            if skipped_count > 0:
+                details.append(f"{skipped_count} kept original")
+
+            detail_text = f" ({', '.join(details)})" if details else ""
+            messages.success(
+                request,
+                f"Successfully uploaded {uploaded_count} image(s){detail_text}!"
+            )
+        else:
+            messages.error(
+                request,
+                "No images were uploaded. Please try again."
+            )
+
+        return redirect('backoffice:media')
+
+
+class PagesView(LoginRequiredMixin, TemplateView):
+    """Pages management - list of pages using new Page model"""
+    template_name = 'backoffice/pages.html'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+
+        # Get all pages
+        pages = Page.objects.all()
+        context['pages'] = pages
+        context['total_pages'] = pages.count()
+
+        return context
+
+    def post(self, request, *args, **kwargs):
+        """Handle page creation"""
+        action = request.POST.get('action')
+
+        if action == 'create':
+            slug = request.POST.get('slug', '').strip()
+            title = request.POST.get('title', '').strip()
+
+            if not slug or not title:
+                messages.error(request, 'Slug and title are required.')
+                return redirect('backoffice:pages')
+
+            # Check if page already exists
+            if Page.objects.filter(slug=slug).exists():
+                messages.error(request, f'Page with slug "{slug}" already exists.')
+                return redirect('backoffice:pages')
+
+            # Create page
+            page = Page.objects.create(
+                slug=slug,
+                title=title,
+                is_active=True
+            )
+
+            messages.success(request, f'Page "{title}" created successfully!')
+            return redirect('backoffice:page_edit', page_id=page.pk)
+
+        elif action == 'bulk_create':
+            titles = request.POST.getlist('titles[]')
+            slugs = request.POST.getlist('slugs[]')
+
+            if len(titles) != len(slugs):
+                messages.error(request, 'Mismatch between titles and slugs.')
+                return redirect('backoffice:pages')
+
+            created_pages = []
+            skipped_pages = []
+
+            for title, slug in zip(titles, slugs):
+                title = title.strip()
+                slug = slug.strip()
+
+                if not title or not slug:
+                    continue
+
+                # Check if page already exists
+                if Page.objects.filter(slug=slug).exists():
+                    skipped_pages.append(f'{title} (slug "{slug}" already exists)')
+                    continue
+
+                # Create page
+                page = Page.objects.create(
+                    slug=slug,
+                    title=title,
+                    is_active=True
+                )
+                created_pages.append(title)
+
+            # Display results
+            if created_pages:
+                messages.success(request, f'Successfully created {len(created_pages)} page(s): {", ".join(created_pages)}')
+            if skipped_pages:
+                messages.warning(request, f'Skipped {len(skipped_pages)} page(s): {", ".join(skipped_pages)}')
+            if not created_pages and not skipped_pages:
+                messages.error(request, 'No valid pages to create.')
+
+        elif action == 'delete':
+            page_id = request.POST.get('page_id')
+            try:
+                page = Page.objects.get(pk=page_id)
+                page_title = page.title
+                page.delete()
+                messages.success(request, f'Page "{page_title}" deleted successfully!')
+            except Page.DoesNotExist:
+                messages.error(request, 'Page not found.')
+
+        return redirect('backoffice:pages')
+
+
+class PageEditView(LoginRequiredMixin, TemplateView):
+    """Edit page details (slug, title, active status)"""
+    template_name = 'backoffice/page_edit.html'
+
+    def get_context_data(self, **kwargs):
+        from core.models import PageVersion, SiteSettings
+        context = super().get_context_data(**kwargs)
+        page_id = kwargs.get('page_id')
+
+        try:
+            page = Page.objects.get(pk=page_id)
+            context['page'] = page
+            context['page_obj'] = page  # For section management compatibility
+
+            # Get version history
+            context['versions'] = PageVersion.objects.filter(page=page).order_by('-version_number')[:10]
+
+            # Get enabled languages for the form
+            site_settings = SiteSettings.objects.first()
+            context['languages'] = site_settings.get_enabled_languages() if site_settings else [('pt', 'Portuguese'), ('en', 'English')]
+
+            context['all_pages'] = Page.objects.all()
+
+            # AI REFINE MODAL DATA
+            # Build reference pages list (exclude current page and pages with no HTML content)
+            reference_pages = []
+            for ref_page in Page.objects.all().order_by('-created_at'):
+                # Skip current page
+                if ref_page.id == page_id:
+                    continue
+
+                if ref_page.html_content:
+                    reference_pages.append({
+                        'id': ref_page.id,
+                        'title': ref_page.default_title,
+                        'slug': ref_page.default_slug,
+                    })
+            context['reference_pages'] = reference_pages
+
+            # Get AI configuration
+            try:
+                from ai.utils.llm_config import LLMConfig
+                from ai.utils.prompts_v2 import PromptVersionManager
+                config = LLMConfig()
+                context['ai_models'] = config.get_available_models()
+                context['default_model'] = config.default_model
+                context['prompt_versions'] = PromptVersionManager.get_available_versions()
+            except Exception as e:
+                context['ai_models'] = []
+                context['default_model'] = None
+                context['prompt_versions'] = [('v1', 'V1 - Comprehensive'), ('v2', 'V2 - Simplified')]
+
+        except Page.DoesNotExist:
+            context['page'] = None
+            context['page_obj'] = None
+            context['versions'] = []
+            context['languages'] = [('pt', 'Portuguese'), ('en', 'English')]
+            context['all_pages'] = []
+            context['reference_pages'] = []
+            context['ai_models'] = []
+            context['default_model'] = None
+            context['prompt_versions'] = [('v1', 'V1 - Comprehensive'), ('v2', 'V2 - Simplified')]
+
+        return context
+
+    def post(self, request, *args, **kwargs):
+        """Handle page update"""
+        from core.models import SiteSettings
+        page_id = kwargs.get('page_id')
+
+        try:
+            page = Page.objects.get(pk=page_id)
+
+            # Get enabled languages
+            site_settings = SiteSettings.objects.first()
+            languages = site_settings.get_language_codes() if site_settings else ['pt', 'en']
+
+            # Get form data for i18n fields
+            title_i18n = {}
+            slug_i18n = {}
+
+            for lang in languages:
+                title = request.POST.get(f'title_{lang}', '').strip()
+                slug = request.POST.get(f'slug_{lang}', '').strip()
+
+                if title:
+                    title_i18n[lang] = title
+                if slug:
+                    slug_i18n[lang] = slug
+
+            is_active = 'is_active' in request.POST
+
+            # Validation
+            if not title_i18n or not slug_i18n:
+                messages.error(request, 'Title and slug are required for at least one language.')
+                return redirect('backoffice:page_edit', page_id=page_id)
+
+            # Check for duplicate slugs across all languages
+            for lang, slug in slug_i18n.items():
+                for other_page in Page.objects.exclude(pk=page_id):
+                    if other_page.get_slug(lang) == slug:
+                        messages.error(request, f'Page with slug "{slug}" already exists for language "{lang}".')
+                        return redirect('backoffice:page_edit', page_id=page_id)
+
+            # Update page
+            page.title_i18n = title_i18n
+            page.slug_i18n = slug_i18n
+            page.is_active = is_active
+
+            # Set user for version tracking
+            if request.user.is_authenticated:
+                page._snapshot_user = request.user
+
+            # Set change summary if provided
+            change_summary = request.POST.get('change_summary', '')
+            if change_summary:
+                page._change_summary = change_summary
+
+            page.save()
+
+            messages.success(request, f'Page "{page.get_title()}" updated successfully!')
+            return redirect('backoffice:pages')
+
+        except Page.DoesNotExist:
+            messages.error(request, 'Page not found.')
+            return redirect('backoffice:pages')
+
+
+class SettingsView(LoginRequiredMixin, TemplateView):
+    """Site settings management"""
+    template_name = 'backoffice/settings.html'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['settings'], _ = SiteSettings.objects.get_or_create(pk=1)
+        context['google_fonts'] = GOOGLE_FONTS_CHOICES
+        return context
+
+    def post(self, request, *args, **kwargs):
+        """Handle settings form submission"""
+        settings, _ = SiteSettings.objects.get_or_create(pk=1)
+
+        # Update general information
+        settings.site_name = request.POST.get('site_name', settings.site_name)
+        settings.site_description = request.POST.get('site_description', '')
+        settings.project_briefing = request.POST.get('project_briefing', '')
+
+        # Update logos if provided
+        if 'logo' in request.FILES:
+            settings.logo = request.FILES['logo']
+        if 'logo_dark_bg' in request.FILES:
+            settings.logo_dark_bg = request.FILES['logo_dark_bg']
+
+        # Update contact information
+        settings.contact_email = request.POST.get('contact_email', settings.contact_email)
+        settings.contact_phone = request.POST.get('contact_phone', '')
+        settings.contact_address = request.POST.get('contact_address', '')
+
+        # Update social media links
+        settings.facebook_url = request.POST.get('facebook_url', '')
+        settings.instagram_url = request.POST.get('instagram_url', '')
+        settings.linkedin_url = request.POST.get('linkedin_url', '')
+        settings.twitter_url = request.POST.get('twitter_url', '')
+
+        # Update SEO settings
+        settings.meta_keywords = request.POST.get('meta_keywords', '')
+        settings.google_analytics_id = request.POST.get('google_analytics_id', '')
+
+        # Update design system settings (if they exist)
+        if hasattr(settings, 'primary_color'):
+            # Colors
+            settings.primary_color = request.POST.get('primary_color', settings.primary_color)
+            settings.primary_color_hover = request.POST.get('primary_color_hover', settings.primary_color_hover)
+            settings.secondary_color = request.POST.get('secondary_color', settings.secondary_color)
+            settings.accent_color = request.POST.get('accent_color', settings.accent_color)
+            settings.background_color = request.POST.get('background_color', settings.background_color)
+            settings.text_color = request.POST.get('text_color', settings.text_color)
+            settings.heading_color = request.POST.get('heading_color', settings.heading_color)
+
+            # General Typography
+            settings.heading_font = request.POST.get('heading_font', settings.heading_font)
+            settings.body_font = request.POST.get('body_font', settings.body_font)
+
+            # Individual Heading Fonts & Sizes
+            settings.h1_font = request.POST.get('h1_font', settings.h1_font)
+            settings.h1_size = request.POST.get('h1_size', settings.h1_size)
+            settings.h2_font = request.POST.get('h2_font', settings.h2_font)
+            settings.h2_size = request.POST.get('h2_size', settings.h2_size)
+            settings.h3_font = request.POST.get('h3_font', settings.h3_font)
+            settings.h3_size = request.POST.get('h3_size', settings.h3_size)
+            settings.h4_font = request.POST.get('h4_font', settings.h4_font)
+            settings.h4_size = request.POST.get('h4_size', settings.h4_size)
+            settings.h5_font = request.POST.get('h5_font', settings.h5_font)
+            settings.h5_size = request.POST.get('h5_size', settings.h5_size)
+            settings.h6_font = request.POST.get('h6_font', settings.h6_font)
+            settings.h6_size = request.POST.get('h6_size', settings.h6_size)
+
+            # Layout
+            settings.container_width = request.POST.get('container_width', settings.container_width)
+            settings.border_radius_preset = request.POST.get('border_radius_preset', settings.border_radius_preset)
+            settings.spacing_scale = request.POST.get('spacing_scale', settings.spacing_scale)
+            settings.shadow_preset = request.POST.get('shadow_preset', settings.shadow_preset)
+
+            # Button Settings - Style & Size
+            settings.button_style = request.POST.get('button_style', settings.button_style)
+            settings.button_size = request.POST.get('button_size', settings.button_size)
+            settings.button_border_width = request.POST.get('button_border_width', settings.button_border_width)
+
+            # Button Settings - Primary Colors
+            settings.primary_button_bg = request.POST.get('primary_button_bg', settings.primary_button_bg)
+            settings.primary_button_text = request.POST.get('primary_button_text', settings.primary_button_text)
+            settings.primary_button_border = request.POST.get('primary_button_border', settings.primary_button_border)
+            settings.primary_button_hover = request.POST.get('primary_button_hover', settings.primary_button_hover)
+
+            # Button Settings - Secondary Colors
+            settings.secondary_button_bg = request.POST.get('secondary_button_bg', settings.secondary_button_bg)
+            settings.secondary_button_text = request.POST.get('secondary_button_text', settings.secondary_button_text)
+            settings.secondary_button_border = request.POST.get('secondary_button_border', settings.secondary_button_border)
+            settings.secondary_button_hover = request.POST.get('secondary_button_hover', settings.secondary_button_hover)
+
+        # Update maintenance mode
+        settings.maintenance_mode = 'maintenance_mode' in request.POST
+
+        settings.save()
+
+        messages.success(request, 'Settings updated successfully!')
+        return redirect('backoffice:settings')
+
+
+from django.http import JsonResponse
+
+
+class AIManagementView(LoginRequiredMixin, TemplateView):
+    """AI Content Studio - Main dashboard"""
+    template_name = 'backoffice/ai_management.html'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+
+        # Get all pages for dropdown options
+        context['pages'] = Page.objects.all().order_by('title')
+        context['total_pages'] = Page.objects.count()
+
+        # Get AI configuration (if available)
+        try:
+            from ai.utils.llm_config import LLMConfig
+            config = LLMConfig()
+            context['ai_models'] = config.get_available_models()
+            context['default_model'] = config.default_model
+        except:
+            context['ai_models'] = []
+            context['default_model'] = None
+
+        return context
+
+
+class AIGeneratePageView(LoginRequiredMixin, TemplateView):
+    """AI Content Studio - Generate Page"""
+    template_name = 'backoffice/ai_generate_page.html'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+
+        context['total_pages'] = Page.objects.count()
+
+        # Get AI configuration (if available)
+        try:
+            from ai.utils.llm_config import LLMConfig
+            config = LLMConfig()
+            context['ai_models'] = config.get_available_models()
+            context['default_model'] = config.default_model
+        except:
+            context['ai_models'] = []
+            context['default_model'] = None
+
+        return context
+
+
+class AIBulkPagesView(LoginRequiredMixin, TemplateView):
+    """AI Content Studio - Bulk Create Pages"""
+    template_name = 'backoffice/ai_bulk_pages.html'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+
+        context['total_pages'] = Page.objects.count()
+
+        # Get AI configuration (if available)
+        try:
+            from ai.utils.llm_config import LLMConfig
+            config = LLMConfig()
+            context['ai_models'] = config.get_available_models()
+            context['default_model'] = config.default_model
+        except:
+            context['ai_models'] = []
+            context['default_model'] = None
+
+        return context
+
+
+class AIRefinePageView(LoginRequiredMixin, TemplateView):
+    """AI Content Studio - Refine Page"""
+    template_name = 'backoffice/ai_refine_page.html'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+
+        # Get all pages for dropdown options (sorted by created_at)
+        all_pages = Page.objects.all().order_by('-created_at')
+        context['pages'] = all_pages
+        context['total_pages'] = all_pages.count()
+
+        # Pre-populate page if page_slug is in URL
+        page_slug = kwargs.get('page_slug')
+        selected_page_obj = None
+        selected_page_id = None
+        if page_slug:
+            try:
+                # Find page by slug_i18n (check all languages)
+                page_obj = None
+                for page in all_pages:
+                    if page.slug_i18n and isinstance(page.slug_i18n, dict):
+                        if page_slug in page.slug_i18n.values():
+                            page_obj = page
+                            break
+
+                if page_obj:
+                    selected_page_obj = page_obj
+                    selected_page_id = page_obj.id
+                    context['selected_page'] = page_obj
+                    context['selected_page_slug'] = page_slug
+            except Page.DoesNotExist:
+                pass
+
+        # Build reference pages list (exclude current page and pages with no HTML content)
+        reference_pages = []
+        for page in all_pages:
+            # Skip current page
+            if selected_page_id and page.id == selected_page_id:
+                continue
+
+            if page.html_content:
+                reference_pages.append({
+                    'id': page.id,
+                    'title': page.default_title,
+                    'slug': page.default_slug,
+                })
+        context['reference_pages'] = reference_pages
+
+        # Get AI configuration (if available)
+        try:
+            from ai.utils.llm_config import LLMConfig
+            config = LLMConfig()
+            context['ai_models'] = config.get_available_models()
+            context['default_model'] = config.default_model
+        except:
+            context['ai_models'] = []
+            context['default_model'] = None
+
+        return context
+
+
+class AIComponentsView(LoginRequiredMixin, TemplateView):
+    """AI Content Studio - Components (Header/Footer/Global Sections)"""
+    template_name = 'backoffice/ai_components.html'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+
+        context['pages'] = Page.objects.all().order_by('title')
+
+        # Get AI configuration (if available)
+        try:
+            from ai.utils.llm_config import LLMConfig
+            config = LLMConfig()
+            context['ai_models'] = config.get_available_models()
+            context['default_model'] = config.default_model
+        except:
+            context['ai_models'] = []
+            context['default_model'] = None
+
+        return context
+
+
+
+@login_required
+@require_http_methods(["POST"])
+def restore_page_version(request, version_id):
+    """Restore a page to a specific version"""
+    from core.models import PageVersion
+
+    try:
+        version = PageVersion.objects.get(pk=version_id)
+        page = version.page
+
+        # Set user for version tracking
+        if request.user.is_authenticated:
+            page._snapshot_user = request.user
+        page._change_summary = f'Restored to version {version.version_number}'
+
+        # Restore the version
+        version.restore()
+
+        messages.success(request, f'Page "{page.slug}" restored to version {version.version_number}!')
+        return redirect('backoffice:page_edit', page_id=page.id)
+
+    except PageVersion.DoesNotExist:
+        messages.error(request, 'Version not found.')
+        return redirect('backoffice:pages')
+    except Exception as e:
+        messages.error(request, f'Error restoring version: {str(e)}')
+        return redirect('backoffice:pages')
+
+
+# === AI GENERATION CONTEXT MANAGEMENT ===
+# AI Generation Settings have been removed.
+# All AI context is now managed through the Project Briefing field in SiteSettings.
+# Users should edit the Project Briefing in Django Admin > Site Settings.
+
+
+class HeaderEditView(LoginRequiredMixin, TemplateView):
+    """Header editing page"""
+    template_name = 'backoffice/header_edit.html'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        # Get or create header global section
+        header, created = GlobalSection.objects.get_or_create(
+            key='main-header',
+            defaults={
+                'section_type': 'header',
+                'name': 'Main Header',
+                'html_template': '',
+                'fallback_template': 'partials/header.html',
+                'cache_duration': 3600,
+                'is_active': True
+            }
+        )
+        context['header'] = header
+        context['section'] = header  # For consistency with other templates
+
+        # Add AI configuration
+        try:
+            from ai.utils.llm_config import LLMConfig
+            config = LLMConfig()
+            context['ai_models'] = config.get_available_models()
+            context['default_model'] = config.default_model
+        except:
+            context['ai_models'] = []
+            context['default_model'] = 'gemini-pro'
+
+        return context
+
+    def post(self, request, *args, **kwargs):
+        """Handle header update"""
+        header, _ = GlobalSection.objects.get_or_create(
+            key='main-header',
+            defaults={
+                'section_type': 'header',
+                'name': 'Main Header',
+                'fallback_template': 'partials/header.html',
+            }
+        )
+
+        # Update header HTML template
+        header.html_template = request.POST.get('html_template', '')
+        header.name = request.POST.get('name', 'Main Header')
+        header.cache_duration = int(request.POST.get('cache_duration', 3600))
+        header.is_active = 'is_active' in request.POST
+        header.fallback_template = request.POST.get('fallback_template', 'partials/header.html')
+        
+        header.save()  # This will auto-clear cache
+        
+        messages.success(request, 'Header updated successfully!')
+        return redirect('backoffice:header_edit')
+
+
+class FooterEditView(LoginRequiredMixin, TemplateView):
+    """Footer editing page"""
+    template_name = 'backoffice/footer_edit.html'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        # Get or create footer global section
+        footer, created = GlobalSection.objects.get_or_create(
+            key='main-footer',
+            defaults={
+                'section_type': 'footer',
+                'name': 'Main Footer',
+                'html_template': '',
+                'fallback_template': 'partials/footer.html',
+                'cache_duration': 3600,
+                'is_active': True
+            }
+        )
+        context['footer'] = footer
+        context['section'] = footer  # For consistency with other templates
+
+        # Add AI configuration
+        try:
+            from ai.utils.llm_config import LLMConfig
+            config = LLMConfig()
+            context['ai_models'] = config.get_available_models()
+            context['default_model'] = config.default_model
+        except:
+            context['ai_models'] = []
+            context['default_model'] = 'gemini-pro'
+
+        return context
+
+    def post(self, request, *args, **kwargs):
+        """Handle footer update"""
+        footer, _ = GlobalSection.objects.get_or_create(
+            key='main-footer',
+            defaults={
+                'section_type': 'footer',
+                'name': 'Main Footer',
+                'fallback_template': 'partials/footer.html',
+            }
+        )
+
+        # Update footer HTML template
+        footer.html_template = request.POST.get('html_template', '')
+        footer.name = request.POST.get('name', 'Main Footer')
+        footer.cache_duration = int(request.POST.get('cache_duration', 3600))
+        footer.is_active = 'is_active' in request.POST
+        footer.fallback_template = request.POST.get('fallback_template', 'partials/footer.html')
+        
+        footer.save()  # This will auto-clear cache
+        
+        messages.success(request, 'Footer updated successfully!')
+        return redirect('backoffice:footer_edit')

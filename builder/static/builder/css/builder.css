@@ -1,0 +1,813 @@
+/**
+ * Frontend Builder Styles
+ * Visual styles for the inline content editor
+ */
+
+/* ========================================
+   Editable Elements
+   ======================================== */
+
+.builder-editable {
+    position: relative;
+    transition: all 0.2s ease;
+    cursor: text;
+}
+
+.builder-editable:hover {
+    outline: 2px dashed rgba(59, 130, 246, 0.4);
+    outline-offset: 4px;
+}
+
+.builder-editing {
+    outline: 2px solid rgba(59, 130, 246, 0.8) !important;
+    outline-offset: 4px;
+    background-color: rgba(59, 130, 246, 0.05);
+}
+
+/* Edit Indicator - DISABLED */
+.builder-edit-indicator {
+    display: none !important;
+}
+
+/* Modified/Success States */
+.builder-modified {
+    outline: 2px solid #f59e0b !important;
+    outline-offset: 4px;
+    background-color: rgba(245, 158, 11, 0.05);
+}
+
+.builder-success {
+    outline: 2px solid #10b981 !important;
+    outline-offset: 4px;
+    background-color: rgba(16, 185, 129, 0.05);
+    animation: builderPulseSuccess 0.6s ease;
+}
+
+@keyframes builderPulseSuccess {
+    0%, 100% {
+        outline-color: #10b981;
+    }
+    50% {
+        outline-color: #34d399;
+    }
+}
+
+/* ========================================
+   Notifications
+   ======================================== */
+
+.builder-notification {
+    position: fixed;
+    top: 70px;
+    right: 20px;
+    padding: 16px 24px;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    font-size: 14px;
+    font-weight: 600;
+    z-index: 10001;
+    transform: translateX(400px);
+    transition: transform 0.3s ease;
+}
+
+.builder-notification.show {
+    transform: translateX(0);
+}
+
+.builder-notification-success {
+    background: #10b981;
+    color: white;
+}
+
+.builder-notification-warning {
+    background: #f59e0b;
+    color: white;
+}
+
+.builder-notification-info {
+    background: #3b82f6;
+    color: white;
+}
+
+.builder-notification-error {
+    background: #ef4444;
+    color: white;
+}
+
+/* ========================================
+   Image Editing
+   ======================================== */
+
+.builder-image-editable {
+    position: relative;
+}
+
+.builder-image-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+    z-index: 10;
+}
+
+.builder-image-editable:hover .builder-image-overlay {
+    opacity: 1;
+}
+
+.builder-image-edit-btn {
+    background: #3b82f6;
+    color: white;
+    border: none;
+    padding: 12px 24px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: all 0.2s ease;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.builder-image-edit-btn:hover {
+    background: #2563eb;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4);
+}
+
+.builder-image-edit-btn svg {
+    width: 20px;
+    height: 20px;
+}
+
+/* ========================================
+   Modal
+   ======================================== */
+
+.builder-modal {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    align-items: center;
+    justify-content: center;
+}
+
+.builder-modal-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(4px);
+}
+
+.builder-modal-content {
+    position: relative;
+    background: white;
+    border-radius: 12px;
+    width: 90%;
+    max-width: 1000px;
+    max-height: 80vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    animation: builderModalSlideIn 0.3s ease;
+}
+
+@keyframes builderModalSlideIn {
+    from {
+        opacity: 0;
+        transform: translateY(-20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.builder-modal-header {
+    padding: 24px;
+    border-bottom: 1px solid #e5e7eb;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.builder-modal-header h3 {
+    margin: 0;
+    font-size: 20px;
+    font-weight: 700;
+    color: #111827;
+}
+
+.builder-modal-close {
+    background: none;
+    border: none;
+    font-size: 32px;
+    color: #6b7280;
+    cursor: pointer;
+    line-height: 1;
+    padding: 0;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    transition: all 0.2s ease;
+}
+
+.builder-modal-close:hover {
+    background: #f3f4f6;
+    color: #111827;
+}
+
+.builder-modal-body {
+    padding: 24px;
+    overflow-y: auto;
+    flex: 1;
+}
+
+/* ========================================
+   Image Grid
+   ======================================== */
+
+.builder-image-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 16px;
+}
+
+.builder-image-item {
+    aspect-ratio: 1;
+    border-radius: 8px;
+    overflow: hidden;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border: 2px solid transparent;
+    position: relative;
+}
+
+.builder-image-item:hover {
+    border-color: #3b82f6;
+    transform: translateY(-4px);
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
+}
+
+.builder-image-item img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.builder-image-info {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: linear-gradient(to top, rgba(0, 0, 0, 0.8), transparent);
+    padding: 12px 8px 8px;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+.builder-image-item:hover .builder-image-info {
+    opacity: 1;
+}
+
+.builder-image-title {
+    color: white;
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Loading/Empty/Error States */
+.builder-loading,
+.builder-empty,
+.builder-error {
+    padding: 60px 20px;
+    text-align: center;
+    color: #6b7280;
+    font-size: 16px;
+}
+
+.builder-error {
+    color: #ef4444;
+}
+
+/* ========================================
+   Builder Toolbar (if needed)
+   ======================================== */
+
+#builderChangesCount {
+    background: #3b82f6;
+    color: white;
+    padding: 4px 12px;
+    border-radius: 16px;
+    font-size: 14px;
+    font-weight: 600;
+    display: inline-block;
+}
+
+/* ========================================
+   Responsive
+   ======================================== */
+
+@media (max-width: 768px) {
+    .builder-modal-content {
+        width: 95%;
+        max-height: 90vh;
+    }
+
+    .builder-image-grid {
+        grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+        gap: 12px;
+    }
+
+    .builder-modal-header {
+        padding: 16px;
+    }
+
+    .builder-modal-body {
+        padding: 16px;
+    }
+}
+
+/* ========================================
+   Accessibility
+   ======================================== */
+
+.builder-editable:focus {
+    outline: 2px solid #3b82f6;
+    outline-offset: 4px;
+}
+
+/* Edit indicator disabled - no longer needed */
+
+/* Reduce motion for users who prefer it */
+@media (prefers-reduced-motion: reduce) {
+    .builder-editable,
+    .builder-image-overlay,
+    .builder-image-edit-btn,
+    .builder-image-item,
+    .builder-image-info,
+    .builder-modal-content {
+        transition: none;
+        animation: none;
+    }
+}
+
+/* ========================================
+   BUILDER SIDEBAR - Elementor Style
+   ======================================== */
+
+/* Main sidebar container */
+.builder-sidebar {
+    position: fixed;
+    left: -380px;
+    top: 0;
+    bottom: 0;
+    width: 380px;
+    background: #ffffff;
+    box-shadow: 4px 0 20px rgba(0, 0, 0, 0.1);
+    z-index: 9998;
+    display: flex;
+    flex-direction: column;
+    transition: left 0.3s ease;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+/* When sidebar is open */
+.builder-sidebar.open {
+    left: 0;
+}
+
+/* Adjust main content when sidebar is open */
+body.builder-sidebar-open {
+    margin-left: 380px;
+    transition: margin-left 0.3s ease;
+}
+
+/* ===== Sidebar Header ===== */
+.sidebar-header {
+    padding: 20px 24px;
+    border-bottom: 1px solid #e5e7eb;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: #f9fafb;
+}
+
+.sidebar-title {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex: 1;
+}
+
+.sidebar-title > div {
+    flex: 1;
+}
+
+.sidebar-title svg {
+    color: #3b82f6;
+    flex-shrink: 0;
+}
+
+.sidebar-close {
+    background: transparent;
+    border: none;
+    color: #6b7280;
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 4px;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.sidebar-close:hover {
+    background: #e5e7eb;
+    color: #111827;
+}
+
+/* ===== Sidebar Tabs ===== */
+.sidebar-tabs {
+    display: flex;
+    border-bottom: 1px solid #e5e7eb;
+    background: #ffffff;
+}
+
+.sidebar-tab {
+    flex: 1;
+    padding: 12px 16px;
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 600;
+    color: #6b7280;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+}
+
+.sidebar-tab:hover {
+    color: #3b82f6;
+    background: #f9fafb;
+}
+
+.sidebar-tab.active {
+    color: #3b82f6;
+    border-bottom-color: #3b82f6;
+}
+
+.sidebar-tab svg {
+    width: 16px;
+    height: 16px;
+}
+
+/* ===== Sidebar Content ===== */
+.sidebar-content {
+    flex: 1;
+    overflow-y: auto;
+    background: #ffffff;
+}
+
+.sidebar-panel {
+    display: none;
+    padding: 20px;
+}
+
+.sidebar-panel.active {
+    display: block;
+}
+
+/* ===== Empty State ===== */
+.sidebar-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 60px 20px;
+    text-align: center;
+    color: #9ca3af;
+}
+
+.sidebar-empty svg {
+    margin-bottom: 16px;
+}
+
+.sidebar-empty p {
+    font-size: 14px;
+    line-height: 1.6;
+    margin: 0;
+}
+
+/* ===== Sidebar Sections ===== */
+.sidebar-section {
+    margin-bottom: 24px;
+}
+
+.sidebar-section:last-child {
+    margin-bottom: 0;
+}
+
+.sidebar-section-title {
+    font-size: 14px;
+    font-weight: 700;
+    color: #111827;
+    margin: 0 0 12px 0;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.sidebar-info {
+    background: #eff6ff;
+    border-left: 3px solid #3b82f6;
+    padding: 12px;
+    font-size: 13px;
+    color: #1e40af;
+    margin-bottom: 16px;
+    border-radius: 4px;
+}
+
+/* ===== Form Fields ===== */
+.sidebar-field {
+    margin-bottom: 16px;
+}
+
+.sidebar-label {
+    display: block;
+    font-size: 13px;
+    font-weight: 600;
+    color: #374151;
+    margin-bottom: 6px;
+}
+
+.sidebar-input,
+.sidebar-textarea,
+.sidebar-select {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    font-size: 14px;
+    color: #111827;
+    background: #ffffff;
+    transition: all 0.2s ease;
+    font-family: inherit;
+}
+
+.sidebar-input:focus,
+.sidebar-textarea:focus,
+.sidebar-select:focus {
+    outline: none;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.sidebar-textarea {
+    resize: vertical;
+    min-height: 80px;
+}
+
+.sidebar-field-hint {
+    margin-top: 4px;
+    font-size: 11px;
+    color: #9ca3af;
+    font-family: 'Courier New', monospace;
+}
+
+.sidebar-value {
+    padding: 10px 12px;
+    background: #f3f4f6;
+    border-radius: 6px;
+    font-size: 14px;
+    color: #6b7280;
+    font-family: 'Courier New', monospace;
+}
+
+/* ===== Section Selection Indicators ===== */
+.builder-section-selectable {
+    cursor: pointer;
+    transition: all 0.2s ease;
+    position: relative;
+}
+
+.builder-section-selectable:hover {
+    outline: 2px dashed rgba(59, 130, 246, 0.5);
+    outline-offset: 4px;
+}
+
+.builder-section-selected {
+    outline: 3px solid #3b82f6 !important;
+    outline-offset: 4px;
+}
+
+/* Add a subtle indicator on hover */
+.builder-section-selectable::before {
+    content: '';
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 32px;
+    height: 32px;
+    background: rgba(59, 130, 246, 0.9);
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+    pointer-events: none;
+    z-index: 100;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='white'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z'/%3E%3C/svg%3E");
+    background-size: 18px 18px;
+    background-repeat: no-repeat;
+    background-position: center;
+}
+
+.builder-section-selectable:hover::before {
+    opacity: 1;
+}
+
+.builder-section-selected::before {
+    opacity: 1;
+    background-color: #2563eb;
+}
+
+/* ===== Design Controls (Placeholder) ===== */
+.design-section {
+    margin-bottom: 24px;
+    padding-bottom: 24px;
+    border-bottom: 1px solid #e5e7eb;
+}
+
+.design-section:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
+}
+
+.design-section h4 {
+    font-size: 13px;
+    font-weight: 700;
+    color: #111827;
+    margin: 0 0 12px 0;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.control-group {
+    margin-bottom: 16px;
+}
+
+.control-group:last-child {
+    margin-bottom: 0;
+}
+
+.control-group label {
+    display: block;
+    font-size: 13px;
+    font-weight: 600;
+    color: #374151;
+    margin-bottom: 8px;
+}
+
+/* ===== Responsive ===== */
+@media (max-width: 1024px) {
+    .builder-sidebar {
+        left: -320px;
+        width: 320px;
+    }
+
+    body.builder-sidebar-open {
+        margin-left: 320px;
+    }
+}
+
+@media (max-width: 768px) {
+    .builder-sidebar {
+        left: -100%;
+        width: 100%;
+    }
+
+    body.builder-sidebar-open {
+        margin-left: 0;
+        overflow: hidden;
+    }
+
+    .builder-sidebar.open {
+        left: 0;
+    }
+
+    /* Add overlay on mobile */
+    .builder-sidebar.open::before {
+        content: '';
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.5);
+        z-index: -1;
+    }
+}
+
+/* ===== Scrollbar Styling ===== */
+.sidebar-content::-webkit-scrollbar {
+    width: 8px;
+}
+
+.sidebar-content::-webkit-scrollbar-track {
+    background: #f3f4f6;
+}
+
+.sidebar-content::-webkit-scrollbar-thumb {
+    background: #d1d5db;
+    border-radius: 4px;
+}
+
+.sidebar-content::-webkit-scrollbar-thumb:hover {
+    background: #9ca3af;
+}
+
+/* ===== Element-Level Selection ===== */
+.builder-element-selected {
+    outline: 2px solid #3b82f6 !important;
+    outline-offset: 2px;
+    background-color: rgba(59, 130, 246, 0.05) !important;
+    cursor: pointer;
+}
+
+/* Hover state for elements (when not selected) */
+[data-editable]:hover:not(.builder-element-selected) {
+    outline: 1px dashed rgba(59, 130, 246, 0.5);
+    outline-offset: 2px;
+}
+
+/* Element Breadcrumb */
+.element-breadcrumb {
+    display: flex;
+    align-items: center;
+    padding: 12px 20px;
+    background: #f9fafb;
+    border-bottom: 1px solid #e5e7eb;
+    font-size: 12px;
+    overflow-x: auto;
+}
+
+.breadcrumb-item {
+    color: #6b7280;
+    white-space: nowrap;
+    text-transform: capitalize;
+}
+
+.breadcrumb-item.active {
+    color: #3b82f6;
+    font-weight: 600;
+}
+
+/* Sidebar Button */
+.sidebar-button {
+    width: 100%;
+    padding: 10px 16px;
+    background: #3b82f6;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.sidebar-button:hover {
+    background: #2563eb;
+}
+
+.sidebar-button:active {
+    transform: translateY(1px);
+}
+
+.sidebar-button-primary {
+    background: #3b82f6;
+}
+
+.sidebar-button-primary:hover {
+    background: #2563eb;
+}

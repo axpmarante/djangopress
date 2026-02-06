@@ -1,0 +1,1196 @@
+{% extends 'backoffice/base.html' %}
+
+{% block title %}Site Settings{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <!-- Header -->
+    <div>
+        <h2 class="text-3xl font-bold text-gray-900">Site Settings</h2>
+        <p class="text-gray-600 mt-1">Configure your site's general settings and preferences</p>
+    </div>
+
+    <!-- Settings Form -->
+    <form method="post" enctype="multipart/form-data">
+        {% csrf_token %}
+
+        <!-- General Settings -->
+        <div class="bg-white rounded-lg shadow overflow-hidden mb-6">
+            <div class="p-6 border-b border-gray-200">
+                <h3 class="text-lg font-semibold text-gray-900">General Information</h3>
+            </div>
+            <div class="p-6 space-y-6">
+                <!-- Site Name -->
+                <div>
+                    <label for="id_site_name" class="block text-sm font-medium text-gray-700 mb-2">
+                        Site Name *
+                    </label>
+                    <input type="text"
+                           name="site_name"
+                           id="id_site_name"
+                           value="{{ settings.site_name }}"
+                           required
+                           class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                </div>
+
+                <!-- Site Description -->
+                <div>
+                    <label for="id_site_description" class="block text-sm font-medium text-gray-700 mb-2">
+                        Site Description
+                    </label>
+                    <input type="text"
+                           name="site_description"
+                           id="id_site_description"
+                           value="{{ settings.site_description }}"
+                           class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                           placeholder="A brief description of your site">
+                </div>
+
+                <!-- Project Briefing -->
+                <div>
+                    <label for="id_project_briefing" class="block text-sm font-medium text-gray-700 mb-2">
+                        Project Briefing
+                        <span class="text-blue-600 ml-1" title="This helps AI generate better content">ℹ️</span>
+                    </label>
+                    <textarea name="project_briefing"
+                              id="id_project_briefing"
+                              rows="8"
+                              class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-mono text-sm"
+                              placeholder="Detailed description of your project/business for AI context.&#10;&#10;Include:&#10;• Business type and what you do&#10;• Target audience&#10;• Brand values&#10;• Tone of voice (professional, casual, friendly, etc.)&#10;• Key messaging&#10;&#10;This helps AI generate more relevant and on-brand content.">{{ settings.project_briefing }}</textarea>
+                    <p class="mt-2 text-xs text-gray-500">
+                        💡 <strong>AI Context:</strong> This information is used by AI to generate content that matches your brand voice and messaging.
+                        Be as detailed as possible for better results.
+                    </p>
+                </div>
+
+                <!-- Logos -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <!-- Main Logo (Light Backgrounds) -->
+                    <div>
+                        <label for="id_logo" class="block text-sm font-medium text-gray-700 mb-2">
+                            Logo (Light Backgrounds)
+                        </label>
+                        {% if settings.logo %}
+                        <div class="mb-3 p-4 bg-white border border-gray-200 rounded-lg">
+                            <img src="{{ settings.logo.url }}" alt="Current logo" class="h-16 object-contain">
+                            <p class="text-xs text-gray-500 mt-2">Current main logo</p>
+                        </div>
+                        {% endif %}
+                        <input type="file"
+                               name="logo"
+                               id="id_logo"
+                               accept="image/*"
+                               class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
+                        <p class="mt-1 text-xs text-gray-500">Main logo for light/white backgrounds</p>
+                    </div>
+
+                    <!-- Secondary Logo (Dark Backgrounds) -->
+                    <div>
+                        <label for="id_logo_dark_bg" class="block text-sm font-medium text-gray-700 mb-2">
+                            Logo (Dark Backgrounds)
+                        </label>
+                        {% if settings.logo_dark_bg %}
+                        <div class="mb-3 p-4 bg-gray-800 border border-gray-700 rounded-lg">
+                            <img src="{{ settings.logo_dark_bg.url }}" alt="Current dark logo" class="h-16 object-contain">
+                            <p class="text-xs text-gray-400 mt-2">Current dark logo</p>
+                        </div>
+                        {% endif %}
+                        <input type="file"
+                               name="logo_dark_bg"
+                               id="id_logo_dark_bg"
+                               accept="image/*"
+                               class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
+                        <p class="mt-1 text-xs text-gray-500">Alternative logo for dark backgrounds (typically white/light version)</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Language Settings -->
+        <div class="bg-white rounded-lg shadow overflow-hidden mb-6">
+            <div class="p-6 border-b border-gray-200">
+                <h3 class="text-lg font-semibold text-gray-900">Language Settings</h3>
+                <p class="text-sm text-gray-600 mt-1">Configure which languages are available on your site</p>
+            </div>
+            <div class="p-6 space-y-6">
+                <!-- Default Language -->
+                <div>
+                    <label for="id_default_language" class="block text-sm font-medium text-gray-700 mb-2">
+                        Default Language *
+                    </label>
+                    <select name="default_language"
+                            id="id_default_language"
+                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        {% for lang in settings.enabled_languages %}
+                            <option value="{{ lang.code }}" {% if lang.code == settings.default_language %}selected{% endif %}>
+                                {{ lang.name }} ({{ lang.code }})
+                            </option>
+                        {% endfor %}
+                    </select>
+                    <p class="mt-1 text-xs text-gray-500">The default language for new content and URL prefixes</p>
+                </div>
+
+                <!-- Enabled Languages -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-3">
+                        Enabled Languages *
+                    </label>
+
+                    <div id="languages-container" class="space-y-3 mb-4">
+                        {% for lang in settings.enabled_languages %}
+                        <div class="language-item flex items-center gap-3 p-3 bg-gray-50 border border-gray-200 rounded-lg">
+                            <input type="text"
+                                   class="lang-code w-24 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-semibold"
+                                   value="{{ lang.code }}"
+                                   placeholder="Code"
+                                   required>
+                            <input type="text"
+                                   class="lang-name flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                   value="{{ lang.name }}"
+                                   placeholder="Language Name"
+                                   required>
+                            <button type="button"
+                                    onclick="removeLanguage(this)"
+                                    class="remove-lang-btn px-4 py-2 bg-red-600 text-white text-sm rounded-lg hover:bg-red-700 transition-colors">
+                                Remove
+                            </button>
+                        </div>
+                        {% endfor %}
+                    </div>
+
+                    <button type="button"
+                            onclick="addLanguage()"
+                            class="px-4 py-2 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 transition-colors">
+                        + Add Language
+                    </button>
+
+                    <p class="mt-3 text-xs text-gray-500">
+                        💡 <strong>Tip:</strong> When you add or remove languages, all translation fields across the admin will update automatically.
+                        Common codes: pt (Portuguese), en (English), es (Spanish), fr (French), de (German)
+                    </p>
+                </div>
+
+                <!-- Save Languages Button (AJAX) -->
+                <div class="pt-4 border-t border-gray-200">
+                    <button type="button"
+                            onclick="saveLanguages()"
+                            class="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+                        Save Language Settings
+                    </button>
+                    <span id="language-save-status" class="ml-3 text-sm"></span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Contact Information -->
+        <div class="bg-white rounded-lg shadow overflow-hidden mb-6">
+            <div class="p-6 border-b border-gray-200">
+                <h3 class="text-lg font-semibold text-gray-900">Contact Information</h3>
+            </div>
+            <div class="p-6 space-y-6">
+                <!-- Contact Email -->
+                <div>
+                    <label for="id_contact_email" class="block text-sm font-medium text-gray-700 mb-2">
+                        Contact Email *
+                    </label>
+                    <input type="email"
+                           name="contact_email"
+                           id="id_contact_email"
+                           value="{{ settings.contact_email }}"
+                           required
+                           class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                </div>
+
+                <!-- Contact Phone -->
+                <div>
+                    <label for="id_contact_phone" class="block text-sm font-medium text-gray-700 mb-2">
+                        Contact Phone
+                    </label>
+                    <input type="text"
+                           name="contact_phone"
+                           id="id_contact_phone"
+                           value="{{ settings.contact_phone }}"
+                           class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                           placeholder="+351 123 456 789">
+                </div>
+
+                <!-- Contact Address -->
+                <div>
+                    <label for="id_contact_address" class="block text-sm font-medium text-gray-700 mb-2">
+                        Contact Address
+                    </label>
+                    <textarea name="contact_address"
+                              id="id_contact_address"
+                              rows="3"
+                              class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">{{ settings.contact_address }}</textarea>
+                </div>
+            </div>
+        </div>
+
+        <!-- Social Media Links -->
+        <div class="bg-white rounded-lg shadow overflow-hidden mb-6">
+            <div class="p-6 border-b border-gray-200">
+                <h3 class="text-lg font-semibold text-gray-900">Social Media</h3>
+            </div>
+            <div class="p-6 space-y-6">
+                <!-- Facebook -->
+                <div>
+                    <label for="id_facebook_url" class="block text-sm font-medium text-gray-700 mb-2">
+                        Facebook URL
+                    </label>
+                    <input type="url"
+                           name="facebook_url"
+                           id="id_facebook_url"
+                           value="{{ settings.facebook_url }}"
+                           class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                           placeholder="https://facebook.com/yourpage">
+                </div>
+
+                <!-- Instagram -->
+                <div>
+                    <label for="id_instagram_url" class="block text-sm font-medium text-gray-700 mb-2">
+                        Instagram URL
+                    </label>
+                    <input type="url"
+                           name="instagram_url"
+                           id="id_instagram_url"
+                           value="{{ settings.instagram_url }}"
+                           class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                           placeholder="https://instagram.com/yourprofile">
+                </div>
+
+                <!-- LinkedIn -->
+                <div>
+                    <label for="id_linkedin_url" class="block text-sm font-medium text-gray-700 mb-2">
+                        LinkedIn URL
+                    </label>
+                    <input type="url"
+                           name="linkedin_url"
+                           id="id_linkedin_url"
+                           value="{{ settings.linkedin_url }}"
+                           class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                           placeholder="https://linkedin.com/company/yourcompany">
+                </div>
+
+                <!-- Twitter -->
+                <div>
+                    <label for="id_twitter_url" class="block text-sm font-medium text-gray-700 mb-2">
+                        Twitter/X URL
+                    </label>
+                    <input type="url"
+                           name="twitter_url"
+                           id="id_twitter_url"
+                           value="{{ settings.twitter_url }}"
+                           class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                           placeholder="https://twitter.com/yourhandle">
+                </div>
+            </div>
+        </div>
+
+        <!-- SEO Settings -->
+        <div class="bg-white rounded-lg shadow overflow-hidden mb-6">
+            <div class="p-6 border-b border-gray-200">
+                <h3 class="text-lg font-semibold text-gray-900">SEO & Analytics</h3>
+            </div>
+            <div class="p-6 space-y-6">
+                <!-- Meta Keywords -->
+                <div>
+                    <label for="id_meta_keywords" class="block text-sm font-medium text-gray-700 mb-2">
+                        Meta Keywords
+                    </label>
+                    <input type="text"
+                           name="meta_keywords"
+                           id="id_meta_keywords"
+                           value="{{ settings.meta_keywords }}"
+                           class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                           placeholder="keyword1, keyword2, keyword3">
+                    <p class="mt-1 text-xs text-gray-500">Comma-separated list of keywords</p>
+                </div>
+
+                <!-- Google Analytics ID -->
+                <div>
+                    <label for="id_google_analytics_id" class="block text-sm font-medium text-gray-700 mb-2">
+                        Google Analytics ID
+                    </label>
+                    <input type="text"
+                           name="google_analytics_id"
+                           id="id_google_analytics_id"
+                           value="{{ settings.google_analytics_id }}"
+                           class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                           placeholder="G-XXXXXXXXXX or UA-XXXXXXXXX-X">
+                </div>
+            </div>
+        </div>
+
+        <!-- Design System Settings (if exists) -->
+        {% if settings.primary_color %}
+        <div class="bg-white rounded-lg shadow overflow-hidden mb-6">
+            <div class="p-6 border-b border-gray-200">
+                <h3 class="text-lg font-semibold text-gray-900">Design System</h3>
+                <p class="text-sm text-gray-600 mt-1">Customize colors, typography, layout, and buttons</p>
+            </div>
+            <div class="p-6 space-y-8">
+                <!-- COLORS SECTION -->
+                <div>
+                    <h4 class="text-md font-semibold text-gray-800 mb-4 pb-2 border-b">Colors</h4>
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        <div>
+                            <label for="id_primary_color" class="block text-sm font-medium text-gray-700 mb-2">
+                                Primary Color
+                            </label>
+                            <div class="flex items-center space-x-3">
+                                <input type="color"
+                                       name="primary_color"
+                                       id="id_primary_color"
+                                       value="{{ settings.primary_color }}"
+                                       class="h-10 w-20 border border-gray-300 rounded cursor-pointer">
+                                <input type="text"
+                                       value="{{ settings.primary_color }}"
+                                       readonly
+                                       class="flex-1 px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 font-mono text-sm">
+                            </div>
+                        </div>
+
+                        <div>
+                            <label for="id_primary_color_hover" class="block text-sm font-medium text-gray-700 mb-2">
+                                Primary Hover
+                            </label>
+                            <div class="flex items-center space-x-3">
+                                <input type="color"
+                                       name="primary_color_hover"
+                                       id="id_primary_color_hover"
+                                       value="{{ settings.primary_color_hover }}"
+                                       class="h-10 w-20 border border-gray-300 rounded cursor-pointer">
+                                <input type="text"
+                                       value="{{ settings.primary_color_hover }}"
+                                       readonly
+                                       class="flex-1 px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 font-mono text-sm">
+                            </div>
+                        </div>
+
+                        <div>
+                            <label for="id_secondary_color" class="block text-sm font-medium text-gray-700 mb-2">
+                                Secondary Color
+                            </label>
+                            <div class="flex items-center space-x-3">
+                                <input type="color"
+                                       name="secondary_color"
+                                       id="id_secondary_color"
+                                       value="{{ settings.secondary_color }}"
+                                       class="h-10 w-20 border border-gray-300 rounded cursor-pointer">
+                                <input type="text"
+                                       value="{{ settings.secondary_color }}"
+                                       readonly
+                                       class="flex-1 px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 font-mono text-sm">
+                            </div>
+                        </div>
+
+                        <div>
+                            <label for="id_accent_color" class="block text-sm font-medium text-gray-700 mb-2">
+                                Accent Color
+                            </label>
+                            <div class="flex items-center space-x-3">
+                                <input type="color"
+                                       name="accent_color"
+                                       id="id_accent_color"
+                                       value="{{ settings.accent_color }}"
+                                       class="h-10 w-20 border border-gray-300 rounded cursor-pointer">
+                                <input type="text"
+                                       value="{{ settings.accent_color }}"
+                                       readonly
+                                       class="flex-1 px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 font-mono text-sm">
+                            </div>
+                        </div>
+
+                        <div>
+                            <label for="id_background_color" class="block text-sm font-medium text-gray-700 mb-2">
+                                Background Color
+                            </label>
+                            <div class="flex items-center space-x-3">
+                                <input type="color"
+                                       name="background_color"
+                                       id="id_background_color"
+                                       value="{{ settings.background_color }}"
+                                       class="h-10 w-20 border border-gray-300 rounded cursor-pointer">
+                                <input type="text"
+                                       value="{{ settings.background_color }}"
+                                       readonly
+                                       class="flex-1 px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 font-mono text-sm">
+                            </div>
+                        </div>
+
+                        <div>
+                            <label for="id_text_color" class="block text-sm font-medium text-gray-700 mb-2">
+                                Text Color
+                            </label>
+                            <div class="flex items-center space-x-3">
+                                <input type="color"
+                                       name="text_color"
+                                       id="id_text_color"
+                                       value="{{ settings.text_color }}"
+                                       class="h-10 w-20 border border-gray-300 rounded cursor-pointer">
+                                <input type="text"
+                                       value="{{ settings.text_color }}"
+                                       readonly
+                                       class="flex-1 px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 font-mono text-sm">
+                            </div>
+                        </div>
+
+                        <div>
+                            <label for="id_heading_color" class="block text-sm font-medium text-gray-700 mb-2">
+                                Heading Color
+                            </label>
+                            <div class="flex items-center space-x-3">
+                                <input type="color"
+                                       name="heading_color"
+                                       id="id_heading_color"
+                                       value="{{ settings.heading_color }}"
+                                       class="h-10 w-20 border border-gray-300 rounded cursor-pointer">
+                                <input type="text"
+                                       value="{{ settings.heading_color }}"
+                                       readonly
+                                       class="flex-1 px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 font-mono text-sm">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TYPOGRAPHY SECTION -->
+                <div>
+                    <h4 class="text-md font-semibold text-gray-800 mb-4 pb-2 border-b">Typography</h4>
+
+                    <!-- General Fonts -->
+                    <div class="mb-3 p-3 bg-blue-50 border-l-4 border-blue-500 rounded">
+                        <p class="text-sm text-blue-800">
+                            <strong>📝 Google Fonts:</strong> Select from our curated list of professional Google Fonts.
+                            The selected fonts will be automatically loaded on your website.
+                        </p>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                        <div>
+                            <label for="id_body_font" class="block text-sm font-medium text-gray-700 mb-2">
+                                Body Font
+                            </label>
+                            <select name="body_font"
+                                    id="id_body_font"
+                                    class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                {% for font_value, font_label in google_fonts %}
+                                    <option value="{{ font_value }}" {% if settings.body_font == font_value %}selected{% endif %}>
+                                        {{ font_label }}
+                                    </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <div>
+                            <label for="id_heading_font" class="block text-sm font-medium text-gray-700 mb-2">
+                                General Heading Font
+                            </label>
+                            <select name="heading_font"
+                                    id="id_heading_font"
+                                    class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                {% for font_value, font_label in google_fonts %}
+                                    <option value="{{ font_value }}" {% if settings.heading_font == font_value %}selected{% endif %}>
+                                        {{ font_label }}
+                                    </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Individual Heading Fonts & Sizes -->
+                    <p class="text-sm text-gray-600 mb-3">Individual Heading Settings (H1-H6)</p>
+                    <div class="space-y-4">
+                        <!-- H1 -->
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label for="id_h1_font" class="block text-xs font-medium text-gray-600 mb-1">
+                                    H1 Font Family
+                                </label>
+                                <select name="h1_font" id="id_h1_font"
+                                        class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                    {% for font_value, font_label in google_fonts %}
+                                        <option value="{{ font_value }}" {% if settings.h1_font == font_value %}selected{% endif %}>
+                                            {{ font_label }}
+                                        </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div>
+                                <label for="id_h1_size" class="block text-xs font-medium text-gray-600 mb-1">
+                                    H1 Size (Tailwind class)
+                                </label>
+                                <select name="h1_size" id="id_h1_size"
+                                        class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                    <option value="text-xs" {% if settings.h1_size == "text-xs" %}selected{% endif %}>text-xs</option>
+                                    <option value="text-sm" {% if settings.h1_size == "text-sm" %}selected{% endif %}>text-sm</option>
+                                    <option value="text-base" {% if settings.h1_size == "text-base" %}selected{% endif %}>text-base</option>
+                                    <option value="text-lg" {% if settings.h1_size == "text-lg" %}selected{% endif %}>text-lg</option>
+                                    <option value="text-xl" {% if settings.h1_size == "text-xl" %}selected{% endif %}>text-xl</option>
+                                    <option value="text-2xl" {% if settings.h1_size == "text-2xl" %}selected{% endif %}>text-2xl</option>
+                                    <option value="text-3xl" {% if settings.h1_size == "text-3xl" %}selected{% endif %}>text-3xl</option>
+                                    <option value="text-4xl" {% if settings.h1_size == "text-4xl" %}selected{% endif %}>text-4xl</option>
+                                    <option value="text-5xl" {% if settings.h1_size == "text-5xl" %}selected{% endif %}>text-5xl</option>
+                                    <option value="text-6xl" {% if settings.h1_size == "text-6xl" %}selected{% endif %}>text-6xl</option>
+                                    <option value="text-7xl" {% if settings.h1_size == "text-7xl" %}selected{% endif %}>text-7xl</option>
+                                    <option value="text-8xl" {% if settings.h1_size == "text-8xl" %}selected{% endif %}>text-8xl</option>
+                                    <option value="text-9xl" {% if settings.h1_size == "text-9xl" %}selected{% endif %}>text-9xl</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- H2 -->
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label for="id_h2_font" class="block text-xs font-medium text-gray-600 mb-1">
+                                    H2 Font Family
+                                </label>
+                                <select name="h2_font" id="id_h2_font"
+                                        class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                    {% for font_value, font_label in google_fonts %}
+                                        <option value="{{ font_value }}" {% if settings.h2_font == font_value %}selected{% endif %}>
+                                            {{ font_label }}
+                                        </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div>
+                                <label for="id_h2_size" class="block text-xs font-medium text-gray-600 mb-1">
+                                    H2 Size (Tailwind class)
+                                </label>
+                                <select name="h2_size" id="id_h2_size"
+                                        class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                    <option value="text-xs" {% if settings.h2_size == "text-xs" %}selected{% endif %}>text-xs</option>
+                                    <option value="text-sm" {% if settings.h2_size == "text-sm" %}selected{% endif %}>text-sm</option>
+                                    <option value="text-base" {% if settings.h2_size == "text-base" %}selected{% endif %}>text-base</option>
+                                    <option value="text-lg" {% if settings.h2_size == "text-lg" %}selected{% endif %}>text-lg</option>
+                                    <option value="text-xl" {% if settings.h2_size == "text-xl" %}selected{% endif %}>text-xl</option>
+                                    <option value="text-2xl" {% if settings.h2_size == "text-2xl" %}selected{% endif %}>text-2xl</option>
+                                    <option value="text-3xl" {% if settings.h2_size == "text-3xl" %}selected{% endif %}>text-3xl</option>
+                                    <option value="text-4xl" {% if settings.h2_size == "text-4xl" %}selected{% endif %}>text-4xl</option>
+                                    <option value="text-5xl" {% if settings.h2_size == "text-5xl" %}selected{% endif %}>text-5xl</option>
+                                    <option value="text-6xl" {% if settings.h2_size == "text-6xl" %}selected{% endif %}>text-6xl</option>
+                                    <option value="text-7xl" {% if settings.h2_size == "text-7xl" %}selected{% endif %}>text-7xl</option>
+                                    <option value="text-8xl" {% if settings.h2_size == "text-8xl" %}selected{% endif %}>text-8xl</option>
+                                    <option value="text-9xl" {% if settings.h2_size == "text-9xl" %}selected{% endif %}>text-9xl</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- H3 -->
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label for="id_h3_font" class="block text-xs font-medium text-gray-600 mb-1">
+                                    H3 Font Family
+                                </label>
+                                <select name="h3_font" id="id_h3_font"
+                                        class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                    {% for font_value, font_label in google_fonts %}
+                                        <option value="{{ font_value }}" {% if settings.h3_font == font_value %}selected{% endif %}>
+                                            {{ font_label }}
+                                        </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div>
+                                <label for="id_h3_size" class="block text-xs font-medium text-gray-600 mb-1">
+                                    H3 Size (Tailwind class)
+                                </label>
+                                <select name="h3_size" id="id_h3_size"
+                                        class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                    <option value="text-xs" {% if settings.h3_size == "text-xs" %}selected{% endif %}>text-xs</option>
+                                    <option value="text-sm" {% if settings.h3_size == "text-sm" %}selected{% endif %}>text-sm</option>
+                                    <option value="text-base" {% if settings.h3_size == "text-base" %}selected{% endif %}>text-base</option>
+                                    <option value="text-lg" {% if settings.h3_size == "text-lg" %}selected{% endif %}>text-lg</option>
+                                    <option value="text-xl" {% if settings.h3_size == "text-xl" %}selected{% endif %}>text-xl</option>
+                                    <option value="text-2xl" {% if settings.h3_size == "text-2xl" %}selected{% endif %}>text-2xl</option>
+                                    <option value="text-3xl" {% if settings.h3_size == "text-3xl" %}selected{% endif %}>text-3xl</option>
+                                    <option value="text-4xl" {% if settings.h3_size == "text-4xl" %}selected{% endif %}>text-4xl</option>
+                                    <option value="text-5xl" {% if settings.h3_size == "text-5xl" %}selected{% endif %}>text-5xl</option>
+                                    <option value="text-6xl" {% if settings.h3_size == "text-6xl" %}selected{% endif %}>text-6xl</option>
+                                    <option value="text-7xl" {% if settings.h3_size == "text-7xl" %}selected{% endif %}>text-7xl</option>
+                                    <option value="text-8xl" {% if settings.h3_size == "text-8xl" %}selected{% endif %}>text-8xl</option>
+                                    <option value="text-9xl" {% if settings.h3_size == "text-9xl" %}selected{% endif %}>text-9xl</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- H4 -->
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label for="id_h4_font" class="block text-xs font-medium text-gray-600 mb-1">
+                                    H4 Font Family
+                                </label>
+                                <select name="h4_font" id="id_h4_font"
+                                        class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                    {% for font_value, font_label in google_fonts %}
+                                        <option value="{{ font_value }}" {% if settings.h4_font == font_value %}selected{% endif %}>
+                                            {{ font_label }}
+                                        </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div>
+                                <label for="id_h4_size" class="block text-xs font-medium text-gray-600 mb-1">
+                                    H4 Size (Tailwind class)
+                                </label>
+                                <select name="h4_size" id="id_h4_size"
+                                        class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                    <option value="text-xs" {% if settings.h4_size == "text-xs" %}selected{% endif %}>text-xs</option>
+                                    <option value="text-sm" {% if settings.h4_size == "text-sm" %}selected{% endif %}>text-sm</option>
+                                    <option value="text-base" {% if settings.h4_size == "text-base" %}selected{% endif %}>text-base</option>
+                                    <option value="text-lg" {% if settings.h4_size == "text-lg" %}selected{% endif %}>text-lg</option>
+                                    <option value="text-xl" {% if settings.h4_size == "text-xl" %}selected{% endif %}>text-xl</option>
+                                    <option value="text-2xl" {% if settings.h4_size == "text-2xl" %}selected{% endif %}>text-2xl</option>
+                                    <option value="text-3xl" {% if settings.h4_size == "text-3xl" %}selected{% endif %}>text-3xl</option>
+                                    <option value="text-4xl" {% if settings.h4_size == "text-4xl" %}selected{% endif %}>text-4xl</option>
+                                    <option value="text-5xl" {% if settings.h4_size == "text-5xl" %}selected{% endif %}>text-5xl</option>
+                                    <option value="text-6xl" {% if settings.h4_size == "text-6xl" %}selected{% endif %}>text-6xl</option>
+                                    <option value="text-7xl" {% if settings.h4_size == "text-7xl" %}selected{% endif %}>text-7xl</option>
+                                    <option value="text-8xl" {% if settings.h4_size == "text-8xl" %}selected{% endif %}>text-8xl</option>
+                                    <option value="text-9xl" {% if settings.h4_size == "text-9xl" %}selected{% endif %}>text-9xl</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- H5 -->
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label for="id_h5_font" class="block text-xs font-medium text-gray-600 mb-1">
+                                    H5 Font Family
+                                </label>
+                                <select name="h5_font" id="id_h5_font"
+                                        class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                    {% for font_value, font_label in google_fonts %}
+                                        <option value="{{ font_value }}" {% if settings.h5_font == font_value %}selected{% endif %}>
+                                            {{ font_label }}
+                                        </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div>
+                                <label for="id_h5_size" class="block text-xs font-medium text-gray-600 mb-1">
+                                    H5 Size (Tailwind class)
+                                </label>
+                                <select name="h5_size" id="id_h5_size"
+                                        class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                    <option value="text-xs" {% if settings.h5_size == "text-xs" %}selected{% endif %}>text-xs</option>
+                                    <option value="text-sm" {% if settings.h5_size == "text-sm" %}selected{% endif %}>text-sm</option>
+                                    <option value="text-base" {% if settings.h5_size == "text-base" %}selected{% endif %}>text-base</option>
+                                    <option value="text-lg" {% if settings.h5_size == "text-lg" %}selected{% endif %}>text-lg</option>
+                                    <option value="text-xl" {% if settings.h5_size == "text-xl" %}selected{% endif %}>text-xl</option>
+                                    <option value="text-2xl" {% if settings.h5_size == "text-2xl" %}selected{% endif %}>text-2xl</option>
+                                    <option value="text-3xl" {% if settings.h5_size == "text-3xl" %}selected{% endif %}>text-3xl</option>
+                                    <option value="text-4xl" {% if settings.h5_size == "text-4xl" %}selected{% endif %}>text-4xl</option>
+                                    <option value="text-5xl" {% if settings.h5_size == "text-5xl" %}selected{% endif %}>text-5xl</option>
+                                    <option value="text-6xl" {% if settings.h5_size == "text-6xl" %}selected{% endif %}>text-6xl</option>
+                                    <option value="text-7xl" {% if settings.h5_size == "text-7xl" %}selected{% endif %}>text-7xl</option>
+                                    <option value="text-8xl" {% if settings.h5_size == "text-8xl" %}selected{% endif %}>text-8xl</option>
+                                    <option value="text-9xl" {% if settings.h5_size == "text-9xl" %}selected{% endif %}>text-9xl</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- H6 -->
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label for="id_h6_font" class="block text-xs font-medium text-gray-600 mb-1">
+                                    H6 Font Family
+                                </label>
+                                <select name="h6_font" id="id_h6_font"
+                                        class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                    {% for font_value, font_label in google_fonts %}
+                                        <option value="{{ font_value }}" {% if settings.h6_font == font_value %}selected{% endif %}>
+                                            {{ font_label }}
+                                        </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div>
+                                <label for="id_h6_size" class="block text-xs font-medium text-gray-600 mb-1">
+                                    H6 Size (Tailwind class)
+                                </label>
+                                <select name="h6_size" id="id_h6_size"
+                                        class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                    <option value="text-xs" {% if settings.h6_size == "text-xs" %}selected{% endif %}>text-xs</option>
+                                    <option value="text-sm" {% if settings.h6_size == "text-sm" %}selected{% endif %}>text-sm</option>
+                                    <option value="text-base" {% if settings.h6_size == "text-base" %}selected{% endif %}>text-base</option>
+                                    <option value="text-lg" {% if settings.h6_size == "text-lg" %}selected{% endif %}>text-lg</option>
+                                    <option value="text-xl" {% if settings.h6_size == "text-xl" %}selected{% endif %}>text-xl</option>
+                                    <option value="text-2xl" {% if settings.h6_size == "text-2xl" %}selected{% endif %}>text-2xl</option>
+                                    <option value="text-3xl" {% if settings.h6_size == "text-3xl" %}selected{% endif %}>text-3xl</option>
+                                    <option value="text-4xl" {% if settings.h6_size == "text-4xl" %}selected{% endif %}>text-4xl</option>
+                                    <option value="text-5xl" {% if settings.h6_size == "text-5xl" %}selected{% endif %}>text-5xl</option>
+                                    <option value="text-6xl" {% if settings.h6_size == "text-6xl" %}selected{% endif %}>text-6xl</option>
+                                    <option value="text-7xl" {% if settings.h6_size == "text-7xl" %}selected{% endif %}>text-7xl</option>
+                                    <option value="text-8xl" {% if settings.h6_size == "text-8xl" %}selected{% endif %}>text-8xl</option>
+                                    <option value="text-9xl" {% if settings.h6_size == "text-9xl" %}selected{% endif %}>text-9xl</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- LAYOUT SECTION -->
+                <div>
+                    <h4 class="text-md font-semibold text-gray-800 mb-4 pb-2 border-b">Layout</h4>
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                        <div>
+                            <label for="id_container_width" class="block text-sm font-medium text-gray-700 mb-2">
+                                Container Width
+                            </label>
+                            <select name="container_width"
+                                    id="id_container_width"
+                                    class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                <option value="full" {% if settings.container_width == 'full' %}selected{% endif %}>Full Width</option>
+                                <option value="xs" {% if settings.container_width == 'xs' %}selected{% endif %}>Extra Small (20rem)</option>
+                                <option value="sm" {% if settings.container_width == 'sm' %}selected{% endif %}>Small (24rem)</option>
+                                <option value="md" {% if settings.container_width == 'md' %}selected{% endif %}>Medium (28rem)</option>
+                                <option value="lg" {% if settings.container_width == 'lg' %}selected{% endif %}>Large (32rem)</option>
+                                <option value="xl" {% if settings.container_width == 'xl' %}selected{% endif %}>Extra Large (36rem)</option>
+                                <option value="2xl" {% if settings.container_width == '2xl' %}selected{% endif %}>2XL (42rem)</option>
+                                <option value="3xl" {% if settings.container_width == '3xl' %}selected{% endif %}>3XL (48rem)</option>
+                                <option value="4xl" {% if settings.container_width == '4xl' %}selected{% endif %}>4XL (56rem)</option>
+                                <option value="5xl" {% if settings.container_width == '5xl' %}selected{% endif %}>5XL (64rem)</option>
+                                <option value="6xl" {% if settings.container_width == '6xl' %}selected{% endif %}>6XL (72rem)</option>
+                                <option value="7xl" {% if settings.container_width == '7xl' %}selected{% endif %}>7XL (80rem)</option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label for="id_border_radius_preset" class="block text-sm font-medium text-gray-700 mb-2">
+                                Border Radius
+                            </label>
+                            <select name="border_radius_preset"
+                                    id="id_border_radius_preset"
+                                    class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                <option value="none" {% if settings.border_radius_preset == 'none' %}selected{% endif %}>None</option>
+                                <option value="sm" {% if settings.border_radius_preset == 'sm' %}selected{% endif %}>Small</option>
+                                <option value="md" {% if settings.border_radius_preset == 'md' %}selected{% endif %}>Medium</option>
+                                <option value="lg" {% if settings.border_radius_preset == 'lg' %}selected{% endif %}>Large</option>
+                                <option value="xl" {% if settings.border_radius_preset == 'xl' %}selected{% endif %}>Extra Large</option>
+                                <option value="2xl" {% if settings.border_radius_preset == '2xl' %}selected{% endif %}>2XL</option>
+                                <option value="3xl" {% if settings.border_radius_preset == '3xl' %}selected{% endif %}>3XL</option>
+                                <option value="full" {% if settings.border_radius_preset == 'full' %}selected{% endif %}>Full</option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label for="id_spacing_scale" class="block text-sm font-medium text-gray-700 mb-2">
+                                Spacing Scale
+                            </label>
+                            <select name="spacing_scale"
+                                    id="id_spacing_scale"
+                                    class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                <option value="tight" {% if settings.spacing_scale == 'tight' %}selected{% endif %}>Tight</option>
+                                <option value="normal" {% if settings.spacing_scale == 'normal' %}selected{% endif %}>Normal</option>
+                                <option value="relaxed" {% if settings.spacing_scale == 'relaxed' %}selected{% endif %}>Relaxed</option>
+                                <option value="loose" {% if settings.spacing_scale == 'loose' %}selected{% endif %}>Loose</option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label for="id_shadow_preset" class="block text-sm font-medium text-gray-700 mb-2">
+                                Shadow Style
+                            </label>
+                            <select name="shadow_preset"
+                                    id="id_shadow_preset"
+                                    class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                <option value="none" {% if settings.shadow_preset == 'none' %}selected{% endif %}>None</option>
+                                <option value="sm" {% if settings.shadow_preset == 'sm' %}selected{% endif %}>Small</option>
+                                <option value="md" {% if settings.shadow_preset == 'md' %}selected{% endif %}>Medium</option>
+                                <option value="lg" {% if settings.shadow_preset == 'lg' %}selected{% endif %}>Large</option>
+                                <option value="xl" {% if settings.shadow_preset == 'xl' %}selected{% endif %}>Extra Large</option>
+                                <option value="2xl" {% if settings.shadow_preset == '2xl' %}selected{% endif %}>2XL</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- BUTTONS SECTION -->
+                <div>
+                    <h4 class="text-md font-semibold text-gray-800 mb-4 pb-2 border-b">Buttons</h4>
+
+                    <!-- Button Style & Size -->
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+                        <div>
+                            <label for="id_button_style" class="block text-sm font-medium text-gray-700 mb-2">
+                                Button Style
+                            </label>
+                            <select name="button_style"
+                                    id="id_button_style"
+                                    class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                <option value="rounded" {% if settings.button_style == 'rounded' %}selected{% endif %}>Rounded</option>
+                                <option value="square" {% if settings.button_style == 'square' %}selected{% endif %}>Square</option>
+                                <option value="pill" {% if settings.button_style == 'pill' %}selected{% endif %}>Pill</option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label for="id_button_size" class="block text-sm font-medium text-gray-700 mb-2">
+                                Button Size
+                            </label>
+                            <select name="button_size"
+                                    id="id_button_size"
+                                    class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                <option value="small" {% if settings.button_size == 'small' %}selected{% endif %}>Small</option>
+                                <option value="medium" {% if settings.button_size == 'medium' %}selected{% endif %}>Medium</option>
+                                <option value="large" {% if settings.button_size == 'large' %}selected{% endif %}>Large</option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label for="id_button_border_width" class="block text-sm font-medium text-gray-700 mb-2">
+                                Border Width
+                            </label>
+                            <select name="button_border_width"
+                                    id="id_button_border_width"
+                                    class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                <option value="0" {% if settings.button_border_width == '0' %}selected{% endif %}>None</option>
+                                <option value="1" {% if settings.button_border_width == '1' %}selected{% endif %}>1px</option>
+                                <option value="2" {% if settings.button_border_width == '2' %}selected{% endif %}>2px</option>
+                                <option value="4" {% if settings.button_border_width == '4' %}selected{% endif %}>4px</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Primary Button Colors -->
+                    <p class="text-sm font-medium text-gray-700 mb-3">Primary Button Colors</p>
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                        <div>
+                            <label for="id_primary_button_bg" class="block text-xs font-medium text-gray-600 mb-1">
+                                Background
+                            </label>
+                            <div class="flex items-center space-x-2">
+                                <input type="color"
+                                       name="primary_button_bg"
+                                       id="id_primary_button_bg"
+                                       value="{{ settings.primary_button_bg }}"
+                                       class="h-10 w-16 border border-gray-300 rounded cursor-pointer">
+                                <input type="text"
+                                       value="{{ settings.primary_button_bg }}"
+                                       readonly
+                                       class="flex-1 px-2 py-1.5 text-xs border border-gray-300 rounded bg-gray-50 font-mono">
+                            </div>
+                        </div>
+
+                        <div>
+                            <label for="id_primary_button_text" class="block text-xs font-medium text-gray-600 mb-1">
+                                Text
+                            </label>
+                            <div class="flex items-center space-x-2">
+                                <input type="color"
+                                       name="primary_button_text"
+                                       id="id_primary_button_text"
+                                       value="{{ settings.primary_button_text }}"
+                                       class="h-10 w-16 border border-gray-300 rounded cursor-pointer">
+                                <input type="text"
+                                       value="{{ settings.primary_button_text }}"
+                                       readonly
+                                       class="flex-1 px-2 py-1.5 text-xs border border-gray-300 rounded bg-gray-50 font-mono">
+                            </div>
+                        </div>
+
+                        <div>
+                            <label for="id_primary_button_border" class="block text-xs font-medium text-gray-600 mb-1">
+                                Border
+                            </label>
+                            <div class="flex items-center space-x-2">
+                                <input type="color"
+                                       name="primary_button_border"
+                                       id="id_primary_button_border"
+                                       value="{{ settings.primary_button_border }}"
+                                       class="h-10 w-16 border border-gray-300 rounded cursor-pointer">
+                                <input type="text"
+                                       value="{{ settings.primary_button_border }}"
+                                       readonly
+                                       class="flex-1 px-2 py-1.5 text-xs border border-gray-300 rounded bg-gray-50 font-mono">
+                            </div>
+                        </div>
+
+                        <div>
+                            <label for="id_primary_button_hover" class="block text-xs font-medium text-gray-600 mb-1">
+                                Hover
+                            </label>
+                            <div class="flex items-center space-x-2">
+                                <input type="color"
+                                       name="primary_button_hover"
+                                       id="id_primary_button_hover"
+                                       value="{{ settings.primary_button_hover }}"
+                                       class="h-10 w-16 border border-gray-300 rounded cursor-pointer">
+                                <input type="text"
+                                       value="{{ settings.primary_button_hover }}"
+                                       readonly
+                                       class="flex-1 px-2 py-1.5 text-xs border border-gray-300 rounded bg-gray-50 font-mono">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Secondary Button Colors -->
+                    <p class="text-sm font-medium text-gray-700 mb-3">Secondary Button Colors</p>
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                        <div>
+                            <label for="id_secondary_button_bg" class="block text-xs font-medium text-gray-600 mb-1">
+                                Background
+                            </label>
+                            <div class="flex items-center space-x-2">
+                                <input type="color"
+                                       name="secondary_button_bg"
+                                       id="id_secondary_button_bg"
+                                       value="{{ settings.secondary_button_bg }}"
+                                       class="h-10 w-16 border border-gray-300 rounded cursor-pointer">
+                                <input type="text"
+                                       value="{{ settings.secondary_button_bg }}"
+                                       readonly
+                                       class="flex-1 px-2 py-1.5 text-xs border border-gray-300 rounded bg-gray-50 font-mono">
+                            </div>
+                        </div>
+
+                        <div>
+                            <label for="id_secondary_button_text" class="block text-xs font-medium text-gray-600 mb-1">
+                                Text
+                            </label>
+                            <div class="flex items-center space-x-2">
+                                <input type="color"
+                                       name="secondary_button_text"
+                                       id="id_secondary_button_text"
+                                       value="{{ settings.secondary_button_text }}"
+                                       class="h-10 w-16 border border-gray-300 rounded cursor-pointer">
+                                <input type="text"
+                                       value="{{ settings.secondary_button_text }}"
+                                       readonly
+                                       class="flex-1 px-2 py-1.5 text-xs border border-gray-300 rounded bg-gray-50 font-mono">
+                            </div>
+                        </div>
+
+                        <div>
+                            <label for="id_secondary_button_border" class="block text-xs font-medium text-gray-600 mb-1">
+                                Border
+                            </label>
+                            <div class="flex items-center space-x-2">
+                                <input type="color"
+                                       name="secondary_button_border"
+                                       id="id_secondary_button_border"
+                                       value="{{ settings.secondary_button_border }}"
+                                       class="h-10 w-16 border border-gray-300 rounded cursor-pointer">
+                                <input type="text"
+                                       value="{{ settings.secondary_button_border }}"
+                                       readonly
+                                       class="flex-1 px-2 py-1.5 text-xs border border-gray-300 rounded bg-gray-50 font-mono">
+                            </div>
+                        </div>
+
+                        <div>
+                            <label for="id_secondary_button_hover" class="block text-xs font-medium text-gray-600 mb-1">
+                                Hover
+                            </label>
+                            <div class="flex items-center space-x-2">
+                                <input type="color"
+                                       name="secondary_button_hover"
+                                       id="id_secondary_button_hover"
+                                       value="{{ settings.secondary_button_hover }}"
+                                       class="h-10 w-16 border border-gray-300 rounded cursor-pointer">
+                                <input type="text"
+                                       value="{{ settings.secondary_button_hover }}"
+                                       readonly
+                                       class="flex-1 px-2 py-1.5 text-xs border border-gray-300 rounded bg-gray-50 font-mono">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Maintenance Mode -->
+        <div class="bg-white rounded-lg shadow overflow-hidden mb-6">
+            <div class="p-6 border-b border-gray-200">
+                <h3 class="text-lg font-semibold text-gray-900">Maintenance</h3>
+            </div>
+            <div class="p-6">
+                <div class="flex items-center">
+                    <input type="checkbox"
+                           name="maintenance_mode"
+                           id="id_maintenance_mode"
+                           {% if settings.maintenance_mode %}checked{% endif %}
+                           class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
+                    <label for="id_maintenance_mode" class="ml-2 block text-sm text-gray-700">
+                        Enable Maintenance Mode
+                    </label>
+                </div>
+                <p class="mt-2 text-xs text-gray-500">When enabled, your site will show a maintenance page to visitors</p>
+            </div>
+        </div>
+
+        <!-- Form Actions -->
+        <div class="flex items-center justify-end space-x-4">
+            <a href="{% url 'backoffice:dashboard' %}"
+               class="px-6 py-2 text-sm font-medium text-gray-700 hover:text-gray-900">
+                Cancel
+            </a>
+            <button type="submit"
+                    class="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+                Save Settings
+            </button>
+        </div>
+    </form>
+</div>
+
+<script>
+// Sync color picker with text input
+document.querySelectorAll('input[type="color"]').forEach(colorInput => {
+    const textInput = colorInput.nextElementSibling.nextElementSibling;
+
+    colorInput.addEventListener('change', function() {
+        textInput.value = this.value;
+    });
+});
+
+// Language Management Functions
+function addLanguage() {
+    const container = document.getElementById('languages-container');
+    const languageItem = document.createElement('div');
+    languageItem.className = 'language-item flex items-center gap-3 p-3 bg-gray-50 border border-gray-200 rounded-lg';
+    languageItem.innerHTML = `
+        <input type="text"
+               class="lang-code w-24 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-semibold"
+               placeholder="Code"
+               required>
+        <input type="text"
+               class="lang-name flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+               placeholder="Language Name"
+               required>
+        <button type="button"
+                onclick="removeLanguage(this)"
+                class="remove-lang-btn px-4 py-2 bg-red-600 text-white text-sm rounded-lg hover:bg-red-700 transition-colors">
+            Remove
+        </button>
+    `;
+    container.appendChild(languageItem);
+}
+
+function removeLanguage(button) {
+    const container = document.getElementById('languages-container');
+    const items = container.querySelectorAll('.language-item');
+
+    if (items.length <= 1) {
+        alert('You must have at least one language enabled.');
+        return;
+    }
+
+    button.closest('.language-item').remove();
+
+    // Update default language dropdown
+    updateDefaultLanguageDropdown();
+}
+
+function updateDefaultLanguageDropdown() {
+    const container = document.getElementById('languages-container');
+    const items = container.querySelectorAll('.language-item');
+    const defaultSelect = document.getElementById('id_default_language');
+    const currentValue = defaultSelect.value;
+
+    // Clear and rebuild dropdown
+    defaultSelect.innerHTML = '';
+
+    items.forEach(item => {
+        const code = item.querySelector('.lang-code').value;
+        const name = item.querySelector('.lang-name').value;
+
+        if (code && name) {
+            const option = document.createElement('option');
+            option.value = code;
+            option.textContent = `${name} (${code})`;
+            if (code === currentValue) {
+                option.selected = true;
+            }
+            defaultSelect.appendChild(option);
+        }
+    });
+
+    // If current default language no longer exists, select the first one
+    if (!defaultSelect.querySelector(`option[value="${currentValue}"]`)) {
+        if (defaultSelect.options.length > 0) {
+            defaultSelect.options[0].selected = true;
+        }
+    }
+}
+
+function saveLanguages() {
+    const container = document.getElementById('languages-container');
+    const items = container.querySelectorAll('.language-item');
+    const defaultLanguage = document.getElementById('id_default_language').value;
+    const statusSpan = document.getElementById('language-save-status');
+
+    // Collect enabled languages
+    const enabledLanguages = [];
+    items.forEach(item => {
+        const code = item.querySelector('.lang-code').value.trim();
+        const name = item.querySelector('.lang-name').value.trim();
+
+        if (code && name) {
+            enabledLanguages.push({ code, name });
+        }
+    });
+
+    // Validation
+    if (enabledLanguages.length === 0) {
+        statusSpan.textContent = '❌ At least one language is required';
+        statusSpan.className = 'ml-3 text-sm text-red-600';
+        return;
+    }
+
+    const languageCodes = enabledLanguages.map(l => l.code);
+    if (!languageCodes.includes(defaultLanguage)) {
+        statusSpan.textContent = '❌ Default language must be in enabled languages';
+        statusSpan.className = 'ml-3 text-sm text-red-600';
+        return;
+    }
+
+    // Show loading
+    statusSpan.textContent = '⏳ Saving...';
+    statusSpan.className = 'ml-3 text-sm text-gray-600';
+
+    // Send to API
+    fetch('{% url "backoffice:api_update_languages" %}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': '{{ csrf_token }}'
+        },
+        body: JSON.stringify({
+            default_language: defaultLanguage,
+            enabled_languages: enabledLanguages
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            statusSpan.textContent = '✅ Saved successfully! Reload page to see changes.';
+            statusSpan.className = 'ml-3 text-sm text-green-600';
+
+            // Update default language dropdown
+            updateDefaultLanguageDropdown();
+        } else {
+            statusSpan.textContent = `❌ Error: ${data.error}`;
+            statusSpan.className = 'ml-3 text-sm text-red-600';
+        }
+    })
+    .catch(error => {
+        statusSpan.textContent = `❌ Error: ${error.message}`;
+        statusSpan.className = 'ml-3 text-sm text-red-600';
+    });
+}
+
+// Update default language dropdown when language codes change
+document.addEventListener('DOMContentLoaded', function() {
+    const container = document.getElementById('languages-container');
+    container.addEventListener('input', function(e) {
+        if (e.target.classList.contains('lang-code') || e.target.classList.contains('lang-name')) {
+            updateDefaultLanguageDropdown();
+        }
+    });
+});
+</script>
+{% endblock %}

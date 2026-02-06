@@ -1,0 +1,231 @@
+<!-- AI Assistant Modal -->
+<div id="aiModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden overflow-y-auto h-full w-full z-50" style="display: none;">
+    <div class="relative top-10 mx-auto p-5 border w-full max-w-4xl shadow-lg rounded-lg bg-white my-8">
+        <!-- Header -->
+        <div class="flex items-center justify-between pb-4 border-b">
+            <div class="flex items-center">
+                <div class="w-10 h-10 bg-gradient-to-r from-purple-500 to-blue-500 rounded-lg flex items-center justify-center mr-3">
+                    <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                    </svg>
+                </div>
+                <div>
+                    <h3 class="text-xl font-semibold text-gray-900">AI Content Generator</h3>
+                    <p class="text-xs text-gray-500">Powered by Large Language Models</p>
+                </div>
+            </div>
+            <button onclick="closeAIModal()" class="text-gray-400 hover:text-gray-500">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                </svg>
+            </button>
+        </div>
+
+        <!-- Content -->
+        <div class="mt-6">
+            <!-- Generation Type Tabs -->
+            <div class="flex border-b border-gray-200 mb-6">
+                <button id="tabPage" onclick="switchAITab('page')"
+                        class="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 border-b-2 border-transparent">
+                    Generate Page
+                </button>
+                <button id="tabSection" onclick="switchAITab('section')"
+                        class="px-4 py-2 text-sm font-medium text-blue-600 border-b-2 border-blue-500">
+                    Generate Section
+                </button>
+                <button id="tabRefine" onclick="switchAITab('refine')"
+                        class="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 border-b-2 border-transparent">
+                    Refine Section
+                </button>
+            </div>
+
+            <!-- Form Area -->
+            <div id="aiForm">
+                <!-- Generate Page Form -->
+                <div id="formPage" class="hidden">
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Describe the page you want to create *</label>
+                            <textarea id="briefPage" rows="4" required
+                                      class="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-blue-500 focus:border-blue-500"
+                                      placeholder="Example: Create a services page showcasing our athlete management, training programs, and career guidance services. Emphasize our 15 years of experience and personalized approach."></textarea>
+                        </div>
+                        <div class="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                            <p class="text-xs text-blue-800">
+                                <strong>💡 Tip:</strong> Content will be generated in all site languages (Portuguese & English) automatically.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Generate Section Form -->
+                <div id="formSection">
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Describe the section you want to create *</label>
+                            <textarea id="briefSection" rows="4" required
+                                      class="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-blue-500 focus:border-blue-500"
+                                      placeholder="Example: Create a hero section welcoming athletes to our Algarve training facilities. Include a call-to-action button to learn more."></textarea>
+                        </div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Section Type</label>
+                                <select id="sectionType" class="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-blue-500 focus:border-blue-500">
+                                    <option value="">Auto-detect</option>
+                                    <option value="hero">Hero Banner</option>
+                                    <option value="text">Text Content</option>
+                                    <option value="text_image">Text + Image</option>
+                                    <option value="features">Features Grid</option>
+                                    <option value="cta">Call to Action</option>
+                                    <option value="contact_form">Contact Form</option>
+                                    <option value="testimonials">Testimonials</option>
+                                    <option value="gallery">Gallery</option>
+                                    <option value="faq">FAQ</option>
+                                    <option value="stats">Statistics</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Insert Position</label>
+                                <input type="number" id="insertPosition" min="0"
+                                       class="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-blue-500 focus:border-blue-500"
+                                       placeholder="Auto">
+                            </div>
+                        </div>
+                        <div id="pageSlugContainer">
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Target Page</label>
+                            <select id="pageSlug" class="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-blue-500 focus:border-blue-500">
+                                <option value="">Select page...</option>
+                            </select>
+                        </div>
+                        <div class="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                            <p class="text-xs text-blue-800">
+                                <strong>💡 Tip:</strong> Content will be generated in all site languages (Portuguese & English) automatically.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Refine Section Form -->
+                <div id="formRefine" class="hidden">
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Select Section to Refine</label>
+                            <select id="refineSectionId" class="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-blue-500 focus:border-blue-500">
+                                <option value="">Select section...</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Refinement Instructions *</label>
+                            <textarea id="refineInstructions" rows="4" required
+                                      class="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-blue-500 focus:border-blue-500"
+                                      placeholder="Example: Make the title more compelling and add emphasis on our 15 years of experience. Make the description more concise."></textarea>
+                        </div>
+                        <div class="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                            <p class="text-xs text-blue-800">
+                                <strong>💡 Tip:</strong> Refinements will update content in all site languages (Portuguese & English) automatically.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Model Selection (Common) -->
+                <div class="mt-6 bg-gray-50 rounded-lg p-4">
+                    <label class="block text-sm font-medium text-gray-700 mb-2">AI Model</label>
+                    <div class="grid grid-cols-2 md:grid-cols-3 gap-3">
+                        <label class="relative flex items-center p-3 bg-white border border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50">
+                            <input type="radio" name="aiModel" value="gemini-flash" checked class="mr-3">
+                            <div>
+                                <div class="text-sm font-medium text-gray-900">Gemini Flash</div>
+                                <div class="text-xs text-gray-500">Fast & Balanced</div>
+                            </div>
+                        </label>
+                        <label class="relative flex items-center p-3 bg-white border border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50">
+                            <input type="radio" name="aiModel" value="gemini-pro" class="mr-3">
+                            <div>
+                                <div class="text-sm font-medium text-gray-900">Gemini Pro</div>
+                                <div class="text-xs text-gray-500">High Quality</div>
+                            </div>
+                        </label>
+                        <label class="relative flex items-center p-3 bg-white border border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50">
+                            <input type="radio" name="aiModel" value="claude" class="mr-3">
+                            <div>
+                                <div class="text-sm font-medium text-gray-900">Claude</div>
+                                <div class="text-xs text-gray-500">Best Quality</div>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Loading State -->
+            <div id="aiLoading" class="hidden text-center py-12">
+                <div class="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4"></div>
+                <p class="text-gray-600">Generating content with AI...</p>
+                <p class="text-sm text-gray-500 mt-2">This may take 5-15 seconds</p>
+            </div>
+
+            <!-- Preview Area -->
+            <div id="aiPreview" class="hidden mt-6">
+                <div class="flex items-center justify-between mb-4">
+                    <h4 class="text-lg font-semibold text-gray-900">Generated Content Preview</h4>
+                    <button onclick="regenerateContent()" class="text-sm text-blue-600 hover:text-blue-800">
+                        Regenerate
+                    </button>
+                </div>
+                <div id="previewContent" class="bg-gray-50 rounded-lg p-6 max-h-96 overflow-y-auto">
+                    <!-- Preview will be inserted here -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer Actions -->
+        <div class="mt-6 flex items-center justify-between pt-4 border-t">
+            <div id="aiError" class="hidden text-sm text-red-600"></div>
+            <div class="flex-1"></div>
+            <div class="flex items-center space-x-3">
+                <button type="button" onclick="closeAIModal()"
+                        class="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50">
+                    Cancel
+                </button>
+                <button id="btnGenerate" onclick="generateContent()"
+                        class="px-6 py-2 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-md hover:from-purple-700 hover:to-blue-700 flex items-center">
+                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                    </svg>
+                    Generate with AI
+                </button>
+                <button id="btnSave" onclick="saveGeneratedContent()" class="hidden px-6 py-2 bg-green-600 text-white rounded-md hover:bg-green-700">
+                    Save to Database
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    /* Animation for AI sparkle effect */
+    @keyframes sparkle {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.5; }
+    }
+
+    .ai-sparkle {
+        animation: sparkle 2s ease-in-out infinite;
+    }
+
+    /* Smooth transitions */
+    #aiModal > div {
+        animation: slideDown 0.3s ease-out;
+    }
+
+    @keyframes slideDown {
+        from {
+            opacity: 0;
+            transform: translateY(-20px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+</style>

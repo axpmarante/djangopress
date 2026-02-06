@@ -1,0 +1,728 @@
+{% extends 'backoffice/base.html' %}
+{% load static %}
+{% load section_tags %}
+
+{% block title %}Edit Page - {{ page.default_title }}{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto space-y-6">
+    <!-- Header -->
+    <div class="flex items-center justify-between">
+        <div>
+            <h2 class="text-3xl font-bold text-gray-900">Edit Page</h2>
+            <p class="text-gray-600 mt-1">Update page details, manage sections, and refine with AI</p>
+        </div>
+        <a href="{% url 'backoffice:pages' %}"
+           class="text-gray-600 hover:text-gray-900 flex items-center">
+            <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+            </svg>
+            Back to Pages
+        </a>
+    </div>
+
+    {% if not page %}
+    <!-- Page Not Found -->
+    <div class="bg-red-50 border border-red-200 rounded-lg p-6 text-center">
+        <svg class="w-16 h-16 text-red-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+        </svg>
+        <h3 class="text-lg font-semibold text-gray-900 mb-2">Page Not Found</h3>
+        <p class="text-gray-600 mb-4">The page you're trying to edit doesn't exist.</p>
+        <a href="{% url 'backoffice:pages' %}" class="text-blue-600 hover:text-blue-800 font-medium">
+            Go to Pages List
+        </a>
+    </div>
+    {% else %}
+
+    <!-- Quick Actions Bar -->
+    <div class="bg-white rounded-lg shadow p-4">
+        <div class="flex items-center justify-between">
+            <div class="flex items-center space-x-4">
+                <a href="{{ page.get_absolute_url }}"
+                   target="_blank"
+                   class="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 flex items-center">
+                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                    </svg>
+                    View Live Page
+                </a>
+                <button onclick="openAIModal()"
+                        class="px-4 py-2 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-md hover:from-purple-700 hover:to-blue-700 flex items-center">
+                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                    </svg>
+                    Edit Page with AI
+                </button>
+            </div>
+            <div class="text-sm text-gray-600">
+                <strong>ID:</strong> {{ page.id }}
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabs Navigation -->
+    <div class="bg-white rounded-lg shadow">
+        <div class="border-b border-gray-200">
+            <nav class="-mb-px flex space-x-8 px-6" aria-label="Tabs">
+                <button onclick="showTab('settings')" id="tab-settings"
+                        class="tab-button border-b-2 border-blue-500 py-4 px-1 text-sm font-medium text-blue-600">
+                    <svg class="w-5 h-5 inline mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                    </svg>
+                    Page Settings
+                </button>
+                <button onclick="showTab('history')" id="tab-history"
+                        class="tab-button border-b-2 border-transparent py-4 px-1 text-sm font-medium text-gray-500 hover:text-gray-700 hover:border-gray-300">
+                    <svg class="w-5 h-5 inline mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                    Version History
+                </button>
+                <button onclick="showTab('html')" id="tab-html"
+                        class="tab-button border-b-2 border-transparent py-4 px-1 text-sm font-medium text-gray-500 hover:text-gray-700 hover:border-gray-300">
+                    <svg class="w-5 h-5 inline mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"/>
+                    </svg>
+                    HTML Code
+                </button>
+            </nav>
+        </div>
+
+        <!-- Tab Contents -->
+        <div class="p-6">
+            <!-- Settings Tab -->
+            <div id="content-settings" class="tab-content">
+                <form method="post" class="space-y-6">
+                    {% csrf_token %}
+
+                    <!-- Form Fields -->
+                    <div class="space-y-6">
+                        <!-- Change Summary (Optional) -->
+                        <div>
+                            <label for="change_summary" class="block text-sm font-medium text-gray-700 mb-2">
+                                Change Summary (Optional)
+                            </label>
+                            <input type="text"
+                                   id="change_summary"
+                                   name="change_summary"
+                                   placeholder="e.g., Updated page title, Changed slug"
+                                   class="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-blue-500 focus:border-blue-500">
+                            <p class="text-xs text-gray-500 mt-1">
+                                Describe what you changed in this version (optional but recommended)
+                            </p>
+                        </div>
+
+                        <!-- Language-Specific Fields -->
+                        <div class="space-y-6">
+                            <h3 class="text-lg font-semibold text-gray-900 border-b pb-2">
+                                Page Content (All Languages)
+                            </h3>
+
+                            {% for lang_code, lang_name in languages %}
+                            <div class="pl-4 border-l-4 border-blue-500 space-y-4">
+                                <h4 class="font-medium text-gray-900">{{ lang_name }} ({{ lang_code|upper }})</h4>
+
+                                <!-- Title for this language -->
+                                <div>
+                                    <label for="title_{{ lang_code }}" class="block text-sm font-medium text-gray-700 mb-2">
+                                        Title <span class="text-red-600">*</span>
+                                    </label>
+                                    <input type="text"
+                                           id="title_{{ lang_code }}"
+                                           name="title_{{ lang_code }}"
+                                           value="{{ page.title_i18n|getitem:lang_code|default:'' }}"
+                                           required
+                                           maxlength="200"
+                                           class="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-blue-500 focus:border-blue-500"
+                                           placeholder="About Us">
+                                </div>
+
+                                <!-- Slug for this language -->
+                                <div>
+                                    <label for="slug_{{ lang_code }}" class="block text-sm font-medium text-gray-700 mb-2">
+                                        Slug (URL) <span class="text-red-600">*</span>
+                                    </label>
+                                    <input type="text"
+                                           id="slug_{{ lang_code }}"
+                                           name="slug_{{ lang_code }}"
+                                           value="{{ page.slug_i18n|getitem:lang_code|default:'' }}"
+                                           required
+                                           pattern="[a-z0-9\-]+"
+                                           class="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-blue-500 focus:border-blue-500 slug-input"
+                                           data-lang="{{ lang_code }}"
+                                           placeholder="about-us">
+                                    <p class="text-xs text-gray-500 mt-1">
+                                        URL-friendly identifier (lowercase, numbers, hyphens only)
+                                    </p>
+                                    <p class="text-xs text-blue-600 mt-1">
+                                        <strong>URL:</strong> <code>/{{ lang_code }}/<span class="slug-preview" data-lang="{{ lang_code }}">{{ page.slug_i18n|getitem:lang_code|default:'' }}</span>/</code>
+                                    </p>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+
+                        <!-- Active Status -->
+                        <div>
+                            <label class="flex items-center">
+                                <input type="checkbox"
+                                       id="is_active"
+                                       name="is_active"
+                                       {% if page.is_active %}checked{% endif %}
+                                       class="rounded border-gray-300 text-blue-600 focus:ring-blue-500">
+                                <span class="ml-2 text-sm font-medium text-gray-700">Active</span>
+                            </label>
+                            <p class="text-xs text-gray-500 mt-1">
+                                If unchecked, this page will not be accessible on the website
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- Form Actions -->
+                    <div class="flex items-center justify-between pt-4 border-t">
+                        <a href="{% url 'backoffice:pages' %}"
+                           class="px-6 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50">
+                            Cancel
+                        </a>
+
+                        <button type="submit"
+                                class="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 flex items-center">
+                            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                            </svg>
+                            Save Changes
+                        </button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- History Tab -->
+            <div id="content-history" class="tab-content hidden">
+                {% if versions %}
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Version</th>
+                                <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
+                                <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">User</th>
+                                <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Title</th>
+                                <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Slug</th>
+                                <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Summary</th>
+                                <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody class="bg-white divide-y divide-gray-200">
+                            {% for version in versions %}
+                            <tr class="{% if forloop.first %}bg-green-50{% endif %}">
+                                <td class="px-4 py-2 text-sm font-medium text-gray-900">
+                                    v{{ version.version_number }}
+                                    {% if forloop.first %}<span class="ml-2 text-xs bg-green-600 text-white px-2 py-1 rounded">Current</span>{% endif %}
+                                </td>
+                                <td class="px-4 py-2 text-sm text-gray-600">{{ version.created_at|date:"Y-m-d H:i" }}</td>
+                                <td class="px-4 py-2 text-sm text-gray-600">{{ version.created_by|default:"System" }}</td>
+                                <td class="px-4 py-2 text-sm text-gray-600">{{ version.title }}</td>
+                                <td class="px-4 py-2 text-sm text-gray-600">{{ version.slug }}</td>
+                                <td class="px-4 py-2 text-sm text-gray-600">{{ version.change_summary|default:"—" }}</td>
+                                <td class="px-4 py-2 text-sm">
+                                    {% if not forloop.first %}
+                                    <form method="POST" action="{% url 'backoffice:restore_page_version' version.id %}" class="inline" onsubmit="return confirm('Are you sure you want to restore to version {{ version.version_number }}? This will create a new version with the old content.');">
+                                        {% csrf_token %}
+                                        <button type="submit" class="text-blue-600 hover:text-blue-800 font-medium">
+                                            Restore
+                                        </button>
+                                    </form>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center py-8 text-gray-500">
+                    No version history available
+                </div>
+                {% endif %}
+            </div>
+
+            <!-- HTML Code Tab -->
+            <div id="content-html" class="tab-content hidden">
+                <div class="space-y-4">
+                    <!-- Language Selector -->
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">
+                                Select Language
+                            </label>
+                            <select id="htmlLanguage" onchange="loadPageHTML()"
+                                    class="border border-gray-300 rounded-md px-3 py-2 focus:ring-blue-500 focus:border-blue-500">
+                                {% for lang_code, lang_name in languages %}
+                                <option value="{{ lang_code }}">{{ lang_name }} ({{ lang_code|upper }})</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <button onclick="copyHTMLToClipboard()" id="copyHtmlBtn"
+                                class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 flex items-center">
+                            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+                            </svg>
+                            Copy to Clipboard
+                        </button>
+                    </div>
+
+                    <!-- HTML Display Area -->
+                    <div id="htmlLoadingState" class="bg-gray-50 border border-gray-200 rounded-lg p-8 text-center">
+                        <svg class="animate-spin h-8 w-8 text-blue-600 mx-auto mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        <p class="text-gray-600">Loading HTML...</p>
+                    </div>
+
+                    <div id="htmlErrorState" class="hidden bg-red-50 border border-red-200 rounded-lg p-4">
+                        <p class="text-red-800 font-medium">Error loading HTML</p>
+                        <p id="htmlErrorMessage" class="text-red-600 text-sm mt-2"></p>
+                    </div>
+
+                    <div id="htmlContentArea" class="hidden">
+                        <div class="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                            <div class="flex items-center justify-between mb-2">
+                                <h4 class="text-sm font-semibold text-gray-900">Complete Page HTML</h4>
+                                <span id="htmlCharCount" class="text-xs text-gray-500"></span>
+                            </div>
+                            <pre id="htmlCode" class="bg-gray-900 text-green-400 p-4 rounded-md overflow-x-auto text-xs font-mono max-h-[600px] overflow-y-auto"></pre>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- AI Refine Modal -->
+    <div id="aiModal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 overflow-y-auto">
+        <div class="flex items-center justify-center min-h-screen p-4">
+            <div class="bg-white rounded-lg shadow-xl w-full max-w-3xl max-h-[90vh] overflow-hidden flex flex-col">
+                <div class="px-6 py-4 border-b border-gray-200 flex items-center justify-between bg-gradient-to-r from-purple-600 to-blue-600">
+                    <h3 class="text-xl font-semibold text-white flex items-center">
+                        <svg class="w-6 h-6 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                        </svg>
+                        Edit Page with AI
+                    </h3>
+                    <button onclick="closeAIModal()" class="text-white hover:text-gray-200">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                        </svg>
+                    </button>
+                </div>
+
+                <form id="aiRefineForm" class="flex-1 overflow-y-auto">
+                    <div class="px-6 py-4 space-y-4">
+                        <!-- Instructions -->
+                        <div>
+                            <label class="block text-sm font-medium text-gray-900 mb-2">
+                                Refinement Instructions <span class="text-red-600">*</span>
+                            </label>
+                            <textarea id="aiInstructions" name="instructions" rows="6" required
+                                      class="w-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-purple-500 focus:border-purple-500"
+                                      placeholder="Examples:&#10;- Make hero section more impactful with larger text and bolder CTA buttons&#10;- Make all copy more conversational and emphasize our 15 years experience&#10;- Modernize the page - larger typography, more white space, and professional tone"></textarea>
+                            <p class="mt-2 text-xs text-gray-500">Describe design and/or content changes you want. AI will analyze complete HTML + content with project context.</p>
+                        </div>
+
+                        <!-- Reference Pages -->
+                        {% if reference_pages %}
+                        <div>
+                            <label class="block text-sm font-medium text-gray-900 mb-2">
+                                Reference Pages (Optional)
+                            </label>
+                            <div class="border border-gray-200 rounded-lg bg-gray-50 p-4 max-h-48 overflow-y-auto">
+                                <p class="text-xs text-gray-600 mb-3">Select pages to use as design references for maintaining consistency:</p>
+                                <div class="space-y-2">
+                                    {% for ref_page in reference_pages %}
+                                    <label class="flex items-start p-2 hover:bg-gray-100 rounded cursor-pointer">
+                                        <input type="checkbox" name="reference_pages" value="{{ ref_page.id }}"
+                                               class="mt-0.5 h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-300 rounded">
+                                        <div class="ml-3">
+                                            <div class="text-sm font-medium text-gray-900">{{ ref_page.title }}</div>
+                                            <div class="text-xs text-gray-500">{{ ref_page.section_count }} sections • {{ ref_page.slug }}</div>
+                                        </div>
+                                    </label>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                        </div>
+                        {% endif %}
+
+                        <!-- AI Model Selection -->
+                        {% if ai_models %}
+                        <div>
+                            <label class="block text-sm font-medium text-gray-900 mb-2">
+                                AI Model
+                            </label>
+                            <select id="aiModel" name="model"
+                                    class="w-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-purple-500 focus:border-purple-500">
+                                {% for model in ai_models %}
+                                <option value="{{ model.0 }}" {% if model.0 == default_model %}selected{% endif %}>
+                                    {{ model.1 }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        {% endif %}
+
+                        <!-- Prompt Version -->
+                        <div>
+                            <label class="block text-sm font-medium text-gray-900 mb-2">
+                                Prompt Version <span class="text-xs text-gray-500 font-normal">(A/B Test)</span>
+                            </label>
+                            <select id="aiPromptVersion" name="prompt_version"
+                                    class="w-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-purple-500 focus:border-purple-500">
+                                {% for version_key, version_desc in prompt_versions %}
+                                <option value="{{ version_key }}" {% if version_key == 'v2' %}selected{% endif %}>
+                                    {{ version_desc }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                            <p class="mt-2 text-xs text-gray-500">
+                                <span class="font-medium">V2 (Recommended):</span> Simplified prompt for faster/cheaper processing<br>
+                                <span class="font-medium">V1:</span> Comprehensive context with detailed examples
+                            </p>
+                        </div>
+
+                        <!-- Warning -->
+                        <div class="bg-amber-50 border border-amber-200 rounded-lg p-4">
+                            <div class="flex">
+                                <svg class="w-5 h-5 text-amber-600 mr-2 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                                </svg>
+                                <div class="text-sm text-amber-800">
+                                    <p class="font-medium">Important:</p>
+                                    <p class="mt-1">This will refine all sections on this page. AI can automatically update, create, or delete sections based on your instructions.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="px-6 py-4 border-t border-gray-200 flex justify-end space-x-3 bg-gray-50">
+                        <button type="button" onclick="closeAIModal()"
+                                class="px-6 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50">
+                            Cancel
+                        </button>
+                        <button type="submit"
+                                class="px-6 py-2 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-lg hover:from-purple-700 hover:to-blue-700 flex items-center">
+                            <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                            </svg>
+                            Refine Page with AI
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading Modal -->
+    <div id="loadingModal" class="hidden fixed inset-0 bg-gray-900 bg-opacity-50 z-50 flex items-center justify-center">
+        <div class="bg-white rounded-lg p-8 max-w-md w-full mx-4 shadow-2xl">
+            <div class="flex flex-col items-center">
+                <div class="relative">
+                    <div class="animate-spin rounded-full h-20 w-20 border-b-4 border-purple-600"></div>
+                    <svg class="w-10 h-10 text-purple-600 absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                    </svg>
+                </div>
+                <p class="mt-6 text-lg font-semibold text-gray-900">Refining page sections...</p>
+                <p id="progressText" class="mt-2 text-sm text-gray-600 text-center">Processing sections...</p>
+                <div class="mt-4 w-full bg-gray-200 rounded-full h-2">
+                    <div id="progressBar" class="bg-purple-600 h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Results Modal -->
+    <div id="resultsModal" class="hidden fixed inset-0 bg-gray-900 bg-opacity-50 z-50 overflow-y-auto">
+        <div class="min-h-screen px-4 py-8 flex items-center justify-center">
+            <div class="bg-white rounded-lg max-w-4xl w-full shadow-2xl">
+                <div class="flex items-center justify-between p-6 border-b">
+                    <h3 class="text-xl font-semibold text-gray-900">Refinement Complete</h3>
+                    <button onclick="closeResults()" class="text-gray-400 hover:text-gray-600">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                        </svg>
+                    </button>
+                </div>
+                <div id="resultsContent" class="p-6 max-h-[500px] overflow-y-auto"></div>
+                <div class="flex items-center justify-end p-6 border-t bg-gray-50">
+                    <button onclick="reloadPage()"
+                            class="px-8 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700">
+                        Refresh Page
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {% endif %}
+</div>
+
+<script>
+// Tab Management
+function showTab(tabName) {
+    // Hide all content
+    document.querySelectorAll('.tab-content').forEach(content => {
+        content.classList.add('hidden');
+    });
+
+    // Show selected content
+    document.getElementById('content-' + tabName).classList.remove('hidden');
+
+    // Update tab buttons
+    document.querySelectorAll('.tab-button').forEach(button => {
+        button.classList.remove('border-blue-500', 'text-blue-600');
+        button.classList.add('border-transparent', 'text-gray-500');
+    });
+
+    // Highlight selected tab
+    const selectedTab = document.getElementById('tab-' + tabName);
+    selectedTab.classList.remove('border-transparent', 'text-gray-500');
+    selectedTab.classList.add('border-blue-500', 'text-blue-600');
+
+    // Load HTML when HTML tab is clicked
+    if (tabName === 'html' && !window.htmlLoaded) {
+        loadPageHTML();
+    }
+}
+
+// Update slug preview as user types
+document.querySelectorAll('.slug-input').forEach(input => {
+    input.addEventListener('input', function(e) {
+        const lang = e.target.dataset.lang;
+        const preview = document.querySelector(`.slug-preview[data-lang="${lang}"]`);
+        if (preview) {
+            preview.textContent = e.target.value || 'slug';
+        }
+    });
+});
+
+function getCSRFToken() {
+    return document.querySelector('[name=csrfmiddlewaretoken]')?.value ||
+           document.cookie.split('; ').find(row => row.startsWith('csrftoken='))?.split('=')[1];
+}
+
+// AI Modal Functions
+function openAIModal() {
+    document.getElementById('aiModal').classList.remove('hidden');
+}
+
+function closeAIModal() {
+    document.getElementById('aiModal').classList.add('hidden');
+}
+
+// AI Form Submission
+document.getElementById('aiRefineForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+
+    const instructions = document.getElementById('aiInstructions').value;
+    const model = document.getElementById('aiModel')?.value;
+    const promptVersion = document.getElementById('aiPromptVersion')?.value || 'v2';
+
+    // Get reference pages
+    const referenceCheckboxes = document.querySelectorAll('input[name="reference_pages"]:checked');
+    const referencePageIds = Array.from(referenceCheckboxes).map(cb => parseInt(cb.value));
+
+    closeAIModal();
+    showLoading();
+
+    try {
+        const response = await fetch('/ai/api/refine-page-with-html/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCSRFToken()
+            },
+            body: JSON.stringify({
+                page_id: {{ page.id }},
+                instructions: instructions,
+                reference_page_ids: referencePageIds,
+                language: 'pt',
+                model: model,
+                prompt_version: promptVersion
+            })
+        });
+
+        const result = await response.json();
+        hideLoading();
+
+        if (result.success) {
+            displayResults({
+                success: true,
+                message: result.message,
+                updatedCount: (result.updated_sections || []).length,
+                createdCount: (result.created_sections || []).length
+            });
+        } else {
+            displayResults({
+                success: false,
+                error: result.error || 'Unknown error'
+            });
+        }
+    } catch (error) {
+        hideLoading();
+        displayResults({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+function showLoading() {
+    document.getElementById('loadingModal').classList.remove('hidden');
+    document.getElementById('progressBar').style.width = '50%';
+}
+
+function hideLoading() {
+    document.getElementById('loadingModal').classList.add('hidden');
+}
+
+function displayResults(results) {
+    const container = document.getElementById('resultsContent');
+
+    if (results.success) {
+        container.innerHTML = `
+            <div class="bg-green-50 border border-green-200 rounded-lg p-6">
+                <p class="text-green-800 font-medium text-lg">✓ ${results.message}</p>
+                <div class="mt-4 text-sm text-green-700">
+                    <p>• Updated sections: ${results.updatedCount}</p>
+                    <p>• Created sections: ${results.createdCount}</p>
+                </div>
+            </div>
+        `;
+    } else {
+        container.innerHTML = `
+            <div class="bg-red-50 border border-red-200 rounded-lg p-6">
+                <p class="text-red-800 font-medium text-lg">✗ Refinement Failed</p>
+                <p class="mt-2 text-sm text-red-700">${results.error}</p>
+            </div>
+        `;
+    }
+
+    document.getElementById('resultsModal').classList.remove('hidden');
+}
+
+function closeResults() {
+    document.getElementById('resultsModal').classList.add('hidden');
+}
+
+function reloadPage() {
+    location.reload();
+}
+
+// Close modals on Escape key
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+        closeAIModal();
+        closeResults();
+    }
+});
+
+// Close modals when clicking outside
+['aiModal'].forEach(modalId => {
+    const modal = document.getElementById(modalId);
+    if (modal) {
+        modal.addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeAIModal();
+            }
+        });
+    }
+});
+
+// HTML Code Tab Functions
+let currentPageHTML = '';
+
+async function loadPageHTML() {
+    const loadingState = document.getElementById('htmlLoadingState');
+    const errorState = document.getElementById('htmlErrorState');
+    const contentArea = document.getElementById('htmlContentArea');
+
+    // Show loading
+    loadingState.classList.remove('hidden');
+    errorState.classList.add('hidden');
+    contentArea.classList.add('hidden');
+
+    try {
+        const response = await fetch(`/backoffice/api/page-content/{{ page.id }}/`, {
+            method: 'GET',
+            headers: {
+                'Accept': 'application/json',
+                'X-CSRFToken': getCSRFToken()
+            }
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            currentPageHTML = result.html_content || '';
+
+            // Display HTML
+            const htmlCode = document.getElementById('htmlCode');
+            htmlCode.textContent = currentPageHTML;
+
+            // Update character count
+            const charCount = document.getElementById('htmlCharCount');
+            charCount.textContent = `${currentPageHTML.length.toLocaleString()} characters`;
+
+            // Show content area
+            loadingState.classList.add('hidden');
+            contentArea.classList.remove('hidden');
+
+            // Mark as loaded
+            window.htmlLoaded = true;
+        } else {
+            throw new Error(result.error || 'Failed to load HTML');
+        }
+    } catch (error) {
+        loadingState.classList.add('hidden');
+        errorState.classList.remove('hidden');
+        document.getElementById('htmlErrorMessage').textContent = error.message;
+    }
+}
+
+async function copyHTMLToClipboard() {
+    if (!currentPageHTML) {
+        alert('Please load the HTML first by selecting a language');
+        return;
+    }
+
+    try {
+        await navigator.clipboard.writeText(currentPageHTML);
+
+        // Visual feedback
+        const btn = document.getElementById('copyHtmlBtn');
+        const originalHTML = btn.innerHTML;
+        btn.innerHTML = `
+            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+            </svg>
+            Copied!
+        `;
+        btn.classList.remove('bg-blue-600', 'hover:bg-blue-700');
+        btn.classList.add('bg-green-600', 'hover:bg-green-700');
+
+        // Reset after 2 seconds
+        setTimeout(() => {
+            btn.innerHTML = originalHTML;
+            btn.classList.remove('bg-green-600', 'hover:bg-green-700');
+            btn.classList.add('bg-blue-600', 'hover:bg-blue-700');
+        }, 2000);
+    } catch (error) {
+        alert('Failed to copy to clipboard: ' + error.message);
+    }
+}
+</script>
+{% endblock %}

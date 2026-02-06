@@ -1,0 +1,298 @@
+{% comment %}
+Image Selection Modals - Reusable modals for selecting and uploading images
+Usage: {% include 'partials/image_selection_modals.html' with form=form %}
+Requires: form object with featured_image and gallery_images fields
+{% endcomment %}
+
+<!-- Featured Image Selection Modal -->
+<div id="featuredImageModal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+    <div class="relative top-20 mx-auto p-5 border w-11/12 max-w-5xl shadow-lg rounded-lg bg-white">
+        <!-- Modal Header -->
+        <div class="flex items-center justify-between pb-4 border-b">
+            <h3 class="text-2xl font-bold text-gray-900">Select Featured Image</h3>
+            <button type="button" onclick="closeFeaturedImageModal()" class="text-gray-400 hover:text-gray-600">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                </svg>
+            </button>
+        </div>
+
+        <!-- Modal Body -->
+        <div class="mt-4">
+            <p class="text-sm text-gray-600 mb-4">Click on an image to select it as the featured image</p>
+
+            <!-- Search/Filter -->
+            <div class="mb-4">
+                <input type="text" id="modal-search" placeholder="Search images..."
+                       class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                       onkeyup="filterModalImages()">
+            </div>
+
+            <!-- Image Grid -->
+            <div id="modal-image-grid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 max-h-96 overflow-y-auto">
+                {% for image in form.featured_image.field.queryset %}
+                <div class="modal-image-item cursor-pointer group"
+                     data-image-id="{{ image.id }}"
+                     data-image-url="{{ image.image.url }}"
+                     data-image-title="{{ image.title }}"
+                     data-search-text="{{ image.title|lower }} {{ image.tags|lower }}"
+                     onclick="selectFeaturedImage({{ image.id }}, '{{ image.image.url }}', '{{ image.title|escapejs }}')">
+                    <div class="aspect-square relative rounded-lg overflow-hidden border-2 border-gray-300 hover:border-blue-500 transition-all hover:shadow-lg">
+                        <img src="{{ image.image.url }}"
+                             alt="{{ image.alt_text }}"
+                             class="w-full h-full object-cover">
+                        <!-- Hover Overlay -->
+                        <div class="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-30 transition-opacity flex items-center justify-center">
+                            <svg class="w-12 h-12 text-white opacity-0 group-hover:opacity-100 transition-opacity" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+                            </svg>
+                        </div>
+                    </div>
+                    <p class="text-xs text-gray-600 mt-1 truncate text-center" title="{{ image.title }}">{{ image.title }}</p>
+                    {% if image.category %}
+                    <p class="text-xs text-gray-400 text-center">{{ image.get_category_display }}</p>
+                    {% endif %}
+                </div>
+                {% empty %}
+                <div class="col-span-full text-center py-8 text-gray-500">
+                    <p>No images available. Please upload images to your media library first.</p>
+                    <a href="{% url 'backoffice:media_upload' %}" class="text-blue-600 hover:text-blue-700 mt-2 inline-block">
+                        Upload Images
+                    </a>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Modal Footer -->
+        <div class="flex justify-end pt-4 border-t mt-4">
+            <button type="button" onclick="closeFeaturedImageModal()"
+                    class="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 transition-colors">
+                Cancel
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Featured Image Upload Modal -->
+<div id="featuredUploadModal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+    <div class="relative top-20 mx-auto p-5 border w-11/12 max-w-2xl shadow-lg rounded-lg bg-white">
+        <!-- Modal Header -->
+        <div class="flex items-center justify-between pb-4 border-b">
+            <div>
+                <h3 class="text-2xl font-bold text-gray-900">Upload Featured Image</h3>
+                <p class="text-sm text-gray-500 mt-1">Upload a single image to use as the featured image</p>
+            </div>
+            <button type="button" onclick="closeFeaturedUploadModal()" class="text-gray-400 hover:text-gray-600">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                </svg>
+            </button>
+        </div>
+
+        <!-- Modal Body -->
+        <div class="mt-4">
+            <!-- Upload Area -->
+            <div class="mb-4">
+                <div id="featured-drop-zone" class="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-blue-500 transition-colors cursor-pointer">
+                    <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
+                    </svg>
+                    <p class="mt-2 text-sm text-gray-600">
+                        <label for="featured-file-upload" class="cursor-pointer text-blue-600 hover:text-blue-700 font-medium">
+                            Click to upload
+                        </label> or drag and drop
+                    </p>
+                    <p class="text-xs text-gray-500 mt-1">PNG, JPG, GIF up to 10MB</p>
+                    <input id="featured-file-upload" name="featured-file-upload" type="file" class="hidden" accept="image/*" onchange="handleFeaturedFileSelect(event)">
+                </div>
+            </div>
+
+            <!-- Preview Area -->
+            <div id="featured-upload-preview" class="hidden mb-4">
+                <h4 class="text-sm font-medium text-gray-700 mb-2">Selected Image:</h4>
+                <div id="featured-preview-container" class="flex justify-center">
+                    <!-- Preview image will be added here -->
+                </div>
+            </div>
+
+            <!-- Progress Bar -->
+            <div id="featured-upload-progress" class="hidden mb-4">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-sm font-medium text-gray-700">Uploading...</span>
+                    <span id="featured-progress-text" class="text-sm text-gray-600">0%</span>
+                </div>
+                <div class="w-full bg-gray-200 rounded-full h-2.5">
+                    <div id="featured-progress-bar" class="bg-blue-600 h-2.5 rounded-full transition-all" style="width: 0%"></div>
+                </div>
+            </div>
+
+            <!-- Status Messages -->
+            <div id="featured-upload-status" class="hidden"></div>
+        </div>
+
+        <!-- Modal Footer -->
+        <div class="flex justify-between pt-4 border-t mt-4">
+            <button type="button" onclick="closeFeaturedUploadModal()" class="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 transition-colors">
+                Cancel
+            </button>
+            <button type="button" id="featured-upload-button" onclick="uploadFeaturedImage()" disabled class="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed">
+                Upload & Set as Featured
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Gallery Images Selection Modal -->
+<div id="galleryImageModal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+    <div class="relative top-20 mx-auto p-5 border w-11/12 max-w-5xl shadow-lg rounded-lg bg-white">
+        <!-- Modal Header -->
+        <div class="flex items-center justify-between pb-4 border-b">
+            <div>
+                <h3 class="text-2xl font-bold text-gray-900">Select Gallery Images</h3>
+                <p class="text-sm text-gray-500 mt-1">Click on images to add them to the gallery</p>
+            </div>
+            <button type="button" onclick="closeGalleryModal()" class="text-gray-400 hover:text-gray-600">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                </svg>
+            </button>
+        </div>
+
+        <!-- Modal Body -->
+        <div class="mt-4">
+            <!-- Selected Count -->
+            <div class="mb-4 flex items-center justify-between">
+                <span class="text-sm text-gray-600">
+                    <span id="selected-count" class="font-semibold text-blue-600">0</span> images selected
+                </span>
+                <button type="button" onclick="clearAllGallerySelections()" class="text-sm text-red-600 hover:text-red-700">
+                    Clear All
+                </button>
+            </div>
+
+            <!-- Search/Filter -->
+            <div class="mb-4">
+                <input type="text" id="gallery-modal-search" placeholder="Search images by title or tags..."
+                       class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                       onkeyup="filterGalleryModalImages()">
+            </div>
+
+            <!-- Image Grid -->
+            <div id="gallery-modal-image-grid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 max-h-96 overflow-y-auto">
+                {% for image in form.gallery_images.field.queryset %}
+                <div class="gallery-modal-image-item cursor-pointer group"
+                     data-image-id="{{ image.id }}"
+                     data-image-url="{{ image.image.url }}"
+                     data-image-title="{{ image.title }}"
+                     data-search-text="{{ image.title|lower }} {{ image.tags|lower }}"
+                     onclick="toggleGalleryImage({{ image.id }}, '{{ image.image.url }}', '{{ image.title|escapejs }}')">
+                    <div class="aspect-square relative rounded-lg overflow-hidden border-2 border-gray-300 transition-all hover:shadow-lg gallery-item-border">
+                        <img src="{{ image.image.url }}"
+                             alt="{{ image.alt_text }}"
+                             class="w-full h-full object-cover">
+                        <!-- Selection Checkmark -->
+                        <div class="gallery-item-checkmark hidden absolute inset-0 bg-blue-500 bg-opacity-30 flex items-center justify-center">
+                            <svg class="w-12 h-12 text-white" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+                            </svg>
+                        </div>
+                    </div>
+                    <p class="text-xs text-gray-600 mt-1 truncate text-center" title="{{ image.title }}">{{ image.title }}</p>
+                    {% if image.category %}
+                    <p class="text-xs text-gray-400 text-center">{{ image.get_category_display }}</p>
+                    {% endif %}
+                </div>
+                {% empty %}
+                <div class="col-span-full text-center py-8 text-gray-500">
+                    <p>No images available. Please upload images to your media library first.</p>
+                    <a href="{% url 'backoffice:media_upload' %}" class="text-blue-600 hover:text-blue-700 mt-2 inline-block">
+                        Upload Images
+                    </a>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Modal Footer -->
+        <div class="flex justify-between pt-4 border-t mt-4">
+            <button type="button" onclick="closeGalleryModal()"
+                    class="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 transition-colors">
+                Cancel
+            </button>
+            <button type="button" onclick="applyGallerySelection()"
+                    class="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors">
+                Apply Selection
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Gallery Images Upload Modal -->
+<div id="uploadImageModal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+    <div class="relative top-20 mx-auto p-5 border w-11/12 max-w-3xl shadow-lg rounded-lg bg-white">
+        <!-- Modal Header -->
+        <div class="flex items-center justify-between pb-4 border-b">
+            <div>
+                <h3 class="text-2xl font-bold text-gray-900">Upload New Images</h3>
+                <p class="text-sm text-gray-500 mt-1">Upload images to add them to your media library and this project</p>
+            </div>
+            <button type="button" onclick="closeUploadModal()" class="text-gray-400 hover:text-gray-600">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                </svg>
+            </button>
+        </div>
+
+        <!-- Modal Body -->
+        <div class="mt-4">
+            <!-- Upload Area -->
+            <div class="mb-4">
+                <div id="drop-zone" class="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-blue-500 transition-colors cursor-pointer">
+                    <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
+                    </svg>
+                    <p class="mt-2 text-sm text-gray-600">
+                        <label for="file-upload" class="cursor-pointer text-blue-600 hover:text-blue-700 font-medium">
+                            Click to upload
+                        </label> or drag and drop
+                    </p>
+                    <p class="text-xs text-gray-500 mt-1">PNG, JPG, GIF up to 10MB each</p>
+                    <input id="file-upload" name="file-upload" type="file" class="hidden" accept="image/*" multiple onchange="handleFileSelect(event)">
+                </div>
+            </div>
+
+            <!-- Preview Area -->
+            <div id="upload-preview" class="hidden mb-4">
+                <h4 class="text-sm font-medium text-gray-700 mb-2">Selected Images:</h4>
+                <div id="preview-grid" class="grid grid-cols-3 gap-3 max-h-60 overflow-y-auto">
+                    <!-- Preview images will be added here -->
+                </div>
+            </div>
+
+            <!-- Progress Bar -->
+            <div id="upload-progress" class="hidden mb-4">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-sm font-medium text-gray-700">Uploading...</span>
+                    <span id="progress-text" class="text-sm text-gray-600">0%</span>
+                </div>
+                <div class="w-full bg-gray-200 rounded-full h-2.5">
+                    <div id="progress-bar" class="bg-blue-600 h-2.5 rounded-full transition-all" style="width: 0%"></div>
+                </div>
+            </div>
+
+            <!-- Status Messages -->
+            <div id="upload-status" class="hidden"></div>
+        </div>
+
+        <!-- Modal Footer -->
+        <div class="flex justify-between pt-4 border-t mt-4">
+            <button type="button" onclick="closeUploadModal()" class="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 transition-colors">
+                Cancel
+            </button>
+            <button type="button" id="upload-button" onclick="uploadImages()" disabled class="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed">
+                Upload Images
+            </button>
+        </div>
+    </div>
+</div>

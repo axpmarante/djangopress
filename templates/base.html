@@ -1,13 +1,27 @@
-{% load static %}<!DOCTYPE html>
+{% load static section_tags %}<!DOCTYPE html>
 <html lang="{{ LANGUAGE_CODE }}">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}{{ SITE_NAME }}{% endblock %}</title>
-    <meta name="description" content="{{ SITE_DESCRIPTION }}">
+    <title>{% block title %}{{ SITE_NAME_I18N|get_translation:LANGUAGE_CODE }}{% endblock %}</title>
+    <meta name="description" content="{{ SITE_DESCRIPTION_I18N|get_translation:LANGUAGE_CODE }}">
     {% if META_KEYWORDS %}<meta name="keywords" content="{{ META_KEYWORDS }}">{% endif %}
 
-    <link href="{% static 'css/styles.css' %}" rel="stylesheet">
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- Google Fonts - Dynamically loaded based on selected fonts in settings -->
+    {% if GOOGLE_FONTS_URL %}
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="{{ GOOGLE_FONTS_URL }}" rel="stylesheet">
+    {% endif %}
+
+    <!-- Custom site styles -->
+    <link href="{% static 'css/lightbox.css' %}" rel="stylesheet">
+    {% if edit_mode %}
+    <link href="{% static 'css/inline-editor.css' %}?v=4" rel="stylesheet">
+    {% endif %}
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 
     {% if GOOGLE_ANALYTICS_ID %}
@@ -23,8 +37,17 @@
 
     {% block extra_head %}{% endblock %}
 </head>
-<body class="bg-white">
-    {% include 'partials/header.html' %}
+<body class="bg-white" {% if edit_mode %}data-edit-mode="true"{% endif %}>
+    {% if edit_mode %}
+    <!-- Simple Editor Sidebar (left side) -->
+    {% include 'builder/partials/simple_sidebar.html' %}
+
+    <!-- Content wrapper (right side) -->
+    <div class="editor-content-wrapper">
+    {% endif %}
+
+    {# Load header from database (GlobalSection) with fallback to file template #}
+    {% load_global_section 'main-header' fallback_template='partials/header.html' %}
 
     {% if messages %}
     <div class="container mx-auto px-4 py-4">
@@ -40,8 +63,30 @@
         {% block content %}{% endblock %}
     </main>
 
-    {% include 'partials/footer.html' %}
+    {# Load footer from database (GlobalSection) with fallback to file template #}
+    {% load_global_section 'main-footer' fallback_template='partials/footer.html' %}
+    {% include 'partials/admin_toolbar.html' %}
 
+    {% if edit_mode %}
+    </div> <!-- Close editor-content-wrapper -->
+    {% include 'builder/partials/image_modal.html' %}
+    {% endif %}
+
+    <script src="{% static 'js/lightbox.js' %}"></script>
+    {% if edit_mode %}
+    <!-- Simple Editor System -->
+    <script src="{% static 'builder/js/simple-selector.js' %}?v=17"></script>
+    <script src="{% static 'builder/js/simple-sidebar.js' %}?v=17"></script>
+    <script src="{% static 'builder/js/simple-tracker.js' %}?v=17"></script>
+    <script src="{% static 'builder/js/image-modal.js' %}?v=17"></script>
+    <script>
+      // Initialize simple editor when page loads
+      document.addEventListener('DOMContentLoaded', function() {
+        SimpleSelector.enable();
+        console.log('🎨 Simple Editor active - click any element to edit');
+      });
+    </script>
+    {% endif %}
     {% block extra_js %}{% endblock %}
 </body>
 </html>

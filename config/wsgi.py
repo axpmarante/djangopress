@@ -1,5 +1,5 @@
 """
-WSGI config for get_algarve project.
+WSGI config for DjangoPress project.
 """
 
 import os

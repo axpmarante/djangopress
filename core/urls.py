@@ -4,9 +4,13 @@ from . import views
 app_name = 'core'
 
 urlpatterns = [
-    path('', views.HomeView.as_view(), name='home'),
-    path('about/', views.AboutView.as_view(), name='about'),
-    path('contact/', views.ContactView.as_view(), name='contact'),
-    path('privacy-policy/', views.PrivacyPolicyView.as_view(), name='privacy_policy'),
-    path('cookie-policy/', views.CookiePolicyView.as_view(), name='cookie_policy'),
+    # Home page (root path)
+    path('', views.PageView.as_view(), name='home'),
+
+    # Contact form submission
+    path('contact/submit/', views.ContactFormView.as_view(), name='contact_submit'),
+
+    # Dynamic page routing - must be last to catch all other paths
+    # Using path converter to support nested slugs like 'about/team' and 'sports/soccer'
+    path('<path:slug>/', views.PageView.as_view(), name='page'),
 ]

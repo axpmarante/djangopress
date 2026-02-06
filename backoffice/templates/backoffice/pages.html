@@ -1,0 +1,534 @@
+{% extends 'backoffice/base.html' %}
+{% load static %}
+
+{% block title %}Pages{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <!-- Header with Create Button -->
+    <div class="flex items-center justify-between">
+        <div>
+            <h2 class="text-3xl font-bold text-gray-900">Pages</h2>
+            <p class="text-gray-600 mt-1">Manage website pages and their sections</p>
+        </div>
+        <div class="flex space-x-3">
+            <a href="{% url 'backoffice:ai_generate_page' %}"
+               class="bg-gradient-to-r from-purple-600 to-blue-600 text-white px-4 py-2 rounded-md hover:from-purple-700 hover:to-blue-700 flex items-center">
+                <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                </svg>
+                Generate with AI
+            </a>
+            <button onclick="openBulkCreateModal()"
+                    class="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 flex items-center">
+                <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                </svg>
+                Create Multiple Pages
+            </button>
+            <button onclick="openCreateModal()"
+                    class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 flex items-center">
+                <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                </svg>
+                Create New Page
+            </button>
+        </div>
+    </div>
+
+    <!-- Statistics -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div class="bg-white rounded-lg shadow p-6">
+            <div class="flex items-center">
+                <div class="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center mr-4">
+                    <svg class="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                    </svg>
+                </div>
+                <div>
+                    <p class="text-3xl font-bold text-gray-900">{{ total_pages }}</p>
+                    <p class="text-sm text-gray-600">Total Pages</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-lg shadow p-6">
+            <div class="flex items-center">
+                <div class="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center mr-4">
+                    <svg class="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"/>
+                    </svg>
+                </div>
+                <div>
+                    <p class="text-3xl font-bold text-gray-900">{{ total_sections }}</p>
+                    <p class="text-sm text-gray-600">Total Sections</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-lg shadow p-6">
+            <div class="flex items-center">
+                <div class="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center mr-4">
+                    <svg class="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129"/>
+                    </svg>
+                </div>
+                <div>
+                    <p class="text-3xl font-bold text-gray-900">2</p>
+                    <p class="text-sm text-gray-600">Languages</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Pages List -->
+    {% if pages %}
+    <div class="bg-white rounded-lg shadow overflow-hidden">
+        <table class="min-w-full divide-y divide-gray-200">
+            <thead class="bg-gray-50">
+                <tr>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Page</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Slug</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Sections</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                    <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                </tr>
+            </thead>
+            <tbody class="bg-white divide-y divide-gray-200">
+                {% for page in pages %}
+                <tr class="hover:bg-gray-50">
+                    <td class="px-6 py-4">
+                        <div class="flex items-center">
+                            <div class="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center mr-3">
+                                <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                                </svg>
+                            </div>
+                            <div>
+                                <p class="text-sm font-semibold text-gray-900">{{ page.default_title }}</p>
+                                <p class="text-xs text-gray-500">Created {{ page.created_at|date:"M d, Y" }}</p>
+                            </div>
+                        </div>
+                    </td>
+                    <td class="px-6 py-4">
+                        <code class="text-sm text-gray-600 bg-gray-100 px-2 py-1 rounded">{{ page.default_slug }}</code>
+                    </td>
+                    <td class="px-6 py-4">
+                        <span class="text-sm text-gray-900">{{ page.sections.count }}</span>
+                        <span class="text-xs text-gray-500">sections</span>
+                    </td>
+                    <td class="px-6 py-4">
+                        {% if page.is_active %}
+                        <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
+                            Active
+                        </span>
+                        {% else %}
+                        <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-100 text-gray-800">
+                            Inactive
+                        </span>
+                        {% endif %}
+                    </td>
+                    <td class="px-6 py-4 text-right text-sm font-medium space-x-3">
+                        <a href="{% url 'backoffice:page_edit' page_id=page.id %}"
+                           class="text-blue-600 hover:text-blue-900">
+                            Edit
+                        </a>
+                        <a href="{{ page.get_absolute_url }}"
+                           target="_blank"
+                           class="text-green-600 hover:text-green-900">
+                            View
+                        </a>
+                        <button onclick="confirmDelete('{{ page.id }}', '{{ page.default_title }}')"
+                                class="text-red-600 hover:text-red-900">
+                            Delete
+                        </button>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <!-- Empty State -->
+    <div class="bg-white rounded-lg shadow p-12 text-center">
+        <svg class="w-16 h-16 mx-auto mb-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+        </svg>
+        <h3 class="text-lg font-semibold text-gray-900 mb-2">No pages found</h3>
+        <p class="text-gray-600 mb-6">Get started by creating your first page.</p>
+        <button onclick="openCreateModal()"
+                class="inline-block bg-blue-600 text-white px-6 py-2 rounded-md hover:bg-blue-700">
+            Create Your First Page
+        </button>
+    </div>
+    {% endif %}
+
+    <!-- Information Card -->
+    <div class="bg-blue-50 border border-blue-200 rounded-lg p-6">
+        <div class="flex">
+            <div class="flex-shrink-0">
+                <svg class="h-5 w-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+            </div>
+            <div class="ml-3">
+                <h3 class="text-sm font-medium text-blue-800">About Pages & Sections</h3>
+                <div class="mt-2 text-sm text-blue-700">
+                    <ul class="list-disc list-inside space-y-1">
+                        <li>Pages are the main containers for your website content</li>
+                        <li>Each page can have multiple sections (hero, text, images, etc.)</li>
+                        <li>Click "Manage Sections" to add, edit, or reorder sections</li>
+                        <li>All content supports bilingual translations (PT/EN)</li>
+                        <li>Use "Preview" to see how the page looks on the frontend</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Create Page Modal -->
+<div id="createModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden overflow-y-auto h-full w-full z-50">
+    <div class="relative top-20 mx-auto p-5 border w-full max-w-md shadow-lg rounded-md bg-white">
+        <div class="flex items-center justify-between pb-4 border-b">
+            <h3 class="text-xl font-semibold text-gray-900">Create New Page</h3>
+            <button onclick="closeCreateModal()" class="text-gray-400 hover:text-gray-500">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                </svg>
+            </button>
+        </div>
+
+        <form method="POST" class="mt-6">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="create">
+
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Page Title *</label>
+                    <input type="text" name="title" required
+                           class="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-blue-500 focus:border-blue-500"
+                           placeholder="e.g., Services">
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Slug (URL) *</label>
+                    <input type="text" name="slug" required pattern="[a-z0-9-]+"
+                           class="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-blue-500 focus:border-blue-500"
+                           placeholder="e.g., services">
+                    <p class="text-xs text-gray-500 mt-1">Lowercase letters, numbers, and hyphens only</p>
+                </div>
+
+                <div class="bg-gray-50 rounded-lg p-4">
+                    <p class="text-xs text-gray-600">
+                        <strong>Note:</strong> After creating the page, you'll be redirected to add sections to it.
+                    </p>
+                </div>
+            </div>
+
+            <div class="mt-6 flex items-center justify-end space-x-3">
+                <button type="button" onclick="closeCreateModal()"
+                        class="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50">
+                    Cancel
+                </button>
+                <button type="submit"
+                        class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">
+                    Create Page
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Delete Confirmation Modal -->
+<div id="deleteModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden overflow-y-auto h-full w-full z-50">
+    <div class="relative top-20 mx-auto p-5 border w-full max-w-md shadow-lg rounded-md bg-white">
+        <div class="flex items-center justify-between pb-4 border-b">
+            <h3 class="text-xl font-semibold text-gray-900">Confirm Delete</h3>
+            <button onclick="closeDeleteModal()" class="text-gray-400 hover:text-gray-500">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                </svg>
+            </button>
+        </div>
+
+        <div class="mt-6">
+            <p class="text-sm text-gray-700">
+                Are you sure you want to delete the page "<span id="deletePageName" class="font-semibold"></span>"?
+            </p>
+            <p class="text-sm text-red-600 mt-2">
+                ⚠️ This will also delete all sections associated with this page. This action cannot be undone.
+            </p>
+        </div>
+
+        <form method="POST" class="mt-6">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="delete">
+            <input type="hidden" name="page_id" id="deletePageId">
+
+            <div class="flex items-center justify-end space-x-3">
+                <button type="button" onclick="closeDeleteModal()"
+                        class="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50">
+                    Cancel
+                </button>
+                <button type="submit"
+                        class="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700">
+                    Delete Page
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Bulk Create Pages Modal -->
+<div id="bulkCreateModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden overflow-y-auto h-full w-full z-50">
+    <div class="relative top-10 mx-auto p-5 border w-full max-w-2xl shadow-lg rounded-md bg-white">
+        <div class="flex items-center justify-between pb-4 border-b">
+            <h3 class="text-xl font-semibold text-gray-900">Create Multiple Pages</h3>
+            <button onclick="closeBulkCreateModal()" class="text-gray-400 hover:text-gray-500">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                </svg>
+            </button>
+        </div>
+
+        <form method="POST" class="mt-6" id="bulkCreateForm">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="bulk_create">
+
+            <div class="space-y-4">
+                <!-- Page Input Fields Container -->
+                <div id="pageInputsContainer" class="space-y-4">
+                    <!-- Initial page input -->
+                    <div class="page-input-row border border-gray-200 rounded-lg p-4 relative">
+                        <button type="button" onclick="removePageInput(this)"
+                                class="absolute top-2 right-2 text-red-500 hover:text-red-700 hidden remove-btn">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                            </svg>
+                        </button>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Page Title *</label>
+                                <input type="text" name="titles[]" required
+                                       class="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-green-500 focus:border-green-500 title-input"
+                                       placeholder="e.g., Services"
+                                       oninput="generateSlug(this)">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">
+                                    Slug (auto-generated)
+                                    <span class="text-xs text-gray-500">(editable)</span>
+                                </label>
+                                <input type="text" name="slugs[]" required pattern="[a-z0-9-]+"
+                                       class="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-green-500 focus:border-green-500 slug-input"
+                                       placeholder="services">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Add More Button -->
+                <button type="button" onclick="addPageInput()"
+                        class="w-full py-2 border-2 border-dashed border-gray-300 rounded-lg text-gray-600 hover:border-green-500 hover:text-green-600 flex items-center justify-center">
+                    <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                    </svg>
+                    Add Another Page
+                </button>
+
+                <div class="bg-blue-50 rounded-lg p-4">
+                    <p class="text-xs text-blue-800">
+                        <strong>💡 Tip:</strong> Enter page titles and slugs will be auto-generated. You can edit the slugs if needed.
+                        Pages will be created without any sections - you can add sections later.
+                    </p>
+                </div>
+            </div>
+
+            <div class="mt-6 flex items-center justify-between">
+                <span class="text-sm text-gray-600">
+                    <span id="pageCount">1</span> page(s) to create
+                </span>
+                <div class="flex items-center space-x-3">
+                    <button type="button" onclick="closeBulkCreateModal()"
+                            class="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50">
+                        Cancel
+                    </button>
+                    <button type="submit"
+                            class="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700">
+                        Create All Pages
+                    </button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+function openCreateModal() {
+    document.getElementById('createModal').classList.remove('hidden');
+}
+
+function closeCreateModal() {
+    document.getElementById('createModal').classList.add('hidden');
+}
+
+function confirmDelete(pageId, pageName) {
+    document.getElementById('deletePageId').value = pageId;
+    document.getElementById('deletePageName').textContent = pageName;
+    document.getElementById('deleteModal').classList.remove('hidden');
+}
+
+function closeDeleteModal() {
+    document.getElementById('deleteModal').classList.add('hidden');
+}
+
+// Bulk Create Modal Functions
+function openBulkCreateModal() {
+    document.getElementById('bulkCreateModal').classList.remove('hidden');
+}
+
+function closeBulkCreateModal() {
+    const modal = document.getElementById('bulkCreateModal');
+    modal.classList.add('hidden');
+
+    // Reset form
+    const container = document.getElementById('pageInputsContainer');
+    container.innerHTML = `
+        <div class="page-input-row border border-gray-200 rounded-lg p-4 relative">
+            <button type="button" onclick="removePageInput(this)"
+                    class="absolute top-2 right-2 text-red-500 hover:text-red-700 hidden remove-btn">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                </svg>
+            </button>
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Page Title *</label>
+                    <input type="text" name="titles[]" required
+                           class="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-green-500 focus:border-green-500 title-input"
+                           placeholder="e.g., Services"
+                           oninput="generateSlug(this)">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">
+                        Slug (auto-generated)
+                        <span class="text-xs text-gray-500">(editable)</span>
+                    </label>
+                    <input type="text" name="slugs[]" required pattern="[a-z0-9-]+"
+                           class="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-green-500 focus:border-green-500 slug-input"
+                           placeholder="services">
+                </div>
+            </div>
+        </div>
+    `;
+    updatePageCount();
+}
+
+function addPageInput() {
+    const container = document.getElementById('pageInputsContainer');
+    const newRow = document.createElement('div');
+    newRow.className = 'page-input-row border border-gray-200 rounded-lg p-4 relative';
+    newRow.innerHTML = `
+        <button type="button" onclick="removePageInput(this)"
+                class="absolute top-2 right-2 text-red-500 hover:text-red-700 remove-btn">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+            </svg>
+        </button>
+        <div class="grid grid-cols-2 gap-4">
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Page Title *</label>
+                <input type="text" name="titles[]" required
+                       class="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-green-500 focus:border-green-500 title-input"
+                       placeholder="e.g., Services"
+                       oninput="generateSlug(this)">
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">
+                    Slug (auto-generated)
+                    <span class="text-xs text-gray-500">(editable)</span>
+                </label>
+                <input type="text" name="slugs[]" required pattern="[a-z0-9-]+"
+                       class="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-green-500 focus:border-green-500 slug-input"
+                       placeholder="services">
+            </div>
+        </div>
+    `;
+    container.appendChild(newRow);
+    updatePageCount();
+    updateRemoveButtons();
+}
+
+function removePageInput(button) {
+    const row = button.closest('.page-input-row');
+    row.remove();
+    updatePageCount();
+    updateRemoveButtons();
+}
+
+function updatePageCount() {
+    const count = document.querySelectorAll('.page-input-row').length;
+    document.getElementById('pageCount').textContent = count;
+}
+
+function updateRemoveButtons() {
+    const rows = document.querySelectorAll('.page-input-row');
+    const removeButtons = document.querySelectorAll('.remove-btn');
+
+    // Show remove buttons only if there's more than one row
+    removeButtons.forEach(btn => {
+        if (rows.length > 1) {
+            btn.classList.remove('hidden');
+        } else {
+            btn.classList.add('hidden');
+        }
+    });
+}
+
+function generateSlug(titleInput) {
+    const row = titleInput.closest('.page-input-row');
+    const slugInput = row.querySelector('.slug-input');
+    const title = titleInput.value;
+
+    // Convert to slug: lowercase, replace spaces with hyphens, remove special chars
+    const slug = title
+        .toLowerCase()
+        .trim()
+        .replace(/[^\w\s-]/g, '') // Remove special characters
+        .replace(/\s+/g, '-')      // Replace spaces with hyphens
+        .replace(/-+/g, '-')       // Replace multiple hyphens with single hyphen
+        .replace(/^-+|-+$/g, '');  // Remove leading/trailing hyphens
+
+    slugInput.value = slug;
+}
+
+// Close modals on ESC key
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+        closeCreateModal();
+        closeDeleteModal();
+        closeBulkCreateModal();
+    }
+});
+
+// Close modals when clicking outside
+document.getElementById('createModal').addEventListener('click', function(e) {
+    if (e.target === this) closeCreateModal();
+});
+
+document.getElementById('deleteModal').addEventListener('click', function(e) {
+    if (e.target === this) closeDeleteModal();
+});
+
+document.getElementById('bulkCreateModal').addEventListener('click', function(e) {
+    if (e.target === this) closeBulkCreateModal();
+});
+</script>
+
+<!-- Include AI Assistant -->
+
+{% endblock %}
+
+{% block extra_js %}
+{% endblock %}

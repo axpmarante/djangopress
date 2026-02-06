@@ -1,5 +1,5 @@
 """
-ASGI config for get_algarve project.
+ASGI config for DjangoPress project.
 """
 
 import os
