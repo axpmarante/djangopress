@@ -1,5 +1,5 @@
 """
-API views for the frontend builder.
+API views for the inline editor.
 These endpoints allow staff users to edit page content directly from the frontend.
 """
 
@@ -7,6 +7,7 @@ import json
 from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
 from django.contrib.admin.views.decorators import staff_member_required
+from django.views.decorators.csrf import csrf_exempt
 from core.models import Page, SiteImage
 from bs4 import BeautifulSoup
 
@@ -308,3 +309,65 @@ def get_media_library(request):
             'success': False,
             'error': str(e)
         }, status=500)
+
+
+@staff_member_required
+@require_http_methods(["GET"])
+def get_images(request):
+    """Get all available images for the image modal."""
+    images = SiteImage.objects.filter(is_active=True).order_by('-uploaded_at')
+
+    image_list = []
+    for img in images:
+        alt_text = img.get_alt_text('pt') or img.get_alt_text('en') or img.get_title('pt') or img.get_title('en')
+        image_list.append({
+            'id': img.id,
+            'url': img.image.url if img.image else '',
+            'title': img.get_title('pt') or img.get_title('en'),
+            'alt_text': alt_text,
+            'category': img.category,
+            'tags': img.tags or '',
+        })
+
+    return JsonResponse({'success': True, 'images': image_list})
+
+
+@csrf_exempt
+@staff_member_required
+@require_http_methods(["POST"])
+def upload_image(request):
+    """Upload a new image to the media library."""
+    if 'image' not in request.FILES:
+        return JsonResponse({'success': False, 'error': 'No image file provided'}, status=400)
+
+    image_file = request.FILES['image']
+    title = request.POST.get('title', image_file.name)
+    alt_text = request.POST.get('alt_text', '')
+    category = request.POST.get('category', 'other')
+
+    if image_file.size > 10 * 1024 * 1024:
+        return JsonResponse({'success': False, 'error': 'File size exceeds 10MB limit'}, status=400)
+
+    allowed_types = ['image/jpeg', 'image/png', 'image/gif', 'image/webp']
+    if image_file.content_type not in allowed_types:
+        return JsonResponse({'success': False, 'error': 'Invalid file type. Only JPEG, PNG, GIF, and WebP are allowed'}, status=400)
+
+    try:
+        site_image = SiteImage.objects.create(
+            image=image_file,
+            title_i18n={'pt': title, 'en': title},
+            alt_text_i18n={'pt': alt_text, 'en': alt_text},
+            category=category,
+            is_active=True
+        )
+        return JsonResponse({
+            'success': True,
+            'image': {
+                'id': site_image.id,
+                'url': site_image.image.url,
+                'title': site_image.get_title('pt') or site_image.get_title('en'),
+                'alt_text': site_image.get_alt_text('pt') or site_image.get_alt_text('en'),
+            }
+        })
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)

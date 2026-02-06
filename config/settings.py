@@ -46,7 +46,7 @@ INSTALLED_APPS = [
     'storages',
     'ai',
     'backoffice',
-    'builder',
+    'editor',
     'core',
     'news',
 ]

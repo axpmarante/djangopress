@@ -40,7 +40,7 @@
 <body class="bg-white" {% if edit_mode %}data-edit-mode="true"{% endif %}>
     {% if edit_mode %}
     <!-- Simple Editor Sidebar (left side) -->
-    {% include 'builder/partials/simple_sidebar.html' %}
+    {% include 'editor/partials/simple_sidebar.html' %}
 
     <!-- Content wrapper (right side) -->
     <div class="editor-content-wrapper">
@@ -69,16 +69,16 @@
 
     {% if edit_mode %}
     </div> <!-- Close editor-content-wrapper -->
-    {% include 'builder/partials/image_modal.html' %}
+    {% include 'editor/partials/image_modal.html' %}
     {% endif %}
 
     <script src="{% static 'js/lightbox.js' %}"></script>
     {% if edit_mode %}
     <!-- Simple Editor System -->
-    <script src="{% static 'builder/js/simple-selector.js' %}?v=17"></script>
-    <script src="{% static 'builder/js/simple-sidebar.js' %}?v=17"></script>
-    <script src="{% static 'builder/js/simple-tracker.js' %}?v=17"></script>
-    <script src="{% static 'builder/js/image-modal.js' %}?v=17"></script>
+    <script src="{% static 'editor/js/simple-selector.js' %}?v=17"></script>
+    <script src="{% static 'editor/js/simple-sidebar.js' %}?v=17"></script>
+    <script src="{% static 'editor/js/simple-tracker.js' %}?v=17"></script>
+    <script src="{% static 'editor/js/image-modal.js' %}?v=17"></script>
     <script>
       // Initialize simple editor when page loads
       document.addEventListener('DOMContentLoaded', function() {

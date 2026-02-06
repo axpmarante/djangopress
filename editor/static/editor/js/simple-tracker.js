@@ -232,7 +232,7 @@
   // Save content change
   async function saveContentChange(change) {
     try {
-      const response = await fetch('/builder/api/update-page-content/', {
+      const response = await fetch('/editor/api/update-page-content/', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -269,7 +269,7 @@
         ? change.value.join(' ')
         : change.value;
 
-      const response = await fetch('/builder/api/update-page-classes/', {
+      const response = await fetch('/editor/api/update-page-classes/', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -300,7 +300,7 @@
   // Save attribute change
   async function saveAttributeChange(change) {
     try {
-      const response = await fetch('/builder/api/update-page-attribute/', {
+      const response = await fetch('/editor/api/update-page-attribute/', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

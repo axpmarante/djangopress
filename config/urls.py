@@ -16,7 +16,7 @@ urlpatterns = [
     path('django-admin/', admin.site.urls),  # Django admin (fallback/advanced)
     path('ai/', include('ai.urls')),  # AI content generation
     path('backoffice/', include('backoffice.urls')),  # Custom backoffice
-    path('builder/', include('builder.urls')),  # Frontend builder
+    path('editor/', include('editor.urls')),  # Inline editor
     path('i18n/', include('django.conf.urls.i18n')),
     path('sitemap.xml', sitemap, {'sitemaps': sitemaps}, name='django.contrib.sitemaps.views.sitemap'),
 ]

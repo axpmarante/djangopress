@@ -146,7 +146,7 @@ async function loadBuilderImages() {
     empty.classList.add('hidden');
 
     try {
-        const response = await fetch('/builder/api/images/');
+        const response = await fetch('/editor/api/images/');
         const data = await response.json();
 
         if (data.success && data.images.length > 0) {
@@ -305,7 +305,7 @@ async function uploadBuilderImage() {
     document.getElementById('builderUploadBtn').disabled = true;
 
     try {
-        const response = await fetch('/builder/api/images/upload/', {
+        const response = await fetch('/editor/api/images/upload/', {
             method: 'POST',
             body: formData
         });

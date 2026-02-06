@@ -1,6 +1,6 @@
 from django.apps import AppConfig
 
 
-class BuilderConfig(AppConfig):
+class EditorConfig(AppConfig):
     default_auto_field = 'django.db.models.BigAutoField'
-    name = 'builder'
+    name = 'editor'
