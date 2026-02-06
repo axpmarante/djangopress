@@ -181,51 +181,6 @@
             </div>
         </div>
 
-        <!-- Recent Athletes -->
-        <div class="bg-white rounded-lg shadow">
-            <div class="p-6 border-b border-gray-200">
-                <div class="flex items-center justify-between">
-                    <h3 class="text-lg font-semibold text-gray-900">Recent Athletes</h3>
-                    <a href="{% url 'backoffice:athlete_list' %}" class="text-sm text-blue-600 hover:text-blue-800">View all →</a>
-                </div>
-            </div>
-            <div class="divide-y divide-gray-200">
-                {% if recent_athletes %}
-                    {% for athlete in recent_athletes %}
-                    <div class="p-4 hover:bg-gray-50 transition-colors">
-                        <div class="flex items-center justify-between">
-                            <div class="flex-1 min-w-0">
-                                <h4 class="text-sm font-semibold text-gray-900 truncate">{{ athlete.get_name }}</h4>
-                                <p class="text-xs text-gray-600 mt-1">{{ athlete.get_country }}</p>
-                                <p class="text-xs text-gray-400 mt-1">{{ athlete.created_at|date:"M d, Y" }}</p>
-                            </div>
-                            <div class="flex items-center space-x-2 ml-4">
-                                {% if athlete.is_active %}
-                                <span class="px-2 py-1 text-xs font-medium text-green-700 bg-green-100 rounded-full">Active</span>
-                                {% else %}
-                                <span class="px-2 py-1 text-xs font-medium text-gray-700 bg-gray-100 rounded-full">Inactive</span>
-                                {% endif %}
-                                <a href="{% url 'backoffice:athlete_edit' pk=athlete.pk %}"
-                                   class="text-sm text-blue-600 hover:text-blue-800">
-                                    Edit
-                                </a>
-                            </div>
-                        </div>
-                    </div>
-                    {% endfor %}
-                {% else %}
-                    <div class="p-8 text-center text-gray-500">
-                        <svg class="w-12 h-12 mx-auto mb-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/>
-                        </svg>
-                        <p>No athletes yet</p>
-                        <a href="{% url 'backoffice:athlete_create' %}" class="inline-block mt-3 text-sm text-blue-600 hover:text-blue-800">
-                            Create your first athlete →
-                        </a>
-                    </div>
-                {% endif %}
-            </div>
-        </div>
     </div>
 
     <!-- Recent News -->
