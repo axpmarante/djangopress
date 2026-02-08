@@ -57,7 +57,7 @@ Go to `/backoffice/settings/` and fill in:
 
 - **Site Name** (all languages) — e.g. `{"pt": "O Moinho", "en": "The Windmill"}`
 - **Site Description** (all languages)
-- **Project Briefing** (all languages) — detailed description of the business, services, tone, target audience. This is the most important field — the AI reads it for every generation.
+- **Project Briefing** (plain text) — detailed description of the business, services, tone, target audience. This is the most important field — the AI reads it for every generation.
 - **Domain** — e.g. `windmillrestaurant-pt` (used as GCS folder name in production)
 - **Languages** — enable the languages you need, set default
 - **Contact info** — email, phone, address, social media URLs
@@ -73,7 +73,11 @@ Go to `/backoffice/ai/` → use **Bulk Pages** to describe all pages at once, or
 
 Go to `/backoffice/ai/components/` → generate or refine the header and footer GlobalSections.
 
-### 7. What NOT to modify for a standard site
+### 7. Process images
+
+After generating pages with image placeholders, go to `/backoffice/page/<id>/images/` (or click "Process Images" from the page edit view). Use "AI Suggest Prompts" to auto-fill generation prompts and find matching library images, then "Process Selected" to replace placeholders with real images.
+
+### 9. What NOT to modify for a standard site
 
 These files rarely need changes for a new site — everything is DB-driven:
 
@@ -83,7 +87,7 @@ These files rarely need changes for a new site — everything is DB-driven:
 - `templates/base.html` — master layout — shared
 - `config/urls.py` — URL routing — shared
 
-### 8. What you WILL customize
+### 10. What you WILL customize
 
 - `.env` — secrets and API keys
 - `SiteSettings` in the database — all branding, design, content
@@ -206,9 +210,15 @@ Both `Page.content` and `GlobalSection.content` use this structure.
 - `/en/about/` → page with EN slug `about`
 - `/backoffice/` → admin dashboard (login required)
 - `/backoffice/settings/` → design system & site config
+- `/backoffice/settings/header/` → header editor
+- `/backoffice/settings/footer/` → footer editor
 - `/backoffice/page/<id>/edit/` → page editor
+- `/backoffice/page/<id>/images/` → process images (full page)
 - `/backoffice/ai/` → AI content generation hub
+- `/backoffice/ai/generate/page/` → generate a new page
+- `/backoffice/ai/bulk/pages/` → bulk page creation
 - `/backoffice/ai/chat/refine/<page_id>/` → chat-based page refinement
+- `/backoffice/ai/components/` → header/footer/global section management
 - `/ai/api/*` → AI API endpoints
 - `/editor/api/*` → inline editor API (staff only)
 
@@ -225,6 +235,7 @@ Configured in `ai/utils/llm_config.py`. Supports OpenAI, Anthropic, and Google (
 | `/ai/api/generate-page/` | POST | Generate a new page (two-step: HTML → templatize + translate) |
 | `/ai/api/refine-page-with-html/` | POST | Refine existing page via form |
 | `/ai/api/chat-refine-page/` | POST | Chat-based iterative refinement (with session history) |
+| `/ai/api/analyze-page-images/` | POST | AI suggests generation prompts, aspect ratios, and library matches per image |
 | `/ai/api/process-page-images/` | POST | Replace image placeholders with library or AI-generated images |
 | `/ai/api/save-page/` | POST | Save generated page to DB |
 | `/ai/api/refine-header/` | POST | Refine header GlobalSection |
@@ -236,6 +247,7 @@ Configured in `ai/utils/llm_config.py`. Supports OpenAI, Anthropic, and Google (
 
 1. **Step 1 (HTML):** LLM generates clean HTML with real text in the default language. No `{{ trans.xxx }}` variables — just plain readable HTML.
 2. **Step 2 (Templatize + Translate):** A second LLM call extracts all visible text, assigns variable names, and translates to all enabled languages. Python replaces text in HTML with `{{ trans.var }}` variables.
+3. **Step 3 (Metadata):** A third LLM call suggests `title_i18n` and `slug_i18n` from the brief. The user can override these or leave them blank to use the AI suggestions.
 
 This avoids the LLM needing to output valid JSON-wrapped HTML, which was error-prone.
 
@@ -253,9 +265,15 @@ This avoids the LLM needing to output valid JSON-wrapped HTML, which was error-p
 When "Add image placeholders" is enabled during refinement:
 - LLM adds `data-image-prompt="description"` and `data-image-name="slug"` to `<img>` tags
 - Uses `https://placehold.co/WxH?text=Label` as placeholder src
-- User later clicks "Process Images" to replace placeholders with:
+
+**Process Images** (`/backoffice/page/<id>/images/`) is a dedicated full page for managing all images on a page:
+- Auto-scans all `<img>` tags on page load (not just placeholder images)
+- Each image card has: thumbnail preview, prompt textarea, aspect ratio selector (1:1, 16:9, 4:3, 3:2, 9:16), Generate/Library radio, library dropdown
+- **AI Suggest Prompts** button calls `/ai/api/analyze-page-images/` which analyzes page context, project briefing, and media library to auto-fill prompts, aspect ratios, and show up to 3 matching library thumbnails per image
+- Clicking a library suggestion thumbnail auto-selects "From Library" mode
+- **Process Selected** calls `/ai/api/process-page-images/` to replace images with:
   - An existing image from the media library, OR
-  - A newly AI-generated image (via Gemini image generation)
+  - A newly AI-generated image (via Gemini image generation) at the selected aspect ratio
 
 ## Adding a New Decoupled App
 
@@ -282,14 +300,14 @@ When "Add image placeholders" is enabled during refinement:
 - `templates/base.html` — master layout, loads header/footer GlobalSections
 
 ### AI
-- `ai/services.py` — `ContentGenerationService`: generate, refine, process images
+- `ai/services.py` — `ContentGenerationService`: generate, refine, process images, analyze page images
 - `ai/utils/prompts.py` — `PromptTemplates`: all LLM prompt builders
 - `ai/utils/llm_config.py` — `LLMBase`: unified LLM client (OpenAI, Anthropic, Google), image generation, `optimize_generated_image()`
 - `ai/views.py` — all AI API endpoints
 - `ai/models.py` — `RefinementSession`
 
 ### Backoffice
-- `backoffice/views.py` — dashboard, page editor, settings, AI tools views
+- `backoffice/views.py` — dashboard, page editor, process images, settings, AI tools views
 - `backoffice/api_views.py` — settings API, media library API, page content API
 - `backoffice/templates/backoffice/` — all admin templates
 
@@ -308,6 +326,21 @@ When "Add image placeholders" is enabled during refinement:
 - **Cache in dev:** `LocMemCache` is per-process. Restart server to see GlobalSection changes, or set `DummyCache`.
 - **Home page slug must be `home` in all languages** — PageView defaults to this slug for root URL.
 - **GCS storage:** When `GS_BUCKET_NAME` is set in `.env`, media files are stored in Google Cloud Storage under a domain-based folder (from `SiteSettings.domain`).
+
+## Syncing Template Updates to Child Projects
+
+Projects created from this template can pull future djangopress updates:
+
+```bash
+# One-time setup (in the child project):
+git remote add upstream https://github.com/axpmarante/djangopress.git
+
+# Sync (whenever djangopress is updated):
+git fetch upstream
+git merge upstream/main
+```
+
+The first merge requires `--allow-unrelated-histories` since GitHub template repos don't share git history. Resolve conflicts by taking the upstream version for core engine files (`core/`, `ai/`, `backoffice/`, `editor/`, `config/`, `templates/`). Site-specific content lives in the database and `.env`, so it won't conflict.
 
 ## Git Conventions
 
