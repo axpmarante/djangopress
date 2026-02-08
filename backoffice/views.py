@@ -760,6 +760,36 @@ def restore_page_version(request, version_id):
 # Users should edit the Project Briefing in Django Admin > Site Settings.
 
 
+class ProcessImagesView(LoginRequiredMixin, TemplateView):
+    """Full page for processing images on a page"""
+    template_name = 'backoffice/process_images.html'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        page_id = kwargs.get('page_id')
+
+        try:
+            page = Page.objects.get(pk=page_id)
+            context['page'] = page
+
+            # Get AI configuration
+            try:
+                from ai.utils.llm_config import LLMConfig
+                config = LLMConfig()
+                context['ai_models'] = config.get_available_models()
+                context['default_model'] = config.default_model
+            except Exception:
+                context['ai_models'] = []
+                context['default_model'] = None
+
+        except Page.DoesNotExist:
+            context['page'] = None
+            context['ai_models'] = []
+            context['default_model'] = None
+
+        return context
+
+
 class HeaderEditView(LoginRequiredMixin, TemplateView):
     """Header editing page"""
     template_name = 'backoffice/header_edit.html'

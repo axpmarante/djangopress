@@ -9,13 +9,36 @@ class PromptTemplates:
     """Prompt templates for AI content generation"""
 
     @staticmethod
+    def _format_pages_info(pages, languages):
+        """Format available pages as text for prompt injection.
+
+        Args:
+            pages: List of dicts with 'title' and 'slug' (both i18n dicts)
+            languages: List of language codes
+        Returns:
+            Formatted string block, or empty string if no pages.
+        """
+        if not pages:
+            return ""
+        lines = ["\n**Available Pages (use these slugs for inter-page links):**"]
+        for page in pages:
+            page_slugs = []
+            for lang in languages:
+                slug = page.get('slug', {}).get(lang, '')
+                title = page.get('title', {}).get(lang, '')
+                if slug:
+                    page_slugs.append(f"  - {lang.upper()}: \"{title}\" → slug='{slug}'")
+            if page_slugs:
+                lines.extend(page_slugs)
+        return "\n".join(lines) + "\n"
+
+    @staticmethod
     def get_page_generation_prompt(
         site_name: str,
         site_description: str,
         project_briefing: str,
         languages: list,
         brief: str,
-        page_type: str = 'general'
     ) -> tuple:
         """
         Generate prompt for creating a new page as a single HTML document with translations
@@ -26,7 +49,6 @@ class PromptTemplates:
             project_briefing: Detailed project context
             languages: List of language codes (e.g., ['pt', 'en'])
             brief: User's description of the desired page
-            page_type: Type of page (e.g., 'about', 'services', 'home')
 
         Returns:
             Tuple of (system_prompt, user_prompt)
@@ -80,7 +102,6 @@ Generate a complete page as a single HTML document with multiple sections. Use `
 # PAGE REQUEST
 
 **Brief:** {brief}
-**Page Type:** {page_type}
 
 ---
 
@@ -353,19 +374,7 @@ Improve the provided {section_type} by applying the requested changes. Return a 
         # Format existing section
         section_json = json.dumps(existing_section, indent=2, ensure_ascii=False)
 
-        # Format pages information
-        pages_info = ""
-        if pages:
-            pages_info = "\n**Available Pages:**\n"
-            for page in pages:
-                page_slugs = []
-                for lang in languages:
-                    slug = page.get('slug', {}).get(lang, '')
-                    title = page.get('title', {}).get(lang, '')
-                    if slug:
-                        page_slugs.append(f"  - {lang.upper()}: \"{title}\" → slug='{slug}'")
-                if page_slugs:
-                    pages_info += "\n".join(page_slugs) + "\n"
+        pages_info = PromptTemplates._format_pages_info(pages, languages)
 
         user_prompt = f"""# PROJECT CONTEXT
 
@@ -484,6 +493,44 @@ Example:
 
 Return ONLY the JSON array, no markdown, no explanations."""
 
+    @staticmethod
+    def get_page_metadata_prompt(brief: str, languages: list) -> tuple:
+        """
+        Generate prompt for suggesting page title and slug from the brief.
+
+        Args:
+            brief: User's description of the desired page
+            languages: List of language codes
+
+        Returns:
+            Tuple of (system_prompt, user_prompt)
+        """
+        langs_display = ' and '.join([lang.upper() for lang in languages])
+        langs_json = ', '.join([f'"{lang}": "..."' for lang in languages])
+
+        system_prompt = "You are a web content specialist. Given a page description, suggest a concise page title and a URL-safe slug for each language."
+
+        user_prompt = f"""Given this page description, suggest a title and slug in each language: {langs_display}
+
+**Page Description:**
+{brief}
+
+Return a JSON object:
+```json
+{{
+  "title_i18n": {{{langs_json}}},
+  "slug_i18n": {{{langs_json}}}
+}}
+```
+
+**Rules:**
+- Titles should be concise (2-5 words), suitable for navigation menus
+- Slugs must be lowercase, hyphenated, URL-safe (a-z, 0-9, hyphens only)
+- Translate naturally for each language (not literal word-for-word)
+- Return ONLY the JSON object, no markdown, no explanations"""
+
+        return (system_prompt, user_prompt)
+
     # =========================================================================
     # Two-Step Generation Prompts
     # =========================================================================
@@ -495,9 +542,10 @@ Return ONLY the JSON array, no markdown, no explanations."""
         project_briefing: str,
         default_language: str,
         brief: str,
-        page_type: str = 'general',
         has_reference_images: bool = False,
-        design_guide: str = ''
+        design_guide: str = '',
+        pages: list = None,
+        languages: list = None
     ) -> tuple:
         """
         Generate prompt for Step 1: create clean HTML with real text in the default language.
@@ -558,19 +606,20 @@ The user has provided reference design images. Use them as visual inspiration fo
 - Overall aesthetic and mood
 Match the design style shown in the images while following all other technical requirements."""
 
+        pages_info = PromptTemplates._format_pages_info(pages, languages or [])
+
         user_prompt = f"""# PROJECT CONTEXT
 
 **Site Name:** {site_name}
 **Description:** {site_description}
 **Project Briefing:** {project_briefing}
 **Language:** {lang_name}
-
+{pages_info}
 ---
 
 # PAGE REQUEST
 
 **Brief:** {brief}
-**Page Type:** {page_type}
 
 ---
 
@@ -590,7 +639,9 @@ Return ONLY the raw HTML for this page. All text must be real content in {lang_n
         page_slug: str = '',
         design_guide: str = '',
         has_reference_images: bool = False,
-        handle_images: bool = False
+        handle_images: bool = False,
+        pages: list = None,
+        languages: list = None
     ) -> tuple:
         """
         Generate prompt for Step 1 of refinement: edit clean HTML with real text.
@@ -654,6 +705,8 @@ The user has provided reference design images. Use them as visual inspiration fo
 - Overall aesthetic and mood
 Match the design style shown in the images while following all other technical requirements."""
 
+        pages_info = PromptTemplates._format_pages_info(pages, languages or [])
+
         user_prompt = f"""# PROJECT CONTEXT
 
 **Site Name:** {site_name}
@@ -661,7 +714,7 @@ Match the design style shown in the images while following all other technical r
 
 **Project Briefing:**
 {project_briefing}
-
+{pages_info}
 ---
 
 # CURRENT PAGE
@@ -698,7 +751,9 @@ Return ONLY the complete updated HTML. All text in {lang_name}. No template vari
         design_guide: str = '',
         has_reference_images: bool = False,
         conversation_history: str = '',
-        handle_images: bool = False
+        handle_images: bool = False,
+        pages: list = None,
+        languages: list = None
     ) -> tuple:
         """
         Wraps get_page_refinement_html_prompt and injects conversation history
@@ -719,6 +774,8 @@ Return ONLY the complete updated HTML. All text in {lang_name}. No template vari
             design_guide=design_guide,
             has_reference_images=has_reference_images,
             handle_images=handle_images,
+            pages=pages,
+            languages=languages,
         )
 
         if conversation_history:
@@ -738,6 +795,100 @@ Do NOT undo any of these previous changes unless specifically asked to.
                 '# USER REQUEST',
                 history_block + '# USER REQUEST',
             )
+
+        return (system_prompt, user_prompt)
+
+    @staticmethod
+    def get_image_analysis_prompt(
+        site_name: str,
+        project_briefing: str,
+        design_guide: str,
+        page_title: str,
+        page_html: str,
+        images: list,
+        library_catalog: list
+    ) -> tuple:
+        """
+        Generate prompt for analyzing page images and suggesting generation prompts
+        plus matching library images.
+
+        Args:
+            site_name: Name of the website
+            project_briefing: Detailed project context
+            design_guide: Freeform markdown design guide
+            page_title: Title of the page
+            page_html: De-templatized page HTML (real text)
+            images: List of dicts with index, src, alt, name
+            library_catalog: List of dicts with id, title, alt_text, key, category, tags
+
+        Returns:
+            Tuple of (system_prompt, user_prompt)
+        """
+        system_prompt = """You are an image consultant for a website. Given page context and a list of images that need real photos, your job is to:
+
+1. **Suggest a detailed AI image generation prompt** for each image — photographic, specific, describing subject, style, lighting, composition, and mood.
+2. **Pick the best aspect ratio** from: 1:1, 16:9, 4:3, 3:2, 9:16 — based on where the image sits in the layout.
+3. **Find up to 3 matching images** from the media library catalog (by ID), ordered by relevance. Return an empty array if none fit.
+
+Return a JSON array. No markdown, no explanations — just the JSON."""
+
+        images_json = json.dumps(images, indent=2, ensure_ascii=False)
+
+        library_section = ""
+        if library_catalog:
+            library_json = json.dumps(library_catalog, indent=2, ensure_ascii=False)
+            library_section = f"""
+## Media Library Catalog
+
+These images are already available. Return their IDs as `library_matches` if they fit:
+
+```json
+{library_json}
+```
+"""
+        else:
+            library_section = "\n## Media Library\nThe media library is empty. Return `library_matches: []` for all images.\n"
+
+        design_section = ""
+        if design_guide:
+            design_section = f"\n## Design Guide\n{design_guide}\n"
+
+        user_prompt = f"""## Site: {site_name}
+
+## Project Briefing
+{project_briefing}
+{design_section}
+## Page: {page_title}
+
+```html
+{page_html}
+```
+
+## Images to Analyze
+
+```json
+{images_json}
+```
+{library_section}
+## Output Format
+
+Return a JSON array:
+```json
+[
+  {{
+    "index": 0,
+    "prompt": "Professional photo of a modern dental clinic reception area with clean white walls, natural light streaming through large windows, potted plants, and a welcoming receptionist smiling at camera",
+    "aspect_ratio": "16:9",
+    "library_matches": [42, 17, 8]
+  }}
+]
+```
+
+Rules:
+- Write detailed, photographic prompts suitable for AI image generation (30-60 words each)
+- Pick aspect ratio based on image context (hero banners → 16:9, profile photos → 1:1, tall cards → 3:2, etc.)
+- Return up to 3 library image IDs that best match, ordered by relevance, or [] if none fit
+- Return ONLY the JSON array"""
 
         return (system_prompt, user_prompt)
 

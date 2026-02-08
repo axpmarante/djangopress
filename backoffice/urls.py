@@ -37,6 +37,7 @@ urlpatterns = [
     # Pages Management
     path('pages/', views.PagesView.as_view(), name='pages'),
     path('page/<int:page_id>/edit/', views.PageEditView.as_view(), name='page_edit'),
+    path('page/<int:page_id>/images/', views.ProcessImagesView.as_view(), name='process_images'),
 
     # Settings
     path('settings/', views.SettingsView.as_view(), name='settings'),

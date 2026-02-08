@@ -278,10 +278,57 @@ Return the complete, corrected JSON now:"""
             }
         }
 
+    def _generate_page_metadata(self, brief: str, languages: list, model: str) -> Dict:
+        """
+        Ask LLM to suggest title_i18n and slug_i18n from the page brief.
+
+        Args:
+            brief: User's page description
+            languages: List of language codes
+            model: LLM model name to use
+
+        Returns:
+            Dict with 'title_i18n' and 'slug_i18n'
+        """
+        print(f"\n--- Generating page metadata (title/slug) ---")
+
+        system_prompt, user_prompt = PromptTemplates.get_page_metadata_prompt(
+            brief=brief,
+            languages=languages
+        )
+
+        messages = [
+            {'role': 'system', 'content': system_prompt},
+            {'role': 'user', 'content': user_prompt}
+        ]
+
+        try:
+            response = self.llm.get_completion(messages, tool_name=model)
+            content = response.choices[0].message.content
+            metadata = self._extract_json_from_response(content)
+
+            title_i18n = metadata.get('title_i18n', {})
+            slug_i18n = metadata.get('slug_i18n', {})
+
+            # Sanitize slugs
+            for lang in languages:
+                if lang in slug_i18n:
+                    slug = slug_i18n[lang].lower().strip()
+                    slug = re.sub(r'[^a-z0-9-]', '', slug)
+                    slug = re.sub(r'-+', '-', slug).strip('-')
+                    slug_i18n[lang] = slug
+
+            print(f"Suggested titles: {title_i18n}")
+            print(f"Suggested slugs: {slug_i18n}")
+            return {'title_i18n': title_i18n, 'slug_i18n': slug_i18n}
+
+        except Exception as e:
+            print(f"WARNING: Metadata generation failed: {e}")
+            return {'title_i18n': {}, 'slug_i18n': {}}
+
     def generate_page(
         self,
         brief: str,
-        page_type: str = 'general',
         language: str = 'pt',
         model_override: str = None,
         reference_images: list = None
@@ -291,7 +338,6 @@ Return the complete, corrected JSON now:"""
 
         Args:
             brief: User's description of the desired page
-            page_type: Type of page (e.g., 'about', 'services', 'home')
             language: Primary language for content (default: 'pt')
             model_override: Override the default model for this request
 
@@ -303,11 +349,10 @@ Return the complete, corrected JSON now:"""
         """
         print(f"\n=== Generating Page (Two-Step) ===")
         print(f"Brief: {brief}")
-        print(f"Page Type: {page_type}")
         print(f"Language: {language}")
 
         # Get site context
-        from core.models import SiteSettings
+        from core.models import SiteSettings, Page
         site_settings = SiteSettings.objects.first()
         default_language = site_settings.get_default_language() if site_settings else 'pt'
         site_name = site_settings.get_site_name(default_language) if site_settings else 'Website'
@@ -321,15 +366,21 @@ Return the complete, corrected JSON now:"""
 
         design_guide = site_settings.design_guide if site_settings else ''
 
+        # Build available pages list for inter-page linking
+        pages_data = []
+        for p in Page.objects.filter(is_active=True).order_by('id'):
+            pages_data.append({'title': p.title_i18n or {}, 'slug': p.slug_i18n or {}})
+
         system_prompt, user_prompt = PromptTemplates.get_page_generation_html_prompt(
             site_name=site_name,
             site_description=site_description,
             project_briefing=project_briefing,
             default_language=default_language,
             brief=brief,
-            page_type=page_type,
             has_reference_images=bool(reference_images),
-            design_guide=design_guide
+            design_guide=design_guide,
+            pages=pages_data,
+            languages=languages
         )
 
         # Debug output
@@ -364,6 +415,11 @@ Return the complete, corrected JSON now:"""
 
         # --- Step 2: Templatize + Translate ---
         page_data = self._templatize_and_translate(raw_html, languages, default_language, model)
+
+        # --- Step 3: Generate suggested title/slug ---
+        metadata = self._generate_page_metadata(brief, languages, model)
+        page_data['title_i18n'] = metadata.get('title_i18n', {})
+        page_data['slug_i18n'] = metadata.get('slug_i18n', {})
 
         print(f"Successfully generated page (two-step)")
         return page_data
@@ -582,6 +638,11 @@ Return the complete, corrected JSON now:"""
 
         design_guide = site_settings.design_guide if site_settings else ''
 
+        # Build available pages list for inter-page linking
+        pages_data = []
+        for p in Page.objects.filter(is_active=True).order_by('id'):
+            pages_data.append({'title': p.title_i18n or {}, 'slug': p.slug_i18n or {}})
+
         # Prepare the refinement instructions with section targeting
         targeted_instructions = instructions
         if section_name:
@@ -615,6 +676,8 @@ Return the complete, corrected JSON now:"""
                 has_reference_images=bool(reference_images),
                 conversation_history=conversation_history,
                 handle_images=handle_images,
+                pages=pages_data,
+                languages=languages,
             )
         else:
             system_prompt, user_prompt = PromptTemplates.get_page_refinement_html_prompt(
@@ -629,6 +692,8 @@ Return the complete, corrected JSON now:"""
                 design_guide=design_guide,
                 has_reference_images=bool(reference_images),
                 handle_images=handle_images,
+                pages=pages_data,
+                languages=languages,
             )
 
         # Debug output
@@ -717,10 +782,11 @@ Return the complete, corrected JSON now:"""
 
         for decision in image_decisions:
             image_name = decision.get('image_name', '')
+            image_src = decision.get('image_src', '')
             action = decision.get('action', '')
 
-            if not image_name or not action:
-                failed.append({'image_name': image_name, 'error': 'Missing image_name or action'})
+            if not action or (not image_name and not image_src):
+                failed.append({'image_name': image_name or image_src, 'error': 'Missing identifier or action'})
                 continue
 
             try:
@@ -741,7 +807,8 @@ Return the complete, corrected JSON now:"""
                         failed.append({'image_name': image_name, 'error': 'Missing prompt'})
                         continue
 
-                    print(f"Generating image for '{image_name}': {prompt[:80]}...")
+                    image_label = image_name or image_src.split('/')[-1] or 'image'
+                    print(f"Generating image for '{image_label}': {prompt[:80]}...")
                     result = self.llm.generate_image(prompt=prompt, aspect_ratio=aspect_ratio)
 
                     if not result.success:
@@ -752,7 +819,7 @@ Return the complete, corrected JSON now:"""
                     optimized_bytes = optimize_generated_image(result.image_bytes, max_width=1200, quality=85)
 
                     # Save as SiteImage
-                    file_slug = slugify(image_name) or 'ai-image'
+                    file_slug = slugify(image_name or image_src.split('/')[-1]) or 'ai-image'
                     # Ensure unique key
                     base_key = f"ai-{file_slug}"
                     key = base_key
@@ -761,7 +828,7 @@ Return the complete, corrected JSON now:"""
                         key = f"{base_key}-{counter}"
                         counter += 1
 
-                    title_text = image_name.replace('-', ' ').replace('_', ' ').title()
+                    title_text = (image_name or file_slug).replace('-', ' ').replace('_', ' ').title()
                     site_image = SiteImage(
                         key=key,
                         title_i18n={lang: title_text for lang in languages},
@@ -779,13 +846,24 @@ Return the complete, corrected JSON now:"""
                     failed.append({'image_name': image_name, 'error': f'Unknown action: {action}'})
                     continue
 
-                # Replace in HTML: find img with data-image-name="..." and update src
-                # Use regex to match the img tag with this data-image-name
-                pattern = re.compile(
-                    r'(<img\b[^>]*?\bdata-image-name="' + re.escape(image_name) + r'"[^>]*?)(/?>)',
-                    re.DOTALL
-                )
-                match = pattern.search(html)
+                # Replace in HTML: find img tag and update src
+                # First try matching by data-image-name
+                match = None
+                if image_name:
+                    pattern = re.compile(
+                        r'(<img\b[^>]*?\bdata-image-name="' + re.escape(image_name) + r'"[^>]*?)(/?>)',
+                        re.DOTALL
+                    )
+                    match = pattern.search(html)
+
+                # Fallback: match by src attribute
+                if not match and image_src:
+                    pattern2 = re.compile(
+                        r'(<img\b[^>]*?\bsrc="' + re.escape(image_src) + r'"[^>]*?)(/?>)',
+                        re.DOTALL
+                    )
+                    match = pattern2.search(html)
+
                 if match:
                     tag_content = match.group(1)
                     tag_close = match.group(2)
@@ -817,3 +895,100 @@ Return the complete, corrected JSON now:"""
             'failed': failed,
             'report': f"Processed {len(processed)} image(s), {len(failed)} failed"
         }
+
+    def analyze_page_images(
+        self,
+        page_id: int,
+        images: List[Dict],
+        model_override: str = None
+    ) -> List[Dict]:
+        """
+        Analyze page images and suggest generation prompts + library matches.
+
+        Args:
+            page_id: ID of the page
+            images: List of dicts with index, src, alt, name
+            model_override: Override the default model
+
+        Returns:
+            List of suggestion dicts with index, prompt, aspect_ratio, library_matches
+        """
+        from core.models import Page, SiteSettings, SiteImage
+
+        print(f"\n=== Analyzing Page Images ===")
+        print(f"Page ID: {page_id}")
+        print(f"Images: {len(images)}")
+
+        try:
+            page = Page.objects.get(id=page_id)
+        except Page.DoesNotExist:
+            raise ValueError(f"Page with ID {page_id} not found")
+
+        site_settings = SiteSettings.objects.first()
+        default_language = site_settings.get_default_language() if site_settings else 'pt'
+        site_name = site_settings.get_site_name(default_language) if site_settings else 'Website'
+        project_briefing = site_settings.get_project_briefing() if site_settings else ''
+        design_guide = site_settings.design_guide if site_settings else ''
+
+        # De-templatize page HTML
+        current_html = page.html_content or ''
+        current_translations = (page.content or {}).get('translations', {})
+        if current_translations.get(default_language):
+            clean_html = self._detemplatize_html(current_html, current_translations, default_language)
+        else:
+            clean_html = current_html
+
+        # Build library catalog (metadata only, no URLs)
+        library_catalog = []
+        for img in SiteImage.objects.filter(is_active=True).order_by('-id'):
+            title = img.title if isinstance(img.title, str) else (img.title_i18n or {}).get(default_language, img.title_i18n.get(list(img.title_i18n.keys())[0], '')) if img.title_i18n else ''
+            alt_text = img.alt_text if isinstance(img.alt_text, str) else (img.alt_text_i18n or {}).get(default_language, '') if hasattr(img, 'alt_text_i18n') and img.alt_text_i18n else ''
+            library_catalog.append({
+                'id': img.id,
+                'title': title,
+                'alt_text': alt_text,
+                'key': img.key or '',
+                'category': img.category or '',
+                'tags': img.tags or '',
+            })
+
+        page_title = page.default_title or page.default_slug or 'Untitled'
+
+        # Build prompt
+        system_prompt, user_prompt = PromptTemplates.get_image_analysis_prompt(
+            site_name=site_name,
+            project_briefing=project_briefing,
+            design_guide=design_guide,
+            page_title=page_title,
+            page_html=clean_html,
+            images=images,
+            library_catalog=library_catalog,
+        )
+
+        model = model_override or self.model_name
+        messages = [
+            {'role': 'system', 'content': system_prompt},
+            {'role': 'user', 'content': user_prompt}
+        ]
+
+        response = self.llm.get_completion(messages, tool_name=model)
+        content = response.choices[0].message.content
+        suggestions = self._extract_json_from_response(content)
+
+        # Ensure it's a list
+        if isinstance(suggestions, dict):
+            for key in ('suggestions', 'images', 'results'):
+                if key in suggestions and isinstance(suggestions[key], list):
+                    suggestions = suggestions[key]
+                    break
+            else:
+                suggestions = [suggestions]
+
+        # Validate library IDs
+        valid_ids = set(SiteImage.objects.filter(is_active=True).values_list('id', flat=True))
+        for suggestion in suggestions:
+            matches = suggestion.get('library_matches', [])
+            suggestion['library_matches'] = [mid for mid in matches if mid in valid_ids]
+
+        print(f"Generated {len(suggestions)} image suggestions")
+        return suggestions

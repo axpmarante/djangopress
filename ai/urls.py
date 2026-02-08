@@ -28,5 +28,6 @@ urlpatterns = [
     path('api/generate-design-guide/', views.generate_design_guide_ai_api, name='generate_design_guide_ai'),
 
     # Image processing
+    path('api/analyze-page-images/', views.analyze_page_images_api, name='analyze_page_images'),
     path('api/process-page-images/', views.process_page_images_api, name='process_page_images'),
 ]

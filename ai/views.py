@@ -20,7 +20,6 @@ def generate_page_api(request):
     POST /ai/api/generate-page/
     Body: {
         "brief": "User description",
-        "page_type": "about",  # optional
         "language": "pt",  # optional, default: 'pt'
         "model": "gemini-flash"  # optional, default from service
     }
@@ -34,7 +33,6 @@ def generate_page_api(request):
         # Support both multipart (with images) and JSON body
         if request.content_type and 'multipart' in request.content_type:
             brief = request.POST.get('brief')
-            page_type = request.POST.get('page_type', 'general')
             language = request.POST.get('language', 'pt')
             model = request.POST.get('model', 'gemini-pro')
             reference_images = []
@@ -43,7 +41,6 @@ def generate_page_api(request):
         else:
             data = json.loads(request.body)
             brief = data.get('brief')
-            page_type = data.get('page_type', 'general')
             language = data.get('language', 'pt')
             model = data.get('model', 'gemini-pro')
             reference_images = []
@@ -58,7 +55,6 @@ def generate_page_api(request):
         service = ContentGenerationService()
         page_data = service.generate_page(
             brief=brief,
-            page_type=page_type,
             language=language,
             model_override=model,
             reference_images=reference_images or None
@@ -66,7 +62,9 @@ def generate_page_api(request):
 
         return JsonResponse({
             'success': True,
-            'page_data': page_data
+            'page_data': page_data,
+            'title_i18n': page_data.pop('title_i18n', {}),
+            'slug_i18n': page_data.pop('slug_i18n', {}),
         })
 
     except Exception as e:
@@ -866,6 +864,58 @@ Aim for 80-150 lines of concise, actionable markdown."""
 
     except Exception as e:
         print(f"Error in generate_design_guide_ai_api: {e}")
+        import traceback
+        traceback.print_exc()
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+
+
+@staff_member_required
+@require_http_methods(["POST"])
+def analyze_page_images_api(request):
+    """
+    Analyze page images and suggest generation prompts + library matches.
+
+    POST /ai/api/analyze-page-images/
+    Body: {
+        "page_id": 123,
+        "images": [{"index": 0, "src": "...", "alt": "...", "name": "..."}],
+        "model": "gemini-pro"
+    }
+
+    Returns: {
+        "success": true,
+        "suggestions": [{"index": 0, "prompt": "...", "aspect_ratio": "16:9", "library_matches": [42, 17]}]
+    }
+    """
+    try:
+        data = json.loads(request.body)
+        page_id = data.get('page_id')
+        images = data.get('images', [])
+        model = data.get('model', 'gemini-pro')
+
+        if not page_id or not images:
+            return JsonResponse({
+                'success': False,
+                'error': 'page_id and images are required'
+            }, status=400)
+
+        service = ContentGenerationService()
+        suggestions = service.analyze_page_images(
+            page_id=page_id,
+            images=images,
+            model_override=model,
+        )
+
+        return JsonResponse({
+            'success': True,
+            'suggestions': suggestions,
+        })
+
+    except Exception as e:
+        print(f"Error in analyze_page_images_api: {e}")
         import traceback
         traceback.print_exc()
         return JsonResponse({

@@ -1,0 +1,503 @@
+{% extends 'backoffice/base.html' %}
+{% load static %}
+
+{% block title %}Process Images - {{ page.default_title }}{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto space-y-6">
+    <!-- Header -->
+    <div class="flex items-center justify-between">
+        <div>
+            <h2 class="text-3xl font-bold text-gray-900">Process Images</h2>
+            <p class="text-gray-600 mt-1">{{ page.default_title }}</p>
+        </div>
+        <a href="{% url 'backoffice:page_edit' page_id=page.id %}"
+           class="text-gray-600 hover:text-gray-900 flex items-center">
+            <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+            </svg>
+            Back to Page
+        </a>
+    </div>
+
+    {% if not page %}
+    <div class="bg-red-50 border border-red-200 rounded-lg p-6 text-center">
+        <h3 class="text-lg font-semibold text-gray-900 mb-2">Page Not Found</h3>
+        <a href="{% url 'backoffice:pages' %}" class="text-blue-600 hover:text-blue-800 font-medium">Go to Pages List</a>
+    </div>
+    {% else %}
+
+    <!-- Top Actions Bar -->
+    <div class="bg-white rounded-lg shadow p-4">
+        <div class="flex items-center justify-between flex-wrap gap-3">
+            <div class="flex items-center gap-3 flex-wrap">
+                {% if ai_models %}
+                <select id="aiModel" class="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-purple-500 focus:border-purple-500">
+                    {% for model in ai_models %}
+                    <option value="{{ model.0 }}" {% if model.0 == default_model %}selected{% endif %}>{{ model.1 }}</option>
+                    {% endfor %}
+                </select>
+                {% endif %}
+                <button id="aiSuggestBtn" onclick="aiSuggestPrompts()"
+                        class="px-4 py-2 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-md hover:from-purple-700 hover:to-blue-700 flex items-center text-sm font-medium">
+                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                    </svg>
+                    AI Suggest Prompts
+                </button>
+            </div>
+            <div class="flex items-center gap-3">
+                <label class="flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
+                    <input type="checkbox" id="selectAllImages" onchange="toggleSelectAll(this.checked)" class="w-4 h-4 text-purple-600 border-gray-300 rounded" checked>
+                    Select all
+                </label>
+                <button id="processSelectedBtn" onclick="processSelected()"
+                        class="px-4 py-2 bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-md hover:from-emerald-600 hover:to-teal-600 flex items-center text-sm font-medium">
+                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                    </svg>
+                    Process Selected
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading State -->
+    <div id="loadingState" class="bg-white rounded-lg shadow p-8 text-center">
+        <svg class="animate-spin h-8 w-8 text-blue-600 mx-auto mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+        </svg>
+        <p class="text-gray-600">Scanning page for images...</p>
+    </div>
+
+    <!-- No Images State -->
+    <div id="emptyState" class="hidden bg-white rounded-lg shadow p-8 text-center">
+        <svg class="w-16 h-16 text-gray-300 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+        </svg>
+        <h3 class="text-lg font-semibold text-gray-900 mb-2">No Images Found</h3>
+        <p class="text-gray-600">This page doesn't contain any &lt;img&gt; tags.</p>
+    </div>
+
+    <!-- Image Cards Container -->
+    <div id="imageCards" class="hidden space-y-4"></div>
+
+    <!-- Results Banner -->
+    <div id="resultsBanner" class="hidden bg-green-50 border border-green-200 rounded-lg p-4">
+        <p id="resultsText" class="text-green-800 font-medium"></p>
+        <p id="resultsErrors" class="text-red-700 text-sm mt-1 hidden"></p>
+    </div>
+
+    {% endif %}
+</div>
+
+<script>
+const PAGE_ID = {{ page.id }};
+let detectedImages = [];
+let mediaLibraryCache = null;
+
+// ============ Init ============
+document.addEventListener('DOMContentLoaded', scanImages);
+
+async function scanImages() {
+    try {
+        // Fetch page HTML and media library in parallel
+        const [pageRes, libRes] = await Promise.all([
+            fetch(`/backoffice/api/page-content/${PAGE_ID}/`),
+            fetch('/backoffice/api/media-library/')
+        ]);
+        const pageResult = await pageRes.json();
+        const libResult = await libRes.json();
+
+        if (!pageResult.success) { showEmpty(); return; }
+
+        mediaLibraryCache = libResult.success ? libResult.images : [];
+
+        const html = pageResult.html_content || '';
+        const regex = /<img\b[^>]*?>/gi;
+        detectedImages = [];
+        let match;
+        let idx = 0;
+        while ((match = regex.exec(html)) !== null) {
+            const tag = match[0];
+            const promptMatch = tag.match(/data-image-prompt="([^"]*)"/);
+            const nameMatch = tag.match(/data-image-name="([^"]*)"/);
+            const srcMatch = tag.match(/src="([^"]*)"/);
+            const altMatch = tag.match(/alt="([^"]*)"/);
+            detectedImages.push({
+                index: idx++,
+                prompt: promptMatch ? promptMatch[1] : '',
+                name: nameMatch ? nameMatch[1] : '',
+                src: srcMatch ? srcMatch[1] : '',
+                alt: altMatch ? altMatch[1] : '',
+                selected: true,
+                action: 'generate',
+                aspect_ratio: '16:9',
+                library_image_id: null,
+                library_suggestions: []
+            });
+        }
+
+        if (detectedImages.length === 0) {
+            showEmpty();
+            return;
+        }
+
+        renderCards();
+    } catch (e) {
+        console.error('Error scanning images:', e);
+        document.getElementById('loadingState').innerHTML =
+            `<p class="text-red-600">Error: ${escapeHtml(e.message)}</p>`;
+    }
+}
+
+function showEmpty() {
+    document.getElementById('loadingState').classList.add('hidden');
+    document.getElementById('emptyState').classList.remove('hidden');
+}
+
+// ============ Render ============
+function renderCards() {
+    const container = document.getElementById('imageCards');
+    const libraryOptions = (mediaLibraryCache || []).map(li =>
+        `<option value="${li.id}">${escapeHtml(li.title || li.key || 'Image #' + li.id)}</option>`
+    ).join('');
+
+    let html = '';
+    detectedImages.forEach((img, i) => {
+        const label = img.name || img.src.split('/').pop() || `image-${i + 1}`;
+        const truncatedSrc = img.src.length > 60 ? '...' + img.src.slice(-57) : img.src;
+
+        html += `
+        <div class="bg-white rounded-lg shadow p-5" id="imgCard${i}">
+            <div class="flex items-start gap-4">
+                <input type="checkbox" ${img.selected ? 'checked' : ''} onchange="detectedImages[${i}].selected=this.checked"
+                       class="mt-1 w-5 h-5 text-purple-600 border-gray-300 rounded flex-shrink-0">
+                <div class="w-20 h-20 flex-shrink-0 bg-gray-100 rounded-lg border border-gray-200 flex items-center justify-center overflow-hidden">
+                    ${img.src
+                        ? `<img src="${escapeHtml(img.src)}" class="w-full h-full object-cover" onerror="this.parentElement.innerHTML='<svg class=\\'w-10 h-10 text-gray-300\\' fill=\\'none\\' stroke=\\'currentColor\\' viewBox=\\'0 0 24 24\\'><path stroke-linecap=\\'round\\' stroke-linejoin=\\'round\\' stroke-width=\\'2\\' d=\\'M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z\\'/></svg>'">`
+                        : `<svg class="w-10 h-10 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>`
+                    }
+                </div>
+                <div class="flex-1 min-w-0 space-y-3">
+                    <!-- Identity -->
+                    <div>
+                        <div class="flex items-center gap-2 mb-1">
+                            <span class="font-semibold text-gray-900">${escapeHtml(label)}</span>
+                            <span class="text-xs text-gray-400">#${i + 1}</span>
+                        </div>
+                        ${img.src ? `<p class="text-xs text-gray-400 truncate" title="${escapeHtml(img.src)}">${escapeHtml(truncatedSrc)}</p>` : ''}
+                        ${img.alt ? `<p class="text-xs text-gray-500">alt: ${escapeHtml(img.alt)}</p>` : ''}
+                    </div>
+
+                    <!-- Prompt -->
+                    <div>
+                        <label class="block text-xs font-medium text-gray-700 mb-1">Generation Prompt</label>
+                        <textarea id="prompt${i}" rows="2"
+                                  onchange="detectedImages[${i}].prompt=this.value" oninput="detectedImages[${i}].prompt=this.value"
+                                  class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                                  placeholder="Describe the image you want generated...">${escapeHtml(img.prompt)}</textarea>
+                    </div>
+
+                    <!-- Aspect Ratio & Action -->
+                    <div class="flex items-center gap-6 flex-wrap">
+                        <div>
+                            <label class="block text-xs font-medium text-gray-700 mb-1">Aspect Ratio</label>
+                            <select id="aspect${i}" onchange="detectedImages[${i}].aspect_ratio=this.value"
+                                    class="border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:ring-2 focus:ring-purple-500">
+                                <option value="1:1" ${img.aspect_ratio === '1:1' ? 'selected' : ''}>1:1</option>
+                                <option value="16:9" ${img.aspect_ratio === '16:9' ? 'selected' : ''}>16:9</option>
+                                <option value="4:3" ${img.aspect_ratio === '4:3' ? 'selected' : ''}>4:3</option>
+                                <option value="3:2" ${img.aspect_ratio === '3:2' ? 'selected' : ''}>3:2</option>
+                                <option value="9:16" ${img.aspect_ratio === '9:16' ? 'selected' : ''}>9:16</option>
+                            </select>
+                        </div>
+                        <div class="flex items-center gap-4 text-sm">
+                            <label class="flex items-center gap-1.5 cursor-pointer">
+                                <input type="radio" name="action${i}" value="generate" ${img.action === 'generate' ? 'checked' : ''} onchange="setAction(${i},'generate')"
+                                       class="text-purple-600 focus:ring-purple-500">
+                                <span class="text-gray-700">Generate</span>
+                            </label>
+                            <label class="flex items-center gap-1.5 cursor-pointer">
+                                <input type="radio" name="action${i}" value="library" ${img.action === 'library' ? 'checked' : ''} onchange="setAction(${i},'library')"
+                                       class="text-purple-600 focus:ring-purple-500">
+                                <span class="text-gray-700">From Library</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Library Dropdown -->
+                    <div id="libSelect${i}" class="${img.action === 'library' ? '' : 'hidden'}">
+                        <select id="libDropdown${i}" onchange="detectedImages[${i}].library_image_id=parseInt(this.value)||null"
+                                class="w-full border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:ring-2 focus:ring-purple-500">
+                            <option value="">-- Select image --</option>
+                            ${libraryOptions}
+                        </select>
+                    </div>
+
+                    <!-- Library Suggestions (populated by AI) -->
+                    <div id="libSuggestions${i}" class="hidden">
+                        <label class="block text-xs font-medium text-gray-700 mb-1">AI Suggestions</label>
+                        <div id="libSugThumbs${i}" class="flex gap-2 flex-wrap"></div>
+                    </div>
+
+                    <!-- Status -->
+                    <div id="imgStatus${i}" class="hidden text-sm"></div>
+                </div>
+            </div>
+        </div>`;
+    });
+
+    container.innerHTML = html;
+    document.getElementById('loadingState').classList.add('hidden');
+    container.classList.remove('hidden');
+}
+
+// ============ Actions ============
+function setAction(index, action) {
+    detectedImages[index].action = action;
+    const libSelect = document.getElementById(`libSelect${index}`);
+    if (libSelect) libSelect.classList.toggle('hidden', action !== 'library');
+}
+
+function selectLibrarySuggestion(index, imageId) {
+    detectedImages[index].action = 'library';
+    detectedImages[index].library_image_id = imageId;
+
+    // Update radio to "From Library"
+    const radios = document.querySelectorAll(`input[name="action${index}"]`);
+    radios.forEach(r => r.checked = (r.value === 'library'));
+
+    // Show and set library dropdown
+    const libSelect = document.getElementById(`libSelect${index}`);
+    if (libSelect) libSelect.classList.remove('hidden');
+    const dropdown = document.getElementById(`libDropdown${index}`);
+    if (dropdown) dropdown.value = imageId;
+
+    // Highlight selected suggestion
+    const thumbs = document.querySelectorAll(`#libSugThumbs${index} .lib-sug-thumb`);
+    thumbs.forEach(t => {
+        t.classList.toggle('ring-2', parseInt(t.dataset.imageId) === imageId);
+        t.classList.toggle('ring-purple-500', parseInt(t.dataset.imageId) === imageId);
+    });
+}
+
+function toggleSelectAll(checked) {
+    detectedImages.forEach((img, i) => {
+        img.selected = checked;
+        const cb = document.querySelector(`#imgCard${i} input[type="checkbox"]`);
+        if (cb) cb.checked = checked;
+    });
+}
+
+function getCSRFToken() {
+    return document.querySelector('[name=csrfmiddlewaretoken]')?.value ||
+           document.cookie.split('; ').find(row => row.startsWith('csrftoken='))?.split('=')[1];
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+// ============ AI Suggest ============
+async function aiSuggestPrompts() {
+    if (detectedImages.length === 0) return;
+
+    const btn = document.getElementById('aiSuggestBtn');
+    const origHTML = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = `<svg class="animate-spin w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> Analyzing...`;
+
+    const images = detectedImages.map(img => ({
+        index: img.index,
+        src: img.src,
+        alt: img.alt,
+        name: img.name
+    }));
+
+    const modelEl = document.getElementById('aiModel');
+    const model = modelEl ? modelEl.value : 'gemini-pro';
+
+    try {
+        const response = await fetch('/ai/api/analyze-page-images/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCSRFToken()
+            },
+            body: JSON.stringify({ page_id: PAGE_ID, images, model })
+        });
+        const result = await response.json();
+
+        if (result.success && result.suggestions) {
+            applySuggestions(result.suggestions);
+        } else {
+            alert('AI analysis failed: ' + (result.error || 'Unknown error'));
+        }
+    } catch (e) {
+        alert('Error: ' + e.message);
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = origHTML;
+    }
+}
+
+function applySuggestions(suggestions) {
+    suggestions.forEach(sug => {
+        const idx = sug.index;
+        if (idx < 0 || idx >= detectedImages.length) return;
+
+        // Update prompt
+        if (sug.prompt) {
+            detectedImages[idx].prompt = sug.prompt;
+            const textarea = document.getElementById(`prompt${idx}`);
+            if (textarea) textarea.value = sug.prompt;
+        }
+
+        // Update aspect ratio
+        if (sug.aspect_ratio) {
+            detectedImages[idx].aspect_ratio = sug.aspect_ratio;
+            const select = document.getElementById(`aspect${idx}`);
+            if (select) select.value = sug.aspect_ratio;
+        }
+
+        // Library suggestions
+        const matches = sug.library_matches || [];
+        detectedImages[idx].library_suggestions = matches;
+
+        if (matches.length > 0) {
+            const sugContainer = document.getElementById(`libSuggestions${idx}`);
+            const thumbsContainer = document.getElementById(`libSugThumbs${idx}`);
+            if (sugContainer && thumbsContainer) {
+                // Build thumbnail HTML from library cache
+                let thumbsHtml = '';
+                matches.forEach(imgId => {
+                    const libImg = (mediaLibraryCache || []).find(li => li.id === imgId);
+                    if (libImg) {
+                        const thumbUrl = libImg.url || '';
+                        const thumbTitle = libImg.title || libImg.key || `#${imgId}`;
+                        thumbsHtml += `
+                            <div class="lib-sug-thumb w-16 h-16 rounded-lg border-2 border-gray-200 overflow-hidden cursor-pointer hover:border-purple-400 transition-colors flex-shrink-0"
+                                 data-image-id="${imgId}"
+                                 onclick="selectLibrarySuggestion(${idx}, ${imgId})"
+                                 title="${escapeHtml(thumbTitle)}">
+                                ${thumbUrl
+                                    ? `<img src="${escapeHtml(thumbUrl)}" class="w-full h-full object-cover" onerror="this.parentElement.innerHTML='<span class=\\'text-xs text-gray-400 p-1\\'>#${imgId}</span>'">`
+                                    : `<span class="text-xs text-gray-400 p-1">#${imgId}</span>`
+                                }
+                            </div>`;
+                    }
+                });
+                thumbsContainer.innerHTML = thumbsHtml;
+                sugContainer.classList.remove('hidden');
+            }
+        }
+    });
+}
+
+// ============ Process ============
+async function processSelected() {
+    const selected = detectedImages.filter(img => img.selected);
+    if (selected.length === 0) { alert('No images selected.'); return; }
+
+    // Validate
+    for (const img of selected) {
+        const label = img.name || img.src.split('/').pop() || 'image';
+        if (img.action === 'library' && !img.library_image_id) {
+            alert(`Please select a library image for "${label}".`);
+            return;
+        }
+        if (img.action === 'generate' && !img.prompt) {
+            alert(`Please enter a generation prompt for "${label}".`);
+            return;
+        }
+    }
+
+    const btn = document.getElementById('processSelectedBtn');
+    const origHTML = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = `<svg class="animate-spin w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> Processing...`;
+
+    const images = selected.map(img => {
+        const entry = { image_name: img.name, image_src: img.src, action: img.action };
+        if (img.action === 'library') {
+            entry.library_image_id = img.library_image_id;
+        } else {
+            entry.prompt = img.prompt;
+            entry.aspect_ratio = img.aspect_ratio;
+        }
+        return entry;
+    });
+
+    try {
+        const response = await fetch('/ai/api/process-page-images/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCSRFToken()
+            },
+            body: JSON.stringify({ page_id: PAGE_ID, images })
+        });
+        const result = await response.json();
+
+        btn.disabled = false;
+        btn.innerHTML = origHTML;
+
+        if (result.success) {
+            // Show results banner
+            const banner = document.getElementById('resultsBanner');
+            const text = document.getElementById('resultsText');
+            const errors = document.getElementById('resultsErrors');
+
+            text.textContent = result.report;
+            banner.classList.remove('hidden');
+
+            if (result.failed && result.failed.length > 0) {
+                errors.textContent = 'Failed: ' + result.failed.map(f => `${f.image_name}: ${f.error}`).join(', ');
+                errors.classList.remove('hidden');
+            } else {
+                errors.classList.add('hidden');
+            }
+
+            // Update card statuses
+            if (result.processed) {
+                result.processed.forEach(p => {
+                    const idx = detectedImages.findIndex(img =>
+                        (p.image_name && img.name === p.image_name) ||
+                        (!p.image_name && img.src && p.new_url)
+                    );
+                    if (idx >= 0) {
+                        const status = document.getElementById(`imgStatus${idx}`);
+                        if (status) {
+                            status.classList.remove('hidden');
+                            status.innerHTML = `<span class="text-green-600 font-medium">Done — ${escapeHtml(p.action)}</span>`;
+                        }
+                    }
+                });
+            }
+            if (result.failed) {
+                result.failed.forEach(f => {
+                    const idx = detectedImages.findIndex(img => img.name === f.image_name);
+                    if (idx >= 0) {
+                        const status = document.getElementById(`imgStatus${idx}`);
+                        if (status) {
+                            status.classList.remove('hidden');
+                            status.innerHTML = `<span class="text-red-600 font-medium">Failed: ${escapeHtml(f.error)}</span>`;
+                        }
+                    }
+                });
+            }
+        } else {
+            alert('Error: ' + (result.error || 'Unknown error'));
+        }
+    } catch (e) {
+        btn.disabled = false;
+        btn.innerHTML = origHTML;
+        alert('Error: ' + e.message);
+    }
+}
+</script>
+{% endblock %}
