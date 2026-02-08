@@ -246,9 +246,9 @@ class SiteSettingsAdmin(admin.ModelAdmin):
             'fields': ('default_language', 'enabled_languages'),
             'description': 'Configure which languages are available on your site and set the default language. Changes here will affect the entire site.',
         }),
-        ('AI Context - Project Briefing (Translations)', {
-            'fields': ('project_briefing_i18n',),
-            'description': 'Detailed description of the project/business for AI content generation in each language. Include business type, target audience, brand values, tone of voice, key messaging, and any specific guidelines.',
+        ('AI Context - Project Briefing', {
+            'fields': ('project_briefing',),
+            'description': 'Detailed description of the project/business for AI content generation. Include business type, target audience, brand values, tone of voice, key messaging, and any specific guidelines.',
         }),
         ('Contact Information', {
             'fields': ('contact_email', 'contact_phone', 'contact_address_i18n')
@@ -313,13 +313,6 @@ class SiteSettingsAdmin(admin.ModelAdmin):
             form.base_fields['site_description_i18n'] = TranslationJSONField(
                 label='Site Description',
                 widget_type='text',
-                required=False
-            )
-
-        if 'project_briefing_i18n' in form.base_fields:
-            form.base_fields['project_briefing_i18n'] = TranslationJSONField(
-                label='Project Briefing',
-                widget_type='textarea',
                 required=False
             )
 

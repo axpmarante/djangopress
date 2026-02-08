@@ -51,7 +51,7 @@ class SiteSettings(models.Model):
     # OLD FIELDS (will be removed after migration)
     site_name = models.CharField("Site Name (OLD)", max_length=100, default="DjangoPress", null=True, blank=True)
     site_description = models.CharField("Site Description (OLD)", max_length=255, blank=True, null=True)
-    project_briefing = models.TextField("Project Briefing (OLD)", blank=True, default='', null=True)
+    project_briefing = models.TextField("Project Briefing", blank=True, default='', help_text='Detailed description of the project/business for AI context.')
     contact_address = models.TextField("Address (OLD)", blank=True, default='', null=True)
 
     # NEW: JSON Translation Fields
@@ -66,12 +66,6 @@ class SiteSettings(models.Model):
         default=dict,
         blank=True,
         help_text='{"pt": "Descrição PT", "en": "Description EN"}'
-    )
-    project_briefing_i18n = models.JSONField(
-        'Project Briefing (All Languages)',
-        default=dict,
-        blank=True,
-        help_text='{"pt": "Briefing PT", "en": "Briefing EN"}. Detailed description of the project/business for AI context.'
     )
     contact_address_i18n = models.JSONField(
         'Contact Address (All Languages)',
@@ -317,13 +311,8 @@ class SiteSettings(models.Model):
         # Fallback to old field if new field is empty
         return self.site_description or ''
 
-    def get_project_briefing(self, lang='pt'):
-        """Get project briefing in specified language"""
-        if self.project_briefing_i18n and isinstance(self.project_briefing_i18n, dict) and self.project_briefing_i18n:
-            briefing = self.project_briefing_i18n.get(lang, self.project_briefing_i18n.get('pt', ''))
-            if briefing:
-                return briefing
-        # Fallback to old field if new field is empty
+    def get_project_briefing(self):
+        """Get project briefing for AI context"""
         return self.project_briefing or ''
 
     def get_contact_address(self, lang='pt'):

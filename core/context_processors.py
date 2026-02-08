@@ -57,7 +57,6 @@ def site_settings(request):
         'SITE_NAME_I18N': settings.site_name_i18n,
         'SITE_DESCRIPTION_I18N': settings.site_description_i18n,
         'CONTACT_ADDRESS_I18N': settings.contact_address_i18n,
-        'PROJECT_BRIEFING_I18N': settings.project_briefing_i18n,
 
         # Pass entire settings object for helper methods
         'site_settings': settings,

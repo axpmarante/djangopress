@@ -312,7 +312,7 @@ Return the complete, corrected JSON now:"""
         default_language = site_settings.get_default_language() if site_settings else 'pt'
         site_name = site_settings.get_site_name(default_language) if site_settings else 'Website'
         site_description = site_settings.get_site_description(default_language) if site_settings else ''
-        project_briefing = site_settings.get_project_briefing(default_language) if site_settings else ''
+        project_briefing = site_settings.get_project_briefing() if site_settings else ''
         languages = site_settings.get_language_codes() if site_settings else ['pt', 'en']
         model = model_override or self.model_name
 
@@ -416,7 +416,7 @@ Return the complete, corrected JSON now:"""
         language = site_settings.default_language if site_settings else 'pt'
         site_name = site_settings.get_site_name(language) if site_settings else 'Website'
         site_description = site_settings.get_site_description(language) if site_settings else ''
-        project_briefing = site_settings.get_project_briefing(language) if site_settings else ''
+        project_briefing = site_settings.get_project_briefing() if site_settings else ''
         languages = site_settings.get_language_codes() if site_settings else ['pt', 'en']
 
         # Get all pages with their slugs in all languages
@@ -576,7 +576,7 @@ Return the complete, corrected JSON now:"""
         default_language = site_settings.get_default_language() if site_settings else 'pt'
         site_name = site_settings.get_site_name(default_language) if site_settings else 'Website'
         site_description = site_settings.get_site_description(default_language) if site_settings else ''
-        project_briefing = site_settings.get_project_briefing(default_language) if site_settings else ''
+        project_briefing = site_settings.get_project_briefing() if site_settings else ''
         languages = site_settings.get_language_codes() if site_settings else ['pt', 'en']
         model = model_override or self.model_name
 

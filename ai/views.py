@@ -327,7 +327,7 @@ def analyze_bulk_pages_api(request):
         site_settings = SiteSettings.objects.first()
         site_name = site_settings.get_site_name(language) if site_settings else 'Website'
         site_description = site_settings.get_site_description(language) if site_settings else ''
-        project_briefing = site_settings.get_project_briefing(language) if site_settings else ''
+        project_briefing = site_settings.get_project_briefing() if site_settings else ''
         enabled_languages = site_settings.get_language_codes() if site_settings else ['pt', 'en']
 
         # Create LLM instance
@@ -734,7 +734,7 @@ def generate_design_guide_ai_api(request):
 
         default_language = site_settings.get_default_language()
         site_name = site_settings.get_site_name(default_language)
-        project_briefing = site_settings.get_project_briefing(default_language)
+        project_briefing = site_settings.get_project_briefing()
 
         # Build current settings summary
         settings_summary = f"""## Current Design System Values
