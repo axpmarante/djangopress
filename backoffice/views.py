@@ -6,6 +6,7 @@ from django.contrib import messages
 from django.shortcuts import redirect
 from django.urls import reverse_lazy
 
+from django.conf.global_settings import LANGUAGES as ALL_LANGUAGES
 from core.models import SiteSettings, SiteImage, Page, GOOGLE_FONTS_CHOICES, GlobalSection
 from core.utils import resize_and_compress_image
 from django.utils.text import slugify
@@ -386,6 +387,7 @@ class SettingsView(LoginRequiredMixin, TemplateView):
         context = super().get_context_data(**kwargs)
         context['settings'], _ = SiteSettings.objects.get_or_create(pk=1)
         context['google_fonts'] = GOOGLE_FONTS_CHOICES
+        context['available_languages'] = ALL_LANGUAGES
 
         # Pages with content (for AI design guide generation)
         context['pages_with_content'] = Page.objects.filter(
