@@ -170,9 +170,17 @@ class PagesView(LoginRequiredMixin, TemplateView):
         context = super().get_context_data(**kwargs)
 
         # Get all pages
-        pages = Page.objects.all()
+        pages = Page.objects.all().order_by('-created_at')
         context['pages'] = pages
         context['total_pages'] = pages.count()
+        context['active_pages'] = pages.filter(is_active=True).count()
+
+        # Get enabled languages for create form
+        site_settings = SiteSettings.objects.first()
+        if site_settings:
+            context['languages'] = site_settings.get_enabled_languages()
+        else:
+            context['languages'] = [('pt', 'Portuguese'), ('en', 'English')]
 
         return context
 
@@ -180,61 +188,62 @@ class PagesView(LoginRequiredMixin, TemplateView):
         """Handle page creation"""
         action = request.POST.get('action')
 
-        if action == 'create':
-            slug = request.POST.get('slug', '').strip()
-            title = request.POST.get('title', '').strip()
+        if action == 'bulk_create':
+            # Get enabled languages
+            site_settings = SiteSettings.objects.first()
+            if site_settings:
+                lang_codes = site_settings.get_language_codes()
+            else:
+                lang_codes = ['pt', 'en']
 
-            if not slug or not title:
-                messages.error(request, 'Slug and title are required.')
-                return redirect('backoffice:pages')
+            # Collect per-language title/slug lists
+            lang_titles = {}
+            lang_slugs = {}
+            for code in lang_codes:
+                lang_titles[code] = request.POST.getlist(f'title_{code}[]')
+                lang_slugs[code] = request.POST.getlist(f'slug_{code}[]')
 
-            # Check if page already exists
-            if Page.objects.filter(slug=slug).exists():
-                messages.error(request, f'Page with slug "{slug}" already exists.')
-                return redirect('backoffice:pages')
-
-            # Create page
-            page = Page.objects.create(
-                slug=slug,
-                title=title,
-                is_active=True
-            )
-
-            messages.success(request, f'Page "{title}" created successfully!')
-            return redirect('backoffice:page_edit', page_id=page.pk)
-
-        elif action == 'bulk_create':
-            titles = request.POST.getlist('titles[]')
-            slugs = request.POST.getlist('slugs[]')
-
-            if len(titles) != len(slugs):
-                messages.error(request, 'Mismatch between titles and slugs.')
-                return redirect('backoffice:pages')
+            # Determine number of pages from first language's title list
+            num_pages = len(lang_titles.get(lang_codes[0], []))
 
             created_pages = []
             skipped_pages = []
 
-            for title, slug in zip(titles, slugs):
-                title = title.strip()
-                slug = slug.strip()
+            for i in range(num_pages):
+                title_i18n = {}
+                slug_i18n = {}
+                for code in lang_codes:
+                    t = lang_titles[code][i].strip() if i < len(lang_titles[code]) else ''
+                    s = lang_slugs[code][i].strip() if i < len(lang_slugs[code]) else ''
+                    if t:
+                        title_i18n[code] = t
+                    if s:
+                        slug_i18n[code] = s
 
-                if not title or not slug:
+                if not title_i18n or not slug_i18n:
                     continue
 
-                # Check if page already exists
-                if Page.objects.filter(slug=slug).exists():
-                    skipped_pages.append(f'{title} (slug "{slug}" already exists)')
+                # Check for duplicate slugs
+                duplicate = False
+                for code, slug_val in slug_i18n.items():
+                    for existing_page in Page.objects.all():
+                        if existing_page.get_slug(code) == slug_val:
+                            display_title = title_i18n.get(lang_codes[0], list(title_i18n.values())[0])
+                            skipped_pages.append(f'{display_title} (slug "{slug_val}" already exists for {code})')
+                            duplicate = True
+                            break
+                    if duplicate:
+                        break
+                if duplicate:
                     continue
 
-                # Create page
                 page = Page.objects.create(
-                    slug=slug,
-                    title=title,
+                    title_i18n=title_i18n,
+                    slug_i18n=slug_i18n,
                     is_active=True
                 )
-                created_pages.append(title)
+                created_pages.append(page.default_title)
 
-            # Display results
             if created_pages:
                 messages.success(request, f'Successfully created {len(created_pages)} page(s): {", ".join(created_pages)}')
             if skipped_pages:
@@ -246,7 +255,7 @@ class PagesView(LoginRequiredMixin, TemplateView):
             page_id = request.POST.get('page_id')
             try:
                 page = Page.objects.get(pk=page_id)
-                page_title = page.title
+                page_title = page.default_title
                 page.delete()
                 messages.success(request, f'Page "{page_title}" deleted successfully!')
             except Page.DoesNotExist:
