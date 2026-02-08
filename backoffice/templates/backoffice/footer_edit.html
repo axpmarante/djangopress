@@ -222,6 +222,24 @@
                         <p class="mt-2 text-xs text-gray-500">Describe what you want the AI to create or how to improve the current footer.</p>
                     </div>
 
+                    <!-- Reference Images -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-900 mb-2">
+                            Reference Images <span class="text-gray-400 font-normal">(optional)</span>
+                        </label>
+                        <div id="imageDropZone"
+                             class="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-purple-400 hover:bg-purple-50 transition-colors cursor-pointer"
+                             onclick="document.getElementById('refImages').click()">
+                            <svg class="w-8 h-8 text-gray-400 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                            </svg>
+                            <p class="text-sm text-gray-600">Drop design screenshots or mockups here, or <span class="text-purple-600 font-medium">browse</span></p>
+                            <p class="text-xs text-gray-400 mt-1">PNG, JPG, WebP — used as visual inspiration for the AI</p>
+                        </div>
+                        <input type="file" id="refImages" accept="image/*" multiple class="hidden" onchange="handleImageSelect(event)">
+                        <div id="imagePreviews" class="grid grid-cols-4 gap-3 mt-3"></div>
+                    </div>
+
                     <!-- AI Model Selection -->
                     {% if ai_models %}
                     <div>
@@ -354,6 +372,8 @@ function clearCache() {
 }
 
 // AI Modal
+let refFiles = [];
+
 function openAIModal() {
     document.getElementById('aiModal').classList.remove('hidden');
 }
@@ -361,6 +381,47 @@ function openAIModal() {
 function closeAIModal() {
     document.getElementById('aiModal').classList.add('hidden');
 }
+
+// Image handling
+function handleImageSelect(event) {
+    Array.from(event.target.files).forEach(f => { if (f.type.startsWith('image/')) refFiles.push(f); });
+    renderImagePreviews();
+}
+
+function removeImage(index) {
+    refFiles.splice(index, 1);
+    renderImagePreviews();
+}
+
+function renderImagePreviews() {
+    const container = document.getElementById('imagePreviews');
+    container.innerHTML = '';
+    refFiles.forEach((file, i) => {
+        const url = URL.createObjectURL(file);
+        container.insertAdjacentHTML('beforeend', `
+            <div class="relative group">
+                <img src="${url}" class="w-full h-24 object-cover rounded-lg border border-gray-200">
+                <button type="button" onclick="removeImage(${i})"
+                        class="absolute -top-2 -right-2 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity">
+                    &times;
+                </button>
+                <p class="text-xs text-gray-500 truncate mt-1">${file.name}</p>
+            </div>
+        `);
+    });
+}
+
+// Drag and drop
+document.addEventListener('DOMContentLoaded', function() {
+    const dz = document.getElementById('imageDropZone');
+    if (!dz) return;
+    ['dragenter','dragover'].forEach(e => dz.addEventListener(e, ev => { ev.preventDefault(); dz.classList.add('border-purple-500','bg-purple-50'); }));
+    ['dragleave','drop'].forEach(e => dz.addEventListener(e, ev => { ev.preventDefault(); dz.classList.remove('border-purple-500','bg-purple-50'); }));
+    dz.addEventListener('drop', ev => {
+        Array.from(ev.dataTransfer.files).forEach(f => { if (f.type.startsWith('image/')) refFiles.push(f); });
+        renderImagePreviews();
+    });
+});
 
 // AI Refinement
 async function refineFooter() {
@@ -376,18 +437,33 @@ async function refineFooter() {
     showLoading();
 
     try {
-        const response = await fetch('/ai/api/refine-footer/', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': getCSRFToken()
-            },
-            body: JSON.stringify({
-                instructions: instructions,
-                model: model
-            })
-        });
+        let fetchOptions;
 
+        if (refFiles.length > 0) {
+            const fd = new FormData();
+            fd.append('instructions', instructions);
+            fd.append('model', model);
+            refFiles.forEach(f => fd.append('reference_images', f));
+            fetchOptions = {
+                method: 'POST',
+                headers: { 'X-CSRFToken': getCSRFToken() },
+                body: fd
+            };
+        } else {
+            fetchOptions = {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCSRFToken()
+                },
+                body: JSON.stringify({
+                    instructions: instructions,
+                    model: model
+                })
+            };
+        }
+
+        const response = await fetch('/ai/api/refine-footer/', fetchOptions);
         const result = await response.json();
         hideLoading();
 

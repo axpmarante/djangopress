@@ -71,7 +71,7 @@ Go to `/backoffice/ai/` → use **Bulk Pages** to describe all pages at once, or
 
 ### 6. Generate header/footer
 
-Go to `/backoffice/ai/components/` → generate or refine the header and footer GlobalSections.
+Go to `/backoffice/settings/header/` and `/backoffice/settings/footer/` → use "Quick AI Edit" to generate or refine the header and footer with optional reference images.
 
 ### 7. Process images
 
@@ -218,7 +218,6 @@ Both `Page.content` and `GlobalSection.content` use this structure.
 - `/backoffice/ai/generate/page/` → generate a new page
 - `/backoffice/ai/bulk/pages/` → bulk page creation
 - `/backoffice/ai/chat/refine/<page_id>/` → chat-based page refinement
-- `/backoffice/ai/components/` → header/footer/global section management
 - `/ai/api/*` → AI API endpoints
 - `/editor/api/*` → inline editor API (staff only)
 

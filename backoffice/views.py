@@ -169,8 +169,8 @@ class PagesView(LoginRequiredMixin, TemplateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
 
-        # Get all pages
-        pages = Page.objects.all().order_by('-created_at')
+        # Get all pages (uses model default ordering: sort_order, created_at)
+        pages = Page.objects.all()
         context['pages'] = pages
         context['total_pages'] = pages.count()
         context['active_pages'] = pages.filter(is_active=True).count()
@@ -365,9 +365,26 @@ class PageEditView(LoginRequiredMixin, TemplateView):
                         messages.error(request, f'Page with slug "{slug}" already exists for language "{lang}".')
                         return redirect('backoffice:page_edit', page_id=page_id)
 
+            # Update SEO fields
+            meta_title_i18n = {}
+            meta_description_i18n = {}
+            for lang in languages:
+                mt = request.POST.get(f'meta_title_{lang}', '').strip()
+                md = request.POST.get(f'meta_description_{lang}', '').strip()
+                if mt:
+                    meta_title_i18n[lang] = mt
+                if md:
+                    meta_description_i18n[lang] = md
+
+            # Update OG image
+            if 'og_image' in request.FILES:
+                page.og_image = request.FILES['og_image']
+
             # Update page
             page.title_i18n = title_i18n
             page.slug_i18n = slug_i18n
+            page.meta_title_i18n = meta_title_i18n
+            page.meta_description_i18n = meta_description_i18n
             page.is_active = is_active
 
             # Set user for version tracking
@@ -425,11 +442,13 @@ class SettingsView(LoginRequiredMixin, TemplateView):
         settings.site_description = request.POST.get('site_description', '')
         settings.project_briefing = request.POST.get('project_briefing', '')
 
-        # Update logos if provided
+        # Update logos and favicon if provided
         if 'logo' in request.FILES:
             settings.logo = request.FILES['logo']
         if 'logo_dark_bg' in request.FILES:
             settings.logo_dark_bg = request.FILES['logo_dark_bg']
+        if 'favicon' in request.FILES:
+            settings.favicon = request.FILES['favicon']
 
         # Update domain
         settings.domain = request.POST.get('domain', settings.domain)
@@ -514,6 +533,108 @@ class SettingsView(LoginRequiredMixin, TemplateView):
 
 
 from django.http import JsonResponse
+from core.models import MenuItem
+
+
+class MenuView(LoginRequiredMixin, TemplateView):
+    """Navigation menu management"""
+    template_name = 'backoffice/menu.html'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['menu_items'] = MenuItem.objects.select_related('page', 'parent').all()
+        context['pages'] = Page.objects.filter(is_active=True)
+
+        # Get enabled languages
+        site_settings = SiteSettings.objects.first()
+        context['languages'] = site_settings.get_enabled_languages() if site_settings else [('pt', 'Portuguese'), ('en', 'English')]
+
+        return context
+
+    def post(self, request, *args, **kwargs):
+        action = request.POST.get('action')
+
+        if action == 'create':
+            # Get enabled languages
+            site_settings = SiteSettings.objects.first()
+            lang_codes = site_settings.get_language_codes() if site_settings else ['pt', 'en']
+
+            label_i18n = {}
+            for lang in lang_codes:
+                label = request.POST.get(f'label_{lang}', '').strip()
+                if label:
+                    label_i18n[lang] = label
+
+            page_id = request.POST.get('page_id')
+            url = request.POST.get('url', '').strip()
+            parent_id = request.POST.get('parent_id')
+            sort_order = int(request.POST.get('sort_order', 0))
+            open_in_new_tab = 'open_in_new_tab' in request.POST
+            css_class = request.POST.get('css_class', '').strip()
+
+            if not label_i18n:
+                messages.error(request, 'Label is required for at least one language.')
+                return redirect('backoffice:menu')
+
+            MenuItem.objects.create(
+                label_i18n=label_i18n,
+                page_id=int(page_id) if page_id else None,
+                url=url,
+                parent_id=int(parent_id) if parent_id else None,
+                sort_order=sort_order,
+                open_in_new_tab=open_in_new_tab,
+                css_class=css_class,
+            )
+            self._clear_global_section_cache()
+            messages.success(request, 'Menu item created.')
+
+        elif action == 'update':
+            item_id = request.POST.get('item_id')
+            try:
+                item = MenuItem.objects.get(pk=item_id)
+
+                site_settings = SiteSettings.objects.first()
+                lang_codes = site_settings.get_language_codes() if site_settings else ['pt', 'en']
+
+                label_i18n = {}
+                for lang in lang_codes:
+                    label = request.POST.get(f'label_{lang}', '').strip()
+                    if label:
+                        label_i18n[lang] = label
+
+                page_id = request.POST.get('page_id')
+                item.label_i18n = label_i18n
+                item.page_id = int(page_id) if page_id else None
+                item.url = request.POST.get('url', '').strip()
+                parent_id = request.POST.get('parent_id')
+                item.parent_id = int(parent_id) if parent_id else None
+                item.sort_order = int(request.POST.get('sort_order', 0))
+                item.is_active = 'is_active' in request.POST
+                item.open_in_new_tab = 'open_in_new_tab' in request.POST
+                item.css_class = request.POST.get('css_class', '').strip()
+                item.save()
+                self._clear_global_section_cache()
+                messages.success(request, 'Menu item updated.')
+            except MenuItem.DoesNotExist:
+                messages.error(request, 'Menu item not found.')
+
+        elif action == 'delete':
+            item_id = request.POST.get('item_id')
+            try:
+                item = MenuItem.objects.get(pk=item_id)
+                item.delete()
+                self._clear_global_section_cache()
+                messages.success(request, 'Menu item deleted.')
+            except MenuItem.DoesNotExist:
+                messages.error(request, 'Menu item not found.')
+
+        return redirect('backoffice:menu')
+
+    @staticmethod
+    def _clear_global_section_cache():
+        """Clear header/footer cache so menu changes are visible immediately."""
+        for section in GlobalSection.objects.filter(key__in=['main-header', 'main-footer']):
+            section.clear_cache()
 
 
 class AIManagementView(LoginRequiredMixin, TemplateView):
@@ -699,30 +820,6 @@ class AIChatRefineView(LoginRequiredMixin, TemplateView):
             context['default_model'] = 'gemini-pro'
 
         return context
-
-
-class AIComponentsView(LoginRequiredMixin, TemplateView):
-    """AI Content Studio - Components (Header/Footer/Global Sections)"""
-    template_name = 'backoffice/ai_components.html'
-
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-
-        context['pages'] = Page.objects.all().order_by('title')
-        context['global_sections'] = GlobalSection.objects.all().order_by('key')
-
-        # Get AI configuration (if available)
-        try:
-            from ai.utils.llm_config import LLMConfig
-            config = LLMConfig()
-            context['ai_models'] = config.get_available_models()
-            context['default_model'] = config.default_model
-        except:
-            context['ai_models'] = []
-            context['default_model'] = None
-
-        return context
-
 
 
 @login_required

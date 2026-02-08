@@ -21,6 +21,7 @@ urlpatterns = [
     path('api/upload-images/', api_views.upload_images, name='api_upload_images'),
     path('api/page-content/<int:page_id>/', api_views.get_page_content, name='api_page_content'),
     path('api/generate-design-guide/', api_views.generate_design_guide, name='api_generate_design_guide'),
+    path('api/update-page-order/', api_views.update_page_order, name='api_update_page_order'),
 
     # Media Management
     path('media/', views.MediaView.as_view(), name='media'),
@@ -39,6 +40,9 @@ urlpatterns = [
     path('page/<int:page_id>/edit/', views.PageEditView.as_view(), name='page_edit'),
     path('page/<int:page_id>/images/', views.ProcessImagesView.as_view(), name='process_images'),
 
+    # Menu
+    path('menu/', views.MenuView.as_view(), name='menu'),
+
     # Settings
     path('settings/', views.SettingsView.as_view(), name='settings'),
     path('settings/header/', views.HeaderEditView.as_view(), name='header_edit'),
@@ -51,7 +55,6 @@ urlpatterns = [
     path('ai/refine/page/', views.AIRefinePageView.as_view(), name='ai_refine_page'),
     path('ai/refine/page/<str:page_slug>/', views.AIRefinePageView.as_view(), name='ai_refine_page_with_slug'),
     path('ai/chat/refine/<int:page_id>/', views.AIChatRefineView.as_view(), name='ai_chat_refine'),
-    path('ai/components/', views.AIComponentsView.as_view(), name='ai_components'),
 
     # Version Management
     path('version/page/<int:version_id>/restore/', views.restore_page_version, name='restore_page_version'),
