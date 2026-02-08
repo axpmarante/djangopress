@@ -10,7 +10,7 @@
     <div class="flex items-center justify-between">
         <div>
             <h2 class="text-3xl font-bold text-gray-900">Edit Page</h2>
-            <p class="text-gray-600 mt-1">Update page details, manage sections, and refine with AI</p>
+            <p class="text-gray-600 mt-1">Update page details and refine with AI</p>
         </div>
         <a href="{% url 'backoffice:pages' %}"
            class="text-gray-600 hover:text-gray-900 flex items-center">
@@ -48,12 +48,19 @@
                     </svg>
                     View Live Page
                 </a>
+                <a href="{% url 'backoffice:ai_chat_refine' page_id=page.id %}"
+                   class="px-4 py-2 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-md hover:from-purple-700 hover:to-blue-700 flex items-center">
+                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"/>
+                    </svg>
+                    Chat Refine
+                </a>
                 <button onclick="openAIModal()"
-                        class="px-4 py-2 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-md hover:from-purple-700 hover:to-blue-700 flex items-center">
+                        class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 flex items-center">
                     <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
                     </svg>
-                    Edit Page with AI
+                    Quick AI Edit
                 </button>
             </div>
             <div class="text-sm text-gray-600">
@@ -100,21 +107,6 @@
 
                     <!-- Form Fields -->
                     <div class="space-y-6">
-                        <!-- Change Summary (Optional) -->
-                        <div>
-                            <label for="change_summary" class="block text-sm font-medium text-gray-700 mb-2">
-                                Change Summary (Optional)
-                            </label>
-                            <input type="text"
-                                   id="change_summary"
-                                   name="change_summary"
-                                   placeholder="e.g., Updated page title, Changed slug"
-                                   class="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-blue-500 focus:border-blue-500">
-                            <p class="text-xs text-gray-500 mt-1">
-                                Describe what you changed in this version (optional but recommended)
-                            </p>
-                        </div>
-
                         <!-- Language-Specific Fields -->
                         <div class="space-y-6">
                             <h3 class="text-lg font-semibold text-gray-900 border-b pb-2">
@@ -252,19 +244,8 @@
             <!-- HTML Code Tab -->
             <div id="content-html" class="tab-content hidden">
                 <div class="space-y-4">
-                    <!-- Language Selector -->
                     <div class="flex items-center justify-between">
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-2">
-                                Select Language
-                            </label>
-                            <select id="htmlLanguage" onchange="loadPageHTML()"
-                                    class="border border-gray-300 rounded-md px-3 py-2 focus:ring-blue-500 focus:border-blue-500">
-                                {% for lang_code, lang_name in languages %}
-                                <option value="{{ lang_code }}">{{ lang_name }} ({{ lang_code|upper }})</option>
-                                {% endfor %}
-                            </select>
-                        </div>
+                        <h4 class="text-sm font-semibold text-gray-900">Page HTML Template</h4>
                         <button onclick="copyHTMLToClipboard()" id="copyHtmlBtn"
                                 class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 flex items-center">
                             <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -311,7 +292,7 @@
                         <svg class="w-6 h-6 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
                         </svg>
-                        Edit Page with AI
+                        Quick AI Edit
                     </h3>
                     <button onclick="closeAIModal()" class="text-white hover:text-gray-200">
                         <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -348,7 +329,7 @@
                                                class="mt-0.5 h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-300 rounded">
                                         <div class="ml-3">
                                             <div class="text-sm font-medium text-gray-900">{{ ref_page.title }}</div>
-                                            <div class="text-xs text-gray-500">{{ ref_page.section_count }} sections • {{ ref_page.slug }}</div>
+                                            <div class="text-xs text-gray-500">/{{ ref_page.slug }}/</div>
                                         </div>
                                     </label>
                                     {% endfor %}
@@ -374,23 +355,14 @@
                         </div>
                         {% endif %}
 
-                        <!-- Prompt Version -->
+                        <!-- Reference Images -->
                         <div>
                             <label class="block text-sm font-medium text-gray-900 mb-2">
-                                Prompt Version <span class="text-xs text-gray-500 font-normal">(A/B Test)</span>
+                                Reference Images (Optional)
                             </label>
-                            <select id="aiPromptVersion" name="prompt_version"
-                                    class="w-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-purple-500 focus:border-purple-500">
-                                {% for version_key, version_desc in prompt_versions %}
-                                <option value="{{ version_key }}" {% if version_key == 'v2' %}selected{% endif %}>
-                                    {{ version_desc }}
-                                </option>
-                                {% endfor %}
-                            </select>
-                            <p class="mt-2 text-xs text-gray-500">
-                                <span class="font-medium">V2 (Recommended):</span> Simplified prompt for faster/cheaper processing<br>
-                                <span class="font-medium">V1:</span> Comprehensive context with detailed examples
-                            </p>
+                            <input type="file" id="aiReferenceImages" name="reference_images" multiple accept="image/*"
+                                   class="w-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-purple-500 focus:border-purple-500 text-sm text-gray-600 file:mr-4 file:py-1 file:px-3 file:rounded file:border-0 file:text-sm file:font-medium file:bg-purple-50 file:text-purple-700 hover:file:bg-purple-100">
+                            <p class="mt-2 text-xs text-gray-500">Upload images as visual references for the AI to guide the design.</p>
                         </div>
 
                         <!-- Warning -->
@@ -401,7 +373,7 @@
                                 </svg>
                                 <div class="text-sm text-amber-800">
                                     <p class="font-medium">Important:</p>
-                                    <p class="mt-1">This will refine all sections on this page. AI can automatically update, create, or delete sections based on your instructions.</p>
+                                    <p class="mt-1">This will refine the page content. AI will update the HTML and translations based on your instructions.</p>
                                 </div>
                             </div>
                         </div>
@@ -435,8 +407,8 @@
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
                     </svg>
                 </div>
-                <p class="mt-6 text-lg font-semibold text-gray-900">Refining page sections...</p>
-                <p id="progressText" class="mt-2 text-sm text-gray-600 text-center">Processing sections...</p>
+                <p class="mt-6 text-lg font-semibold text-gray-900">Refining page content...</p>
+                <p id="progressText" class="mt-2 text-sm text-gray-600 text-center">AI is working...</p>
                 <div class="mt-4 w-full bg-gray-200 rounded-full h-2">
                     <div id="progressBar" class="bg-purple-600 h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
                 </div>
@@ -527,13 +499,21 @@ function closeAIModal() {
 document.getElementById('aiRefineForm').addEventListener('submit', async function(e) {
     e.preventDefault();
 
-    const instructions = document.getElementById('aiInstructions').value;
-    const model = document.getElementById('aiModel')?.value;
-    const promptVersion = document.getElementById('aiPromptVersion')?.value || 'v2';
+    const formData = new FormData();
+    formData.append('page_id', '{{ page.id }}');
+    formData.append('instructions', document.getElementById('aiInstructions').value);
+    formData.append('language', '{{ default_language }}');
 
-    // Get reference pages
-    const referenceCheckboxes = document.querySelectorAll('input[name="reference_pages"]:checked');
-    const referencePageIds = Array.from(referenceCheckboxes).map(cb => parseInt(cb.value));
+    const modelEl = document.getElementById('aiModel');
+    if (modelEl) formData.append('model', modelEl.value);
+
+    // Add reference images
+    const imageInput = document.getElementById('aiReferenceImages');
+    if (imageInput && imageInput.files.length > 0) {
+        for (const file of imageInput.files) {
+            formData.append('reference_images', file);
+        }
+    }
 
     closeAIModal();
     showLoading();
@@ -542,17 +522,9 @@ document.getElementById('aiRefineForm').addEventListener('submit', async functio
         const response = await fetch('/ai/api/refine-page-with-html/', {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json',
                 'X-CSRFToken': getCSRFToken()
             },
-            body: JSON.stringify({
-                page_id: {{ page.id }},
-                instructions: instructions,
-                reference_page_ids: referencePageIds,
-                language: 'pt',
-                model: model,
-                prompt_version: promptVersion
-            })
+            body: formData
         });
 
         const result = await response.json();
@@ -561,9 +533,7 @@ document.getElementById('aiRefineForm').addEventListener('submit', async functio
         if (result.success) {
             displayResults({
                 success: true,
-                message: result.message,
-                updatedCount: (result.updated_sections || []).length,
-                createdCount: (result.created_sections || []).length
+                message: result.message || 'Page refined successfully'
             });
         } else {
             displayResults({
@@ -595,11 +565,7 @@ function displayResults(results) {
     if (results.success) {
         container.innerHTML = `
             <div class="bg-green-50 border border-green-200 rounded-lg p-6">
-                <p class="text-green-800 font-medium text-lg">✓ ${results.message}</p>
-                <div class="mt-4 text-sm text-green-700">
-                    <p>• Updated sections: ${results.updatedCount}</p>
-                    <p>• Created sections: ${results.createdCount}</p>
-                </div>
+                <p class="text-green-800 font-medium text-lg">${results.message}</p>
             </div>
         `;
     } else {

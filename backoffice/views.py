@@ -276,7 +276,6 @@ class PageEditView(LoginRequiredMixin, TemplateView):
         try:
             page = Page.objects.get(pk=page_id)
             context['page'] = page
-            context['page_obj'] = page  # For section management compatibility
 
             # Get version history
             context['versions'] = PageVersion.objects.filter(page=page).order_by('-version_number')[:10]
@@ -303,6 +302,9 @@ class PageEditView(LoginRequiredMixin, TemplateView):
                     })
             context['reference_pages'] = reference_pages
 
+            # Default language for AI form
+            context['default_language'] = site_settings.get_default_language() if site_settings else 'pt'
+
             # Get AI configuration
             try:
                 from ai.utils.llm_config import LLMConfig
@@ -315,7 +317,6 @@ class PageEditView(LoginRequiredMixin, TemplateView):
 
         except Page.DoesNotExist:
             context['page'] = None
-            context['page_obj'] = None
             context['versions'] = []
             context['languages'] = [('pt', 'Portuguese'), ('en', 'English')]
             context['all_pages'] = []
