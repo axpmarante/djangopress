@@ -44,6 +44,15 @@
                 <span>Pages</span>
             </a>
 
+            <!-- Menu -->
+            <a href="{% url 'backoffice:menu' %}"
+               class="flex items-center px-4 py-3 text-gray-300 rounded-lg hover:bg-gray-800 hover:text-white transition-colors {% if request.resolver_match.url_name == 'menu' %}bg-gray-800 text-white{% endif %}">
+                <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
+                </svg>
+                <span>Navigation Menu</span>
+            </a>
+
             <!-- Media -->
             <a href="{% url 'backoffice:media' %}"
                class="flex items-center px-4 py-3 text-gray-300 rounded-lg hover:bg-gray-800 hover:text-white transition-colors {% if 'media' in request.resolver_match.url_name %}bg-gray-800 text-white{% endif %}">
