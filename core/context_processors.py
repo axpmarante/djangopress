@@ -1,4 +1,4 @@
-from .models import SiteSettings, SiteImage
+from .models import SiteSettings, SiteImage, MenuItem
 
 
 def site_settings(request):
@@ -46,7 +46,15 @@ def site_settings(request):
     # Button border width mapping
     button_border_class = f"border-{settings.button_border_width}" if settings.button_border_width != '0' else "border-0"
 
+    # Menu items (top-level with children prefetched)
+    menu_items = MenuItem.objects.filter(
+        is_active=True, parent__isnull=True
+    ).select_related('page').prefetch_related('children')
+
     return {
+        'FAVICON': settings.favicon if settings.favicon else None,
+        'MENU_ITEMS': menu_items,
+
         # OLD: Backward compatible (using modeltranslation, will be removed later)
         'SITE_NAME': settings.site_name,
         'SITE_DESCRIPTION': settings.site_description,

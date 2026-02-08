@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django import forms
 from django.conf import settings as django_settings
-from .models import SiteSettings, Contact, SiteImage, Page, PageVersion, GlobalSection
+from .models import SiteSettings, Contact, SiteImage, Page, PageVersion, GlobalSection, MenuItem
 
 
 # ===================================
@@ -516,4 +516,13 @@ class GlobalSectionAdmin(admin.ModelAdmin):
             "all": ("admin/css/custom_admin.css",)
         }
         js = ("admin/js/global_section_admin.js",)
+
+
+@admin.register(MenuItem)
+class MenuItemAdmin(admin.ModelAdmin):
+    """Admin for navigation menu items"""
+    list_display = ('__str__', 'page', 'url', 'parent', 'sort_order', 'is_active')
+    list_filter = ('is_active',)
+    list_editable = ('sort_order', 'is_active')
+    ordering = ('sort_order', 'id')
 

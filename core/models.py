@@ -85,6 +85,7 @@ class SiteSettings(models.Model):
 
     logo = models.ImageField("Logo (Light Backgrounds)", upload_to='site_images/', blank=True, null=True, help_text="Main logo for light backgrounds")
     logo_dark_bg = models.ImageField("Logo (Dark Backgrounds)", upload_to='site_images/', blank=True, null=True, help_text="Alternative logo for dark backgrounds (typically white/light version)")
+    favicon = models.ImageField("Favicon", upload_to='site_images/', blank=True, null=True, help_text="Site favicon (recommended: 32x32 or 48x48 PNG)")
 
     # Contact Information
     contact_email = models.EmailField("Contact Email", default="admin@example.com")
@@ -554,6 +555,17 @@ class Page(models.Model):
         help_text='{"translations": {"pt": {"field": "valor"}, "en": {"field": "value"}}}'
     )
 
+    # SEO Fields
+    meta_title_i18n = models.JSONField('Meta Title', default=dict, blank=True,
+        help_text='{"pt": "Título SEO", "en": "SEO Title"} - Override the page title in search results')
+    meta_description_i18n = models.JSONField('Meta Description', default=dict, blank=True,
+        help_text='{"pt": "Descrição SEO", "en": "SEO Description"} - Description shown in search results')
+    og_image = models.ImageField('OG Image', upload_to='site_images/', blank=True, null=True,
+        help_text='Image shown when page is shared on social media')
+
+    # Ordering
+    sort_order = models.IntegerField('Sort Order', default=0)
+
     is_active = models.BooleanField('Active', default=True)
     created_at = models.DateTimeField('Created At', auto_now_add=True)
     updated_at = models.DateTimeField('Updated At', auto_now=True)
@@ -561,7 +573,7 @@ class Page(models.Model):
     class Meta:
         verbose_name = 'Page'
         verbose_name_plural = 'Pages'
-        ordering = ['slug']
+        ordering = ['sort_order', 'created_at']
 
     def __str__(self):
         # Try new JSON field first, fall back to old field
@@ -631,6 +643,20 @@ class Page(models.Model):
         if self.slug_i18n and isinstance(self.slug_i18n, dict):
             return self.slug_i18n.get(lang, self.slug_i18n.get('pt', self.slug))
         return self.slug or ''
+
+    def get_meta_title(self, lang='pt'):
+        """Get meta title in specified language, falls back to page title"""
+        if self.meta_title_i18n and isinstance(self.meta_title_i18n, dict):
+            val = self.meta_title_i18n.get(lang, self.meta_title_i18n.get('pt', ''))
+            if val:
+                return val
+        return self.get_title(lang)
+
+    def get_meta_description(self, lang='pt'):
+        """Get meta description in specified language"""
+        if self.meta_description_i18n and isinstance(self.meta_description_i18n, dict):
+            return self.meta_description_i18n.get(lang, self.meta_description_i18n.get('pt', ''))
+        return ''
 
     def get_absolute_url(self, lang=None):
         """
@@ -881,5 +907,44 @@ class PageVersion(models.Model):
         setattr(p, '_change_summary', f'Restore to version {self.version_number}')
         p.save()
         return p
+
+
+class MenuItem(models.Model):
+    """Navigation menu item, supports hierarchy via parent FK."""
+
+    label_i18n = models.JSONField('Label', default=dict, blank=True,
+        help_text='{"pt": "Início", "en": "Home"}')
+    page = models.ForeignKey('Page', on_delete=models.SET_NULL, null=True, blank=True,
+        help_text='Link to an internal page')
+    url = models.CharField('Custom URL', max_length=500, blank=True, default='',
+        help_text='External or custom URL (used when no page is selected)')
+    parent = models.ForeignKey('self', on_delete=models.CASCADE, null=True, blank=True,
+        related_name='children')
+    sort_order = models.IntegerField('Sort Order', default=0)
+    is_active = models.BooleanField('Active', default=True)
+    open_in_new_tab = models.BooleanField('Open in New Tab', default=False)
+    css_class = models.CharField('CSS Class', max_length=100, blank=True, default='')
+
+    class Meta:
+        ordering = ['sort_order', 'id']
+        verbose_name = 'Menu Item'
+        verbose_name_plural = 'Menu Items'
+
+    def __str__(self):
+        if self.label_i18n and isinstance(self.label_i18n, dict):
+            return self.label_i18n.get('pt', self.label_i18n.get('en', f'MenuItem {self.id}'))
+        return f'MenuItem {self.id}'
+
+    def get_label(self, lang='pt'):
+        """Get label in specified language"""
+        if self.label_i18n and isinstance(self.label_i18n, dict):
+            return self.label_i18n.get(lang, self.label_i18n.get('pt', ''))
+        return ''
+
+    def get_url(self, lang='pt'):
+        """Get URL: page URL if linked, otherwise custom URL"""
+        if self.page:
+            return self.page.get_absolute_url(lang)
+        return self.url or '#'
 
 

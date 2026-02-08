@@ -103,6 +103,25 @@
                         <p class="mt-1 text-xs text-gray-500">Alternative logo for dark backgrounds (typically white/light version)</p>
                     </div>
                 </div>
+
+                <!-- Favicon -->
+                <div>
+                    <label for="id_favicon" class="block text-sm font-medium text-gray-700 mb-2">
+                        Favicon
+                    </label>
+                    {% if settings.favicon %}
+                    <div class="mb-3 p-3 bg-gray-50 border border-gray-200 rounded-lg inline-block">
+                        <img src="{{ settings.favicon.url }}" alt="Current favicon" class="h-8 w-8 object-contain">
+                        <p class="text-xs text-gray-500 mt-1">Current favicon</p>
+                    </div>
+                    {% endif %}
+                    <input type="file"
+                           name="favicon"
+                           id="id_favicon"
+                           accept="image/png,image/x-icon,image/svg+xml"
+                           class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
+                    <p class="mt-1 text-xs text-gray-500">Browser tab icon. Recommended: 32x32 or 48x48 PNG.</p>
+                </div>
             </div>
         </div>
 

@@ -388,6 +388,49 @@ def generate_design_guide(request):
 
 @staff_member_required
 @require_http_methods(["POST"])
+def update_page_order(request):
+    """
+    Bulk update page sort_order.
+
+    Expected POST data:
+    {
+        "pages": [{"id": 1, "sort_order": 0}, {"id": 2, "sort_order": 1}]
+    }
+    """
+    try:
+        data = json.loads(request.body)
+        pages_data = data.get('pages', [])
+
+        if not pages_data:
+            return JsonResponse({
+                'success': False,
+                'error': 'No pages provided'
+            }, status=400)
+
+        for page_data in pages_data:
+            Page.objects.filter(id=page_data['id']).update(
+                sort_order=page_data['sort_order']
+            )
+
+        return JsonResponse({
+            'success': True,
+            'message': f'Updated order for {len(pages_data)} page(s)'
+        })
+
+    except json.JSONDecodeError:
+        return JsonResponse({
+            'success': False,
+            'error': 'Invalid JSON'
+        }, status=400)
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+
+
+@staff_member_required
+@require_http_methods(["POST"])
 def update_languages(request):
     """
     Update site language settings.

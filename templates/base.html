@@ -4,7 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}{{ SITE_NAME_I18N|get_translation:LANGUAGE_CODE }}{% endblock %}</title>
+    {% if FAVICON %}<link rel="icon" href="{{ FAVICON.url }}">{% endif %}
+    {% block extra_head %}
     <meta name="description" content="{{ SITE_DESCRIPTION_I18N|get_translation:LANGUAGE_CODE }}">
+    {% endblock %}
     {% if META_KEYWORDS %}<meta name="keywords" content="{{ META_KEYWORDS }}">{% endif %}
 
     <!-- Tailwind CSS CDN -->
@@ -34,8 +37,6 @@
         gtag('config', '{{ GOOGLE_ANALYTICS_ID }}');
     </script>
     {% endif %}
-
-    {% block extra_head %}{% endblock %}
 </head>
 <body class="bg-white" {% if edit_mode %}data-edit-mode="true"{% endif %}>
     {% if edit_mode %}

@@ -6,11 +6,22 @@ from django.conf import settings
 from django.conf.urls.static import static
 from django.conf.urls.i18n import i18n_patterns
 from django.contrib.sitemaps.views import sitemap
-from core.sitemaps import StaticViewSitemap
+from django.http import HttpResponse
+from core.sitemaps import PageSitemap
 
 sitemaps = {
-    'static': StaticViewSitemap,
+    'pages': PageSitemap,
 }
+
+
+def robots_txt(request):
+    lines = [
+        "User-agent: *",
+        "Allow: /",
+        f"Sitemap: {request.build_absolute_uri('/sitemap.xml')}",
+    ]
+    return HttpResponse("\n".join(lines), content_type="text/plain")
+
 
 urlpatterns = [
     path('django-admin/', admin.site.urls),  # Django admin (fallback/advanced)
@@ -19,6 +30,7 @@ urlpatterns = [
     path('editor/', include('editor.urls')),  # Inline editor
     path('i18n/', include('django.conf.urls.i18n')),
     path('sitemap.xml', sitemap, {'sitemaps': sitemaps}, name='django.contrib.sitemaps.views.sitemap'),
+    path('robots.txt', robots_txt, name='robots_txt'),
 ]
 
 # Add i18n patterns for core URLs

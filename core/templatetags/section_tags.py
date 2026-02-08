@@ -229,6 +229,28 @@ def load_global_section(context, key, fallback_template=None):
         return mark_safe(f'<!-- Global section not found: {key} -->')
 
 
+@register.filter
+def get_menu_label(menu_item, lang=None):
+    """
+    Get menu item label in specified language.
+    Usage: {{ item|get_menu_label:LANGUAGE_CODE }}
+    """
+    if not lang:
+        lang = 'pt'
+    return menu_item.get_label(lang)
+
+
+@register.filter
+def get_menu_url(menu_item, lang=None):
+    """
+    Get menu item URL in specified language.
+    Usage: {{ item|get_menu_url:LANGUAGE_CODE }}
+    """
+    if not lang:
+        lang = 'pt'
+    return menu_item.get_url(lang)
+
+
 @register.simple_tag
 def clear_global_section_cache(key):
     """

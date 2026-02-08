@@ -21,10 +21,16 @@ class PageView(TemplateView):
         from django.utils.translation import get_language
         current_lang = get_language()
 
+        # Preview mode: staff can see inactive pages with ?preview=true
+        preview_mode = (
+            self.request.user.is_staff and self.request.GET.get('preview') == 'true'
+        )
+
         # Get the page object - search by language-specific slug
         page_obj = None
         try:
-            for page in Page.objects.filter(is_active=True):
+            queryset = Page.objects.all() if preview_mode else Page.objects.filter(is_active=True)
+            for page in queryset:
                 if page.get_slug(current_lang) == page_slug:
                     page_obj = page
                     break
@@ -37,6 +43,7 @@ class PageView(TemplateView):
 
         context['page_obj'] = page_obj
         context['page'] = page_slug
+        context['preview_mode'] = preview_mode
 
         # Render page HTML content with translations
         language = current_lang or 'pt'
@@ -61,6 +68,12 @@ class PageView(TemplateView):
         context['edit_mode'] = (
             self.request.user.is_staff and self.request.GET.get('edit') == 'true'
         )
+
+        # SEO context
+        context['seo_title'] = page_obj.get_meta_title(language)
+        context['seo_description'] = page_obj.get_meta_description(language)
+        context['og_image_url'] = page_obj.og_image.url if page_obj.og_image else None
+        context['canonical_url'] = self.request.build_absolute_uri(page_obj.get_absolute_url())
 
         return context
 

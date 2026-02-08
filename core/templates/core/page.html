@@ -1,9 +1,23 @@
 {% extends "base.html" %}
 {% load i18n section_tags %}
 
-{% block title %}{{ page_obj.title_i18n|get_translation:LANGUAGE_CODE }}{% endblock %}
+{% block title %}{{ seo_title }}{% endblock %}
+
+{% block extra_head %}
+<meta name="description" content="{% if seo_description %}{{ seo_description }}{% else %}{{ SITE_DESCRIPTION_I18N|get_translation:LANGUAGE_CODE }}{% endif %}">
+<meta property="og:title" content="{{ seo_title }}">
+<meta property="og:description" content="{% if seo_description %}{{ seo_description }}{% else %}{{ SITE_DESCRIPTION_I18N|get_translation:LANGUAGE_CODE }}{% endif %}">
+<meta property="og:type" content="website">
+{% if og_image_url %}<meta property="og:image" content="{{ og_image_url }}">{% endif %}
+{% if canonical_url %}<link rel="canonical" href="{{ canonical_url }}">{% endif %}
+{% endblock %}
 
 {% block content %}
+{% if preview_mode %}
+<div class="bg-yellow-400 text-yellow-900 text-center py-2 px-4 font-semibold text-sm">
+    DRAFT — This page is not published. Only staff can see this preview.
+</div>
+{% endif %}
 <div {% if edit_mode %}data-page-id="{{ page_obj.id }}"{% endif %}>
   {{ page_content }}
 </div>

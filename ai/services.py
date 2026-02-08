@@ -486,6 +486,17 @@ Return the complete, corrected JSON now:"""
 
         design_guide = site_settings.design_guide if site_settings else ''
 
+        # Get menu items for header/footer context
+        from core.models import MenuItem
+        menu_items_data = []
+        for item in MenuItem.objects.filter(is_active=True, parent__isnull=True).select_related('page').order_by('sort_order', 'id'):
+            item_data = {
+                'label_i18n': item.label_i18n or {},
+                'url': item.url,
+                'page_slug': item.page.slug_i18n if item.page else {},
+            }
+            menu_items_data.append(item_data)
+
         # Build prompt for global section
         system_prompt, user_prompt = PromptTemplates.get_global_section_refinement_prompt(
             site_name=site_name,
@@ -496,7 +507,8 @@ Return the complete, corrected JSON now:"""
             existing_section=existing_data,
             user_request=refinement_instructions,
             section_type=section.section_type,
-            design_guide=design_guide
+            design_guide=design_guide,
+            menu_items=menu_items_data
         )
 
         # Print prompts for debugging
