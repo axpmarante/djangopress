@@ -299,7 +299,9 @@ When "Add image placeholders" is enabled during refinement:
 
 ## Development Notes
 
-- **Stack:** Django 5.1, Tailwind CSS (CDN), Alpine.js, SQLite (dev) / PostgreSQL (prod)
+- **Stack:** Django 6.0, Tailwind CSS (CDN), Alpine.js, Python 3.10+
+- **Database:** SQLite by default. PostgreSQL via `DATABASE_URL` env var (e.g. `postgres://user:pass@host:5432/dbname`). Railway provides `DATABASE_URL` automatically when you add a Postgres plugin.
+- **Dependencies:** `requirements.txt` lists only direct dependencies (12 packages). Transitive deps are resolved by pip. Key packages: Django, gunicorn, whitenoise, django-anymail, django-environ, django-storages, psycopg (PostgreSQL), openai, anthropic, google-genai, Pillow, beautifulsoup4.
 - **Deployment:** Railway-ready with WhiteNoise for static files, optional GCS for media
 - **Email:** Anymail with Mailgun
 - **No npm build step** — Tailwind via CDN, no bundler needed
