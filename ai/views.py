@@ -31,11 +31,22 @@ def generate_page_api(request):
     }
     """
     try:
-        data = json.loads(request.body)
-        brief = data.get('brief')
-        page_type = data.get('page_type', 'general')
-        language = data.get('language', 'pt')
-        model = data.get('model', 'gemini-pro')
+        # Support both multipart (with images) and JSON body
+        if request.content_type and 'multipart' in request.content_type:
+            brief = request.POST.get('brief')
+            page_type = request.POST.get('page_type', 'general')
+            language = request.POST.get('language', 'pt')
+            model = request.POST.get('model', 'gemini-pro')
+            reference_images = []
+            for f in request.FILES.getlist('reference_images'):
+                reference_images.append({'bytes': f.read(), 'mime_type': f.content_type})
+        else:
+            data = json.loads(request.body)
+            brief = data.get('brief')
+            page_type = data.get('page_type', 'general')
+            language = data.get('language', 'pt')
+            model = data.get('model', 'gemini-pro')
+            reference_images = []
 
         if not brief:
             return JsonResponse({
@@ -49,7 +60,8 @@ def generate_page_api(request):
             brief=brief,
             page_type=page_type,
             language=language,
-            model_override=model
+            model_override=model,
+            reference_images=reference_images or None
         )
 
         return JsonResponse({
@@ -430,12 +442,26 @@ def refine_page_with_html_api(request):
         from core.models import Page
         from .services import ContentGenerationService
 
-        data = json.loads(request.body)
-        page_id = data.get('page_id')
-        instructions = data.get('instructions')
-        section_name = data.get('section_name')
-        language = data.get('language', 'pt')
-        model = data.get('model', 'gemini-pro')
+        # Support both multipart (with images) and JSON body
+        if request.content_type and 'multipart' in request.content_type:
+            page_id = request.POST.get('page_id')
+            if page_id:
+                page_id = int(page_id)
+            instructions = request.POST.get('instructions')
+            section_name = request.POST.get('section_name')
+            language = request.POST.get('language', 'pt')
+            model = request.POST.get('model', 'gemini-pro')
+            reference_images = []
+            for f in request.FILES.getlist('reference_images'):
+                reference_images.append({'bytes': f.read(), 'mime_type': f.content_type})
+        else:
+            data = json.loads(request.body)
+            page_id = data.get('page_id')
+            instructions = data.get('instructions')
+            section_name = data.get('section_name')
+            language = data.get('language', 'pt')
+            model = data.get('model', 'gemini-pro')
+            reference_images = []
 
         if not page_id or not instructions:
             return JsonResponse({
@@ -465,7 +491,8 @@ def refine_page_with_html_api(request):
             instructions=instructions,
             section_name=section_name,
             language=language,
-            model_override=model
+            model_override=model,
+            reference_images=reference_images or None
         )
 
         # Save refined content to page
@@ -481,6 +508,249 @@ def refine_page_with_html_api(request):
 
     except Exception as e:
         print(f"Error in refine_page_with_html_api: {e}")
+        import traceback
+        traceback.print_exc()
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+
+
+@staff_member_required
+@require_http_methods(["POST"])
+def chat_refine_page_api(request):
+    """
+    Chat-based page refinement endpoint.
+
+    POST /ai/api/chat-refine-page/
+    Accepts JSON or multipart (when reference images are included).
+    Fields: page_id, message, session_id (optional), model, reference_images
+    """
+    try:
+        from .models import RefinementSession
+        from .utils.diff_utils import compute_section_changes, build_change_summary
+
+        # Parse input — dual-mode (same pattern as refine_page_with_html_api)
+        if request.content_type and 'multipart' in request.content_type:
+            page_id = request.POST.get('page_id')
+            if page_id:
+                page_id = int(page_id)
+            message = request.POST.get('message')
+            session_id = request.POST.get('session_id')
+            if session_id:
+                session_id = int(session_id)
+            model = request.POST.get('model', 'gemini-pro')
+            handle_images = request.POST.get('handle_images') in ('true', '1', 'on')
+            reference_images = []
+            for f in request.FILES.getlist('reference_images'):
+                reference_images.append({'bytes': f.read(), 'mime_type': f.content_type})
+        else:
+            data = json.loads(request.body)
+            page_id = data.get('page_id')
+            message = data.get('message')
+            session_id = data.get('session_id')
+            model = data.get('model', 'gemini-pro')
+            handle_images = bool(data.get('handle_images', False))
+            reference_images = []
+
+        if not page_id or not message:
+            return JsonResponse({
+                'success': False,
+                'error': 'page_id and message are required'
+            }, status=400)
+
+        # Load the page
+        try:
+            page = Page.objects.get(id=page_id)
+        except Page.DoesNotExist:
+            return JsonResponse({
+                'success': False,
+                'error': f'Page with id {page_id} not found'
+            }, status=404)
+
+        # Load or create session
+        if session_id:
+            try:
+                session = RefinementSession.objects.get(id=session_id, page=page)
+            except RefinementSession.DoesNotExist:
+                return JsonResponse({
+                    'success': False,
+                    'error': f'Session {session_id} not found'
+                }, status=404)
+        else:
+            session = RefinementSession(
+                page=page,
+                title=message[:80],
+                model_used=model,
+                created_by=request.user if request.user.is_authenticated else None,
+            )
+            session.save()
+
+        # Capture old HTML for diff
+        old_html = page.html_content or ''
+
+        # Append user message to session
+        session.add_user_message(message, reference_images_count=len(reference_images))
+
+        # Build history from previous completed turns (excludes current message)
+        history = session.get_history_for_prompt()
+
+        # Create version snapshot
+        page.create_version(
+            user=request.user,
+            change_summary=f'Before chat refine: {message[:100]}'
+        )
+
+        # Call AI service
+        service = ContentGenerationService()
+        refined_data = service.refine_page_with_html(
+            page_id=page_id,
+            instructions=message,
+            model_override=model,
+            reference_images=reference_images or None,
+            conversation_history=history or None,
+            handle_images=handle_images,
+        )
+
+        # Save refined content to page
+        page.html_content = refined_data.get('html_content', page.html_content)
+        page.content = refined_data.get('content', page.content)
+        page.save()
+
+        # Compute section changes
+        new_html = page.html_content or ''
+        added, removed, modified = compute_section_changes(old_html, new_html)
+        change_summary = build_change_summary(added, removed, modified)
+        sections_changed = added + modified
+
+        # Append assistant message and save session
+        session.add_assistant_message(change_summary, sections_changed)
+        session.save()
+
+        return JsonResponse({
+            'success': True,
+            'session_id': session.id,
+            'assistant_message': change_summary,
+            'sections_changed': sections_changed,
+            'page_id': page.id,
+        })
+
+    except Exception as e:
+        print(f"Error in chat_refine_page_api: {e}")
+        import traceback
+        traceback.print_exc()
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+
+
+@staff_member_required
+@require_http_methods(["GET"])
+def get_refinement_session_api(request, session_id):
+    """Return full session with messages."""
+    from .models import RefinementSession
+
+    try:
+        session = RefinementSession.objects.get(id=session_id)
+    except RefinementSession.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Session not found'}, status=404)
+
+    return JsonResponse({
+        'success': True,
+        'session': {
+            'id': session.id,
+            'title': session.title,
+            'page_id': session.page_id,
+            'model_used': session.model_used,
+            'messages': session.messages,
+            'created_at': session.created_at.isoformat(),
+            'updated_at': session.updated_at.isoformat(),
+        }
+    })
+
+
+@staff_member_required
+@require_http_methods(["GET"])
+def list_refinement_sessions_api(request, page_id):
+    """Return list of sessions for a given page."""
+    from .models import RefinementSession
+
+    sessions = RefinementSession.objects.filter(page_id=page_id)[:20]
+    data = []
+    for s in sessions:
+        data.append({
+            'id': s.id,
+            'title': s.title,
+            'message_count': len(s.messages),
+            'updated_at': s.updated_at.isoformat(),
+        })
+
+    return JsonResponse({'success': True, 'sessions': data})
+
+
+@staff_member_required
+@require_http_methods(["POST"])
+def process_page_images_api(request):
+    """
+    Process image placeholders on a page.
+
+    POST /ai/api/process-page-images/
+    Body: {
+        "page_id": 123,
+        "images": [
+            {"image_name": "hero-banner", "action": "library", "library_image_id": 5},
+            {"image_name": "team-photo", "action": "generate", "prompt": "...", "aspect_ratio": "16:9"}
+        ]
+    }
+
+    Returns: {
+        "success": true,
+        "processed": [...],
+        "failed": [...],
+        "report": "Processed 2 image(s), 0 failed"
+    }
+    """
+    try:
+        data = json.loads(request.body)
+        page_id = data.get('page_id')
+        images = data.get('images', [])
+
+        if not page_id or not images:
+            return JsonResponse({
+                'success': False,
+                'error': 'page_id and images are required'
+            }, status=400)
+
+        # Create version before processing
+        try:
+            page = Page.objects.get(id=page_id)
+        except Page.DoesNotExist:
+            return JsonResponse({
+                'success': False,
+                'error': f'Page with id {page_id} not found'
+            }, status=404)
+
+        page.create_version(
+            user=request.user,
+            change_summary=f'Before image processing: {len(images)} image(s)'
+        )
+
+        service = ContentGenerationService()
+        result = service.process_page_images(
+            page_id=page_id,
+            image_decisions=images,
+        )
+
+        return JsonResponse({
+            'success': True,
+            'processed': result['processed'],
+            'failed': result['failed'],
+            'report': result['report'],
+        })
+
+    except Exception as e:
+        print(f"Error in process_page_images_api: {e}")
         import traceback
         traceback.print_exc()
         return JsonResponse({

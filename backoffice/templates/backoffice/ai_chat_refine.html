@@ -1,0 +1,751 @@
+{% extends 'backoffice/base.html' %}
+{% load static %}
+
+{% block title %}Chat Refine — {{ page.default_title }} — AI Content Studio{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <!-- Breadcrumb -->
+    <nav class="flex" aria-label="Breadcrumb">
+        <ol class="flex items-center space-x-2 text-sm text-gray-500">
+            <li><a href="{% url 'backoffice:ai_management' %}" class="hover:text-gray-700">AI Content Studio</a></li>
+            <li>
+                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+                </svg>
+            </li>
+            <li class="text-gray-900 font-medium">Chat Refine — {{ page.default_title }}</li>
+        </ol>
+    </nav>
+
+    <!-- Header -->
+    <div class="flex items-center justify-between">
+        <div>
+            <h2 class="text-3xl font-bold text-gray-900 flex items-center">
+                <span class="w-12 h-12 bg-gradient-to-r from-purple-500 to-indigo-500 rounded-lg flex items-center justify-center mr-3">
+                    <svg class="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"/>
+                    </svg>
+                </span>
+                Chat Refine
+            </h2>
+            <p class="text-gray-600 mt-2 ml-15">Iteratively refine <strong>{{ page.default_title }}</strong> through conversation</p>
+        </div>
+    </div>
+
+    <!-- Main grid -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- Chat Column (2/3) -->
+        <div class="lg:col-span-2 flex flex-col">
+            <!-- Session bar -->
+            <div class="bg-white rounded-t-lg border border-gray-200 px-4 py-3 flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                    <select id="sessionSelect" onchange="loadSession(this.value)"
+                            class="border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:ring-2 focus:ring-purple-500 focus:border-transparent">
+                        <option value="">New session</option>
+                        {% for s in sessions %}
+                        <option value="{{ s.id }}" {% if active_session and active_session.id == s.id %}selected{% endif %}>
+                            {{ s.title|truncatechars:50 }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                    <button onclick="startNewSession()" class="text-sm text-purple-600 hover:text-purple-800 font-medium">+ New Session</button>
+                </div>
+            </div>
+
+            <!-- Chat messages -->
+            <div id="chatMessages" class="bg-white border-x border-gray-200 flex-1 overflow-y-auto p-4 space-y-4" style="min-height:400px; max-height:60vh;">
+                {% if active_session_messages %}
+                    {% for msg in active_session_messages %}
+                        {% if msg.role == 'user' %}
+                        <div class="flex justify-end">
+                            <div class="max-w-[75%] bg-purple-600 text-white rounded-lg px-4 py-3 shadow-sm">
+                                <p class="text-sm whitespace-pre-wrap">{{ msg.content }}</p>
+                                {% if msg.reference_images_count %}
+                                <p class="text-xs text-purple-200 mt-1">{{ msg.reference_images_count }} image(s) attached</p>
+                                {% endif %}
+                                <p class="text-xs text-purple-300 mt-1 text-right">{{ msg.timestamp|truncatechars:19 }}</p>
+                            </div>
+                        </div>
+                        {% elif msg.role == 'assistant' %}
+                        <div class="flex justify-start">
+                            <div class="max-w-[75%] bg-gray-100 text-gray-900 rounded-lg px-4 py-3 shadow-sm">
+                                <p class="text-sm whitespace-pre-wrap">{{ msg.content }}</p>
+                                {% if msg.sections_changed %}
+                                <div class="flex flex-wrap gap-1 mt-2">
+                                    {% for sec in msg.sections_changed %}
+                                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800">{{ sec }}</span>
+                                    {% endfor %}
+                                </div>
+                                {% endif %}
+                                <p class="text-xs text-gray-400 mt-1">{{ msg.timestamp|truncatechars:19 }}</p>
+                            </div>
+                        </div>
+                        {% endif %}
+                    {% endfor %}
+                {% else %}
+                <div id="emptyState" class="flex flex-col items-center justify-center h-full text-gray-400 py-16">
+                    <svg class="w-12 h-12 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"/>
+                    </svg>
+                    <p class="text-sm">Send a message to start refining this page</p>
+                </div>
+                {% endif %}
+            </div>
+
+            <!-- Typing indicator (hidden by default) -->
+            <div id="typingIndicator" class="hidden bg-white border-x border-gray-200 px-4 pb-2">
+                <div class="flex justify-start">
+                    <div class="bg-gray-100 rounded-lg px-4 py-3">
+                        <div class="flex items-center space-x-1">
+                            <div class="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style="animation-delay:0ms"></div>
+                            <div class="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style="animation-delay:150ms"></div>
+                            <div class="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style="animation-delay:300ms"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Image drop zone -->
+            <div class="bg-white border-x border-gray-200 px-4">
+                <div id="imageDropZone"
+                     class="border-2 border-dashed border-gray-200 rounded-lg p-3 text-center hover:border-purple-400 hover:bg-purple-50 transition-colors cursor-pointer"
+                     onclick="document.getElementById('referenceImages').click()">
+                    <p class="text-xs text-gray-500">Drop reference images here or <span class="text-purple-600 font-medium">browse</span></p>
+                </div>
+                <input type="file" id="referenceImages" accept="image/*" multiple class="hidden" onchange="handleImageSelect(event)">
+                <div id="imagePreviews" class="grid grid-cols-6 gap-2 mt-2"></div>
+            </div>
+
+            <!-- Input area -->
+            <div class="bg-white rounded-b-lg border border-gray-200 p-4">
+                <form id="chatForm" onsubmit="sendMessage(event)" class="flex items-end gap-3">
+                    <textarea id="messageInput" rows="2" required
+                              class="flex-1 border border-gray-300 rounded-lg px-4 py-2 text-sm focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-none"
+                              placeholder="Describe the changes you want..."
+                              onkeydown="if(event.key==='Enter' && !event.shiftKey){event.preventDefault();sendMessage(event)}"></textarea>
+                    <button type="submit" id="sendButton"
+                            class="px-5 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-lg hover:from-purple-700 hover:to-indigo-700 flex items-center shadow-sm transition-all text-sm font-medium">
+                        <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
+                        </svg>
+                        Send
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Sidebar (1/3) -->
+        <div class="space-y-6">
+            <!-- Page Info -->
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-5">
+                <h3 class="text-sm font-semibold text-gray-900 mb-3">Page Info</h3>
+                <div class="space-y-2 text-sm">
+                    <p class="text-gray-700">
+                        <strong>Title:</strong>
+                        <a href="{% url 'core:page' slug=page.default_slug %}" target="_blank" class="text-purple-600 hover:text-purple-800 hover:underline">
+                            {{ page.default_title }}
+                            <svg class="w-3 h-3 inline-block ml-0.5 -mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
+                        </a>
+                    </p>
+                    <p class="text-gray-700"><strong>Slug:</strong> {{ page.default_slug }}</p>
+                    <p class="text-gray-700"><strong>Versions:</strong> {{ version_count }}</p>
+                    {% if page_sections %}
+                    <div class="pt-2 border-t">
+                        <p class="text-xs text-gray-600 mb-1">Sections:</p>
+                        <div class="flex flex-wrap gap-1">
+                            {% for sec in page_sections %}
+                            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800">{{ sec }}</span>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Past Sessions -->
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-5">
+                <h3 class="text-sm font-semibold text-gray-900 mb-3">Past Sessions</h3>
+                {% if sessions %}
+                <div class="space-y-2 max-h-48 overflow-y-auto">
+                    {% for s in sessions %}
+                    <button onclick="loadSession({{ s.id }})"
+                            class="w-full text-left px-3 py-2 rounded-md text-sm hover:bg-purple-50 transition-colors {% if active_session and active_session.id == s.id %}bg-purple-50 text-purple-700 font-medium{% else %}text-gray-700{% endif %}">
+                        <p class="truncate">{{ s.title|truncatechars:40 }}</p>
+                        <p class="text-xs text-gray-400">{{ s.messages|length }} messages</p>
+                    </button>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <p class="text-sm text-gray-500">No sessions yet</p>
+                {% endif %}
+            </div>
+
+            <!-- AI Model -->
+            {% if ai_models %}
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-5">
+                <h3 class="text-sm font-semibold text-gray-900 mb-3">AI Model</h3>
+                <select id="modelSelect"
+                        class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500 focus:border-transparent">
+                    {% for model in ai_models %}
+                    <option value="{{ model.0 }}" {% if model.0 == default_model %}selected{% endif %}>
+                        {{ model.1 }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            {% endif %}
+
+            <!-- Image Handling -->
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-5">
+                <h3 class="text-sm font-semibold text-gray-900 mb-3">Image Handling</h3>
+                <label class="flex items-center gap-3 cursor-pointer">
+                    <input type="checkbox" id="handleImages" class="w-4 h-4 text-purple-600 border-gray-300 rounded focus:ring-purple-500">
+                    <span class="text-sm text-gray-700">Add image placeholders</span>
+                </label>
+                <p class="text-xs text-gray-500 mt-2">LLM will add image metadata for later generation/selection.</p>
+                <button id="processImagesBtn" onclick="scanForImagePlaceholders()"
+                        class="hidden mt-3 w-full px-3 py-2 bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-lg hover:from-emerald-600 hover:to-teal-600 text-sm font-medium transition-all flex items-center justify-center gap-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                    </svg>
+                    Process Images
+                </button>
+            </div>
+
+            <!-- Links -->
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-5">
+                <h3 class="text-sm font-semibold text-gray-900 mb-3">Quick Links</h3>
+                <div class="space-y-2 text-sm">
+                    <a href="{% url 'backoffice:ai_refine_page' %}" class="block text-purple-600 hover:text-purple-800 font-medium">
+                        Switch to form view &rarr;
+                    </a>
+                    <a href="{% url 'backoffice:page_edit' page_id=page.id %}" class="block text-gray-600 hover:text-gray-800">
+                        Edit page details &rarr;
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Image Processing Modal -->
+<div id="imageModal" class="hidden fixed inset-0 z-50 overflow-y-auto">
+    <div class="flex items-center justify-center min-h-screen px-4">
+        <div class="fixed inset-0 bg-black bg-opacity-50 transition-opacity" onclick="closeImageModal()"></div>
+        <div class="relative bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[85vh] flex flex-col">
+            <!-- Modal Header -->
+            <div class="flex items-center justify-between px-6 py-4 border-b">
+                <h3 class="text-lg font-semibold text-gray-900" id="imageModalTitle">Process Images</h3>
+                <button onclick="closeImageModal()" class="text-gray-400 hover:text-gray-600">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
+                </button>
+            </div>
+            <!-- Modal Body -->
+            <div id="imageModalBody" class="flex-1 overflow-y-auto px-6 py-4 space-y-4">
+                <p class="text-sm text-gray-500">Loading...</p>
+            </div>
+            <!-- Modal Footer -->
+            <div class="flex items-center justify-between px-6 py-4 border-t bg-gray-50 rounded-b-xl">
+                <label class="flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
+                    <input type="checkbox" id="selectAllImages" onchange="toggleSelectAllImages(this.checked)" class="w-4 h-4 text-purple-600 border-gray-300 rounded">
+                    Select all
+                </label>
+                <div class="flex gap-3">
+                    <button onclick="closeImageModal()" class="px-4 py-2 text-sm text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50">Cancel</button>
+                    <button id="processSelectedBtn" onclick="processSelectedImages()" class="px-4 py-2 text-sm text-white bg-gradient-to-r from-emerald-500 to-teal-500 rounded-lg hover:from-emerald-600 hover:to-teal-600 font-medium">
+                        Process Selected
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+const PAGE_ID = {{ page.id }};
+let currentSessionId = {{ active_session.id|default:"null" }};
+let selectedFiles = [];
+
+// --- Image handling ---
+function handleImageSelect(event) {
+    const files = Array.from(event.target.files);
+    files.forEach(f => { if (f.type.startsWith('image/')) selectedFiles.push(f); });
+    renderImagePreviews();
+}
+
+function removeImage(index) {
+    selectedFiles.splice(index, 1);
+    renderImagePreviews();
+}
+
+function renderImagePreviews() {
+    const container = document.getElementById('imagePreviews');
+    container.innerHTML = '';
+    selectedFiles.forEach((file, i) => {
+        const url = URL.createObjectURL(file);
+        container.insertAdjacentHTML('beforeend', `
+            <div class="relative group">
+                <img src="${url}" class="w-full h-16 object-cover rounded border border-gray-200">
+                <button type="button" onclick="removeImage(${i})"
+                        class="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white rounded-full flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity">&times;</button>
+            </div>
+        `);
+    });
+}
+
+// Drag and drop
+(function() {
+    document.addEventListener('DOMContentLoaded', function() {
+        const dz = document.getElementById('imageDropZone');
+        if (!dz) return;
+        ['dragenter','dragover'].forEach(e => dz.addEventListener(e, ev => { ev.preventDefault(); dz.classList.add('border-purple-500','bg-purple-50'); }));
+        ['dragleave','drop'].forEach(e => dz.addEventListener(e, ev => { ev.preventDefault(); dz.classList.remove('border-purple-500','bg-purple-50'); }));
+        dz.addEventListener('drop', ev => {
+            const files = Array.from(ev.dataTransfer.files);
+            files.forEach(f => { if (f.type.startsWith('image/')) selectedFiles.push(f); });
+            renderImagePreviews();
+        });
+    });
+})();
+
+// --- Chat functions ---
+function renderMessage(msg) {
+    const chat = document.getElementById('chatMessages');
+    // Remove empty state if present
+    const empty = document.getElementById('emptyState');
+    if (empty) empty.remove();
+
+    if (msg.role === 'user') {
+        const imgInfo = msg.reference_images_count ? `<p class="text-xs text-purple-200 mt-1">${msg.reference_images_count} image(s) attached</p>` : '';
+        chat.insertAdjacentHTML('beforeend', `
+            <div class="flex justify-end">
+                <div class="max-w-[75%] bg-purple-600 text-white rounded-lg px-4 py-3 shadow-sm">
+                    <p class="text-sm whitespace-pre-wrap">${escapeHtml(msg.content)}</p>
+                    ${imgInfo}
+                    <p class="text-xs text-purple-300 mt-1 text-right">${formatTime(msg.timestamp)}</p>
+                </div>
+            </div>
+        `);
+    } else {
+        const badges = (msg.sections_changed || []).map(s =>
+            `<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800">${escapeHtml(s)}</span>`
+        ).join('');
+        const badgeHtml = badges ? `<div class="flex flex-wrap gap-1 mt-2">${badges}</div>` : '';
+        chat.insertAdjacentHTML('beforeend', `
+            <div class="flex justify-start">
+                <div class="max-w-[75%] bg-gray-100 text-gray-900 rounded-lg px-4 py-3 shadow-sm">
+                    <p class="text-sm whitespace-pre-wrap">${escapeHtml(msg.content)}</p>
+                    ${badgeHtml}
+                    <p class="text-xs text-gray-400 mt-1">${formatTime(msg.timestamp)}</p>
+                </div>
+            </div>
+        `);
+    }
+    chat.scrollTop = chat.scrollHeight;
+}
+
+async function sendMessage(event) {
+    event.preventDefault();
+    const input = document.getElementById('messageInput');
+    const message = input.value.trim();
+    if (!message) return;
+
+    const model = document.getElementById('modelSelect')?.value || 'gemini-pro';
+
+    // Render user bubble immediately
+    const userMsg = {
+        role: 'user',
+        content: message,
+        timestamp: new Date().toISOString(),
+        reference_images_count: selectedFiles.length
+    };
+    renderMessage(userMsg);
+    input.value = '';
+
+    // Show typing indicator
+    document.getElementById('typingIndicator').classList.remove('hidden');
+    document.getElementById('sendButton').disabled = true;
+
+    const handleImages = document.getElementById('handleImages')?.checked || false;
+
+    try {
+        let fetchOptions;
+        if (selectedFiles.length > 0) {
+            const fd = new FormData();
+            fd.append('page_id', PAGE_ID);
+            fd.append('message', message);
+            fd.append('model', model);
+            if (handleImages) fd.append('handle_images', 'true');
+            if (currentSessionId) fd.append('session_id', currentSessionId);
+            selectedFiles.forEach(f => fd.append('reference_images', f));
+            fetchOptions = {
+                method: 'POST',
+                headers: { 'X-CSRFToken': getCookie('csrftoken') },
+                body: fd
+            };
+        } else {
+            const payload = {
+                page_id: PAGE_ID,
+                message: message,
+                model: model,
+                handle_images: handleImages,
+            };
+            if (currentSessionId) payload.session_id = currentSessionId;
+            fetchOptions = {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken')
+                },
+                body: JSON.stringify(payload)
+            };
+        }
+
+        const response = await fetch('/ai/api/chat-refine-page/', fetchOptions);
+        const result = await response.json();
+
+        document.getElementById('typingIndicator').classList.add('hidden');
+        document.getElementById('sendButton').disabled = false;
+
+        if (result.success) {
+            currentSessionId = result.session_id;
+            // Update session selector
+            updateSessionSelector(result.session_id, message);
+            renderMessage({
+                role: 'assistant',
+                content: result.assistant_message,
+                timestamp: new Date().toISOString(),
+                sections_changed: result.sections_changed
+            });
+            // Check for image placeholders
+            checkForImagePlaceholders();
+        } else {
+            renderMessage({
+                role: 'assistant',
+                content: 'Error: ' + (result.error || 'Unknown error'),
+                timestamp: new Date().toISOString(),
+                sections_changed: []
+            });
+        }
+    } catch (error) {
+        document.getElementById('typingIndicator').classList.add('hidden');
+        document.getElementById('sendButton').disabled = false;
+        renderMessage({
+            role: 'assistant',
+            content: 'Error: ' + error.message,
+            timestamp: new Date().toISOString(),
+            sections_changed: []
+        });
+    }
+
+    // Clear images after send
+    selectedFiles = [];
+    renderImagePreviews();
+    document.getElementById('referenceImages').value = '';
+}
+
+async function loadSession(sessionId) {
+    if (!sessionId) {
+        startNewSession();
+        return;
+    }
+
+    try {
+        const response = await fetch(`/ai/api/refinement-session/${sessionId}/`);
+        const result = await response.json();
+
+        if (result.success) {
+            currentSessionId = result.session.id;
+            const chat = document.getElementById('chatMessages');
+            chat.innerHTML = '';
+
+            result.session.messages.forEach(msg => renderMessage(msg));
+
+            // Update selector
+            const select = document.getElementById('sessionSelect');
+            select.value = sessionId;
+        }
+    } catch (error) {
+        console.error('Error loading session:', error);
+    }
+}
+
+function startNewSession() {
+    currentSessionId = null;
+    const chat = document.getElementById('chatMessages');
+    chat.innerHTML = `
+        <div id="emptyState" class="flex flex-col items-center justify-center h-full text-gray-400 py-16">
+            <svg class="w-12 h-12 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"/>
+            </svg>
+            <p class="text-sm">Send a message to start refining this page</p>
+        </div>
+    `;
+    const select = document.getElementById('sessionSelect');
+    select.value = '';
+}
+
+function updateSessionSelector(sessionId, title) {
+    const select = document.getElementById('sessionSelect');
+    // Check if option already exists
+    let found = false;
+    for (const opt of select.options) {
+        if (opt.value == sessionId) {
+            found = true;
+            opt.selected = true;
+            break;
+        }
+    }
+    if (!found) {
+        const opt = document.createElement('option');
+        opt.value = sessionId;
+        opt.textContent = title.substring(0, 50);
+        opt.selected = true;
+        select.insertBefore(opt, select.options[1]); // After "New session"
+    }
+}
+
+// --- Utilities ---
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+function formatTime(iso) {
+    if (!iso) return '';
+    const d = new Date(iso);
+    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+
+// --- Image Processing (Phase 2) ---
+let mediaLibraryCache = null;
+let detectedImages = [];
+
+async function checkForImagePlaceholders() {
+    try {
+        const response = await fetch(`/backoffice/api/page-content/${PAGE_ID}/`);
+        const result = await response.json();
+        if (!result.success) return;
+
+        const html = result.html_content || '';
+        const hasPlaceholders = /data-image-prompt="/.test(html);
+        const btn = document.getElementById('processImagesBtn');
+        if (btn) {
+            btn.classList.toggle('hidden', !hasPlaceholders);
+        }
+    } catch (e) {
+        console.error('Error checking for image placeholders:', e);
+    }
+}
+
+async function scanForImagePlaceholders() {
+    try {
+        const response = await fetch(`/backoffice/api/page-content/${PAGE_ID}/`);
+        const result = await response.json();
+        if (!result.success) { alert('Failed to load page content'); return; }
+
+        const html = result.html_content || '';
+        // Parse img tags with data-image-prompt
+        const regex = /<img\b[^>]*?data-image-prompt="([^"]*)"[^>]*?>/gi;
+        detectedImages = [];
+        let match;
+        while ((match = regex.exec(html)) !== null) {
+            const tag = match[0];
+            const prompt = match[1];
+            const nameMatch = tag.match(/data-image-name="([^"]*)"/);
+            const srcMatch = tag.match(/src="([^"]*)"/);
+            detectedImages.push({
+                prompt: prompt,
+                name: nameMatch ? nameMatch[1] : `image-${detectedImages.length + 1}`,
+                src: srcMatch ? srcMatch[1] : '',
+                selected: true,
+                action: 'generate',
+                library_image_id: null
+            });
+        }
+
+        if (detectedImages.length === 0) {
+            alert('No image placeholders found on this page.');
+            return;
+        }
+
+        // Fetch media library for dropdown
+        if (!mediaLibraryCache) {
+            const libResponse = await fetch('/backoffice/api/media-library/');
+            const libResult = await libResponse.json();
+            mediaLibraryCache = libResult.success ? libResult.images : [];
+        }
+
+        openImageModal();
+    } catch (e) {
+        console.error('Error scanning for images:', e);
+        alert('Error: ' + e.message);
+    }
+}
+
+function openImageModal() {
+    const body = document.getElementById('imageModalBody');
+    const title = document.getElementById('imageModalTitle');
+    title.textContent = `Process Images (${detectedImages.length} found)`;
+
+    let html = '';
+    detectedImages.forEach((img, i) => {
+        const libraryOptions = (mediaLibraryCache || []).map(li =>
+            `<option value="${li.id}">${escapeHtml(li.title || li.key || 'Image #' + li.id)}</option>`
+        ).join('');
+
+        html += `
+        <div class="border border-gray-200 rounded-lg p-4" id="imgCard${i}">
+            <div class="flex items-start gap-3">
+                <input type="checkbox" ${img.selected ? 'checked' : ''} onchange="detectedImages[${i}].selected=this.checked"
+                       class="mt-1 w-4 h-4 text-purple-600 border-gray-300 rounded">
+                <div class="flex-1 min-w-0">
+                    <div class="flex items-center gap-2 mb-1">
+                        <span class="font-medium text-sm text-gray-900">${escapeHtml(img.name)}</span>
+                        ${img.src ? `<img src="${escapeHtml(img.src)}" class="h-8 w-12 object-cover rounded border" onerror="this.style.display='none'">` : ''}
+                    </div>
+                    <p class="text-xs text-gray-500 mb-3 line-clamp-2">${escapeHtml(img.prompt)}</p>
+                    <div class="flex items-center gap-4 text-sm">
+                        <label class="flex items-center gap-1.5 cursor-pointer">
+                            <input type="radio" name="action${i}" value="generate" ${img.action === 'generate' ? 'checked' : ''} onchange="setImageAction(${i},'generate')"
+                                   class="text-purple-600 focus:ring-purple-500">
+                            <span class="text-gray-700">Generate</span>
+                        </label>
+                        <label class="flex items-center gap-1.5 cursor-pointer">
+                            <input type="radio" name="action${i}" value="library" ${img.action === 'library' ? 'checked' : ''} onchange="setImageAction(${i},'library')"
+                                   class="text-purple-600 focus:ring-purple-500">
+                            <span class="text-gray-700">From library</span>
+                        </label>
+                    </div>
+                    <div id="libSelect${i}" class="${img.action === 'library' ? '' : 'hidden'} mt-2">
+                        <select onchange="detectedImages[${i}].library_image_id=parseInt(this.value)"
+                                class="w-full border border-gray-300 rounded-md px-2 py-1.5 text-sm focus:ring-2 focus:ring-purple-500">
+                            <option value="">-- Select image --</option>
+                            ${libraryOptions}
+                        </select>
+                    </div>
+                </div>
+            </div>
+        </div>`;
+    });
+
+    body.innerHTML = html;
+    document.getElementById('selectAllImages').checked = true;
+    document.getElementById('imageModal').classList.remove('hidden');
+}
+
+function closeImageModal() {
+    document.getElementById('imageModal').classList.add('hidden');
+}
+
+function setImageAction(index, action) {
+    detectedImages[index].action = action;
+    const libSelect = document.getElementById(`libSelect${index}`);
+    if (libSelect) {
+        libSelect.classList.toggle('hidden', action !== 'library');
+    }
+}
+
+function toggleSelectAllImages(checked) {
+    detectedImages.forEach((img, i) => {
+        img.selected = checked;
+        const cb = document.querySelector(`#imgCard${i} input[type="checkbox"]`);
+        if (cb) cb.checked = checked;
+    });
+}
+
+async function processSelectedImages() {
+    const selected = detectedImages.filter(img => img.selected);
+    if (selected.length === 0) { alert('No images selected.'); return; }
+
+    // Validate library selections
+    for (const img of selected) {
+        if (img.action === 'library' && !img.library_image_id) {
+            alert(`Please select a library image for "${img.name}".`);
+            return;
+        }
+    }
+
+    const btn = document.getElementById('processSelectedBtn');
+    const origText = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = 'Processing...';
+
+    const images = selected.map(img => {
+        const entry = { image_name: img.name, action: img.action };
+        if (img.action === 'library') {
+            entry.library_image_id = img.library_image_id;
+        } else {
+            entry.prompt = img.prompt;
+            entry.aspect_ratio = '16:9';
+        }
+        return entry;
+    });
+
+    try {
+        const response = await fetch('/ai/api/process-page-images/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            body: JSON.stringify({ page_id: PAGE_ID, images: images })
+        });
+        const result = await response.json();
+
+        btn.disabled = false;
+        btn.textContent = origText;
+
+        if (result.success) {
+            closeImageModal();
+            // Show result in chat
+            let msg = result.report;
+            if (result.failed && result.failed.length > 0) {
+                msg += '\nFailed: ' + result.failed.map(f => `${f.image_name}: ${f.error}`).join(', ');
+            }
+            renderMessage({
+                role: 'assistant',
+                content: msg,
+                timestamp: new Date().toISOString(),
+                sections_changed: result.processed.map(p => p.image_name)
+            });
+            // Refresh button visibility
+            checkForImagePlaceholders();
+        } else {
+            alert('Error: ' + (result.error || 'Unknown error'));
+        }
+    } catch (e) {
+        btn.disabled = false;
+        btn.textContent = origText;
+        alert('Error: ' + e.message);
+    }
+}
+
+// Auto-scroll on load if messages present
+document.addEventListener('DOMContentLoaded', function() {
+    const chat = document.getElementById('chatMessages');
+    chat.scrollTop = chat.scrollHeight;
+    // Check for existing image placeholders on load
+    checkForImagePlaceholders();
+});
+</script>
+{% endblock %}

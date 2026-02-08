@@ -122,7 +122,7 @@ Return a JSON **object** with two fields:
         user_request: str,
         page_title: str = '',
         page_slug: str = '',
-        design_settings: dict = None
+        design_guide: str = ''
     ) -> tuple:
         """
         Generate prompt for refining an existing page's HTML and translations
@@ -137,7 +137,7 @@ Return a JSON **object** with two fields:
             user_request: User's instructions for changes
             page_title: Title of the page being edited
             page_slug: Slug/URL of the page being edited
-            design_settings: Dict of design settings with Tailwind classes
+            design_guide: Freeform markdown design guide for AI context
 
         Returns:
             Tuple of (system_prompt, user_prompt)
@@ -145,30 +145,10 @@ Return a JSON **object** with two fields:
         langs_display = ' and '.join([lang.upper() for lang in languages])
         langs_json = ', '.join([f'"{lang}"' for lang in languages])
 
-        # Build design guidelines from settings
+        # Build design guidelines
         design_guidelines = ""
-        if design_settings:
-            design_guidelines = "\n\n## Design System (Use These Classes)\n\n"
-            design_guidelines += "**Use these Tailwind classes for consistency:**\n\n"
-
-            if design_settings.get('primary_color'):
-                design_guidelines += f"- Primary color: `{design_settings['primary_color']}`\n"
-            if design_settings.get('secondary_color'):
-                design_guidelines += f"- Secondary color: `{design_settings['secondary_color']}`\n"
-            if design_settings.get('accent_color'):
-                design_guidelines += f"- Accent color: `{design_settings['accent_color']}`\n"
-            if design_settings.get('text_color'):
-                design_guidelines += f"- Text color: `{design_settings['text_color']}`\n"
-            if design_settings.get('heading_color'):
-                design_guidelines += f"- Heading color: `{design_settings['heading_color']}`\n"
-            if design_settings.get('primary_button'):
-                design_guidelines += f"- Primary button: `{design_settings['primary_button']}`\n"
-            if design_settings.get('secondary_button'):
-                design_guidelines += f"- Secondary button: `{design_settings['secondary_button']}`\n"
-            if design_settings.get('section_padding'):
-                design_guidelines += f"- Section padding: `{design_settings['section_padding']}`\n"
-            if design_settings.get('container_width'):
-                design_guidelines += f"- Container: `{design_settings['container_width']}`\n"
+        if design_guide:
+            design_guidelines = "\n\n## Design Guide\nFollow these design patterns and conventions:\n" + design_guide
 
         system_prompt = f"""You are a web designer specializing in Tailwind CSS and Django templates. Your goal is to edit a webpage based on user instructions.
 
@@ -269,7 +249,8 @@ Return a JSON **object** with the complete updated page:
         pages: list,
         existing_section: dict,
         user_request: str,
-        section_type: str = 'header'
+        section_type: str = 'header',
+        design_guide: str = ''
     ) -> tuple:
         """
         Generate prompt for global section refinement (header/footer)
@@ -342,6 +323,14 @@ Return a JSON **object** with the complete updated page:
 - Use logo: `{{ LOGO.url }}`
 """
 
+        design_guidelines = ""
+        if design_guide:
+            design_guidelines = f"""
+
+## Design Guide
+Follow these design patterns and conventions:
+{design_guide}"""
+
         system_prompt = f"""You are a web designer specializing in Tailwind CSS and Django templates. Your goal is to refine a site-wide {section_type}.
 
 ## Your Task
@@ -359,7 +348,7 @@ Improve the provided {section_type} by applying the requested changes. Return a 
 
 **Required Fields:**
 - `html_template`: Complete HTML with all Tailwind classes and Django tags
-- `content`: Translations object with text only"""
+- `content`: Translations object with text only{design_guidelines}"""
 
         # Format existing section
         section_json = json.dumps(existing_section, indent=2, ensure_ascii=False)
@@ -494,3 +483,330 @@ Example:
 ```
 
 Return ONLY the JSON array, no markdown, no explanations."""
+
+    # =========================================================================
+    # Two-Step Generation Prompts
+    # =========================================================================
+
+    @staticmethod
+    def get_page_generation_html_prompt(
+        site_name: str,
+        site_description: str,
+        project_briefing: str,
+        default_language: str,
+        brief: str,
+        page_type: str = 'general',
+        has_reference_images: bool = False,
+        design_guide: str = ''
+    ) -> tuple:
+        """
+        Generate prompt for Step 1: create clean HTML with real text in the default language.
+        No {{ trans.xxx }} variables, no JSON wrapping — just raw HTML.
+
+        Returns:
+            Tuple of (system_prompt, user_prompt)
+        """
+        lang_name = {'pt': 'Portuguese', 'en': 'English', 'es': 'Spanish', 'fr': 'French', 'de': 'German', 'it': 'Italian'}.get(default_language, default_language.upper())
+
+        system_prompt = f"""You are a web designer creating complete web pages using Tailwind CSS.
+
+## Task
+Generate a complete, professional web page as clean HTML with real text content written in {lang_name}.
+
+## Technical Requirements
+- Use Tailwind CSS classes inline for all styling
+- Make responsive with breakpoint prefixes: `sm:`, `md:`, `lg:`
+- Use Alpine.js (`x-data`, `x-show`, `@click`) for interactive elements if needed
+- Write all text content directly in {lang_name} — do NOT use template variables or placeholders
+
+## HTML Structure
+- Compose the page from multiple `<section>` blocks
+- Each `<section>` MUST have `data-section="name"` and `id="name"` attributes
+- Use `data-element-id="unique_id"` on editable text elements (headings, paragraphs, buttons, links)
+- Start with a hero section, add content sections, end with a CTA
+- All URLs hardcoded: `href="/about/"`, `src="/media/image.jpg"`
+- Generate 4-8 sections for a complete, professional page
+
+## CRITICAL: Page Content Only
+- Do NOT include `<html>`, `<head>`, `<body>`, `<header>`, `<nav>`, or `<footer>` tags
+- Do NOT include any navigation menus, site headers, or site footers
+- The header and footer are managed separately as global site components
+- Your output is ONLY the page body content — a series of `<section>` blocks
+- Do NOT include `<script>` or `<link>` tags for Tailwind/Alpine — they are already loaded
+
+## Important
+- Write ALL text in {lang_name} — real words, real sentences
+- Do NOT use `{{{{ trans.xxx }}}}` or any template variables for text
+- Do NOT wrap the output in JSON
+- Return ONLY the HTML, no markdown code blocks, no explanations"""
+
+        if design_guide:
+            system_prompt += f"""
+
+## Design Guide
+Follow these design patterns and conventions:
+{design_guide}"""
+
+        if has_reference_images:
+            system_prompt += """
+
+## Reference Images
+The user has provided reference design images. Use them as visual inspiration for:
+- Layout structure and section arrangement
+- Color scheme and visual style
+- Typography and spacing patterns
+- Overall aesthetic and mood
+Match the design style shown in the images while following all other technical requirements."""
+
+        user_prompt = f"""# PROJECT CONTEXT
+
+**Site Name:** {site_name}
+**Description:** {site_description}
+**Project Briefing:** {project_briefing}
+**Language:** {lang_name}
+
+---
+
+# PAGE REQUEST
+
+**Brief:** {brief}
+**Page Type:** {page_type}
+
+---
+
+Return ONLY the raw HTML for this page. All text must be real content in {lang_name}. No template variables, no JSON, no code blocks."""
+
+        return (system_prompt, user_prompt)
+
+    @staticmethod
+    def get_page_refinement_html_prompt(
+        site_name: str,
+        site_description: str,
+        project_briefing: str,
+        default_language: str,
+        page_html: str,
+        user_request: str,
+        page_title: str = '',
+        page_slug: str = '',
+        design_guide: str = '',
+        has_reference_images: bool = False,
+        handle_images: bool = False
+    ) -> tuple:
+        """
+        Generate prompt for Step 1 of refinement: edit clean HTML with real text.
+        The HTML has already been de-templatized (real text, no {{ trans.xxx }}).
+
+        Returns:
+            Tuple of (system_prompt, user_prompt)
+        """
+        lang_name = {'pt': 'Portuguese', 'en': 'English', 'es': 'Spanish', 'fr': 'French', 'de': 'German', 'it': 'Italian'}.get(default_language, default_language.upper())
+
+        # Build design guidelines
+        design_guidelines = ""
+        if design_guide:
+            design_guidelines = "\n\n## Design Guide\nFollow these design patterns and conventions:\n" + design_guide
+
+        system_prompt = f"""You are a web designer specializing in Tailwind CSS. Your goal is to edit a webpage based on user instructions.
+
+## Your Task
+Edit the provided HTML page by applying the requested changes. Return the complete updated HTML.
+
+## Technical Requirements
+- Use Tailwind CSS classes inline for all styling
+- Make responsive: `md:text-6xl`, `lg:grid-cols-3`, `sm:flex-row`
+- Each `<section>` MUST have `data-section="name"` and `id="name"` attributes
+- Use `data-element-id="unique_id"` on editable text elements
+- All text is in {lang_name} — keep it that way, do NOT use template variables
+
+## CRITICAL: Page Content Only
+- Do NOT include `<html>`, `<head>`, `<body>`, `<header>`, `<nav>`, or `<footer>` tags
+- Do NOT include any navigation menus, site headers, or site footers
+- The header and footer are managed separately as global site components
+- Output ONLY the page body content — a series of `<section>` blocks
+- Do NOT include `<script>` or `<link>` tags for Tailwind/Alpine — they are already loaded
+
+## Important
+- Return ONLY the complete updated HTML
+- Do NOT use `{{{{ trans.xxx }}}}` or any template variables
+- Do NOT wrap the output in JSON
+- No markdown code blocks, no explanations{design_guidelines}"""
+
+        if handle_images:
+            system_prompt += """
+
+## Image Handling
+For every image on the page:
+- Use a placeholder src: `https://placehold.co/{width}x{height}?text={Short+Label}`
+- Add `data-image-prompt="detailed description for AI image generation"` attribute
+- Add `data-image-name="descriptive-slug-name"` attribute
+- Write rich, specific prompts (style, subject, mood, setting) in data-image-prompt
+- Choose appropriate dimensions for each image's context (hero: 1200x600, card: 600x400, avatar: 400x400, etc.)
+- Example: <img src="https://placehold.co/800x400?text=Hero+Image" data-image-name="hero-banner" data-image-prompt="Aerial photo of luxury villa with infinity pool overlooking ocean at golden hour, Mediterranean architecture" alt="..." class="...">"""
+
+        if has_reference_images:
+            system_prompt += """
+
+## Reference Images
+The user has provided reference design images. Use them as visual inspiration for:
+- Layout structure and section arrangement
+- Color scheme and visual style
+- Typography and spacing patterns
+- Overall aesthetic and mood
+Match the design style shown in the images while following all other technical requirements."""
+
+        user_prompt = f"""# PROJECT CONTEXT
+
+**Site Name:** {site_name}
+**Description:** {site_description}
+
+**Project Briefing:**
+{project_briefing}
+
+---
+
+# CURRENT PAGE
+
+**Page:** {page_title if page_title else 'Untitled'}
+**Slug:** {page_slug if page_slug else 'unknown'}
+**Language:** {lang_name}
+
+**Current HTML:**
+{page_html if page_html.strip() else "<!-- EMPTY PAGE -->"}
+
+---
+
+# USER REQUEST
+
+{user_request}
+
+---
+
+Return ONLY the complete updated HTML. All text in {lang_name}. No template variables, no JSON, no code blocks."""
+
+        return (system_prompt, user_prompt)
+
+    @staticmethod
+    def get_chat_refinement_html_prompt(
+        site_name: str,
+        site_description: str,
+        project_briefing: str,
+        default_language: str,
+        page_html: str,
+        user_request: str,
+        page_title: str = '',
+        page_slug: str = '',
+        design_guide: str = '',
+        has_reference_images: bool = False,
+        conversation_history: str = '',
+        handle_images: bool = False
+    ) -> tuple:
+        """
+        Wraps get_page_refinement_html_prompt and injects conversation history
+        into the user prompt so the LLM preserves previous refinements.
+
+        Returns:
+            Tuple of (system_prompt, user_prompt)
+        """
+        system_prompt, user_prompt = PromptTemplates.get_page_refinement_html_prompt(
+            site_name=site_name,
+            site_description=site_description,
+            project_briefing=project_briefing,
+            default_language=default_language,
+            page_html=page_html,
+            user_request=user_request,
+            page_title=page_title,
+            page_slug=page_slug,
+            design_guide=design_guide,
+            has_reference_images=has_reference_images,
+            handle_images=handle_images,
+        )
+
+        if conversation_history:
+            history_block = f"""# PREVIOUS REFINEMENTS
+
+This page has been refined through a conversation. Here is what has been done so far:
+
+{conversation_history}
+
+Do NOT undo any of these previous changes unless specifically asked to.
+
+---
+
+"""
+            # Insert before the # USER REQUEST section
+            user_prompt = user_prompt.replace(
+                '# USER REQUEST',
+                history_block + '# USER REQUEST',
+            )
+
+        return (system_prompt, user_prompt)
+
+    @staticmethod
+    def get_templatize_and_translate_prompt(
+        html: str,
+        languages: list,
+        default_language: str
+    ) -> tuple:
+        """
+        Generate prompt for Step 2: extract text, assign variable names, and translate.
+        Returns a mapping JSON — the caller does the HTML replacement in Python.
+
+        Returns:
+            Tuple of (system_prompt, user_prompt)
+        """
+        langs_display = ' and '.join([lang.upper() for lang in languages])
+        lang_name = {'pt': 'Portuguese', 'en': 'English', 'es': 'Spanish', 'fr': 'French', 'de': 'German', 'it': 'Italian'}.get(default_language, default_language.upper())
+
+        system_prompt = f"""You are a localization specialist. Your job is to extract all human-readable text from HTML and produce a variable mapping with translations.
+
+## What to Extract
+- ALL visible text: headings, paragraphs, button labels, link text, list items, spans, etc.
+- Extract the EXACT text as it appears (preserve whitespace trimming)
+- Do NOT extract: HTML tags, CSS classes, URLs, attribute values, SVG code, Alpine.js directives, HTML comments
+
+## Variable Naming
+- Use descriptive names based on the `data-section` attribute and element role: `hero_title`, `hero_subtitle`, `features_card1_title`, `cta_button`
+- For elements with `data-element-id`, use that as the variable name
+- Keep names short and descriptive using snake_case
+
+## Translation Rules
+- The original text is in {lang_name} — use it as the {default_language.upper()} translation
+- Provide natural, fluent translations for ALL other languages
+- Only text strings — no HTML, no URLs"""
+
+        user_prompt = f"""# HTML TO PROCESS
+
+Extract all text from this HTML, assign variable names, and translate to: {langs_display}
+
+```html
+{html}
+```
+
+---
+
+# OUTPUT FORMAT
+
+Return a JSON **array** of objects. Each object maps one text string:
+
+```json
+[
+  {{
+    "var": "hero_title",
+    "original": "Welcome to Our Site",
+    "translations": {{
+      "{default_language}": "Welcome to Our Site",
+      "...": "..."
+    }}
+  }}
+]
+```
+
+**Rules:**
+- Return ONLY the JSON array, no markdown, no explanations
+- `original` must be the EXACT text from the HTML (trimmed of leading/trailing whitespace)
+- Every text string visible to users must be included
+- `translations` must include ALL languages: {langs_display}
+- The {default_language.upper()} translation must match `original` exactly
+- Do NOT include alt attributes, title attributes, or meta content — only visible body text"""
+
+        return (system_prompt, user_prompt)

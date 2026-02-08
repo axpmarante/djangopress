@@ -142,12 +142,149 @@ Return the complete, corrected JSON now:"""
         # Otherwise return content stripped of leading/trailing whitespace
         return content.strip()
 
+    def _detemplatize_html(self, html: str, translations: dict, language: str) -> str:
+        """
+        Replace {{ trans.xxx }} variables in HTML with actual text from translations.
+
+        Args:
+            html: HTML string with {{ trans.xxx }} template variables
+            translations: Dict like {"pt": {"hero_title": "Título", ...}, "en": {...}}
+            language: Language code to use for substitution
+
+        Returns:
+            Clean HTML with real text instead of template variables
+        """
+        lang_translations = translations.get(language, {})
+
+        def replace_var(match):
+            var_name = match.group(1)
+            return lang_translations.get(var_name, match.group(0))
+
+        return re.sub(r'\{\{\s*trans\.(\w+)\s*\}\}', replace_var, html)
+
+    def _templatize_and_translate(self, html: str, languages: list, default_language: str, model: str) -> Dict:
+        """
+        Step 2: Ask LLM to extract text and translate, then do HTML replacement in Python.
+
+        The LLM returns a compact array of {var, original, translations} objects.
+        We replace the original text in the HTML with {{ trans.var }} ourselves,
+        avoiding the need for the LLM to return the entire HTML back.
+
+        Args:
+            html: Clean HTML with real text in the default language
+            languages: List of language codes
+            default_language: The language the HTML text is written in
+            model: LLM model name to use
+
+        Returns:
+            Dict with 'html_content' (templatized) and 'content' (with translations)
+
+        Raises:
+            ValueError: If templatization fails
+        """
+        print(f"\n--- Step 2: Templatize + Translate ---")
+
+        system_prompt, user_prompt = PromptTemplates.get_templatize_and_translate_prompt(
+            html=html,
+            languages=languages,
+            default_language=default_language
+        )
+
+        # Debug output
+        system_token_estimate = len(system_prompt.split()) * 1.3
+        user_token_estimate = len(user_prompt.split()) * 1.3
+        total_token_estimate = system_token_estimate + user_token_estimate
+
+        print(f"TEMPLATIZE PROMPT (≈{int(total_token_estimate)} tokens)")
+
+        messages = [
+            {'role': 'system', 'content': system_prompt},
+            {'role': 'user', 'content': user_prompt}
+        ]
+
+        response = self.llm.get_completion(messages, tool_name=model)
+        content = response.choices[0].message.content
+        mappings = self._extract_json_from_response(content)
+
+        # Handle if LLM returns an object with a wrapper key
+        if isinstance(mappings, dict):
+            # Try common wrapper keys first, then any key with a list value
+            for key in ('mappings', 'variables', 'texts', 'items'):
+                if key in mappings and isinstance(mappings[key], list):
+                    mappings = mappings[key]
+                    break
+            else:
+                # Fallback: find any key whose value is a list of dicts
+                for key, value in mappings.items():
+                    if isinstance(value, list) and len(value) > 0 and isinstance(value[0], dict):
+                        print(f"Found mappings under unexpected key: '{key}'")
+                        mappings = value
+                        break
+                else:
+                    raise ValueError("Templatize step returned an object instead of an array")
+
+        if not isinstance(mappings, list) or len(mappings) == 0:
+            raise ValueError("Templatize step returned empty or invalid mappings")
+
+        # Build translations dict and do HTML replacements
+        translations = {lang: {} for lang in languages}
+        templatized_html = html
+
+        # Sort by length of original text (longest first) to avoid partial replacements
+        mappings.sort(key=lambda m: len(m.get('original', '')), reverse=True)
+
+        replaced_count = 0
+        for mapping in mappings:
+            var_name = mapping.get('var', '')
+            original_text = mapping.get('original', '')
+            trans = mapping.get('translations', {})
+
+            if not var_name or not original_text:
+                continue
+
+            # Replace original text in HTML with {{ trans.var_name }}
+            template_var = '{{ trans.' + var_name + ' }}'
+            if original_text in templatized_html:
+                templatized_html = templatized_html.replace(original_text, template_var, 1)
+                replaced_count += 1
+
+            # Build translations dict
+            for lang in languages:
+                if lang in trans:
+                    translations[lang][var_name] = trans[lang]
+
+        print(f"Replaced {replaced_count}/{len(mappings)} text strings with template variables")
+
+        # Validate translations completeness
+        trans_vars = set(re.findall(r'\{\{\s*trans\.(\w+)\s*\}\}', templatized_html))
+        if trans_vars:
+            missing_vars = {}
+            for lang in languages:
+                lang_trans = translations.get(lang, {})
+                missing_in_lang = trans_vars - set(lang_trans.keys())
+                if missing_in_lang:
+                    missing_vars[lang] = list(missing_in_lang)
+            if missing_vars:
+                print(f"WARNING: Missing translations after templatization:")
+                for lang, vars_list in missing_vars.items():
+                    print(f"  - {lang.upper()}: {', '.join(vars_list)}")
+
+        print(f"Templatized HTML with {len(trans_vars)} translation variables")
+
+        return {
+            'html_content': templatized_html,
+            'content': {
+                'translations': translations
+            }
+        }
+
     def generate_page(
         self,
         brief: str,
         page_type: str = 'general',
         language: str = 'pt',
-        model_override: str = None
+        model_override: str = None,
+        reference_images: list = None
     ) -> Dict:
         """
         Generate a complete page as a single HTML document with translations
@@ -164,7 +301,7 @@ Return the complete, corrected JSON now:"""
         Raises:
             ValueError: If generation fails or returns invalid data
         """
-        print(f"\n=== Generating Page ===")
+        print(f"\n=== Generating Page (Two-Step) ===")
         print(f"Brief: {brief}")
         print(f"Page Type: {page_type}")
         print(f"Language: {language}")
@@ -172,66 +309,63 @@ Return the complete, corrected JSON now:"""
         # Get site context
         from core.models import SiteSettings
         site_settings = SiteSettings.objects.first()
-        site_name = site_settings.get_site_name(language) if site_settings else 'Website'
-        site_description = site_settings.get_site_description(language) if site_settings else ''
-        project_briefing = site_settings.get_project_briefing(language) if site_settings else ''
+        default_language = site_settings.get_default_language() if site_settings else 'pt'
+        site_name = site_settings.get_site_name(default_language) if site_settings else 'Website'
+        site_description = site_settings.get_site_description(default_language) if site_settings else ''
+        project_briefing = site_settings.get_project_briefing(default_language) if site_settings else ''
         languages = site_settings.get_language_codes() if site_settings else ['pt', 'en']
+        model = model_override or self.model_name
 
-        # Build prompt
-        system_prompt, user_prompt = PromptTemplates.get_page_generation_prompt(
+        # --- Step 1: Generate clean HTML with real text ---
+        print(f"\n--- Step 1: Generate HTML in {default_language.upper()} ---")
+
+        design_guide = site_settings.design_guide if site_settings else ''
+
+        system_prompt, user_prompt = PromptTemplates.get_page_generation_html_prompt(
             site_name=site_name,
             site_description=site_description,
             project_briefing=project_briefing,
-            languages=languages,
+            default_language=default_language,
             brief=brief,
-            page_type=page_type
+            page_type=page_type,
+            has_reference_images=bool(reference_images),
+            design_guide=design_guide
         )
 
-        # Print prompts for debugging
+        # Debug output
         system_token_estimate = len(system_prompt.split()) * 1.3
         user_token_estimate = len(user_prompt.split()) * 1.3
         total_token_estimate = system_token_estimate + user_token_estimate
 
-        print("\n" + "="*80)
-        print(f"SYSTEM PROMPT (≈{int(system_token_estimate)} tokens):")
-        print("="*80)
-        print(system_prompt)
-        print("\n" + "="*80)
-        print(f"USER PROMPT (≈{int(user_token_estimate)} tokens):")
-        print("="*80)
-        print(user_prompt)
-        print("="*80)
-        print(f"TOTAL ESTIMATED TOKENS: ≈{int(total_token_estimate)}")
-        print("="*80 + "\n")
+        print(f"GENERATION PROMPT (≈{int(total_token_estimate)} tokens)")
 
-        messages = [
-            {'role': 'system', 'content': system_prompt},
-            {'role': 'user', 'content': user_prompt}
-        ]
+        if reference_images:
+            # Use vision call with images — combine system + user prompt
+            print(f"Using vision call with {len(reference_images)} reference image(s)")
+            combined_prompt = system_prompt + "\n\n" + user_prompt
+            response = self.llm.get_vision_completion(
+                prompt=combined_prompt,
+                images=reference_images,
+                tool_name=model
+            )
+        else:
+            messages = [
+                {'role': 'system', 'content': system_prompt},
+                {'role': 'user', 'content': user_prompt}
+            ]
+            response = self.llm.get_completion(messages, tool_name=model)
 
-        # Get LLM completion
-        model = model_override or self.model_name
-        response = self.llm.get_completion(messages, tool_name=model)
+        raw_html = self._extract_html_from_response(response.choices[0].message.content)
 
-        # Extract and parse response
-        content = response.choices[0].message.content
-        page_data = self._extract_json_from_response(content)
+        if not raw_html or len(raw_html.strip()) < 50:
+            raise ValueError("Step 1 returned empty or too-short HTML")
 
-        # Validate the response
-        if isinstance(page_data, list):
-            raise ValueError("LLM returned a list instead of a page object")
+        print(f"Step 1 produced {len(raw_html)} chars of HTML")
 
-        if 'html_content' not in page_data:
-            raise ValueError("Response missing 'html_content' field")
+        # --- Step 2: Templatize + Translate ---
+        page_data = self._templatize_and_translate(raw_html, languages, default_language, model)
 
-        if 'content' not in page_data:
-            page_data['content'] = {}
-
-        # Ensure translations structure exists
-        if 'translations' not in page_data.get('content', {}):
-            page_data['content']['translations'] = {}
-
-        print(f"✓ Successfully generated page HTML")
+        print(f"Successfully generated page (two-step)")
         return page_data
 
     def refine_global_section(
@@ -294,6 +428,8 @@ Return the complete, corrected JSON now:"""
             }
             pages_data.append(page_info)
 
+        design_guide = site_settings.design_guide if site_settings else ''
+
         # Build prompt for global section
         system_prompt, user_prompt = PromptTemplates.get_global_section_refinement_prompt(
             site_name=site_name,
@@ -303,7 +439,8 @@ Return the complete, corrected JSON now:"""
             pages=pages_data,
             existing_section=existing_data,
             user_request=refinement_instructions,
-            section_type=section.section_type
+            section_type=section.section_type,
+            design_guide=design_guide
         )
 
         # Print prompts for debugging
@@ -394,7 +531,10 @@ Return the complete, corrected JSON now:"""
         instructions: str,
         section_name: str = None,
         language: str = 'pt',
-        model_override: str = None
+        model_override: str = None,
+        reference_images: list = None,
+        conversation_history: str = None,
+        handle_images: bool = False
     ) -> Dict:
         """
         Refine a page's HTML content based on user instructions.
@@ -415,7 +555,7 @@ Return the complete, corrected JSON now:"""
         Raises:
             ValueError: If refinement fails
         """
-        print(f"\n=== Refining Page (HTML-based) ===")
+        print(f"\n=== Refining Page (Two-Step) ===")
         print(f"Page ID: {page_id}")
         print(f"Instructions: {instructions}")
         print(f"Section: {section_name or 'entire page'}")
@@ -433,88 +573,247 @@ Return the complete, corrected JSON now:"""
 
         # Get site context
         site_settings = SiteSettings.objects.first()
-        site_name = site_settings.get_site_name(language) if site_settings else 'Website'
-        site_description = site_settings.get_site_description(language) if site_settings else ''
-        project_briefing = site_settings.get_project_briefing(language) if site_settings else ''
+        default_language = site_settings.get_default_language() if site_settings else 'pt'
+        site_name = site_settings.get_site_name(default_language) if site_settings else 'Website'
+        site_description = site_settings.get_site_description(default_language) if site_settings else ''
+        project_briefing = site_settings.get_project_briefing(default_language) if site_settings else ''
         languages = site_settings.get_language_codes() if site_settings else ['pt', 'en']
+        model = model_override or self.model_name
 
-        # Build design settings
-        design_settings = {}
-        if site_settings:
-            design_settings = {
-                'primary_color': site_settings.primary_color or 'bg-blue-600',
-                'secondary_color': site_settings.secondary_color or 'bg-gray-600',
-                'accent_color': site_settings.accent_color or 'bg-orange-500',
-                'background_color': site_settings.background_color or 'bg-white',
-                'text_color': site_settings.text_color or 'text-gray-900',
-                'heading_color': site_settings.heading_color or 'text-gray-900',
-                'body_font': site_settings.body_font or 'Inter',
-                'heading_font': site_settings.heading_font or 'Inter',
-                'primary_button': f"{site_settings.primary_button_bg or 'bg-blue-600'} {site_settings.primary_button_text or 'text-white'} px-6 py-3 rounded-md hover:{site_settings.primary_button_hover or 'bg-blue-700'} transition-colors",
-                'secondary_button': f"{site_settings.secondary_button_bg or 'bg-gray-200'} {site_settings.secondary_button_text or 'text-gray-900'} px-6 py-3 rounded-md hover:{site_settings.secondary_button_hover or 'bg-gray-300'} transition-colors",
-                'section_padding': 'py-16 md:py-24',
-                'container_width': site_settings.container_width or 'container mx-auto px-6',
-                'border_radius': site_settings.border_radius_preset or 'rounded-lg',
-            }
+        design_guide = site_settings.design_guide if site_settings else ''
 
         # Prepare the refinement instructions with section targeting
         targeted_instructions = instructions
         if section_name:
             targeted_instructions = f"Focus on the <section data-section=\"{section_name}\"> section. {instructions}"
 
-        # Build prompt
-        system_prompt, user_prompt = PromptTemplates.get_page_refinement_prompt(
-            site_name=site_name,
-            site_description=site_description,
-            project_briefing=project_briefing,
-            languages=languages,
-            page_html=page.html_content or '',
-            page_content=page.content or {},
-            user_request=targeted_instructions,
-            page_title=page_title,
-            page_slug=page_slug,
-            design_settings=design_settings
-        )
+        # --- De-templatize: convert {{ trans.xxx }} back to real text ---
+        current_html = page.html_content or ''
+        current_translations = (page.content or {}).get('translations', {})
 
-        # Print prompts for debugging
+        if current_translations.get(default_language):
+            clean_html = self._detemplatize_html(current_html, current_translations, default_language)
+            print(f"De-templatized HTML using {default_language.upper()} translations")
+        else:
+            clean_html = current_html
+            print(f"No {default_language.upper()} translations found, using HTML as-is")
+
+        # --- Step 1: Refine the clean HTML ---
+        print(f"\n--- Step 1: Refine HTML in {default_language.upper()} ---")
+
+        if conversation_history:
+            system_prompt, user_prompt = PromptTemplates.get_chat_refinement_html_prompt(
+                site_name=site_name,
+                site_description=site_description,
+                project_briefing=project_briefing,
+                default_language=default_language,
+                page_html=clean_html,
+                user_request=targeted_instructions,
+                page_title=page_title,
+                page_slug=page_slug,
+                design_guide=design_guide,
+                has_reference_images=bool(reference_images),
+                conversation_history=conversation_history,
+                handle_images=handle_images,
+            )
+        else:
+            system_prompt, user_prompt = PromptTemplates.get_page_refinement_html_prompt(
+                site_name=site_name,
+                site_description=site_description,
+                project_briefing=project_briefing,
+                default_language=default_language,
+                page_html=clean_html,
+                user_request=targeted_instructions,
+                page_title=page_title,
+                page_slug=page_slug,
+                design_guide=design_guide,
+                has_reference_images=bool(reference_images),
+                handle_images=handle_images,
+            )
+
+        # Debug output
         system_token_estimate = len(system_prompt.split()) * 1.3
         user_token_estimate = len(user_prompt.split()) * 1.3
         total_token_estimate = system_token_estimate + user_token_estimate
 
-        print("\n" + "="*80)
-        print(f"SYSTEM PROMPT (≈{int(system_token_estimate)} tokens):")
-        print("="*80)
-        print(system_prompt)
-        print("\n" + "="*80)
-        print(f"USER PROMPT (≈{int(user_token_estimate)} tokens):")
-        print("="*80)
-        print(user_prompt)
-        print("="*80)
-        print(f"TOTAL ESTIMATED TOKENS: ≈{int(total_token_estimate)}")
-        print("="*80 + "\n")
+        print(f"REFINEMENT PROMPT (≈{int(total_token_estimate)} tokens)")
 
-        messages = [
-            {'role': 'system', 'content': system_prompt},
-            {'role': 'user', 'content': user_prompt}
-        ]
+        if reference_images:
+            # Use vision call with images — combine system + user prompt
+            print(f"Using vision call with {len(reference_images)} reference image(s)")
+            combined_prompt = system_prompt + "\n\n" + user_prompt
+            response = self.llm.get_vision_completion(
+                prompt=combined_prompt,
+                images=reference_images,
+                tool_name=model
+            )
+        else:
+            messages = [
+                {'role': 'system', 'content': system_prompt},
+                {'role': 'user', 'content': user_prompt}
+            ]
+            response = self.llm.get_completion(messages, tool_name=model)
 
-        # Get LLM completion
-        model = model_override or self.model_name
-        response = self.llm.get_completion(messages, tool_name=model)
+        refined_html = self._extract_html_from_response(response.choices[0].message.content)
 
-        # Extract and parse response
-        content = response.choices[0].message.content
-        refined_data = self._extract_json_from_response(content)
+        if not refined_html or len(refined_html.strip()) < 50:
+            raise ValueError("Step 1 returned empty or too-short HTML")
 
-        # Validate
-        if isinstance(refined_data, list):
-            raise ValueError("LLM returned a list instead of a page object")
+        print(f"Step 1 produced {len(refined_html)} chars of refined HTML")
 
-        if 'html_content' not in refined_data:
-            raise ValueError("Refined page missing 'html_content' field")
+        # --- Step 2: Templatize + Translate ---
+        refined_data = self._templatize_and_translate(refined_html, languages, default_language, model)
 
-        if 'content' not in refined_data:
-            refined_data['content'] = {}
-
-        print(f"✓ Successfully refined page")
+        print(f"Successfully refined page (two-step)")
         return refined_data
+
+    def process_page_images(
+        self,
+        page_id: int,
+        image_decisions: List[Dict],
+        languages: List[str] = None,
+    ) -> Dict:
+        """
+        Phase 2: Process image placeholders on a page.
+
+        For each image decision, either pick an existing SiteImage from the
+        media library or generate a new one via the LLM, then replace the
+        placeholder src in the page HTML and remove the data-image-* attributes.
+
+        Args:
+            page_id: ID of the page to process
+            image_decisions: List of dicts, each containing:
+                - image_name: value of data-image-name attribute
+                - action: 'library' or 'generate'
+                - library_image_id: SiteImage id (when action='library')
+                - prompt: generation prompt (when action='generate')
+                - aspect_ratio: e.g. '16:9' (when action='generate', optional)
+            languages: Language codes for SiteImage i18n fields
+
+        Returns:
+            Dict with 'processed', 'failed', and 'report' keys
+        """
+        from core.models import Page, SiteImage, SiteSettings
+        from .utils.llm_config import optimize_generated_image
+        from django.core.files.base import ContentFile
+        from django.utils.text import slugify
+
+        print(f"\n=== Processing Page Images ===")
+        print(f"Page ID: {page_id}")
+        print(f"Decisions: {len(image_decisions)}")
+
+        try:
+            page = Page.objects.get(id=page_id)
+        except Page.DoesNotExist:
+            raise ValueError(f"Page with ID {page_id} not found")
+
+        if not languages:
+            site_settings = SiteSettings.objects.first()
+            languages = site_settings.get_language_codes() if site_settings else ['pt', 'en']
+
+        html = page.html_content or ''
+        processed = []
+        failed = []
+
+        for decision in image_decisions:
+            image_name = decision.get('image_name', '')
+            action = decision.get('action', '')
+
+            if not image_name or not action:
+                failed.append({'image_name': image_name, 'error': 'Missing image_name or action'})
+                continue
+
+            try:
+                new_url = None
+
+                if action == 'library':
+                    library_image_id = decision.get('library_image_id')
+                    if not library_image_id:
+                        failed.append({'image_name': image_name, 'error': 'Missing library_image_id'})
+                        continue
+                    site_image = SiteImage.objects.get(id=library_image_id)
+                    new_url = site_image.image.url
+
+                elif action == 'generate':
+                    prompt = decision.get('prompt', '')
+                    aspect_ratio = decision.get('aspect_ratio', '16:9')
+                    if not prompt:
+                        failed.append({'image_name': image_name, 'error': 'Missing prompt'})
+                        continue
+
+                    print(f"Generating image for '{image_name}': {prompt[:80]}...")
+                    result = self.llm.generate_image(prompt=prompt, aspect_ratio=aspect_ratio)
+
+                    if not result.success:
+                        failed.append({'image_name': image_name, 'error': result.error or 'Generation failed'})
+                        continue
+
+                    # Optimize the generated image
+                    optimized_bytes = optimize_generated_image(result.image_bytes, max_width=1200, quality=85)
+
+                    # Save as SiteImage
+                    file_slug = slugify(image_name) or 'ai-image'
+                    # Ensure unique key
+                    base_key = f"ai-{file_slug}"
+                    key = base_key
+                    counter = 1
+                    while SiteImage.objects.filter(key=key).exists():
+                        key = f"{base_key}-{counter}"
+                        counter += 1
+
+                    title_text = image_name.replace('-', ' ').replace('_', ' ').title()
+                    site_image = SiteImage(
+                        key=key,
+                        title_i18n={lang: title_text for lang in languages},
+                        alt_text_i18n={lang: prompt[:200] for lang in languages},
+                        category='general',
+                        tags='ai-generated',
+                        is_active=True,
+                    )
+                    filename = f"{file_slug}.jpg"
+                    site_image.image.save(filename, ContentFile(optimized_bytes), save=True)
+                    new_url = site_image.image.url
+                    print(f"Saved generated image: {key} -> {new_url}")
+
+                else:
+                    failed.append({'image_name': image_name, 'error': f'Unknown action: {action}'})
+                    continue
+
+                # Replace in HTML: find img with data-image-name="..." and update src
+                # Use regex to match the img tag with this data-image-name
+                pattern = re.compile(
+                    r'(<img\b[^>]*?\bdata-image-name="' + re.escape(image_name) + r'"[^>]*?)(/?>)',
+                    re.DOTALL
+                )
+                match = pattern.search(html)
+                if match:
+                    tag_content = match.group(1)
+                    tag_close = match.group(2)
+
+                    # Replace src attribute
+                    tag_content = re.sub(r'\bsrc="[^"]*"', f'src="{new_url}"', tag_content)
+
+                    # Remove data-image-prompt and data-image-name attributes
+                    tag_content = re.sub(r'\s*data-image-prompt="[^"]*"', '', tag_content)
+                    tag_content = re.sub(r'\s*data-image-name="[^"]*"', '', tag_content)
+
+                    html = html[:match.start()] + tag_content + tag_close + html[match.end():]
+                    processed.append({'image_name': image_name, 'new_url': new_url, 'action': action})
+                else:
+                    failed.append({'image_name': image_name, 'error': 'Image tag not found in HTML'})
+
+            except SiteImage.DoesNotExist:
+                failed.append({'image_name': image_name, 'error': 'Library image not found'})
+            except Exception as e:
+                failed.append({'image_name': image_name, 'error': str(e)})
+
+        # Save updated HTML
+        page.html_content = html
+        page.save()
+
+        print(f"Processed {len(processed)} images, {len(failed)} failed")
+        return {
+            'processed': processed,
+            'failed': failed,
+            'report': f"Processed {len(processed)} image(s), {len(failed)} failed"
+        }
