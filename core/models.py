@@ -80,6 +80,15 @@ class SiteSettings(models.Model):
         help_text='{"pt": "Morada PT", "en": "Address EN"}'
     )
 
+    # Site Domain (used for GCS folder organization)
+    domain = models.CharField(
+        "Site Domain",
+        max_length=255,
+        blank=True,
+        default='',
+        help_text="e.g. get-algarve-com — used as the storage folder name in Google Cloud Storage"
+    )
+
     logo = models.ImageField("Logo (Light Backgrounds)", upload_to='site_images/', blank=True, null=True, help_text="Main logo for light backgrounds")
     logo_dark_bg = models.ImageField("Logo (Dark Backgrounds)", upload_to='site_images/', blank=True, null=True, help_text="Alternative logo for dark backgrounds (typically white/light version)")
 
@@ -253,6 +262,14 @@ class SiteSettings(models.Model):
         ('2', '2px'),
         ('4', '4px'),
     ], help_text="Border width for buttons")
+
+    # Design Guide (freeform markdown for AI context)
+    design_guide = models.TextField(
+        'Design Guide',
+        blank=True,
+        default='',
+        help_text='Markdown document describing UI patterns, component styles, and design rules for AI generation.'
+    )
 
     # Language Settings
     default_language = models.CharField(

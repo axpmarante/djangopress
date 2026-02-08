@@ -691,6 +691,191 @@ def list_refinement_sessions_api(request, page_id):
 
 @staff_member_required
 @require_http_methods(["POST"])
+def generate_design_guide_ai_api(request):
+    """
+    Generate or update a design guide using AI.
+
+    Accepts multipart (when reference images are included) or JSON.
+    Fields:
+        - page_ids: list of page IDs whose HTML to analyze for patterns
+        - reference_images: uploaded design reference images
+        - model: LLM model to use
+        - existing_guide: current design_guide text (for update mode)
+
+    Returns: { "success": true, "design_guide": "..." }
+    """
+    try:
+        from core.models import SiteSettings, Page
+        from .utils.llm_config import LLMBase, MODEL_CONFIG, ModelProvider
+
+        # Parse input
+        if request.content_type and 'multipart' in request.content_type:
+            page_ids_raw = request.POST.getlist('page_ids')
+            page_ids = [int(pid) for pid in page_ids_raw if pid]
+            model = request.POST.get('model', 'gemini-pro')
+            existing_guide = request.POST.get('existing_guide', '')
+            reference_images = []
+            for f in request.FILES.getlist('reference_images'):
+                reference_images.append({'bytes': f.read(), 'mime_type': f.content_type})
+        else:
+            data = json.loads(request.body)
+            page_ids = data.get('page_ids', [])
+            model = data.get('model', 'gemini-pro')
+            existing_guide = data.get('existing_guide', '')
+            reference_images = []
+
+        # Load site settings
+        site_settings = SiteSettings.objects.first()
+        if not site_settings:
+            return JsonResponse({
+                'success': False,
+                'error': 'Site settings not found'
+            }, status=400)
+
+        default_language = site_settings.get_default_language()
+        site_name = site_settings.get_site_name(default_language)
+        project_briefing = site_settings.get_project_briefing(default_language)
+
+        # Build current settings summary
+        settings_summary = f"""## Current Design System Values
+
+### Colors
+- Primary: `{site_settings.primary_color}` (hover: `{site_settings.primary_color_hover}`)
+- Secondary: `{site_settings.secondary_color}`
+- Accent: `{site_settings.accent_color}`
+- Background: `{site_settings.background_color}`
+- Text: `{site_settings.text_color}`
+- Headings: `{site_settings.heading_color}`
+
+### Typography
+- Body font: {site_settings.body_font}
+- Heading font: {site_settings.heading_font}
+- H1: {site_settings.h1_font} / {site_settings.h1_size}
+- H2: {site_settings.h2_font} / {site_settings.h2_size}
+- H3: {site_settings.h3_font} / {site_settings.h3_size}
+- H4: {site_settings.h4_font} / {site_settings.h4_size}
+
+### Layout
+- Container width: max-w-{site_settings.container_width}
+- Border radius: rounded-{site_settings.border_radius_preset}
+- Spacing scale: {site_settings.spacing_scale}
+- Shadow preset: shadow-{site_settings.shadow_preset}
+
+### Buttons
+- Style: {site_settings.button_style}, Size: {site_settings.button_size}
+- Primary: bg `{site_settings.primary_button_bg}`, text `{site_settings.primary_button_text}`, hover `{site_settings.primary_button_hover}`
+- Secondary: bg `{site_settings.secondary_button_bg}`, text `{site_settings.secondary_button_text}`, hover `{site_settings.secondary_button_hover}`
+- Border width: {site_settings.button_border_width}px"""
+
+        # Collect page HTML samples
+        page_samples = ""
+        if page_ids:
+            pages = Page.objects.filter(id__in=page_ids, is_active=True).exclude(html_content='')
+            for page in pages:
+                title = page.default_title or page.default_slug
+                html = page.html_content or ''
+                # Truncate very long pages to keep prompt reasonable
+                if len(html) > 8000:
+                    html = html[:8000] + "\n<!-- ... truncated ... -->"
+                page_samples += f"\n### Page: {title}\n```html\n{html}\n```\n"
+
+        # Build the prompt
+        system_prompt = """You are a senior UI/UX designer and design systems expert. Your job is to analyze a website's design settings, existing pages, and optional reference images to produce a comprehensive design guide in Markdown.
+
+The design guide will be injected into AI prompts that generate and refine web pages using Tailwind CSS. It must be practical, specific, and focused on producing consistent UI.
+
+## What to Include
+
+1. **Color Usage** — When to use each color (primary for CTAs, secondary for borders, accent for highlights, etc.). Include specific Tailwind style attributes using the hex values with arbitrary value syntax, e.g. `bg-[#1e3a8a]`, `text-[#f59e0b]`.
+
+2. **Typography Rules** — How to use each heading level, font pairing rules, text sizing hierarchy.
+
+3. **Component Patterns** — Describe how to build common components:
+   - Cards (padding, shadow, border radius, image treatment)
+   - Buttons (primary vs secondary, sizing, hover states)
+   - Hero sections (layout, overlay patterns, CTA placement)
+   - Content sections (alternating backgrounds, grid patterns)
+   - Lists and grids (columns at different breakpoints)
+   - Forms (input styling, labels, validation)
+
+4. **Layout Conventions** — Section padding, container width, spacing between elements, responsive breakpoints.
+
+5. **Visual Rules** — Image treatment, icon style, divider patterns, background patterns.
+
+6. **Do's and Don'ts** — Specific things to avoid and things to always do.
+
+## Format
+
+Return ONLY the Markdown document, no code blocks wrapping it, no explanations before or after.
+Keep it practical — every rule should map to specific Tailwind classes or patterns.
+Aim for 80-150 lines of concise, actionable markdown."""
+
+        user_parts = [f"# Site: {site_name}\n"]
+
+        if project_briefing:
+            user_parts.append(f"## Project Briefing\n{project_briefing}\n")
+
+        user_parts.append(settings_summary)
+
+        if page_samples:
+            user_parts.append(f"\n## Existing Pages (analyze these for patterns)\n{page_samples}")
+
+        if existing_guide:
+            user_parts.append(f"\n## Current Design Guide (update and improve this)\n{existing_guide}")
+        else:
+            user_parts.append("\n## Task\nGenerate a new design guide from scratch based on the settings, pages, and reference images above.")
+
+        if reference_images:
+            user_parts.append(f"\n## Reference Images\n{len(reference_images)} design reference image(s) are attached. Analyze their visual style, layout patterns, color usage, typography, and component design. Incorporate these patterns into the design guide.")
+
+        user_prompt = "\n".join(user_parts)
+
+        # Call LLM
+        llm = LLMBase()
+
+        if reference_images:
+            # Vision call with images
+            combined_prompt = system_prompt + "\n\n" + user_prompt
+            response = llm.get_vision_completion(
+                prompt=combined_prompt,
+                images=reference_images,
+                tool_name=model
+            )
+        else:
+            messages = [
+                {'role': 'system', 'content': system_prompt},
+                {'role': 'user', 'content': user_prompt}
+            ]
+            response = llm.get_completion(messages, tool_name=model)
+
+        design_guide = response.choices[0].message.content
+
+        # Strip markdown code block wrapping if present
+        if design_guide.startswith('```'):
+            lines = design_guide.split('\n')
+            if lines[0].startswith('```'):
+                lines = lines[1:]
+            if lines and lines[-1].strip() == '```':
+                lines = lines[:-1]
+            design_guide = '\n'.join(lines)
+
+        return JsonResponse({
+            'success': True,
+            'design_guide': design_guide.strip(),
+        })
+
+    except Exception as e:
+        print(f"Error in generate_design_guide_ai_api: {e}")
+        import traceback
+        traceback.print_exc()
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+
+
+@staff_member_required
+@require_http_methods(["POST"])
 def process_page_images_api(request):
     """
     Process image placeholders on a page.

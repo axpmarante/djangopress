@@ -19,11 +19,13 @@ try:
 except (ImportError, Exception) as e:
     _env_loaded = False
 
+
 def get_env(key):
     """Get environment variable, preferring django-environ if available"""
     if _env_loaded:
         return _env(key, default=None)
     return os.getenv(key)
+
 
 # Import dependencies with graceful fallback
 try:
@@ -41,10 +43,12 @@ except ImportError:
     ANTHROPIC_AVAILABLE = False
 
 try:
-    import google.generativeai as genai
+    from google import genai
+    from google.genai import types
     GOOGLE_AVAILABLE = True
 except ImportError:
     genai = None
+    types = None
     GOOGLE_AVAILABLE = False
 
 
@@ -70,31 +74,34 @@ class ModelConfig:
 
     def __post_init__(self):
         """Set default provider-specific parameters if not provided"""
-        # Set provider-specific defaults based on the provider
         if self.provider == ModelProvider.GOOGLE:
-            # For Google, ensure we use max_output_tokens instead of max_tokens
             if self.max_tokens is not None and self.max_output_tokens is None:
                 self.max_output_tokens = self.max_tokens
                 self.max_tokens = None
-
-            # Set Gemini-specific defaults if not provided
             if "generation_config" not in self.provider_params:
                 self.provider_params["generation_config"] = {
                     "top_p": 0.95,
                     "top_k": 40
                 }
-
         elif self.provider == ModelProvider.ANTHROPIC:
-            # Anthropic uses max_tokens, ensure it's set
+            if self.max_tokens is None and self.max_output_tokens is not None:
+                self.max_tokens = self.max_output_tokens
+                self.max_output_tokens = None
+        elif self.provider == ModelProvider.OPENAI:
             if self.max_tokens is None and self.max_output_tokens is not None:
                 self.max_tokens = self.max_output_tokens
                 self.max_output_tokens = None
 
-        elif self.provider == ModelProvider.OPENAI:
-            # OpenAI uses max_tokens (or max_completion_tokens in newer versions)
-            if self.max_tokens is None and self.max_output_tokens is not None:
-                self.max_tokens = self.max_output_tokens
-                self.max_output_tokens = None
+
+@dataclass
+class GeneratedImageResponse:
+    """Result of an image generation request."""
+    success: bool
+    image_bytes: Optional[bytes] = None
+    mime_type: str = "image/png"
+    error: Optional[str] = None
+    prompt_used: str = ""
+    thinking_text: Optional[str] = None
 
 
 # Model configurations for different providers
@@ -102,29 +109,29 @@ MODEL_CONFIG = {
     # ===== OPENAI MODELS =====
     'gpt-5': ModelConfig(
         provider=ModelProvider.OPENAI,
-        model_name="gpt-5-2025-08-07",
-        max_tokens=8192,
-        temperature=1.0  # GPT-5 only supports temperature=1
+        model_name="gpt-5.2",
+        max_tokens=15000,
+        temperature=1.0
     ),
     'gpt-5-mini': ModelConfig(
         provider=ModelProvider.OPENAI,
         model_name="gpt-5-mini-2025-08-07",
-        max_tokens=8192,
-        temperature=1.0  # GPT-5 only supports temperature=1
+        max_tokens=15000,
+        temperature=1.0
     ),
 
     # ===== ANTHROPIC MODELS =====
     'claude': ModelConfig(
         provider=ModelProvider.ANTHROPIC,
-        model_name="claude-sonnet-4-5-20250929",  # Latest Sonnet 4.5
-        max_tokens=8192,
+        model_name="claude-sonnet-4-5-20250929",
+        max_tokens=15000,
         temperature=0.3
     ),
 
     # ===== GOOGLE MODELS =====
     'gemini-pro': ModelConfig(
         provider=ModelProvider.GOOGLE,
-        model_name="gemini-2.5-pro",
+        model_name="gemini-3-pro-preview",
         max_output_tokens=15000,
         temperature=0.3,
         provider_params={
@@ -136,7 +143,7 @@ MODEL_CONFIG = {
     ),
     'gemini-flash': ModelConfig(
         provider=ModelProvider.GOOGLE,
-        model_name="gemini-2.5-flash",
+        model_name="gemini-3-flash-preview",
         max_output_tokens=15000,
         temperature=0.3,
         provider_params={
@@ -149,7 +156,7 @@ MODEL_CONFIG = {
     'gemini-lite': ModelConfig(
         provider=ModelProvider.GOOGLE,
         model_name="gemini-2.5-flash-lite",
-        max_output_tokens=8192,
+        max_output_tokens=15000,
         temperature=0.3,
         provider_params={
             "generation_config": {
@@ -159,7 +166,6 @@ MODEL_CONFIG = {
         }
     )
 }
-
 
 
 class StandardizedLLMResponse:
@@ -186,24 +192,20 @@ class LLMBase:
         return cls._instance
 
     def __init__(self):
-        # Initialize OpenAI client if not already done
         if ModelProvider.OPENAI not in self._clients and OPENAI_AVAILABLE:
             openai_key = get_env('OPENAI_API_KEY')
             if openai_key:
                 self._clients[ModelProvider.OPENAI] = OpenAI(api_key=openai_key)
 
-        # Initialize Anthropic client if not already done
         if ModelProvider.ANTHROPIC not in self._clients and ANTHROPIC_AVAILABLE:
             anthropic_key = get_env('ANTHROPIC_API_KEY')
             if anthropic_key:
                 self._clients[ModelProvider.ANTHROPIC] = Anthropic(api_key=anthropic_key)
 
-        # Initialize Google client if not already done
         if ModelProvider.GOOGLE not in self._clients and GOOGLE_AVAILABLE:
             google_key = get_env('GEMINI_API_KEY')
             if google_key:
-                genai.configure(api_key=google_key)
-                self._clients[ModelProvider.GOOGLE] = genai
+                self._clients[ModelProvider.GOOGLE] = genai.Client(api_key=google_key)
 
     def _format_messages_for_claude(self, messages: List[Dict[str, str]]) -> List[Dict[str, str]]:
         """Convert chat messages to Claude's format (now uses messages API)"""
@@ -228,47 +230,38 @@ class LLMBase:
         gemini_messages = []
 
         try:
-            # Extract system message if present
             system_content = ""
             for msg in messages:
                 if msg.get('role') == 'system':
                     system_content += msg.get('content', '') + "\n\n"
 
-            # Format the rest of the messages
             for msg in messages:
                 role = msg.get('role', '')
                 content = msg.get('content', '')
 
-                # Ensure content is a string
                 if not isinstance(content, str):
                     content = str(content)
 
                 if role == 'system':
-                    # Skip system messages as they're handled separately
                     continue
                 elif role == 'user':
                     gemini_messages.append({"role": "user", "parts": [content]})
                 elif role == 'assistant':
                     gemini_messages.append({"role": "model", "parts": [content]})
                 else:
-                    # Default to user for unknown roles
                     print(f"Warning: Unknown message role '{role}', treating as user message")
                     gemini_messages.append({"role": "user", "parts": [content]})
 
-            # If there was a system message, prepend it to the first user message
             if system_content and gemini_messages and gemini_messages[0]["role"] == "user":
                 gemini_messages[0]["parts"][0] = f"{system_content}\n\n{gemini_messages[0]['parts'][0]}"
 
-            # If no messages were created, create a default one with just the system content
             if not gemini_messages:
                 gemini_messages.append({"role": "user", "parts": [system_content or "Hello"]})
 
             return gemini_messages
         except Exception as e:
             print(f"Error formatting messages for Gemini: {str(e)}")
-            # Return a simple default message if formatting fails
             return [{"role": "user", "parts": ["Hello, can you help me?"]}]
-
 
     def get_completion(
             self,
@@ -282,16 +275,14 @@ class LLMBase:
 
         config = MODEL_CONFIG.get(tool_name, ModelConfig())
 
-        # Print API call details
-        print("\n" + "="*80)
+        print("\n" + "=" * 80)
         print("🤖 LLM API CALL STARTED")
-        print("="*80)
+        print("=" * 80)
         print(f"📍 Provider: {config.provider.value.upper()}")
         print(f"🔧 Tool Name: {tool_name or 'default'}")
         print(f"🧠 Model: {config.model_name}")
         print(f"🌡️  Temperature: {config.temperature}")
 
-        # Print correct token parameter based on provider
         if config.provider == ModelProvider.GOOGLE:
             print(f"📊 Max Output Tokens: {config.max_output_tokens}")
         else:
@@ -305,8 +296,7 @@ class LLMBase:
         for i, msg in enumerate(messages, 1):
             role = msg['role'].upper()
             content = msg['content']
-            # Show full content for debugging (can be configured)
-            SHOW_FULL_CONTENT = True  # Set to False to truncate
+            SHOW_FULL_CONTENT = True
             if SHOW_FULL_CONTENT:
                 content_preview = content
             else:
@@ -316,20 +306,18 @@ class LLMBase:
         print("-" * 80)
 
         try:
-            # Check if the requested provider is available
             if config.provider == ModelProvider.OPENAI and not OPENAI_AVAILABLE:
                 raise ImportError("OpenAI library not installed. Install with: pip install openai")
             elif config.provider == ModelProvider.ANTHROPIC and not ANTHROPIC_AVAILABLE:
                 raise ImportError("Anthropic library not installed. Install with: pip install anthropic")
             elif config.provider == ModelProvider.GOOGLE and not GOOGLE_AVAILABLE:
-                raise ImportError("Google Generative AI library not installed. Install with: pip install google-generativeai")
-            
-            # Check if we have the client for the requested provider
+                raise ImportError(
+                    "Google GenAI library not installed. Install with: pip install google-genai")
+
             if config.provider not in self._clients:
                 raise ValueError(f"Provider {config.provider} not initialized. Check API key.")
 
             if config.provider == ModelProvider.OPENAI:
-                # OpenAI implementation
                 client = self._clients[ModelProvider.OPENAI]
 
                 params = {
@@ -339,10 +327,8 @@ class LLMBase:
                     **kwargs
                 }
 
-                # Add max_tokens if specified (use max_completion_tokens for newer models)
                 if config.max_tokens:
-                    # Check if this is a newer model that requires max_completion_tokens
-                    if "gpt-5" in config.model_name.lower():
+                    if any(x in config.model_name.lower() for x in ["gpt-5", "o1", "o3", "o4"]):
                         params["max_completion_tokens"] = config.max_tokens
                     else:
                         params["max_tokens"] = config.max_tokens
@@ -350,14 +336,12 @@ class LLMBase:
                 if config.response_format:
                     params["response_format"] = config.response_format
 
-                # Add any provider-specific parameters
                 if config.provider_params:
                     params.update(config.provider_params)
 
                 print("\n⏳ Calling OpenAI API...")
                 response = client.chat.completions.create(**params)
 
-                # Extract and format response
                 response_content = response.choices[0].message.content
                 usage = {
                     "total_tokens": response.usage.total_tokens,
@@ -365,24 +349,23 @@ class LLMBase:
                     "prompt_tokens": response.usage.prompt_tokens
                 }
 
-                # Print success info
                 elapsed_time = time.time() - start_time
-                print("\n" + "="*80)
+                print("\n" + "=" * 80)
                 print("✅ LLM API CALL SUCCESSFUL")
-                print("="*80)
+                print("=" * 80)
                 print(f"⏱️  Time Elapsed: {elapsed_time:.2f}s")
                 print(f"📊 Token Usage:")
                 print(f"   - Prompt: {usage['prompt_tokens']}")
                 print(f"   - Completion: {usage['completion_tokens']}")
                 print(f"   - Total: {usage['total_tokens']}")
                 print(f"📝 Response Length: {len(response_content)} characters")
-                # Show full response
-                SHOW_FULL_RESPONSE = True  # Set to False to truncate
+                SHOW_FULL_RESPONSE = True
                 if SHOW_FULL_RESPONSE:
                     print(f"📄 Full Response:\n{response_content}")
                 else:
-                    print(f"📄 Response Preview: {response_content[:150]}..." if len(response_content) > 150 else f"📄 Response: {response_content}")
-                print("="*80 + "\n")
+                    print(f"📄 Response Preview: {response_content[:150]}..." if len(
+                        response_content) > 150 else f"📄 Response: {response_content}")
+                print("=" * 80 + "\n")
 
                 return StandardizedLLMResponse(
                     content=response_content,
@@ -390,7 +373,6 @@ class LLMBase:
                 )
 
             elif config.provider == ModelProvider.ANTHROPIC:
-                # Anthropic implementation
                 client = self._clients[ModelProvider.ANTHROPIC]
 
                 formatted_messages, system_message = self._format_messages_for_claude(messages)
@@ -402,18 +384,15 @@ class LLMBase:
                     "messages": formatted_messages
                 }
 
-                # Add system message if present
                 if system_message:
                     params["system"] = system_message
 
-                # Add any provider-specific parameters
                 if config.provider_params:
                     params.update(config.provider_params)
 
                 print("\n⏳ Calling Anthropic (Claude) API...")
                 response = client.messages.create(**params)
 
-                # Extract and format response
                 response_content = ""
                 if hasattr(response, 'content') and response.content:
                     for content_block in response.content:
@@ -426,24 +405,23 @@ class LLMBase:
                     "prompt_tokens": response.usage.input_tokens
                 }
 
-                # Print success info
                 elapsed_time = time.time() - start_time
-                print("\n" + "="*80)
+                print("\n" + "=" * 80)
                 print("✅ LLM API CALL SUCCESSFUL")
-                print("="*80)
+                print("=" * 80)
                 print(f"⏱️  Time Elapsed: {elapsed_time:.2f}s")
                 print(f"📊 Token Usage:")
                 print(f"   - Prompt: {usage['prompt_tokens']}")
                 print(f"   - Completion: {usage['completion_tokens']}")
                 print(f"   - Total: {usage['total_tokens']}")
                 print(f"📝 Response Length: {len(response_content)} characters")
-                # Show full response
-                SHOW_FULL_RESPONSE = True  # Set to False to truncate
+                SHOW_FULL_RESPONSE = True
                 if SHOW_FULL_RESPONSE:
                     print(f"📄 Full Response:\n{response_content}")
                 else:
-                    print(f"📄 Response Preview: {response_content[:150]}..." if len(response_content) > 150 else f"📄 Response: {response_content}")
-                print("="*80 + "\n")
+                    print(f"📄 Response Preview: {response_content[:150]}..." if len(
+                        response_content) > 150 else f"📄 Response: {response_content}")
+                print("=" * 80 + "\n")
 
                 return StandardizedLLMResponse(
                     content=response_content,
@@ -451,53 +429,55 @@ class LLMBase:
                 )
 
             elif config.provider == ModelProvider.GOOGLE:
-                # Google Gemini implementation
+                # Google Gemini implementation (using google-genai SDK)
                 client = self._clients[ModelProvider.GOOGLE]
 
-                # Convert message format for Gemini
                 gemini_messages = self._format_messages_for_gemini(messages)
 
+                # Build contents for the new SDK format
+                contents = []
+                for msg in gemini_messages:
+                    role = msg.get("role", "user")
+                    parts = msg.get("parts", [])
+                    content_text = parts[0] if parts else ""
+                    contents.append(
+                        types.Content(
+                            role=role,
+                            parts=[types.Part.from_text(text=content_text)]
+                        )
+                    )
+
                 # Configure generation parameters
-                generation_config = {
+                gen_config_params = {
                     "temperature": config.temperature,
                     "top_p": 0.95,
                     "top_k": 40,
                 }
 
-                # Add max_output_tokens if specified
                 if config.max_output_tokens:
-                    generation_config["max_output_tokens"] = config.max_output_tokens
+                    gen_config_params["max_output_tokens"] = config.max_output_tokens
 
-                # Update with any provider-specific parameters
                 if config.provider_params and 'generation_config' in config.provider_params:
-                    generation_config.update(config.provider_params['generation_config'])
+                    gen_config_params.update(config.provider_params['generation_config'])
 
-                # Get the model
-                model = client.GenerativeModel(
-                    model_name=config.model_name,
-                    generation_config=generation_config
-                )
+                generation_config = types.GenerateContentConfig(**gen_config_params)
 
                 try:
-                    print("\n⏳ Calling Google Gemini API...")
+                    print("\n⏳ Calling Google Gemini API (google-genai SDK)...")
+                    print(f"   Model: {config.model_name}")
+                    print(f"   Contents: {len(contents)} message(s)")
 
-                    # If it's a chat, use the chat method
-                    if len(gemini_messages) > 1:
-                        print(f"   Using chat mode with {len(gemini_messages)} messages")
-                        chat = model.start_chat(history=gemini_messages[:-1])
-                        response = chat.send_message(gemini_messages[-1]["parts"][0])
-                    else:
-                        print(f"   Using single message mode")
-                        # For a single message, use the generate_content method
-                        response = model.generate_content(gemini_messages[0]["parts"][0])
+                    response = client.models.generate_content(
+                        model=config.model_name,
+                        contents=contents,
+                        config=generation_config
+                    )
 
-                    # Extract response content
                     response_content = ""
                     try:
                         if hasattr(response, 'text') and response.text:
                             response_content = response.text
                         elif hasattr(response, 'candidates') and response.candidates:
-                            # Try to extract text from candidates
                             candidate = response.candidates[0]
                             if hasattr(candidate, 'content') and hasattr(candidate.content, 'parts'):
                                 for part in candidate.content.parts:
@@ -509,21 +489,20 @@ class LLMBase:
                         response_content = "I apologize, but I'm having trouble processing your request."
 
                 except Exception as gemini_error:
-                    print("\n" + "="*80)
+                    print("\n" + "=" * 80)
                     print("❌ GEMINI API ERROR")
-                    print("="*80)
+                    print("=" * 80)
                     print(f"⚠️  Error Type: {type(gemini_error).__name__}")
                     print(f"⚠️  Error Message: {str(gemini_error)}")
                     print("🔄 Attempting fallback to OpenAI...")
-                    print("="*80)
+                    print("=" * 80)
 
-                    # Fall back to OpenAI if Gemini fails
                     if ModelProvider.OPENAI in self._clients:
                         fallback_client = self._clients[ModelProvider.OPENAI]
                         fallback_params = {
-                            "model": "gpt-4o-mini",  # Use a reliable model as fallback
-                            "temperature": config.temperature,
-                            "max_tokens": 10000,
+                            "model": "gpt-5-mini-2025-08-07",
+                            "temperature": 1.0,
+                            "max_completion_tokens": 10000,
                             "messages": messages
                         }
 
@@ -533,14 +512,11 @@ class LLMBase:
                         response_content = fallback_response.choices[0].message.content
                         print("✅ Successfully used OpenAI fallback.")
                     else:
-                        # If OpenAI is not available, re-raise the original error
                         print("❌ OpenAI fallback not available. Re-raising error.")
                         raise gemini_error
 
-                # Gemini doesn't provide token usage directly in the same way as OpenAI
-                # Approximate based on character count
                 char_count = sum(len(msg.get('content', '')) for msg in messages) + len(response_content)
-                estimated_tokens = char_count // 4  # Rough estimate
+                estimated_tokens = char_count // 4
 
                 usage = {
                     "total_tokens": estimated_tokens,
@@ -548,24 +524,23 @@ class LLMBase:
                     "prompt_tokens": estimated_tokens - (len(response_content) // 4)
                 }
 
-                # Print success info
                 elapsed_time = time.time() - start_time
-                print("\n" + "="*80)
+                print("\n" + "=" * 80)
                 print("✅ LLM API CALL SUCCESSFUL")
-                print("="*80)
+                print("=" * 80)
                 print(f"⏱️  Time Elapsed: {elapsed_time:.2f}s")
                 print(f"📊 Token Usage (estimated):")
                 print(f"   - Prompt: ~{usage['prompt_tokens']}")
                 print(f"   - Completion: ~{usage['completion_tokens']}")
                 print(f"   - Total: ~{usage['total_tokens']}")
                 print(f"📝 Response Length: {len(response_content)} characters")
-                # Show full response
-                SHOW_FULL_RESPONSE = True  # Set to False to truncate
+                SHOW_FULL_RESPONSE = True
                 if SHOW_FULL_RESPONSE:
                     print(f"📄 Full Response:\n{response_content}")
                 else:
-                    print(f"📄 Response Preview: {response_content[:150]}..." if len(response_content) > 150 else f"📄 Response: {response_content}")
-                print("="*80 + "\n")
+                    print(f"📄 Response Preview: {response_content[:150]}..." if len(
+                        response_content) > 150 else f"📄 Response: {response_content}")
+                print("=" * 80 + "\n")
 
                 return StandardizedLLMResponse(
                     content=response_content,
@@ -577,32 +552,518 @@ class LLMBase:
 
         except Exception as e:
             elapsed_time = time.time() - start_time
-            print("\n" + "="*80)
+            print("\n" + "=" * 80)
             print("❌ LLM API CALL FAILED")
-            print("="*80)
+            print("=" * 80)
             print(f"📍 Provider: {config.provider.value.upper()}")
             print(f"🧠 Model: {config.model_name}")
             print(f"⏱️  Time Elapsed: {elapsed_time:.2f}s")
             print(f"❗ Error Type: {type(e).__name__}")
             print(f"❗ Error Message: {str(e)}")
-            print("="*80 + "\n")
+            print("=" * 80 + "\n")
             raise
+
+    def get_vision_completion(
+            self,
+            prompt: str,
+            file_path: str = None,
+            file_bytes: bytes = None,
+            file_mime_type: str = None,
+            images: List[Dict[str, Any]] = None,
+            tool_name: str = 'gemini-pro',
+            **kwargs
+    ) -> StandardizedLLMResponse:
+        """
+        Get vision completion from LLM with file (PDF/image) input.
+
+        Uses Gemini's native PDF/image support - no conversion needed.
+        Falls back to GPT-5.2 if Gemini fails.
+
+        Args:
+            prompt: The text prompt to send with the file
+            file_path: Path to the file (PDF or image)
+            file_bytes: Raw bytes of the file (alternative to file_path)
+            file_mime_type: MIME type of the file (required if using file_bytes)
+            images: List of images, each with 'bytes' and 'mime_type' keys (for multiple images)
+            tool_name: The model configuration to use
+        """
+        import time
+        import mimetypes
+        start_time = time.time()
+
+        config = MODEL_CONFIG.get(tool_name, MODEL_CONFIG['gemini-pro'])
+
+        print("\n" + "=" * 80)
+        print("🖼️ VISION LLM API CALL STARTED")
+        print("=" * 80)
+        print(f"📍 Provider: {config.provider.value.upper()}")
+        print(f"🔧 Tool Name: {tool_name}")
+        print(f"🧠 Model: {config.model_name}")
+
+        try:
+            if images:
+                images_data = images
+                total_size = sum(len(img['bytes']) for img in images)
+                print(f"📄 Files: {len(images)} images")
+                print(f"📏 Total Size: {total_size / 1024:.2f} KB")
+            elif file_path:
+                with open(file_path, 'rb') as f:
+                    file_content = f.read()
+                mime_type = mimetypes.guess_type(file_path)[0] or 'application/octet-stream'
+                print(f"📄 File: {file_path}")
+                images_data = [{'bytes': file_content, 'mime_type': mime_type}]
+                print(f"📋 MIME Type: {mime_type}")
+                print(f"📏 File Size: {len(file_content) / 1024:.2f} KB")
+            elif file_bytes and file_mime_type:
+                file_content = file_bytes
+                mime_type = file_mime_type
+                print(f"📄 File: <bytes> ({len(file_bytes)} bytes)")
+                images_data = [{'bytes': file_content, 'mime_type': mime_type}]
+                print(f"📋 MIME Type: {mime_type}")
+                print(f"📏 File Size: {len(file_content) / 1024:.2f} KB")
+            else:
+                raise ValueError("Either file_path, (file_bytes and file_mime_type), or images must be provided")
+
+            print(f"💬 Prompt length: {len(prompt)} chars")
+
+            if config.provider == ModelProvider.GOOGLE and GOOGLE_AVAILABLE:
+                try:
+                    response_content = self._gemini_vision_call(images_data, prompt, config)
+                except Exception as gemini_error:
+                    print(f"⚠️ Gemini vision failed: {gemini_error}")
+                    print("🔄 Falling back to OpenAI...")
+                    if ModelProvider.OPENAI in self._clients:
+                        response_content = self._openai_vision_call(images_data, prompt, config)
+                    else:
+                        raise gemini_error
+            elif config.provider == ModelProvider.OPENAI and OPENAI_AVAILABLE:
+                response_content = self._openai_vision_call(images_data, prompt, config)
+            else:
+                raise ValueError(f"Vision not supported for provider: {config.provider}")
+
+            char_count = len(prompt) + len(response_content)
+            estimated_tokens = char_count // 4
+
+            usage = {
+                "total_tokens": estimated_tokens,
+                "completion_tokens": len(response_content) // 4,
+                "prompt_tokens": estimated_tokens - (len(response_content) // 4)
+            }
+
+            elapsed_time = time.time() - start_time
+            print("\n" + "=" * 80)
+            print("✅ VISION LLM API CALL SUCCESSFUL")
+            print("=" * 80)
+            print(f"⏱️ Time Elapsed: {elapsed_time:.2f}s")
+            print(f"📝 Response Length: {len(response_content)} characters")
+            print("=" * 80 + "\n")
+
+            return StandardizedLLMResponse(
+                content=response_content,
+                usage=usage
+            )
+
+        except Exception as e:
+            elapsed_time = time.time() - start_time
+            print("\n" + "=" * 80)
+            print("❌ VISION LLM API CALL FAILED")
+            print("=" * 80)
+            print(f"⏱️ Time Elapsed: {elapsed_time:.2f}s")
+            print(f"❗ Error Type: {type(e).__name__}")
+            print(f"❗ Error Message: {str(e)}")
+            print("=" * 80 + "\n")
+            raise
+
+    def _gemini_vision_call(
+            self,
+            images_data: List[Dict[str, Any]],
+            prompt: str,
+            config: ModelConfig
+    ) -> str:
+        """Make a vision API call using Gemini with native PDF/image support."""
+        client = self._clients[ModelProvider.GOOGLE]
+
+        print(f"\n⏳ Calling Gemini Vision API with {len(images_data)} file(s)...")
+
+        if len(images_data) == 1 and images_data[0]['mime_type'] == 'application/pdf':
+            import tempfile
+            import os
+
+            file_content = images_data[0]['bytes']
+            mime_type = images_data[0]['mime_type']
+
+            with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as tmp:
+                tmp.write(file_content)
+                tmp_path = tmp.name
+
+            try:
+                print("📤 Uploading PDF to Gemini Files API...")
+                uploaded_file = client.files.upload(file=tmp_path)
+                print(f"✅ File uploaded: {uploaded_file.name}")
+
+                contents = [
+                    types.Content(
+                        role="user",
+                        parts=[
+                            types.Part.from_uri(
+                                file_uri=uploaded_file.uri,
+                                mime_type=mime_type
+                            ),
+                            types.Part.from_text(text=prompt)
+                        ]
+                    )
+                ]
+            finally:
+                os.unlink(tmp_path)
+        else:
+            parts = []
+            for i, img in enumerate(images_data):
+                print(f"   📷 Image {i + 1}: {img['mime_type']} ({len(img['bytes']) / 1024:.1f} KB)")
+                parts.append(
+                    types.Part.from_bytes(
+                        data=img['bytes'],
+                        mime_type=img['mime_type']
+                    )
+                )
+            parts.append(types.Part.from_text(text=prompt))
+
+            contents = [
+                types.Content(
+                    role="user",
+                    parts=parts
+                )
+            ]
+
+        gen_config_params = {
+            "temperature": config.temperature,
+            "top_p": 0.95,
+            "top_k": 40,
+        }
+
+        if config.max_output_tokens:
+            gen_config_params["max_output_tokens"] = config.max_output_tokens
+
+        generation_config = types.GenerateContentConfig(**gen_config_params)
+
+        response = client.models.generate_content(
+            model=config.model_name,
+            contents=contents,
+            config=generation_config
+        )
+
+        response_content = ""
+        if hasattr(response, 'text') and response.text:
+            response_content = response.text
+        elif hasattr(response, 'candidates') and response.candidates:
+            candidate = response.candidates[0]
+            if hasattr(candidate, 'content') and hasattr(candidate.content, 'parts'):
+                for part in candidate.content.parts:
+                    if hasattr(part, 'text') and part.text:
+                        response_content += part.text
+
+        return response_content
+
+    def _openai_vision_call(
+            self,
+            images_data: List[Dict[str, Any]],
+            prompt: str,
+            config: ModelConfig
+    ) -> str:
+        """Make a vision API call using OpenAI GPT-5.2."""
+        import base64
+
+        client = self._clients[ModelProvider.OPENAI]
+
+        print(f"\n⏳ Calling OpenAI Vision API with {len(images_data)} file(s)...")
+
+        if len(images_data) == 1 and images_data[0]['mime_type'] == 'application/pdf':
+            import tempfile
+            import os
+
+            file_content = images_data[0]['bytes']
+
+            with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as tmp:
+                tmp.write(file_content)
+                tmp_path = tmp.name
+
+            try:
+                print("📤 Uploading PDF to OpenAI...")
+                with open(tmp_path, 'rb') as f:
+                    uploaded_file = client.files.create(
+                        file=f,
+                        purpose='assistants'
+                    )
+                print(f"✅ File uploaded: {uploaded_file.id}")
+
+                messages = [
+                    {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "file",
+                                "file": {"file_id": uploaded_file.id}
+                            },
+                            {
+                                "type": "text",
+                                "text": prompt
+                            }
+                        ]
+                    }
+                ]
+            finally:
+                os.unlink(tmp_path)
+        else:
+            content = []
+            for i, img in enumerate(images_data):
+                encoded_content = base64.b64encode(img['bytes']).decode('utf-8')
+                print(f"   📷 Image {i + 1}: {img['mime_type']} ({len(img['bytes']) / 1024:.1f} KB)")
+                content.append({
+                    "type": "image_url",
+                    "image_url": {
+                        "url": f"data:{img['mime_type']};base64,{encoded_content}",
+                        "detail": "high"
+                    }
+                })
+            content.append({
+                "type": "text",
+                "text": prompt
+            })
+
+            messages = [
+                {
+                    "role": "user",
+                    "content": content
+                }
+            ]
+
+        params = {
+            "model": "gpt-5.2",
+            "temperature": 1.0,
+            "messages": messages,
+        }
+
+        if config.max_tokens:
+            params["max_completion_tokens"] = config.max_tokens
+
+        response = client.chat.completions.create(**params)
+
+        return response.choices[0].message.content
+
+    def generate_image(
+            self,
+            prompt: str,
+            aspect_ratio: str = "1:1",
+            reference_images: List[bytes] = None,
+    ) -> GeneratedImageResponse:
+        """
+        Generate an image using Gemini 3 Pro Image.
+
+        Args:
+            prompt: The text prompt describing the desired image
+            aspect_ratio: Image aspect ratio (1:1, 4:3, 3:4, 16:9, 9:16)
+            reference_images: Optional list of image bytes to use as style references (up to 6)
+
+        Returns:
+            GeneratedImageResponse with the result
+        """
+        import time
+        from io import BytesIO
+        from PIL import Image as PILImage
+
+        start_time = time.time()
+        model_id = "gemini-3-pro-image-preview"
+
+        print("\n" + "=" * 80)
+        print("🎨 IMAGE GENERATION API CALL STARTED")
+        print("=" * 80)
+        print(f"📍 Provider: GOOGLE (Gemini 3 Pro Image)")
+        print(f"🧠 Model: {model_id}")
+        print(f"📐 Aspect Ratio: {aspect_ratio}")
+        if reference_images:
+            print(f"🖼️  Reference Images: {len(reference_images)}")
+        print(f"💬 Prompt: {prompt[:200]}..." if len(prompt) > 200 else f"💬 Prompt: {prompt}")
+        print("-" * 80)
+
+        if not GOOGLE_AVAILABLE:
+            error_msg = "Google GenAI library not available. Install with: pip install google-genai"
+            print(f"❌ {error_msg}")
+            return GeneratedImageResponse(success=False, error=error_msg, prompt_used=prompt)
+
+        if ModelProvider.GOOGLE not in self._clients:
+            error_msg = "Google client not initialized. Check GEMINI_API_KEY."
+            print(f"❌ {error_msg}")
+            return GeneratedImageResponse(success=False, error=error_msg, prompt_used=prompt)
+
+        try:
+            client = self._clients[ModelProvider.GOOGLE]
+
+            contents = [prompt]
+
+            if reference_images:
+                for i, img_bytes in enumerate(reference_images[:6]):
+                    try:
+                        img = PILImage.open(BytesIO(img_bytes))
+                        contents.append(img)
+                        print(f"   ✅ Added reference image {i+1} ({len(img_bytes) / 1024:.1f} KB)")
+                    except Exception as e:
+                        print(f"   ⚠️ Failed to load reference image {i+1}: {e}")
+
+            if aspect_ratio != '1:1':
+                enhanced_prompt = f"[Image should be {aspect_ratio} aspect ratio] {prompt}"
+                contents[0] = enhanced_prompt
+
+            print("\n⏳ Calling Gemini Image Generation API...")
+
+            response = client.models.generate_content(
+                model=model_id,
+                contents=contents,
+                config=types.GenerateContentConfig(
+                    response_modalities=['TEXT', 'IMAGE'],
+                )
+            )
+
+            image_bytes = None
+            thinking_text = None
+
+            if response.candidates and len(response.candidates) > 0:
+                candidate = response.candidates[0]
+                if hasattr(candidate, 'content') and candidate.content:
+                    for part in candidate.content.parts:
+                        if hasattr(part, 'text') and part.text:
+                            thinking_text = part.text
+                            print(f"   💭 Model thinking: {part.text[:100]}..." if len(part.text) > 100 else f"   💭 Model thinking: {part.text}")
+                        elif hasattr(part, 'inline_data') and part.inline_data:
+                            image_bytes = part.inline_data.data
+                            print(f"   ✅ Got image: {part.inline_data.mime_type}, {len(image_bytes) / 1024:.1f} KB")
+
+            if not image_bytes and hasattr(response, 'parts'):
+                for part in response.parts:
+                    if hasattr(part, 'text') and part.text:
+                        thinking_text = part.text
+                    elif hasattr(part, 'inline_data') and part.inline_data:
+                        image_bytes = part.inline_data.data
+                        print(f"   ✅ Got image from parts: {len(image_bytes) / 1024:.1f} KB")
+
+            if not image_bytes and hasattr(response, 'parts'):
+                for part in response.parts:
+                    if hasattr(part, 'as_image'):
+                        img = part.as_image()
+                        if img:
+                            output = BytesIO()
+                            img.save(output, format='PNG')
+                            output.seek(0)
+                            image_bytes = output.getvalue()
+                            print(f"   ✅ Generated image via as_image: {len(image_bytes) / 1024:.1f} KB")
+
+            elapsed_time = time.time() - start_time
+
+            if image_bytes:
+                print("\n" + "=" * 80)
+                print("✅ IMAGE GENERATION SUCCESSFUL")
+                print("=" * 80)
+                print(f"⏱️  Time Elapsed: {elapsed_time:.2f}s")
+                print(f"📏 Image Size: {len(image_bytes) / 1024:.1f} KB")
+                print("=" * 80 + "\n")
+
+                return GeneratedImageResponse(
+                    success=True,
+                    image_bytes=image_bytes,
+                    mime_type="image/png",
+                    prompt_used=prompt,
+                    thinking_text=thinking_text
+                )
+            else:
+                print("\n" + "=" * 80)
+                print("❌ IMAGE GENERATION FAILED")
+                print("=" * 80)
+                print(f"⏱️  Time Elapsed: {elapsed_time:.2f}s")
+                print("❗ Error: No image was generated by the model")
+                if thinking_text:
+                    print(f"💭 Model response: {thinking_text}")
+                print("=" * 80 + "\n")
+
+                return GeneratedImageResponse(
+                    success=False,
+                    error="No image was generated by the model",
+                    prompt_used=prompt,
+                    thinking_text=thinking_text
+                )
+
+        except Exception as e:
+            elapsed_time = time.time() - start_time
+            error_msg = str(e)
+
+            print("\n" + "=" * 80)
+            print("❌ IMAGE GENERATION FAILED")
+            print("=" * 80)
+            print(f"⏱️  Time Elapsed: {elapsed_time:.2f}s")
+            print(f"❗ Error Type: {type(e).__name__}")
+            print(f"❗ Error Message: {error_msg}")
+            print("=" * 80 + "\n")
+
+            return GeneratedImageResponse(
+                success=False,
+                error=error_msg,
+                prompt_used=prompt
+            )
+
 
 class LLMConfig:
     """Configuration class for LLM models"""
 
     def __init__(self):
-        self.default_model = 'gemini-pro'  # Default model
-        
+        self.default_model = 'gemini-pro'
+
     def get_available_models(self):
         """Return list of (model_id, display_name) tuples for available models"""
         models = []
-        
-        # Add available models from MODEL_CONFIG
         for model_id in MODEL_CONFIG.keys():
             config = MODEL_CONFIG[model_id]
-            # Create a friendly display name
             display_name = f"{model_id.upper()} ({config.provider.value})"
             models.append((model_id, display_name))
-        
         return models
+
+
+def optimize_generated_image(
+    image_bytes: bytes,
+    max_width: int = 800,
+    quality: int = 85,
+) -> bytes:
+    """
+    Optimize a generated image for web use.
+
+    Args:
+        image_bytes: Raw image bytes
+        max_width: Maximum width in pixels
+        quality: JPEG quality (1-100)
+
+    Returns:
+        Optimized JPEG image bytes
+    """
+    from io import BytesIO
+    from PIL import Image as PILImage
+
+    img = PILImage.open(BytesIO(image_bytes))
+
+    if img.mode in ('RGBA', 'LA', 'P'):
+        background = PILImage.new('RGB', img.size, (255, 255, 255))
+        if img.mode == 'P':
+            img = img.convert('RGBA')
+        if img.mode in ('RGBA', 'LA'):
+            background.paste(img, mask=img.split()[-1])
+        else:
+            background.paste(img)
+        img = background
+    elif img.mode != 'RGB':
+        img = img.convert('RGB')
+
+    if img.width > max_width:
+        ratio = max_width / img.width
+        new_height = int(img.height * ratio)
+        img = img.resize((max_width, new_height), PILImage.Resampling.LANCZOS)
+
+    output = BytesIO()
+    img.save(output, format='JPEG', quality=quality, optimize=True)
+    output.seek(0)
+
+    return output.getvalue()

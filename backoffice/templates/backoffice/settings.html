@@ -188,6 +188,20 @@
                 <h3 class="text-lg font-semibold text-gray-900">Contact Information</h3>
             </div>
             <div class="p-6 space-y-6">
+                <!-- Site Domain -->
+                <div>
+                    <label for="id_domain" class="block text-sm font-medium text-gray-700 mb-2">
+                        Site Domain
+                    </label>
+                    <input type="text"
+                           name="domain"
+                           id="id_domain"
+                           value="{{ settings.domain }}"
+                           class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                           placeholder="get-algarve-com">
+                    <p class="mt-1 text-xs text-gray-500">Used as the storage folder name in Google Cloud Storage (e.g. get-algarve-com)</p>
+                </div>
+
                 <!-- Contact Email -->
                 <div>
                     <label for="id_contact_email" class="block text-sm font-medium text-gray-700 mb-2">
@@ -322,12 +336,105 @@
             </div>
         </div>
 
+        <!-- Design Guide (AI Context) -->
+        <div class="bg-white rounded-lg shadow overflow-hidden mb-6">
+            <div class="p-6 border-b border-gray-200">
+                <h3 class="text-lg font-semibold text-gray-900">Design Guide (AI Context)</h3>
+                <p class="text-sm text-gray-600 mt-1">Design rules and component patterns injected into all AI generation and refinement prompts</p>
+            </div>
+            <div class="p-6 space-y-6">
+                <!-- AI Generation Panel -->
+                <div class="p-4 bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-200 rounded-lg">
+                    <h4 class="text-sm font-semibold text-purple-900 mb-3">AI-Powered Generation</h4>
+                    <p class="text-xs text-purple-700 mb-4">
+                        Use AI to generate or update the design guide by analyzing your settings, existing pages, and reference design images.
+                    </p>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                        <!-- Model Selection -->
+                        <div>
+                            <label for="id_ai_guide_model" class="block text-xs font-medium text-gray-700 mb-1">AI Model</label>
+                            <select id="id_ai_guide_model"
+                                    class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500">
+                                {% for model_id, model_name in ai_models %}
+                                <option value="{{ model_id }}" {% if model_id == default_model %}selected{% endif %}>{{ model_name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <!-- Reference Images -->
+                        <div>
+                            <label for="id_ai_guide_images" class="block text-xs font-medium text-gray-700 mb-1">
+                                Reference Images (optional)
+                            </label>
+                            <input type="file"
+                                   id="id_ai_guide_images"
+                                   multiple
+                                   accept="image/*"
+                                   class="block w-full text-sm text-gray-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-purple-50 file:text-purple-700 hover:file:bg-purple-100">
+                            <p class="mt-1 text-xs text-gray-500">Upload screenshots or mockups as design references</p>
+                        </div>
+                    </div>
+
+                    <!-- Page Selection -->
+                    {% if pages_with_content %}
+                    <div class="mb-4">
+                        <label class="block text-xs font-medium text-gray-700 mb-2">
+                            Analyze Existing Pages (optional)
+                        </label>
+                        <div class="flex flex-wrap gap-2 max-h-24 overflow-y-auto p-2 bg-white border border-gray-200 rounded-lg">
+                            {% for page in pages_with_content %}
+                            <label class="inline-flex items-center gap-1.5 px-2.5 py-1 bg-gray-50 border border-gray-200 rounded-md cursor-pointer hover:bg-purple-50 hover:border-purple-300 transition-colors">
+                                <input type="checkbox" class="ai-guide-page-cb h-3.5 w-3.5 text-purple-600 border-gray-300 rounded" value="{{ page.id }}">
+                                <span class="text-xs text-gray-700">{{ page.default_title|default:page.default_slug }}</span>
+                            </label>
+                            {% endfor %}
+                        </div>
+                        <p class="mt-1 text-xs text-gray-500">The AI will analyze HTML patterns from selected pages</p>
+                    </div>
+                    {% endif %}
+
+                    <!-- Action Buttons -->
+                    <div class="flex items-center gap-3">
+                        <button type="button"
+                                onclick="aiGenerateDesignGuide()"
+                                id="btn_ai_generate_guide"
+                                class="px-4 py-2 text-sm bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors font-medium">
+                            AI Generate Design Guide
+                        </button>
+                        <button type="button"
+                                onclick="generateDesignGuide()"
+                                id="btn_generate_guide"
+                                class="px-4 py-2 text-sm bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors border border-gray-300">
+                            Quick Generate (no AI)
+                        </button>
+                        <span id="ai-guide-status" class="text-xs text-gray-500"></span>
+                    </div>
+                </div>
+
+                <!-- Design Guide Textarea -->
+                <div>
+                    <label for="id_design_guide" class="block text-sm font-medium text-gray-700 mb-2">
+                        Design Guide (Markdown)
+                    </label>
+                    <textarea name="design_guide"
+                              id="id_design_guide"
+                              rows="20"
+                              class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-mono text-sm"
+                              placeholder="# Design Guide&#10;&#10;Describe your design patterns, component conventions, and visual rules here.&#10;This is injected into all AI generation and refinement prompts.&#10;&#10;Use the buttons above to auto-generate.">{{ settings.design_guide }}</textarea>
+                    <p class="mt-2 text-xs text-gray-500">
+                        This markdown is sent to the AI when generating or refining pages. Save the form to persist changes.
+                    </p>
+                </div>
+            </div>
+        </div>
+
         <!-- Design System Settings (if exists) -->
         {% if settings.primary_color %}
         <div class="bg-white rounded-lg shadow overflow-hidden mb-6">
             <div class="p-6 border-b border-gray-200">
                 <h3 class="text-lg font-semibold text-gray-900">Design System</h3>
-                <p class="text-sm text-gray-600 mt-1">Customize colors, typography, layout, and buttons</p>
+                <p class="text-sm text-gray-600 mt-1">Customize colors and typography</p>
             </div>
             <div class="p-6 space-y-8">
                 <!-- COLORS SECTION -->
@@ -732,273 +839,6 @@
                     </div>
                 </div>
 
-                <!-- LAYOUT SECTION -->
-                <div>
-                    <h4 class="text-md font-semibold text-gray-800 mb-4 pb-2 border-b">Layout</h4>
-                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                        <div>
-                            <label for="id_container_width" class="block text-sm font-medium text-gray-700 mb-2">
-                                Container Width
-                            </label>
-                            <select name="container_width"
-                                    id="id_container_width"
-                                    class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                                <option value="full" {% if settings.container_width == 'full' %}selected{% endif %}>Full Width</option>
-                                <option value="xs" {% if settings.container_width == 'xs' %}selected{% endif %}>Extra Small (20rem)</option>
-                                <option value="sm" {% if settings.container_width == 'sm' %}selected{% endif %}>Small (24rem)</option>
-                                <option value="md" {% if settings.container_width == 'md' %}selected{% endif %}>Medium (28rem)</option>
-                                <option value="lg" {% if settings.container_width == 'lg' %}selected{% endif %}>Large (32rem)</option>
-                                <option value="xl" {% if settings.container_width == 'xl' %}selected{% endif %}>Extra Large (36rem)</option>
-                                <option value="2xl" {% if settings.container_width == '2xl' %}selected{% endif %}>2XL (42rem)</option>
-                                <option value="3xl" {% if settings.container_width == '3xl' %}selected{% endif %}>3XL (48rem)</option>
-                                <option value="4xl" {% if settings.container_width == '4xl' %}selected{% endif %}>4XL (56rem)</option>
-                                <option value="5xl" {% if settings.container_width == '5xl' %}selected{% endif %}>5XL (64rem)</option>
-                                <option value="6xl" {% if settings.container_width == '6xl' %}selected{% endif %}>6XL (72rem)</option>
-                                <option value="7xl" {% if settings.container_width == '7xl' %}selected{% endif %}>7XL (80rem)</option>
-                            </select>
-                        </div>
-
-                        <div>
-                            <label for="id_border_radius_preset" class="block text-sm font-medium text-gray-700 mb-2">
-                                Border Radius
-                            </label>
-                            <select name="border_radius_preset"
-                                    id="id_border_radius_preset"
-                                    class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                                <option value="none" {% if settings.border_radius_preset == 'none' %}selected{% endif %}>None</option>
-                                <option value="sm" {% if settings.border_radius_preset == 'sm' %}selected{% endif %}>Small</option>
-                                <option value="md" {% if settings.border_radius_preset == 'md' %}selected{% endif %}>Medium</option>
-                                <option value="lg" {% if settings.border_radius_preset == 'lg' %}selected{% endif %}>Large</option>
-                                <option value="xl" {% if settings.border_radius_preset == 'xl' %}selected{% endif %}>Extra Large</option>
-                                <option value="2xl" {% if settings.border_radius_preset == '2xl' %}selected{% endif %}>2XL</option>
-                                <option value="3xl" {% if settings.border_radius_preset == '3xl' %}selected{% endif %}>3XL</option>
-                                <option value="full" {% if settings.border_radius_preset == 'full' %}selected{% endif %}>Full</option>
-                            </select>
-                        </div>
-
-                        <div>
-                            <label for="id_spacing_scale" class="block text-sm font-medium text-gray-700 mb-2">
-                                Spacing Scale
-                            </label>
-                            <select name="spacing_scale"
-                                    id="id_spacing_scale"
-                                    class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                                <option value="tight" {% if settings.spacing_scale == 'tight' %}selected{% endif %}>Tight</option>
-                                <option value="normal" {% if settings.spacing_scale == 'normal' %}selected{% endif %}>Normal</option>
-                                <option value="relaxed" {% if settings.spacing_scale == 'relaxed' %}selected{% endif %}>Relaxed</option>
-                                <option value="loose" {% if settings.spacing_scale == 'loose' %}selected{% endif %}>Loose</option>
-                            </select>
-                        </div>
-
-                        <div>
-                            <label for="id_shadow_preset" class="block text-sm font-medium text-gray-700 mb-2">
-                                Shadow Style
-                            </label>
-                            <select name="shadow_preset"
-                                    id="id_shadow_preset"
-                                    class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                                <option value="none" {% if settings.shadow_preset == 'none' %}selected{% endif %}>None</option>
-                                <option value="sm" {% if settings.shadow_preset == 'sm' %}selected{% endif %}>Small</option>
-                                <option value="md" {% if settings.shadow_preset == 'md' %}selected{% endif %}>Medium</option>
-                                <option value="lg" {% if settings.shadow_preset == 'lg' %}selected{% endif %}>Large</option>
-                                <option value="xl" {% if settings.shadow_preset == 'xl' %}selected{% endif %}>Extra Large</option>
-                                <option value="2xl" {% if settings.shadow_preset == '2xl' %}selected{% endif %}>2XL</option>
-                            </select>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- BUTTONS SECTION -->
-                <div>
-                    <h4 class="text-md font-semibold text-gray-800 mb-4 pb-2 border-b">Buttons</h4>
-
-                    <!-- Button Style & Size -->
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-                        <div>
-                            <label for="id_button_style" class="block text-sm font-medium text-gray-700 mb-2">
-                                Button Style
-                            </label>
-                            <select name="button_style"
-                                    id="id_button_style"
-                                    class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                                <option value="rounded" {% if settings.button_style == 'rounded' %}selected{% endif %}>Rounded</option>
-                                <option value="square" {% if settings.button_style == 'square' %}selected{% endif %}>Square</option>
-                                <option value="pill" {% if settings.button_style == 'pill' %}selected{% endif %}>Pill</option>
-                            </select>
-                        </div>
-
-                        <div>
-                            <label for="id_button_size" class="block text-sm font-medium text-gray-700 mb-2">
-                                Button Size
-                            </label>
-                            <select name="button_size"
-                                    id="id_button_size"
-                                    class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                                <option value="small" {% if settings.button_size == 'small' %}selected{% endif %}>Small</option>
-                                <option value="medium" {% if settings.button_size == 'medium' %}selected{% endif %}>Medium</option>
-                                <option value="large" {% if settings.button_size == 'large' %}selected{% endif %}>Large</option>
-                            </select>
-                        </div>
-
-                        <div>
-                            <label for="id_button_border_width" class="block text-sm font-medium text-gray-700 mb-2">
-                                Border Width
-                            </label>
-                            <select name="button_border_width"
-                                    id="id_button_border_width"
-                                    class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                                <option value="0" {% if settings.button_border_width == '0' %}selected{% endif %}>None</option>
-                                <option value="1" {% if settings.button_border_width == '1' %}selected{% endif %}>1px</option>
-                                <option value="2" {% if settings.button_border_width == '2' %}selected{% endif %}>2px</option>
-                                <option value="4" {% if settings.button_border_width == '4' %}selected{% endif %}>4px</option>
-                            </select>
-                        </div>
-                    </div>
-
-                    <!-- Primary Button Colors -->
-                    <p class="text-sm font-medium text-gray-700 mb-3">Primary Button Colors</p>
-                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-                        <div>
-                            <label for="id_primary_button_bg" class="block text-xs font-medium text-gray-600 mb-1">
-                                Background
-                            </label>
-                            <div class="flex items-center space-x-2">
-                                <input type="color"
-                                       name="primary_button_bg"
-                                       id="id_primary_button_bg"
-                                       value="{{ settings.primary_button_bg }}"
-                                       class="h-10 w-16 border border-gray-300 rounded cursor-pointer">
-                                <input type="text"
-                                       value="{{ settings.primary_button_bg }}"
-                                       readonly
-                                       class="flex-1 px-2 py-1.5 text-xs border border-gray-300 rounded bg-gray-50 font-mono">
-                            </div>
-                        </div>
-
-                        <div>
-                            <label for="id_primary_button_text" class="block text-xs font-medium text-gray-600 mb-1">
-                                Text
-                            </label>
-                            <div class="flex items-center space-x-2">
-                                <input type="color"
-                                       name="primary_button_text"
-                                       id="id_primary_button_text"
-                                       value="{{ settings.primary_button_text }}"
-                                       class="h-10 w-16 border border-gray-300 rounded cursor-pointer">
-                                <input type="text"
-                                       value="{{ settings.primary_button_text }}"
-                                       readonly
-                                       class="flex-1 px-2 py-1.5 text-xs border border-gray-300 rounded bg-gray-50 font-mono">
-                            </div>
-                        </div>
-
-                        <div>
-                            <label for="id_primary_button_border" class="block text-xs font-medium text-gray-600 mb-1">
-                                Border
-                            </label>
-                            <div class="flex items-center space-x-2">
-                                <input type="color"
-                                       name="primary_button_border"
-                                       id="id_primary_button_border"
-                                       value="{{ settings.primary_button_border }}"
-                                       class="h-10 w-16 border border-gray-300 rounded cursor-pointer">
-                                <input type="text"
-                                       value="{{ settings.primary_button_border }}"
-                                       readonly
-                                       class="flex-1 px-2 py-1.5 text-xs border border-gray-300 rounded bg-gray-50 font-mono">
-                            </div>
-                        </div>
-
-                        <div>
-                            <label for="id_primary_button_hover" class="block text-xs font-medium text-gray-600 mb-1">
-                                Hover
-                            </label>
-                            <div class="flex items-center space-x-2">
-                                <input type="color"
-                                       name="primary_button_hover"
-                                       id="id_primary_button_hover"
-                                       value="{{ settings.primary_button_hover }}"
-                                       class="h-10 w-16 border border-gray-300 rounded cursor-pointer">
-                                <input type="text"
-                                       value="{{ settings.primary_button_hover }}"
-                                       readonly
-                                       class="flex-1 px-2 py-1.5 text-xs border border-gray-300 rounded bg-gray-50 font-mono">
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Secondary Button Colors -->
-                    <p class="text-sm font-medium text-gray-700 mb-3">Secondary Button Colors</p>
-                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                        <div>
-                            <label for="id_secondary_button_bg" class="block text-xs font-medium text-gray-600 mb-1">
-                                Background
-                            </label>
-                            <div class="flex items-center space-x-2">
-                                <input type="color"
-                                       name="secondary_button_bg"
-                                       id="id_secondary_button_bg"
-                                       value="{{ settings.secondary_button_bg }}"
-                                       class="h-10 w-16 border border-gray-300 rounded cursor-pointer">
-                                <input type="text"
-                                       value="{{ settings.secondary_button_bg }}"
-                                       readonly
-                                       class="flex-1 px-2 py-1.5 text-xs border border-gray-300 rounded bg-gray-50 font-mono">
-                            </div>
-                        </div>
-
-                        <div>
-                            <label for="id_secondary_button_text" class="block text-xs font-medium text-gray-600 mb-1">
-                                Text
-                            </label>
-                            <div class="flex items-center space-x-2">
-                                <input type="color"
-                                       name="secondary_button_text"
-                                       id="id_secondary_button_text"
-                                       value="{{ settings.secondary_button_text }}"
-                                       class="h-10 w-16 border border-gray-300 rounded cursor-pointer">
-                                <input type="text"
-                                       value="{{ settings.secondary_button_text }}"
-                                       readonly
-                                       class="flex-1 px-2 py-1.5 text-xs border border-gray-300 rounded bg-gray-50 font-mono">
-                            </div>
-                        </div>
-
-                        <div>
-                            <label for="id_secondary_button_border" class="block text-xs font-medium text-gray-600 mb-1">
-                                Border
-                            </label>
-                            <div class="flex items-center space-x-2">
-                                <input type="color"
-                                       name="secondary_button_border"
-                                       id="id_secondary_button_border"
-                                       value="{{ settings.secondary_button_border }}"
-                                       class="h-10 w-16 border border-gray-300 rounded cursor-pointer">
-                                <input type="text"
-                                       value="{{ settings.secondary_button_border }}"
-                                       readonly
-                                       class="flex-1 px-2 py-1.5 text-xs border border-gray-300 rounded bg-gray-50 font-mono">
-                            </div>
-                        </div>
-
-                        <div>
-                            <label for="id_secondary_button_hover" class="block text-xs font-medium text-gray-600 mb-1">
-                                Hover
-                            </label>
-                            <div class="flex items-center space-x-2">
-                                <input type="color"
-                                       name="secondary_button_hover"
-                                       id="id_secondary_button_hover"
-                                       value="{{ settings.secondary_button_hover }}"
-                                       class="h-10 w-16 border border-gray-300 rounded cursor-pointer">
-                                <input type="text"
-                                       value="{{ settings.secondary_button_hover }}"
-                                       readonly
-                                       class="flex-1 px-2 py-1.5 text-xs border border-gray-300 rounded bg-gray-50 font-mono">
-                            </div>
-                        </div>
-                    </div>
-                </div>
             </div>
         </div>
         {% endif %}
@@ -1038,6 +878,106 @@
 </div>
 
 <script>
+// Quick Generate Design Guide from current settings (no AI)
+function generateDesignGuide() {
+    const btn = document.getElementById('btn_generate_guide');
+    const textarea = document.getElementById('id_design_guide');
+    const originalText = btn.textContent;
+
+    btn.textContent = 'Generating...';
+    btn.disabled = true;
+
+    fetch('{% url "backoffice:api_generate_design_guide" %}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': '{{ csrf_token }}'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            textarea.value = data.design_guide;
+        } else {
+            alert('Error generating design guide: ' + (data.error || 'Unknown error'));
+        }
+    })
+    .catch(error => {
+        alert('Error: ' + error.message);
+    })
+    .finally(() => {
+        btn.textContent = originalText;
+        btn.disabled = false;
+    });
+}
+
+// AI-powered Design Guide generation
+function aiGenerateDesignGuide() {
+    const btn = document.getElementById('btn_ai_generate_guide');
+    const textarea = document.getElementById('id_design_guide');
+    const statusSpan = document.getElementById('ai-guide-status');
+    const originalText = btn.textContent;
+
+    // Collect selected page IDs
+    const pageCheckboxes = document.querySelectorAll('.ai-guide-page-cb:checked');
+    const pageIds = Array.from(pageCheckboxes).map(cb => cb.value);
+
+    // Collect reference images
+    const imageInput = document.getElementById('id_ai_guide_images');
+    const imageFiles = imageInput ? imageInput.files : [];
+
+    // Get selected model
+    const modelSelect = document.getElementById('id_ai_guide_model');
+    const model = modelSelect ? modelSelect.value : 'gemini-pro';
+
+    // Get existing guide
+    const existingGuide = textarea.value.trim();
+
+    // Build FormData (needed for file uploads)
+    const formData = new FormData();
+    formData.append('model', model);
+    if (existingGuide) {
+        formData.append('existing_guide', existingGuide);
+    }
+    pageIds.forEach(pid => formData.append('page_ids', pid));
+    for (let i = 0; i < imageFiles.length; i++) {
+        formData.append('reference_images', imageFiles[i]);
+    }
+
+    // UI feedback
+    btn.textContent = 'Generating with AI...';
+    btn.disabled = true;
+    statusSpan.textContent = 'This may take 30-60 seconds...';
+    statusSpan.className = 'text-xs text-purple-600';
+
+    fetch('/ai/api/generate-design-guide/', {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': '{{ csrf_token }}'
+        },
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            textarea.value = data.design_guide;
+            statusSpan.textContent = 'Generated successfully. Save the form to persist.';
+            statusSpan.className = 'text-xs text-green-600';
+        } else {
+            statusSpan.textContent = 'Error: ' + (data.error || 'Unknown error');
+            statusSpan.className = 'text-xs text-red-600';
+        }
+    })
+    .catch(error => {
+        statusSpan.textContent = 'Error: ' + error.message;
+        statusSpan.className = 'text-xs text-red-600';
+    })
+    .finally(() => {
+        btn.textContent = originalText;
+        btn.disabled = false;
+    });
+}
+
 // Sync color picker with text input
 document.querySelectorAll('input[type="color"]').forEach(colorInput => {
     const textInput = colorInput.nextElementSibling.nextElementSibling;

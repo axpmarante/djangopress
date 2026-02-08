@@ -258,6 +258,135 @@ def get_page_content(request, page_id):
 
 
 @staff_member_required
+@require_http_methods(["GET"])
+def get_site_settings(request):
+    """
+    Get site settings including enabled languages.
+
+    GET /backoffice/api/get-site-settings/
+
+    Returns: {
+        "success": true,
+        "settings": {
+            "site_name": "...",
+            "enabled_languages": [{"code": "pt", "name": "Portuguese"}, ...],
+            "default_language": "pt"
+        }
+    }
+    """
+    try:
+        settings = SiteSettings.load()
+
+        enabled_languages = getattr(settings, 'enabled_languages', None)
+        if not enabled_languages:
+            enabled_languages = [{'code': 'pt', 'name': 'Portuguese'}, {'code': 'en', 'name': 'English'}]
+
+        default_language = getattr(settings, 'default_language', 'pt')
+
+        return JsonResponse({
+            'success': True,
+            'settings': {
+                'site_name': settings.site_name or '',
+                'enabled_languages': enabled_languages,
+                'default_language': default_language,
+            }
+        })
+
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+
+
+@staff_member_required
+@require_http_methods(["POST"])
+def generate_design_guide(request):
+    """
+    Generate a starter design guide markdown document from current SiteSettings values.
+    Pure Python — no LLM call. Returns markdown text the user can customize.
+    """
+    try:
+        settings = SiteSettings.load()
+
+        lines = ["# Design Guide\n"]
+
+        # Colors
+        lines.append("## Colors\n")
+        lines.append(f"- **Primary:** `{settings.primary_color}` (hover: `{settings.primary_color_hover}`)")
+        lines.append(f"- **Secondary:** `{settings.secondary_color}`")
+        lines.append(f"- **Accent:** `{settings.accent_color}`")
+        lines.append(f"- **Background:** `{settings.background_color}`")
+        lines.append(f"- **Text:** `{settings.text_color}`")
+        lines.append(f"- **Headings:** `{settings.heading_color}`")
+        lines.append("")
+
+        # Typography
+        lines.append("## Typography\n")
+        lines.append(f"- **Body font:** {settings.body_font}")
+        lines.append(f"- **Heading font:** {settings.heading_font}")
+        lines.append(f"- H1: {settings.h1_font} / {settings.h1_size}")
+        lines.append(f"- H2: {settings.h2_font} / {settings.h2_size}")
+        lines.append(f"- H3: {settings.h3_font} / {settings.h3_size}")
+        lines.append(f"- H4: {settings.h4_font} / {settings.h4_size}")
+        lines.append(f"- H5: {settings.h5_font} / {settings.h5_size}")
+        lines.append(f"- H6: {settings.h6_font} / {settings.h6_size}")
+        lines.append("")
+
+        # Layout
+        lines.append("## Layout\n")
+        lines.append(f"- **Container width:** max-w-{settings.container_width}")
+        lines.append(f"- **Border radius:** rounded-{settings.border_radius_preset}")
+        lines.append(f"- **Spacing scale:** {settings.spacing_scale}")
+        lines.append(f"- **Shadow preset:** shadow-{settings.shadow_preset}")
+        lines.append("")
+
+        # Buttons
+        lines.append("## Buttons\n")
+        lines.append(f"- **Style:** {settings.button_style}")
+        lines.append(f"- **Size:** {settings.button_size}")
+        lines.append(f"- **Border width:** {settings.button_border_width}px")
+        lines.append(f"- **Primary button:** bg `{settings.primary_button_bg}`, text `{settings.primary_button_text}`, border `{settings.primary_button_border}`, hover `{settings.primary_button_hover}`")
+        lines.append(f"- **Secondary button:** bg `{settings.secondary_button_bg}`, text `{settings.secondary_button_text}`, border `{settings.secondary_button_border}`, hover `{settings.secondary_button_hover}`")
+        lines.append("")
+
+        # Component patterns (starter suggestions)
+        lines.append("## Component Patterns\n")
+        lines.append("### Cards")
+        lines.append(f"- Use `rounded-{settings.border_radius_preset}` corners with `shadow-{settings.shadow_preset}`")
+        lines.append(f"- Background: white with `{settings.text_color}` text")
+        lines.append("")
+        lines.append("### Sections")
+        spacing_map = {'tight': 'py-12 md:py-16', 'normal': 'py-16 md:py-24', 'relaxed': 'py-20 md:py-28', 'loose': 'py-24 md:py-32'}
+        section_padding = spacing_map.get(settings.spacing_scale, 'py-16 md:py-24')
+        lines.append(f"- Default section padding: `{section_padding}`")
+        lines.append(f"- Container: `max-w-{settings.container_width} mx-auto px-6`")
+        lines.append("- Alternate between white and light gray (`bg-gray-50`) backgrounds")
+        lines.append("")
+        lines.append("### Hero Sections")
+        lines.append(f"- Use primary color `{settings.primary_color}` as background with white text, or use a background image with dark overlay")
+        lines.append("- Hero padding should be larger: `py-24 md:py-32`")
+        lines.append("")
+        lines.append("## Visual Rules\n")
+        lines.append("- Maintain consistent spacing between elements within sections")
+        lines.append("- Use the accent color sparingly for highlights and CTAs")
+        lines.append("- Ensure sufficient color contrast for accessibility")
+
+        markdown = "\n".join(lines)
+
+        return JsonResponse({
+            'success': True,
+            'design_guide': markdown,
+        })
+
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+
+
+@staff_member_required
 @require_http_methods(["POST"])
 def update_languages(request):
     """

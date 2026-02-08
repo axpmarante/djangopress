@@ -29,9 +29,9 @@
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
                     </svg>
                 </span>
-                Edit Complete Page
+                Refine Page with AI
             </h2>
-            <p class="text-gray-600 mt-2 ml-15">Refine, add, or remove sections with AI assistance</p>
+            <p class="text-gray-600 mt-2 ml-15">Improve an existing page's content and design using AI</p>
         </div>
     </div>
 
@@ -51,7 +51,9 @@
                                 onchange="loadPageInfo(this.value)">
                             <option value="">Choose a page...</option>
                             {% for page in pages %}
-                            <option value="{{ page.id }}">{{ page.default_title }} ({{ page.default_slug }})</option>
+                            <option value="{{ page.id }}" {% if selected_page and selected_page.id == page.id %}selected{% endif %}>
+                                {{ page.default_title }} ({{ page.default_slug }})
+                            </option>
                             {% endfor %}
                         </select>
                         <p class="mt-2 text-xs text-gray-500">Select the page you want to improve</p>
@@ -60,38 +62,11 @@
                     <!-- Page Info Preview -->
                     <div id="pageInfoContainer" class="hidden">
                         <div class="border border-gray-200 rounded-lg bg-gray-50 p-4">
-                            <h4 class="text-sm font-semibold text-gray-900 mb-3">Current Page Structure</h4>
+                            <h4 class="text-sm font-semibold text-gray-900 mb-3">Current Page Info</h4>
                             <div id="pageInfo" class="space-y-2 text-sm">
                                 <!-- Will be populated by JavaScript -->
                             </div>
                         </div>
-                    </div>
-
-                    <!-- Reference Pages Selection -->
-                    <div id="referencePagesContainer" class="hidden">
-                        <label class="block text-sm font-medium text-gray-900 mb-2">
-                            Reference Pages (Optional)
-                        </label>
-                        <div class="border border-gray-200 rounded-lg bg-gray-50 p-4 max-h-64 overflow-y-auto">
-                            <p class="text-xs text-gray-600 mb-3">Select pages to use as design references for maintaining consistency:</p>
-                            <div id="referencePagesList" class="space-y-2">
-                                {% if reference_pages %}
-                                    {% for ref_page in reference_pages %}
-                                    <label class="flex items-start p-2 hover:bg-gray-100 rounded cursor-pointer">
-                                        <input type="checkbox" name="reference_pages" value="{{ ref_page.id }}"
-                                               class="mt-0.5 h-4 w-4 text-cyan-600 focus:ring-cyan-500 border-gray-300 rounded">
-                                        <div class="ml-3">
-                                            <div class="text-sm font-medium text-gray-900">{{ ref_page.title }}</div>
-                                            <div class="text-xs text-gray-500">{{ ref_page.section_count }} sections • {{ ref_page.slug }}</div>
-                                        </div>
-                                    </label>
-                                    {% endfor %}
-                                {% else %}
-                                    <p class="text-sm text-gray-500">No pages available as references</p>
-                                {% endif %}
-                            </div>
-                        </div>
-                        <p class="mt-2 text-xs text-gray-500">Selected pages will help AI maintain design coherence when making changes</p>
                     </div>
 
                     <!-- Refinement Instructions -->
@@ -102,7 +77,25 @@
                         <textarea id="instructions" name="instructions" rows="6" required
                                   class="w-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-cyan-500 focus:border-transparent transition-all"
                                   placeholder="Examples:&#10;- Design: 'Make hero section more impactful with larger text and bolder CTA buttons'&#10;- Content: 'Make all copy more conversational and emphasize our 15 years experience'&#10;- Combined: 'Modernize the page - larger typography, more white space, and professional tone'"></textarea>
-                        <p class="mt-2 text-xs text-gray-500">Describe design and/or content changes you want. AI will analyze complete HTML + content with project context.</p>
+                        <p class="mt-2 text-xs text-gray-500">Describe design and/or content changes you want. AI will analyze the complete HTML + content with project context.</p>
+                    </div>
+
+                    <!-- Reference Images -->
+                    <div id="imageContainer" class="hidden">
+                        <label class="block text-sm font-medium text-gray-900 mb-2">
+                            Reference Images <span class="text-gray-400 font-normal">(optional)</span>
+                        </label>
+                        <div id="imageDropZone"
+                             class="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-cyan-400 hover:bg-cyan-50 transition-colors cursor-pointer"
+                             onclick="document.getElementById('referenceImages').click()">
+                            <svg class="w-8 h-8 text-gray-400 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                            </svg>
+                            <p class="text-sm text-gray-600">Drop design screenshots or mockups here, or <span class="text-cyan-600 font-medium">browse</span></p>
+                            <p class="text-xs text-gray-400 mt-1">PNG, JPG, WebP — used as visual inspiration for the AI</p>
+                        </div>
+                        <input type="file" id="referenceImages" accept="image/*" multiple class="hidden" onchange="handleImageSelect(event)">
+                        <div id="imagePreviews" class="grid grid-cols-4 gap-3 mt-3"></div>
                     </div>
 
                     <!-- AI Model Selection -->
@@ -123,22 +116,6 @@
                         {% endif %}
                     </div>
 
-                    <!-- Prompt Version (A/B Testing) -->
-                    <div>
-                        <label class="block text-sm font-medium text-gray-900 mb-2">
-                            Prompt Version <span class="text-xs text-gray-500 font-normal">(A/B Test)</span>
-                        </label>
-                        <select id="promptVersion" name="prompt_version"
-                                class="w-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-cyan-500 focus:border-transparent transition-all">
-                            <option value="v1" selected>V1 - Comprehensive (Original)</option>
-                            <option value="v2">V2 - Simplified (~65% smaller)</option>
-                        </select>
-                        <p class="mt-2 text-xs text-gray-500">
-                            <span class="font-medium">V1:</span> Detailed context, examples, and guidelines<br>
-                            <span class="font-medium">V2:</span> Streamlined prompt for faster/cheaper processing
-                        </p>
-                    </div>
-
                     <!-- Warning -->
                     <div id="warningContainer" class="hidden bg-amber-50 border border-amber-200 rounded-lg p-4">
                         <div class="flex">
@@ -147,7 +124,7 @@
                             </svg>
                             <div class="text-sm text-amber-800">
                                 <p class="font-medium">Important:</p>
-                                <p class="mt-1">This will refine ALL <span id="sectionCount">0</span> sections on this page. The changes will apply your instructions across the entire page. Make sure to review before saving.</p>
+                                <p class="mt-1">This will refine the page's HTML content. A version snapshot will be saved before changes so you can roll back if needed.</p>
                             </div>
                         </div>
                     </div>
@@ -163,7 +140,7 @@
                             <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
                             </svg>
-                            <span id="submitButtonText">Edit Page with AI</span>
+                            <span id="submitButtonText">Refine Page with AI</span>
                         </button>
                     </div>
                 </form>
@@ -186,45 +163,23 @@
                     </div>
                     <div class="flex items-start">
                         <span class="flex-shrink-0 w-6 h-6 bg-cyan-100 text-cyan-600 rounded-full flex items-center justify-center font-semibold mr-2">3</span>
-                        <p>AI refines all sections on the page</p>
+                        <p>AI refines the page HTML and translations</p>
                     </div>
                     <div class="flex items-start">
                         <span class="flex-shrink-0 w-6 h-6 bg-cyan-100 text-cyan-600 rounded-full flex items-center justify-center font-semibold mr-2">4</span>
-                        <p>Review changes and save</p>
+                        <p>Review the updated page (rollback available)</p>
                     </div>
                 </div>
             </div>
 
-            <!-- AI Actions Info (V2) -->
-            <div class="bg-gradient-to-br from-purple-50 to-blue-50 rounded-lg shadow-sm border border-purple-200 p-5">
-                <div class="flex items-center mb-3">
-                    <svg class="w-5 h-5 text-purple-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                    </svg>
-                    <h3 class="text-sm font-semibold text-gray-900">Smart Section Control</h3>
-                </div>
-                <div class="space-y-2 text-xs text-gray-700">
-                    <p class="font-medium text-gray-900">AI can automatically:</p>
-                    <div class="space-y-1">
-                        <div class="flex items-start">
-                            <span class="text-green-600 mr-1">✓</span>
-                            <p><strong>Update</strong> existing sections</p>
-                        </div>
-                        <div class="flex items-start">
-                            <span class="text-blue-600 mr-1">+</span>
-                            <p><strong>Create</strong> new sections</p>
-                        </div>
-                        <div class="flex items-start">
-                            <span class="text-red-600 mr-1">×</span>
-                            <p><strong>Delete</strong> old sections</p>
-                        </div>
-                    </div>
-                    <div class="mt-3 pt-3 border-t border-purple-200">
-                        <p class="text-xs italic text-gray-600">
-                            Using V2 prompts, the AI intelligently decides which action to take based on your instructions.
-                        </p>
-                    </div>
-                </div>
+            <!-- Chat Refinement Link (shown when page selected) -->
+            <div id="chatRefineLink" class="hidden bg-white rounded-lg shadow-sm border border-gray-200 p-5">
+                <h3 class="text-sm font-semibold text-gray-900 mb-3">Conversational Mode</h3>
+                <p class="text-xs text-gray-600 mb-3">Iteratively refine this page through a chat conversation with history.</p>
+                <a id="chatRefineHref" href="#"
+                   class="inline-flex items-center text-sm text-purple-600 hover:text-purple-800 font-medium">
+                    Open Chat Refinement &rarr;
+                </a>
             </div>
 
             <!-- Stats -->
@@ -234,10 +189,6 @@
                     <div class="flex justify-between items-center">
                         <span class="text-sm text-gray-600">Total Pages</span>
                         <span class="text-sm font-semibold text-gray-900">{{ total_pages }}</span>
-                    </div>
-                    <div class="flex justify-between items-center">
-                        <span class="text-sm text-gray-600">Total Sections</span>
-                        <span class="text-sm font-semibold text-gray-900">{{ total_sections }}</span>
                     </div>
                 </div>
             </div>
@@ -254,8 +205,8 @@
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
                     </svg>
                 </div>
-                <p class="mt-6 text-lg font-semibold text-gray-900">Refining page sections...</p>
-                <p id="progressText" class="mt-2 text-sm text-gray-600 text-center">Processing sections...</p>
+                <p class="mt-6 text-lg font-semibold text-gray-900">Refining page...</p>
+                <p id="progressText" class="mt-2 text-sm text-gray-600 text-center">Processing with AI...</p>
                 <div class="mt-4 w-full bg-gray-200 rounded-full h-2">
                     <div id="progressBar" class="bg-cyan-600 h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
                 </div>
@@ -276,10 +227,14 @@
                     </button>
                 </div>
                 <div id="resultsContent" class="p-6 max-h-[500px] overflow-y-auto"></div>
-                <div class="flex items-center justify-end p-6 border-t bg-gray-50">
+                <div class="flex items-center justify-end gap-3 p-6 border-t bg-gray-50">
+                    <button onclick="closeResults()"
+                            class="px-6 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-100">
+                        Close
+                    </button>
                     <button onclick="viewPage()"
                             class="px-8 py-2 bg-cyan-600 text-white rounded-lg hover:bg-cyan-700">
-                        View Page Sections
+                        Edit Page
                     </button>
                 </div>
             </div>
@@ -289,73 +244,118 @@
 
 <script>
 let selectedPageId = null;
-let selectedPageSlug = null;
-let pageSections = [];
+let selectedFiles = [];
+
+// --- Image upload handling ---
+function handleImageSelect(event) {
+    const files = Array.from(event.target.files);
+    files.forEach(f => { if (f.type.startsWith('image/')) selectedFiles.push(f); });
+    renderImagePreviews();
+}
+
+function removeImage(index) {
+    selectedFiles.splice(index, 1);
+    renderImagePreviews();
+}
+
+function renderImagePreviews() {
+    const container = document.getElementById('imagePreviews');
+    container.innerHTML = '';
+    selectedFiles.forEach((file, i) => {
+        const url = URL.createObjectURL(file);
+        container.insertAdjacentHTML('beforeend', `
+            <div class="relative group">
+                <img src="${url}" class="w-full h-24 object-cover rounded-lg border border-gray-200">
+                <button type="button" onclick="removeImage(${i})"
+                        class="absolute -top-2 -right-2 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity">
+                    &times;
+                </button>
+                <p class="text-xs text-gray-500 truncate mt-1">${file.name}</p>
+            </div>
+        `);
+    });
+}
+
+// Drag and drop
+(function() {
+    document.addEventListener('DOMContentLoaded', function() {
+        const dz = document.getElementById('imageDropZone');
+        if (!dz) return;
+        ['dragenter','dragover'].forEach(e => dz.addEventListener(e, ev => { ev.preventDefault(); dz.classList.add('border-cyan-500','bg-cyan-50'); }));
+        ['dragleave','drop'].forEach(e => dz.addEventListener(e, ev => { ev.preventDefault(); dz.classList.remove('border-cyan-500','bg-cyan-50'); }));
+        dz.addEventListener('drop', ev => {
+            const files = Array.from(ev.dataTransfer.files);
+            files.forEach(f => { if (f.type.startsWith('image/')) selectedFiles.push(f); });
+            renderImagePreviews();
+        });
+    });
+})();
 
 async function loadPageInfo(pageId) {
     if (!pageId) {
         document.getElementById('pageInfoContainer').classList.add('hidden');
         document.getElementById('instructionsContainer').classList.add('hidden');
+        document.getElementById('imageContainer').classList.add('hidden');
         document.getElementById('modelContainer').classList.add('hidden');
         document.getElementById('warningContainer').classList.add('hidden');
-        document.getElementById('tipsContainer').classList.add('hidden');
         document.getElementById('actionContainer').classList.add('hidden');
+        document.getElementById('chatRefineLink').classList.add('hidden');
         return;
     }
 
     selectedPageId = pageId;
+    // Update chat refine link
+    document.getElementById('chatRefineHref').href = '/backoffice/ai/chat/refine/' + pageId + '/';
+    document.getElementById('chatRefineLink').classList.remove('hidden');
 
     try {
-        const response = await fetch(`/backoffice/api/page-sections/${pageId}/`);
+        const response = await fetch(`/backoffice/api/page-content/${pageId}/`);
         const data = await response.json();
 
         if (data.success) {
-            selectedPageSlug = data.page.slug;
-            pageSections = data.sections;
-
             const infoContainer = document.getElementById('pageInfo');
+            const htmlContent = data.html_content || '';
+            const translations = data.content?.translations || {};
+            const langCount = Object.keys(translations).length;
 
-            if (data.sections.length === 0) {
+            // Parse section names from data-section attributes
+            const sectionMatches = htmlContent.match(/data-section="[^"]+"/g) || [];
+            const sectionNames = sectionMatches.map(m => m.replace('data-section="', '').replace('"', ''));
+
+            const submitButtonText = document.getElementById('submitButtonText');
+
+            if (!htmlContent) {
                 infoContainer.innerHTML = `
-                    <p class="text-gray-700"><strong>Page:</strong> ${data.page.title}</p>
-                    <p class="text-gray-700"><strong>Sections:</strong> ${data.sections.length}</p>
+                    <p class="text-gray-700"><strong>Page:</strong> ${data.page.title} (${data.page.slug})</p>
                     <div class="mt-2 pt-2 border-t">
-                        <p class="text-sm text-blue-600 font-medium">📄 Empty page - ready to build from scratch!</p>
-                        <p class="text-xs text-gray-600 mt-1">Use the instructions field to describe what sections you want to create.</p>
+                        <p class="text-sm text-blue-600 font-medium">Empty page - AI will generate content from scratch</p>
                     </div>
                 `;
+                document.getElementById('warningContainer').classList.add('hidden');
+                submitButtonText.textContent = 'Build Page with AI';
             } else {
                 infoContainer.innerHTML = `
-                    <p class="text-gray-700"><strong>Page:</strong> ${data.page.title}</p>
-                    <p class="text-gray-700"><strong>Sections:</strong> ${data.sections.length}</p>
+                    <p class="text-gray-700"><strong>Page:</strong> ${data.page.title} (${data.page.slug})</p>
+                    <p class="text-gray-700"><strong>Sections:</strong> ${sectionNames.length}</p>
+                    <p class="text-gray-700"><strong>Languages:</strong> ${langCount}</p>
+                    ${sectionNames.length > 0 ? `
                     <div class="mt-2 pt-2 border-t">
                         <p class="text-xs text-gray-600 mb-1">Sections on this page:</p>
-                        <div class="space-y-1">
-                            ${data.sections.map(s => `
-                                <div class="text-xs text-gray-700">• ${s.section_type} (${s.key})</div>
+                        <div class="flex flex-wrap gap-1">
+                            ${sectionNames.map(name => `
+                                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-cyan-100 text-cyan-800">${name}</span>
                             `).join('')}
                         </div>
                     </div>
+                    ` : ''}
                 `;
-            }
-
-            // Update warning message and button text based on section count
-            const warningContainer = document.getElementById('warningContainer');
-            const submitButtonText = document.getElementById('submitButtonText');
-
-            if (data.sections.length === 0) {
-                // Hide warning for empty pages since there's nothing to refine
-                warningContainer.classList.add('hidden');
-                submitButtonText.textContent = 'Build Page with AI';
-            } else {
-                document.getElementById('sectionCount').textContent = data.sections.length;
-                warningContainer.classList.remove('hidden');
-                submitButtonText.textContent = 'Edit Page with AI';
+                document.getElementById('warningContainer').classList.remove('hidden');
+                submitButtonText.textContent = 'Refine Page with AI';
             }
 
             document.getElementById('pageInfoContainer').classList.remove('hidden');
-            document.getElementById('referencePagesContainer').classList.remove('hidden');
             document.getElementById('instructionsContainer').classList.remove('hidden');
+            document.getElementById('imageContainer').classList.remove('hidden');
             document.getElementById('modelContainer').classList.remove('hidden');
             document.getElementById('actionContainer').classList.remove('hidden');
         }
@@ -373,125 +373,121 @@ document.getElementById('refinePageForm').addEventListener('submit', async funct
         return;
     }
 
-    const formData = new FormData(this);
-    const instructions = formData.get('instructions');
-    const model = formData.get('model');
-    const promptVersion = formData.get('prompt_version') || 'v1';  // NEW: Get prompt version
+    const rawFormData = new FormData(this);
+    const instructions = rawFormData.get('instructions');
+    const model = rawFormData.get('model');
 
-    await refineAllSections(instructions, model, promptVersion);
-});
-
-async function refineAllSections(instructions, model, promptVersion) {
     showLoading();
-    updateProgress(0, 100, 'Preparing page data...');
+    simulateProgress();
 
     try {
-        // Get selected reference pages
-        const referenceCheckboxes = document.querySelectorAll('input[name="reference_pages"]:checked');
-        const referencePageIds = Array.from(referenceCheckboxes).map(cb => parseInt(cb.value));
+        let fetchOptions;
 
-        // Call new HTML-based refinement API
-        const response = await fetch('/ai/api/refine-page-with-html/', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': getCookie('csrftoken')
-            },
-            body: JSON.stringify({
-                page_id: selectedPageId,
-                instructions: instructions,
-                reference_page_ids: referencePageIds,
-                language: 'pt',
-                model: model,
-                prompt_version: promptVersion  // NEW: Send prompt version
-            })
-        });
+        if (selectedFiles.length > 0) {
+            // Use FormData for multipart upload with images
+            const fd = new FormData();
+            fd.append('page_id', selectedPageId);
+            fd.append('instructions', instructions);
+            fd.append('model', model);
+            selectedFiles.forEach(f => fd.append('reference_images', f));
+            fetchOptions = {
+                method: 'POST',
+                headers: { 'X-CSRFToken': getCookie('csrftoken') },
+                body: fd
+            };
+        } else {
+            // Use JSON body when no images
+            fetchOptions = {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken')
+                },
+                body: JSON.stringify({
+                    page_id: parseInt(selectedPageId),
+                    instructions: instructions,
+                    model: model
+                })
+            };
+        }
 
-        updateProgress(50, 100, 'Processing with AI...');
+        const response = await fetch('/ai/api/refine-page-with-html/', fetchOptions);
 
         const result = await response.json();
-
         hideLoading();
 
         if (result.success) {
-            // Combine updated and created sections for display
-            const updatedSections = (result.updated_sections || []).map(id => {
-                const section = pageSections.find(s => s.id === id);
-                return section ? `${section.section_type} (updated)` : 'Updated';
-            });
-
-            const createdSections = (result.created_sections || []).map((id, index) => {
-                return `Section ${index + 1} (created)`;
-            });
-
             displayResults({
-                refined: [...updatedSections, ...createdSections],
-                failed: [],
-                message: result.message
+                success: true,
+                message: result.message || 'Page refined successfully!'
             });
         } else {
             displayResults({
-                refined: [],
-                failed: [{ type: 'Page', error: result.error || 'Unknown error' }]
+                success: false,
+                error: result.error || 'Unknown error'
             });
         }
     } catch (error) {
         hideLoading();
         displayResults({
-            refined: [],
-            failed: [{ type: 'Page', error: error.message }]
+            success: false,
+            error: error.message
         });
     }
-}
+});
 
-function updateProgress(current, total, sectionType) {
-    const percent = (current / total) * 100;
-    document.getElementById('progressBar').style.width = percent + '%';
-    document.getElementById('progressText').textContent = `Refining "${sectionType}" (${current} of ${total})`;
+function simulateProgress() {
+    const progressBar = document.getElementById('progressBar');
+    let width = 0;
+    const interval = setInterval(() => {
+        if (width >= 90) {
+            clearInterval(interval);
+        } else {
+            width += Math.random() * 10;
+            progressBar.style.width = Math.min(width, 90) + '%';
+        }
+    }, 500);
 }
 
 function showLoading() {
     document.getElementById('loadingModal').classList.remove('hidden');
+    document.getElementById('progressBar').style.width = '0%';
 }
 
 function hideLoading() {
     document.getElementById('loadingModal').classList.add('hidden');
+    document.getElementById('progressBar').style.width = '100%';
 }
 
 function displayResults(results) {
     const container = document.getElementById('resultsContent');
-    const message = results.message || '';
 
-    container.innerHTML = `
-        <div class="space-y-4">
-            ${results.refined.length > 0 ? `
-                <div class="bg-green-50 border border-green-200 rounded-lg p-4">
-                    <p class="text-green-800 font-medium">✓ ${message || `Successfully processed ${results.refined.length} section(s)`}</p>
-                    <div class="mt-2 text-sm text-green-700 flex flex-wrap gap-2">
-                        ${results.refined.map(type => `
-                            <span class="bg-green-100 px-2 py-1 rounded">${type}</span>
-                        `).join('')}
-                    </div>
+    if (results.success) {
+        container.innerHTML = `
+            <div class="bg-green-50 border border-green-200 rounded-lg p-4">
+                <div class="flex items-center">
+                    <svg class="w-5 h-5 text-green-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                    <p class="text-green-800 font-medium">${results.message}</p>
                 </div>
-            ` : ''}
-            ${results.failed.length > 0 ? `
-                <div class="bg-red-50 border border-red-200 rounded-lg p-4">
-                    <p class="text-red-800 font-medium">✗ Failed to process ${results.failed.length} section(s)</p>
-                    <ul class="mt-2 space-y-1 text-sm text-red-700">
-                        ${results.failed.map(f => `
-                            <li>• ${f.type}: ${f.error}</li>
-                        `).join('')}
-                    </ul>
-                </div>
-            ` : ''}
-        </div>
-    `;
+                <p class="mt-2 text-sm text-green-700">A version snapshot was saved before changes. You can roll back from the page editor if needed.</p>
+            </div>
+        `;
+    } else {
+        container.innerHTML = `
+            <div class="bg-red-50 border border-red-200 rounded-lg p-4">
+                <p class="text-red-800 font-medium">Refinement failed</p>
+                <p class="mt-1 text-sm text-red-700">${results.error}</p>
+            </div>
+        `;
+    }
     document.getElementById('resultsModal').classList.remove('hidden');
 }
 
 function viewPage() {
-    if (selectedPageSlug) {
-        window.location.href = `/backoffice/sections/page/${selectedPageSlug}/`;
+    if (selectedPageId) {
+        window.location.href = `/backoffice/page/${selectedPageId}/edit/`;
     }
 }
 
@@ -513,5 +509,13 @@ function getCookie(name) {
     }
     return cookieValue;
 }
+
+// Auto-load page info if pre-selected
+document.addEventListener('DOMContentLoaded', function() {
+    const pageSelect = document.getElementById('pageSelect');
+    if (pageSelect.value) {
+        loadPageInfo(pageSelect.value);
+    }
+});
 </script>
 {% endblock %}

@@ -15,10 +15,12 @@ urlpatterns = [
 
     # API Endpoints
     path('api/update-site-settings/', api_views.update_site_settings, name='api_update_site_settings'),
+    path('api/get-site-settings/', api_views.get_site_settings, name='api_get_site_settings'),
     path('api/update-languages/', api_views.update_languages, name='api_update_languages'),
     path('api/media-library/', api_views.get_media_library, name='api_media_library'),
     path('api/upload-images/', api_views.upload_images, name='api_upload_images'),
     path('api/page-content/<int:page_id>/', api_views.get_page_content, name='api_page_content'),
+    path('api/generate-design-guide/', api_views.generate_design_guide, name='api_generate_design_guide'),
 
     # Media Management
     path('media/', views.MediaView.as_view(), name='media'),
@@ -47,6 +49,7 @@ urlpatterns = [
     path('ai/bulk/pages/', views.AIBulkPagesView.as_view(), name='ai_bulk_pages'),
     path('ai/refine/page/', views.AIRefinePageView.as_view(), name='ai_refine_page'),
     path('ai/refine/page/<str:page_slug>/', views.AIRefinePageView.as_view(), name='ai_refine_page_with_slug'),
+    path('ai/chat/refine/<int:page_id>/', views.AIChatRefineView.as_view(), name='ai_chat_refine'),
     path('ai/components/', views.AIComponentsView.as_view(), name='ai_components'),
 
     # Version Management

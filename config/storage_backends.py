@@ -4,7 +4,7 @@ Custom storage backends for Google Cloud Storage with domain-based folder organi
 Each site/domain gets its own folder in the GCS bucket for isolated storage.
 """
 
-from storages.backends.gcs import GoogleCloudStorage
+from storages.backends.gcloud import GoogleCloudStorage
 from django.conf import settings
 
 
@@ -23,7 +23,19 @@ class DomainBasedStorage(GoogleCloudStorage):
     """
     def __init__(self, *args, **kwargs):
         # Get domain from settings (set by DomainMiddleware during request)
-        domain = getattr(settings, 'CURRENT_DOMAIN', 'default')
+        domain = getattr(settings, 'CURRENT_DOMAIN', '')
+
+        # Fallback to SiteSettings.domain if no request context
+        if not domain or domain == 'default':
+            try:
+                from core.models import SiteSettings
+                site_settings = SiteSettings.objects.first()
+                if site_settings and site_settings.domain:
+                    domain = site_settings.domain
+                else:
+                    domain = 'default'
+            except Exception:
+                domain = 'default'
 
         # Clean the domain for use as folder name
         # Replace dots with dashes and remove port numbers

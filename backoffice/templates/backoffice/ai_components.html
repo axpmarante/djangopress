@@ -30,7 +30,7 @@
     <!-- Header -->
     <div class="mb-8">
         <h1 class="text-3xl font-bold text-gray-900 mb-2">Components</h1>
-        <p class="text-gray-600">Manage site-wide components like header, footer, global sections, and legal pages</p>
+        <p class="text-gray-600">Generate or refine site-wide components like header and footer using AI</p>
     </div>
 
     <!-- Tab Navigation -->
@@ -41,12 +41,6 @@
             </button>
             <button onclick="switchTab('footer')" id="tab-footer" class="tab-button border-b-2 border-transparent py-4 px-1 text-sm font-medium text-gray-500 hover:text-gray-700 hover:border-gray-300">
                 Footer
-            </button>
-            <button onclick="switchTab('global')" id="tab-global" class="tab-button border-b-2 border-transparent py-4 px-1 text-sm font-medium text-gray-500 hover:text-gray-700 hover:border-gray-300">
-                Global Sections
-            </button>
-            <button onclick="switchTab('legal')" id="tab-legal" class="tab-button border-b-2 border-transparent py-4 px-1 text-sm font-medium text-gray-500 hover:text-gray-700 hover:border-gray-300">
-                Legal Pages
             </button>
         </nav>
     </div>
@@ -59,13 +53,18 @@
             <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
                 <div class="flex items-start justify-between mb-6">
                     <div>
-                        <h2 class="text-xl font-semibold text-gray-900 mb-2">Generate/Update Header</h2>
-                        <p class="text-sm text-gray-600">Create or refine your site's header navigation</p>
+                        <h2 class="text-xl font-semibold text-gray-900 mb-2">Generate/Refine Header</h2>
+                        <p class="text-sm text-gray-600">Create or refine your site's header navigation using AI</p>
                     </div>
-                    <div class="w-12 h-12 bg-gradient-to-r from-cyan-500 to-blue-500 rounded-lg flex items-center justify-center">
-                        <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
-                        </svg>
+                    <div class="flex items-center gap-3">
+                        <a href="{% url 'backoffice:header_edit' %}" class="text-sm text-cyan-600 hover:text-cyan-800 underline">
+                            Edit Header Directly
+                        </a>
+                        <div class="w-12 h-12 bg-gradient-to-r from-cyan-500 to-blue-500 rounded-lg flex items-center justify-center">
+                            <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
+                            </svg>
+                        </div>
                     </div>
                 </div>
 
@@ -77,10 +76,11 @@
                         <textarea name="instructions" rows="4" required
                                   class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-transparent"
                                   placeholder="Describe the header you want (e.g., 'Modern header with Home, Services, About, Contact links and a CTA button')"></textarea>
-                        <p class="mt-2 text-sm text-gray-500">Describe the navigation structure, links, and any special elements</p>
+                        <p class="mt-2 text-sm text-gray-500">Describe the navigation structure, links, and any special elements. AI will use your site's pages and design system.</p>
                     </div>
 
                     <!-- AI Model Selection -->
+                    {% if ai_models %}
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-3">AI Model</label>
                         <div class="space-y-2">
@@ -94,6 +94,7 @@
                             {% endfor %}
                         </div>
                     </div>
+                    {% endif %}
 
                     <div class="flex gap-3">
                         <button type="submit" class="flex-1 bg-gradient-to-r from-cyan-500 to-blue-500 text-white px-6 py-3 rounded-lg font-medium hover:from-cyan-600 hover:to-blue-600 transition-all">
@@ -109,13 +110,18 @@
             <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
                 <div class="flex items-start justify-between mb-6">
                     <div>
-                        <h2 class="text-xl font-semibold text-gray-900 mb-2">Generate/Update Footer</h2>
-                        <p class="text-sm text-gray-600">Create or refine your site's footer</p>
+                        <h2 class="text-xl font-semibold text-gray-900 mb-2">Generate/Refine Footer</h2>
+                        <p class="text-sm text-gray-600">Create or refine your site's footer using AI</p>
                     </div>
-                    <div class="w-12 h-12 bg-gradient-to-r from-blue-500 to-indigo-500 rounded-lg flex items-center justify-center">
-                        <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
-                        </svg>
+                    <div class="flex items-center gap-3">
+                        <a href="{% url 'backoffice:footer_edit' %}" class="text-sm text-blue-600 hover:text-blue-800 underline">
+                            Edit Footer Directly
+                        </a>
+                        <div class="w-12 h-12 bg-gradient-to-r from-blue-500 to-indigo-500 rounded-lg flex items-center justify-center">
+                            <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
+                            </svg>
+                        </div>
                     </div>
                 </div>
 
@@ -127,10 +133,11 @@
                         <textarea name="instructions" rows="4" required
                                   class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                   placeholder="Describe the footer you want (e.g., 'Footer with company info, quick links, contact details, and social media icons')"></textarea>
-                        <p class="mt-2 text-sm text-gray-500">Describe the footer structure, columns, and content sections</p>
+                        <p class="mt-2 text-sm text-gray-500">Describe the footer structure, columns, and content sections. AI will use your site's settings and design system.</p>
                     </div>
 
                     <!-- AI Model Selection -->
+                    {% if ai_models %}
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-3">AI Model</label>
                         <div class="space-y-2">
@@ -144,158 +151,13 @@
                             {% endfor %}
                         </div>
                     </div>
+                    {% endif %}
 
                     <div class="flex gap-3">
                         <button type="submit" class="flex-1 bg-gradient-to-r from-blue-500 to-indigo-500 text-white px-6 py-3 rounded-lg font-medium hover:from-blue-600 hover:to-indigo-600 transition-all">
                             Generate Footer
                         </button>
                     </div>
-                </form>
-            </div>
-        </div>
-
-        <!-- GLOBAL SECTIONS TAB -->
-        <div id="content-global" class="tab-content hidden">
-            <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                <div class="flex items-start justify-between mb-6">
-                    <div>
-                        <h2 class="text-xl font-semibold text-gray-900 mb-2">Global Sections</h2>
-                        <p class="text-sm text-gray-600">Sections that appear across multiple pages</p>
-                    </div>
-                    <div class="w-12 h-12 bg-gradient-to-r from-purple-500 to-pink-500 rounded-lg flex items-center justify-center">
-                        <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z"/>
-                        </svg>
-                    </div>
-                </div>
-
-                <!-- Existing Global Sections -->
-                {% if global_sections %}
-                <div class="mb-8">
-                    <h3 class="text-lg font-semibold text-gray-900 mb-4">Existing Global Sections</h3>
-                    <div class="space-y-3">
-                        {% for section in global_sections %}
-                        <div class="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:bg-gray-50">
-                            <div class="flex items-center gap-4">
-                                <div class="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
-                                    <span class="text-purple-600 font-semibold text-sm">{{ section.order }}</span>
-                                </div>
-                                <div>
-                                    <h4 class="font-medium text-gray-900">{{ section.key }}</h4>
-                                    <p class="text-sm text-gray-500">Type: {{ section.section_type }}</p>
-                                </div>
-                            </div>
-                            <div class="flex gap-2">
-                                <button onclick="refineGlobalSection({{ section.id }})" class="px-3 py-1 text-sm text-blue-600 hover:bg-blue-50 rounded">
-                                    Refine
-                                </button>
-                            </div>
-                        </div>
-                        {% endfor %}
-                    </div>
-                </div>
-                {% endif %}
-
-                <!-- Create New Global Section -->
-                <div class="border-t border-gray-200 pt-6">
-                    <h3 class="text-lg font-semibold text-gray-900 mb-4">Create New Global Section</h3>
-                    <form id="globalSectionForm" class="space-y-6">
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-2">
-                                Section Description
-                            </label>
-                            <textarea name="brief" rows="4" required
-                                      class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                                      placeholder="Describe the global section (e.g., 'Newsletter signup banner with email capture form')"></textarea>
-                        </div>
-
-                        <!-- AI Model Selection -->
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-3">AI Model</label>
-                            <div class="space-y-2">
-                                {% for model_id, model_name in ai_models %}
-                                <label class="flex items-center p-3 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50">
-                                    <input type="radio" name="model" value="{{ model_id }}"
-                                           {% if model_id == default_model %}checked{% endif %}
-                                           class="w-4 h-4 text-purple-600 border-gray-300 focus:ring-purple-500">
-                                    <span class="ml-3 text-sm font-medium text-gray-900">{{ model_name }}</span>
-                                </label>
-                                {% endfor %}
-                            </div>
-                        </div>
-
-                        <button type="submit" class="w-full bg-gradient-to-r from-purple-500 to-pink-500 text-white px-6 py-3 rounded-lg font-medium hover:from-purple-600 hover:to-pink-600 transition-all">
-                            Generate Global Section
-                        </button>
-                    </form>
-                </div>
-            </div>
-        </div>
-
-        <!-- LEGAL PAGES TAB -->
-        <div id="content-legal" class="tab-content hidden">
-            <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                <div class="flex items-start justify-between mb-6">
-                    <div>
-                        <h2 class="text-xl font-semibold text-gray-900 mb-2">Legal Pages</h2>
-                        <p class="text-sm text-gray-600">Generate privacy policy, cookie policy, and terms of service</p>
-                    </div>
-                    <div class="w-12 h-12 bg-gradient-to-r from-gray-500 to-gray-700 rounded-lg flex items-center justify-center">
-                        <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-                        </svg>
-                    </div>
-                </div>
-
-                <form id="legalPagesForm" class="space-y-6">
-                    <!-- Page Selection -->
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-3">Select Pages to Generate</label>
-                        <div class="space-y-2">
-                            <label class="flex items-center p-3 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50">
-                                <input type="checkbox" name="pages" value="privacy" class="w-4 h-4 text-gray-600 border-gray-300 rounded focus:ring-gray-500">
-                                <span class="ml-3 text-sm font-medium text-gray-900">Privacy Policy</span>
-                            </label>
-                            <label class="flex items-center p-3 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50">
-                                <input type="checkbox" name="pages" value="cookies" class="w-4 h-4 text-gray-600 border-gray-300 rounded focus:ring-gray-500">
-                                <span class="ml-3 text-sm font-medium text-gray-900">Cookie Policy</span>
-                            </label>
-                            <label class="flex items-center p-3 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50">
-                                <input type="checkbox" name="pages" value="terms" class="w-4 h-4 text-gray-600 border-gray-300 rounded focus:ring-gray-500">
-                                <span class="ml-3 text-sm font-medium text-gray-900">Terms of Service</span>
-                            </label>
-                        </div>
-                    </div>
-
-                    <!-- Company Information -->
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-2">
-                            Company/Site Information (Optional)
-                        </label>
-                        <textarea name="company_info" rows="3"
-                                  class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-500 focus:border-transparent"
-                                  placeholder="Additional company details for personalized legal content (e.g., jurisdiction, specific services, data collection practices)"></textarea>
-                        <p class="mt-2 text-sm text-gray-500">Leave blank for generic templates, or provide details for customized content</p>
-                    </div>
-
-                    <!-- AI Model Selection -->
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-3">AI Model</label>
-                        <div class="space-y-2">
-                            {% for model_id, model_name in ai_models %}
-                            <label class="flex items-center p-3 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50">
-                                <input type="radio" name="model" value="{{ model_id }}"
-                                       {% if model_id == default_model %}checked{% endif %}
-                                       class="w-4 h-4 text-gray-600 border-gray-300 focus:ring-gray-500">
-                                <span class="ml-3 text-sm font-medium text-gray-900">{{ model_name }}</span>
-                            </label>
-                            {% endfor %}
-                        </div>
-                    </div>
-
-                    <button type="submit" class="w-full bg-gradient-to-r from-gray-500 to-gray-700 text-white px-6 py-3 rounded-lg font-medium hover:from-gray-600 hover:to-gray-800 transition-all">
-                        Generate Legal Pages
-                    </button>
                 </form>
             </div>
         </div>
@@ -344,38 +206,28 @@
 <script>
 // Tab switching
 function switchTab(tabName) {
-    // Hide all content
     document.querySelectorAll('.tab-content').forEach(content => {
         content.classList.add('hidden');
     });
 
-    // Remove active state from all tabs
     document.querySelectorAll('.tab-button').forEach(button => {
-        button.classList.remove('border-cyan-500', 'border-blue-500', 'border-purple-500', 'border-gray-500');
-        button.classList.remove('text-cyan-600', 'text-blue-600', 'text-purple-600', 'text-gray-600');
+        button.classList.remove('border-cyan-500', 'border-blue-500');
+        button.classList.remove('text-cyan-600', 'text-blue-600');
         button.classList.add('border-transparent', 'text-gray-500');
     });
 
-    // Show selected content
     document.getElementById('content-' + tabName).classList.remove('hidden');
 
-    // Add active state to selected tab
     const activeTab = document.getElementById('tab-' + tabName);
     activeTab.classList.remove('border-transparent', 'text-gray-500');
 
-    // Apply color based on tab
     if (tabName === 'header') {
         activeTab.classList.add('border-cyan-500', 'text-cyan-600');
     } else if (tabName === 'footer') {
         activeTab.classList.add('border-blue-500', 'text-blue-600');
-    } else if (tabName === 'global') {
-        activeTab.classList.add('border-purple-500', 'text-purple-600');
-    } else if (tabName === 'legal') {
-        activeTab.classList.add('border-gray-500', 'text-gray-600');
     }
 }
 
-// Modal functions
 function showLoading(title = 'Generating...', message = 'Please wait while AI creates your content') {
     document.getElementById('loadingTitle').textContent = title;
     document.getElementById('loadingMessage').textContent = message;
@@ -395,6 +247,12 @@ function closeResultsModal() {
     document.getElementById('resultsModal').classList.add('hidden');
 }
 
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.appendChild(document.createTextNode(text));
+    return div.innerHTML;
+}
+
 // Header Form
 document.getElementById('headerForm').addEventListener('submit', async function(e) {
     e.preventDefault();
@@ -403,7 +261,7 @@ document.getElementById('headerForm').addEventListener('submit', async function(
     showLoading('Generating Header...', 'AI is creating your header navigation');
 
     try {
-        const response = await fetch('/ai/api/generate-header/', {
+        const response = await fetch('/ai/api/refine-header/', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -419,13 +277,17 @@ document.getElementById('headerForm').addEventListener('submit', async function(
         hideLoading();
 
         if (data.success) {
+            const section = data.section || {};
             showResults(`
                 <div class="bg-green-50 border border-green-200 rounded-lg p-4 mb-4">
-                    <p class="text-green-800 font-medium">✓ Header generated successfully!</p>
+                    <p class="text-green-800 font-medium">Header generated and saved successfully!</p>
                 </div>
                 <div class="bg-gray-50 p-4 rounded-lg">
-                    <h4 class="font-semibold mb-2">Preview:</h4>
-                    <pre class="text-sm text-gray-700 whitespace-pre-wrap">${JSON.stringify(data.header, null, 2)}</pre>
+                    <div class="flex items-center justify-between mb-2">
+                        <h4 class="font-semibold">HTML Template Preview</h4>
+                        <a href="{% url 'backoffice:header_edit' %}" class="text-sm text-cyan-600 hover:underline">Edit in Header Editor</a>
+                    </div>
+                    <pre class="text-sm text-gray-700 whitespace-pre-wrap max-h-96 overflow-y-auto">${escapeHtml(section.html_template || 'No template generated')}</pre>
                 </div>
             `);
         } else {
@@ -453,7 +315,7 @@ document.getElementById('footerForm').addEventListener('submit', async function(
     showLoading('Generating Footer...', 'AI is creating your footer');
 
     try {
-        const response = await fetch('/ai/api/generate-footer/', {
+        const response = await fetch('/ai/api/refine-footer/', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -469,13 +331,17 @@ document.getElementById('footerForm').addEventListener('submit', async function(
         hideLoading();
 
         if (data.success) {
+            const section = data.section || {};
             showResults(`
                 <div class="bg-green-50 border border-green-200 rounded-lg p-4 mb-4">
-                    <p class="text-green-800 font-medium">✓ Footer generated successfully!</p>
+                    <p class="text-green-800 font-medium">Footer generated and saved successfully!</p>
                 </div>
                 <div class="bg-gray-50 p-4 rounded-lg">
-                    <h4 class="font-semibold mb-2">Preview:</h4>
-                    <pre class="text-sm text-gray-700 whitespace-pre-wrap">${JSON.stringify(data.footer, null, 2)}</pre>
+                    <div class="flex items-center justify-between mb-2">
+                        <h4 class="font-semibold">HTML Template Preview</h4>
+                        <a href="{% url 'backoffice:footer_edit' %}" class="text-sm text-blue-600 hover:underline">Edit in Footer Editor</a>
+                    </div>
+                    <pre class="text-sm text-gray-700 whitespace-pre-wrap max-h-96 overflow-y-auto">${escapeHtml(section.html_template || 'No template generated')}</pre>
                 </div>
             `);
         } else {
@@ -494,174 +360,6 @@ document.getElementById('footerForm').addEventListener('submit', async function(
         `);
     }
 });
-
-// Global Section Form
-document.getElementById('globalSectionForm').addEventListener('submit', async function(e) {
-    e.preventDefault();
-    const formData = new FormData(this);
-
-    showLoading('Generating Global Section...', 'AI is creating your global section');
-
-    try {
-        const response = await fetch('/ai/api/generate-section/', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': '{{ csrf_token }}'
-            },
-            body: JSON.stringify({
-                brief: formData.get('brief'),
-                is_global: true,
-                model: formData.get('model')
-            })
-        });
-
-        const data = await response.json();
-        hideLoading();
-
-        if (data.success) {
-            showResults(`
-                <div class="bg-green-50 border border-green-200 rounded-lg p-4 mb-4">
-                    <p class="text-green-800 font-medium">✓ Global section generated successfully!</p>
-                </div>
-                <div class="space-y-4">
-                    ${data.sections.map(section => `
-                        <div class="bg-gray-50 p-4 rounded-lg">
-                            <h4 class="font-semibold mb-2">${section.language}</h4>
-                            <p class="text-sm text-gray-600 mb-2">Type: ${section.section_type}</p>
-                            <pre class="text-sm text-gray-700 whitespace-pre-wrap max-h-64 overflow-y-auto">${JSON.stringify(section.content, null, 2)}</pre>
-                        </div>
-                    `).join('')}
-                </div>
-            `);
-
-            // Reload page after 2 seconds to show new global section
-            setTimeout(() => location.reload(), 2000);
-        } else {
-            showResults(`
-                <div class="bg-red-50 border border-red-200 rounded-lg p-4">
-                    <p class="text-red-800">${data.error || 'Failed to generate global section'}</p>
-                </div>
-            `);
-        }
-    } catch (error) {
-        hideLoading();
-        showResults(`
-            <div class="bg-red-50 border border-red-200 rounded-lg p-4">
-                <p class="text-red-800">Error: ${error.message}</p>
-            </div>
-        `);
-    }
-});
-
-// Legal Pages Form
-document.getElementById('legalPagesForm').addEventListener('submit', async function(e) {
-    e.preventDefault();
-    const formData = new FormData(this);
-    const selectedPages = Array.from(formData.getAll('pages'));
-
-    if (selectedPages.length === 0) {
-        alert('Please select at least one legal page to generate');
-        return;
-    }
-
-    showLoading('Generating Legal Pages...', `Creating ${selectedPages.length} legal page(s)`);
-
-    try {
-        const response = await fetch('/ai/api/generate-legal-pages/', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': '{{ csrf_token }}'
-            },
-            body: JSON.stringify({
-                pages: selectedPages,
-                company_info: formData.get('company_info'),
-                model: formData.get('model')
-            })
-        });
-
-        const data = await response.json();
-        hideLoading();
-
-        if (data.success) {
-            const resultsHtml = `
-                <div class="bg-green-50 border border-green-200 rounded-lg p-4 mb-4">
-                    <p class="text-green-800 font-medium">✓ Legal pages generated successfully!</p>
-                </div>
-                <div class="space-y-4">
-                    ${data.results.map(result => `
-                        <div class="bg-gray-50 p-4 rounded-lg">
-                            <h4 class="font-semibold mb-2">${result.page_name}</h4>
-                            <p class="text-sm text-gray-600">Status: ${result.status}</p>
-                            ${result.page_url ? `<a href="${result.page_url}" class="text-blue-600 hover:underline text-sm">View Page →</a>` : ''}
-                        </div>
-                    `).join('')}
-                </div>
-            `;
-            showResults(resultsHtml);
-        } else {
-            showResults(`
-                <div class="bg-red-50 border border-red-200 rounded-lg p-4">
-                    <p class="text-red-800">${data.error || 'Failed to generate legal pages'}</p>
-                </div>
-            `);
-        }
-    } catch (error) {
-        hideLoading();
-        showResults(`
-            <div class="bg-red-50 border border-red-200 rounded-lg p-4">
-                <p class="text-red-800">Error: ${error.message}</p>
-            </div>
-        `);
-    }
-});
-
-// Refine global section
-function refineGlobalSection(sectionId) {
-    const instructions = prompt('Enter refinement instructions for this global section:');
-    if (!instructions) return;
-
-    showLoading('Refining Section...', 'AI is improving your global section');
-
-    fetch('/ai/api/refine-section/', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-CSRFToken': '{{ csrf_token }}'
-        },
-        body: JSON.stringify({
-            section_id: sectionId,
-            instructions: instructions
-        })
-    })
-    .then(response => response.json())
-    .then(data => {
-        hideLoading();
-        if (data.success) {
-            showResults(`
-                <div class="bg-green-50 border border-green-200 rounded-lg p-4 mb-4">
-                    <p class="text-green-800 font-medium">✓ Section refined successfully!</p>
-                </div>
-            `);
-            setTimeout(() => location.reload(), 1500);
-        } else {
-            showResults(`
-                <div class="bg-red-50 border border-red-200 rounded-lg p-4">
-                    <p class="text-red-800">${data.error || 'Failed to refine section'}</p>
-                </div>
-            `);
-        }
-    })
-    .catch(error => {
-        hideLoading();
-        showResults(`
-            <div class="bg-red-50 border border-red-200 rounded-lg p-4">
-                <p class="text-red-800">Error: ${error.message}</p>
-            </div>
-        `);
-    });
-}
 </script>
 
 {% endblock %}

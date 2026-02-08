@@ -24,6 +24,9 @@ urlpatterns = [
     path('api/refinement-session/<int:session_id>/', views.get_refinement_session_api, name='get_refinement_session'),
     path('api/refinement-sessions/<int:page_id>/', views.list_refinement_sessions_api, name='list_refinement_sessions'),
 
+    # Design guide generation
+    path('api/generate-design-guide/', views.generate_design_guide_ai_api, name='generate_design_guide_ai'),
+
     # Image processing
     path('api/process-page-images/', views.process_page_images_api, name='process_page_images'),
 ]

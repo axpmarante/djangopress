@@ -9,12 +9,12 @@ from django.utils.translation import gettext_lazy as _
 import warnings
 import os
 
-# Load environment variables
-env = environ.Env()
-env.read_env()
-
 # Base directory
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+# Load environment variables
+env = environ.Env()
+env.read_env(BASE_DIR / '.env')
 
 # Environment
 ENVIRONMENT = env('ENVIRONMENT', default='development')
@@ -134,92 +134,72 @@ if ENVIRONMENT == 'development':
 else:
     STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
-# Media files configuration
-if ENVIRONMENT == 'development':
-    # Local media files for development
-    MEDIA_URL = '/media/'
-    MEDIA_ROOT = BASE_DIR / 'media'
-
-    # Default STORAGES for development
-    STORAGES = {
-        "default": {
-            "BACKEND": "django.core.files.storage.FileSystemStorage",
-        },
-        "staticfiles": {
-            "BACKEND": "whitenoise.storage.StaticFilesStorage",
-        },
-    }
-else:
-    # Production environment - Security settings
+# Production-only security settings
+if ENVIRONMENT != 'development':
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
     SECURE_SSL_REDIRECT = False
     SECURE_BROWSER_XSS_FILTER = True
     SECURE_CONTENT_TYPE_NOSNIFF = True
 
-    # Check if Google Cloud Storage is configured
-    if env('GS_BUCKET_NAME', default=''):
-        # Google Cloud Storage configuration with domain-based folders
-        from google.oauth2 import service_account
-        import json
+# Staticfiles backend for STORAGES
+_staticfiles_backend = (
+    "whitenoise.storage.StaticFilesStorage" if ENVIRONMENT == 'development'
+    else "whitenoise.storage.CompressedManifestStaticFilesStorage"
+)
 
-        GS_BUCKET_NAME = env('GS_BUCKET_NAME')
-        GS_PROJECT_ID = env('GS_PROJECT_ID')
+# Media files configuration — GCS if configured, local otherwise
+if env('GS_BUCKET_NAME', default=''):
+    from google.oauth2 import service_account
+    import json
 
-        # Set MEDIA_URL to GCS bucket
-        MEDIA_URL = f'https://storage.googleapis.com/{GS_BUCKET_NAME}/'
+    GS_BUCKET_NAME = env('GS_BUCKET_NAME')
+    GS_PROJECT_ID = env('GS_PROJECT_ID')
 
-        # Credentials setup - supports both file path and JSON string
-        credentials_json = env('GCS_CREDENTIALS_JSON', default='')
-        credentials_path = env('GS_CREDENTIALS_FILE_PATH', default='')
+    MEDIA_URL = f'https://storage.googleapis.com/{GS_BUCKET_NAME}/'
 
-        if credentials_json:
-            # Option 1: Load from environment variable JSON string (good for Railway/Heroku)
-            GS_CREDENTIALS = service_account.Credentials.from_service_account_info(
-                json.loads(credentials_json)
-            )
-        elif credentials_path:
-            # Option 2: Load from file path (good for local development)
-            GS_CREDENTIALS_FILE_PATH = BASE_DIR / credentials_path
-            GS_CREDENTIALS = service_account.Credentials.from_service_account_file(
-                GS_CREDENTIALS_FILE_PATH
-            )
-        else:
-            GS_CREDENTIALS = None
+    # Credentials setup - supports both file path and JSON string
+    credentials_json = env('GCS_CREDENTIALS_JSON', default='')
+    credentials_path = env('GS_CREDENTIALS_FILE_PATH', default='')
 
-        GS_DEFAULT_ACL = None  # Use bucket's default ACL
-        GS_FILE_OVERWRITE = False  # Don't overwrite files with same name
-        GS_MAX_MEMORY_SIZE = 5242880  # 5MB - files larger than this use streaming
-        GS_QUERYSTRING_AUTH = False  # Generate public URLs without authentication
-
-        # Default domain fallback (used in management commands when no request context)
-        CURRENT_DOMAIN = env('DEFAULT_DOMAIN', default='default')
-
-        # Configure STORAGES for Django 4.2+
-        STORAGES = {
-            "default": {
-                "BACKEND": "config.storage_backends.DomainBasedStorage",
-            },
-            "staticfiles": {
-                "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
-            },
-        }
-
-        # Keep for backward compatibility
-        DEFAULT_FILE_STORAGE = 'config.storage_backends.DomainBasedStorage'
+    if credentials_json:
+        GS_CREDENTIALS = service_account.Credentials.from_service_account_info(
+            json.loads(credentials_json)
+        )
+    elif credentials_path:
+        GS_CREDENTIALS_FILE_PATH = BASE_DIR / credentials_path
+        GS_CREDENTIALS = service_account.Credentials.from_service_account_file(
+            GS_CREDENTIALS_FILE_PATH
+        )
     else:
-        # Fallback to local media storage if GCS not configured in production
-        MEDIA_URL = '/media/'
-        MEDIA_ROOT = BASE_DIR / 'media'
+        GS_CREDENTIALS = None
 
-        STORAGES = {
-            "default": {
-                "BACKEND": "django.core.files.storage.FileSystemStorage",
-            },
-            "staticfiles": {
-                "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
-            },
-        }
+    GS_DEFAULT_ACL = None
+    GS_FILE_OVERWRITE = False
+    GS_MAX_MEMORY_SIZE = 5242880  # 5MB
+    GS_QUERYSTRING_AUTH = False
+
+    STORAGES = {
+        "default": {
+            "BACKEND": "config.storage_backends.DomainBasedStorage",
+        },
+        "staticfiles": {
+            "BACKEND": _staticfiles_backend,
+        },
+    }
+    DEFAULT_FILE_STORAGE = 'config.storage_backends.DomainBasedStorage'
+else:
+    MEDIA_URL = '/media/'
+    MEDIA_ROOT = BASE_DIR / 'media'
+
+    STORAGES = {
+        "default": {
+            "BACKEND": "django.core.files.storage.FileSystemStorage",
+        },
+        "staticfiles": {
+            "BACKEND": _staticfiles_backend,
+        },
+    }
 
 # CSRF Trusted Origins
 CSRF_TRUSTED_ORIGINS = [

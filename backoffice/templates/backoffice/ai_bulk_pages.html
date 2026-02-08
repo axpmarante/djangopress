@@ -153,10 +153,6 @@ Make it professional and engaging for young athletes and their families."></text
                         <span class="text-sm text-gray-600">Existing Pages</span>
                         <span class="text-sm font-semibold text-gray-900">{{ total_pages }}</span>
                     </div>
-                    <div class="flex justify-between items-center">
-                        <span class="text-sm text-gray-600">Total Sections</span>
-                        <span class="text-sm font-semibold text-gray-900">{{ total_sections }}</span>
-                    </div>
                 </div>
             </div>
 
@@ -433,7 +429,10 @@ async function createAllPages() {
                 body: JSON.stringify({
                     title: page.title_i18n || page.title,
                     slug: page.slug_i18n || page.slug,
-                    sections: []  // Empty array - no sections
+                    page_data: {
+                        html_content: '',
+                        content: {translations: {}}
+                    }
                 })
             });
 

@@ -296,15 +296,12 @@ class PageEditView(LoginRequiredMixin, TemplateView):
             # Get AI configuration
             try:
                 from ai.utils.llm_config import LLMConfig
-                from ai.utils.prompts_v2 import PromptVersionManager
                 config = LLMConfig()
                 context['ai_models'] = config.get_available_models()
                 context['default_model'] = config.default_model
-                context['prompt_versions'] = PromptVersionManager.get_available_versions()
-            except Exception as e:
+            except Exception:
                 context['ai_models'] = []
                 context['default_model'] = None
-                context['prompt_versions'] = [('v1', 'V1 - Comprehensive'), ('v2', 'V2 - Simplified')]
 
         except Page.DoesNotExist:
             context['page'] = None
@@ -315,7 +312,6 @@ class PageEditView(LoginRequiredMixin, TemplateView):
             context['reference_pages'] = []
             context['ai_models'] = []
             context['default_model'] = None
-            context['prompt_versions'] = [('v1', 'V1 - Comprehensive'), ('v2', 'V2 - Simplified')]
 
         return context
 
@@ -390,6 +386,22 @@ class SettingsView(LoginRequiredMixin, TemplateView):
         context = super().get_context_data(**kwargs)
         context['settings'], _ = SiteSettings.objects.get_or_create(pk=1)
         context['google_fonts'] = GOOGLE_FONTS_CHOICES
+
+        # Pages with content (for AI design guide generation)
+        context['pages_with_content'] = Page.objects.filter(
+            is_active=True
+        ).exclude(html_content='').order_by('id')
+
+        # AI models
+        try:
+            from ai.utils.llm_config import LLMConfig
+            config = LLMConfig()
+            context['ai_models'] = config.get_available_models()
+            context['default_model'] = config.default_model
+        except Exception:
+            context['ai_models'] = []
+            context['default_model'] = 'gemini-pro'
+
         return context
 
     def post(self, request, *args, **kwargs):
@@ -407,6 +419,9 @@ class SettingsView(LoginRequiredMixin, TemplateView):
         if 'logo_dark_bg' in request.FILES:
             settings.logo_dark_bg = request.FILES['logo_dark_bg']
 
+        # Update domain
+        settings.domain = request.POST.get('domain', settings.domain)
+
         # Update contact information
         settings.contact_email = request.POST.get('contact_email', settings.contact_email)
         settings.contact_phone = request.POST.get('contact_phone', '')
@@ -421,6 +436,9 @@ class SettingsView(LoginRequiredMixin, TemplateView):
         # Update SEO settings
         settings.meta_keywords = request.POST.get('meta_keywords', '')
         settings.google_analytics_id = request.POST.get('google_analytics_id', '')
+
+        # Update design guide
+        settings.design_guide = request.POST.get('design_guide', settings.design_guide)
 
         # Update design system settings (if they exist)
         if hasattr(settings, 'primary_color'):
@@ -616,6 +634,61 @@ class AIRefinePageView(LoginRequiredMixin, TemplateView):
         return context
 
 
+class AIChatRefineView(LoginRequiredMixin, TemplateView):
+    """AI Content Studio - Chat-based Page Refinement"""
+    template_name = 'backoffice/ai_chat_refine.html'
+
+    def get_context_data(self, **kwargs):
+        from core.models import PageVersion
+        from ai.models import RefinementSession
+        import re
+
+        context = super().get_context_data(**kwargs)
+        page_id = kwargs.get('page_id')
+
+        try:
+            page = Page.objects.get(pk=page_id)
+        except Page.DoesNotExist:
+            context['page'] = None
+            return context
+
+        context['page'] = page
+
+        # Parse section names from HTML
+        html = page.html_content or ''
+        section_matches = re.findall(r'data-section="([^"]+)"', html)
+        context['page_sections'] = section_matches
+
+        # Version count
+        context['version_count'] = PageVersion.objects.filter(page=page).count()
+
+        # Sessions for this page (last 20)
+        sessions = RefinementSession.objects.filter(page=page)[:20]
+        context['sessions'] = sessions
+
+        # Active session from query param
+        active_session_id = self.request.GET.get('session')
+        if active_session_id:
+            try:
+                active_session = RefinementSession.objects.get(id=active_session_id, page=page)
+                context['active_session'] = active_session
+                context['active_session_messages'] = active_session.messages
+            except RefinementSession.DoesNotExist:
+                pass
+
+        # AI models
+        try:
+            from ai.utils.llm_config import LLMConfig
+            config = LLMConfig()
+            context['ai_models'] = config.get_available_models()
+            context['default_model'] = config.default_model
+        except Exception:
+            context['ai_models'] = []
+            context['default_model'] = 'gemini-pro'
+
+        return context
+
+
 class AIComponentsView(LoginRequiredMixin, TemplateView):
     """AI Content Studio - Components (Header/Footer/Global Sections)"""
     template_name = 'backoffice/ai_components.html'
@@ -624,6 +697,7 @@ class AIComponentsView(LoginRequiredMixin, TemplateView):
         context = super().get_context_data(**kwargs)
 
         context['pages'] = Page.objects.all().order_by('title')
+        context['global_sections'] = GlobalSection.objects.all().order_by('key')
 
         # Get AI configuration (if available)
         try:
