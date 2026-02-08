@@ -93,12 +93,10 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'config.wsgi.application'
 
-# Database - SQLite for both development and production
+# Database — PostgreSQL if DATABASE_URL is set, SQLite otherwise
+# SQLite works fine for small/medium sites. Use PostgreSQL for high-traffic sites.
 DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
-    }
+    'default': env.db('DATABASE_URL', default=f'sqlite:///{BASE_DIR / "db.sqlite3"}')
 }
 
 # Password validation
