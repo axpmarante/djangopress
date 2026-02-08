@@ -271,7 +271,8 @@ Return a JSON **object** with the complete updated page:
         existing_section: dict,
         user_request: str,
         section_type: str = 'header',
-        design_guide: str = ''
+        design_guide: str = '',
+        menu_items: list = None
     ) -> tuple:
         """
         Generate prompt for global section refinement (header/footer)
@@ -285,6 +286,7 @@ Return a JSON **object** with the complete updated page:
             existing_section: Current GlobalSection data
             user_request: User's instructions for refinement
             section_type: Type of global section ('header' or 'footer')
+            menu_items: List of menu item dicts with label_i18n, page slugs, url, etc.
 
         Returns:
             Tuple of (system_prompt, user_prompt)
@@ -302,46 +304,88 @@ Return a JSON **object** with the complete updated page:
             else:
                 lang_examples[lang] = {"menu_home": "Home", "menu_about": "About"}
 
+        # Build menu items info for the prompt
+        menu_info = ""
+        if menu_items:
+            menu_lines = ["\n**Menu Items (from database — use MENU_ITEMS loop):**"]
+            for item in menu_items:
+                labels = item.get('label_i18n', {})
+                label_parts = [f"{lang.upper()}: \"{labels.get(lang, '')}\"" for lang in languages if labels.get(lang)]
+                page_slug = item.get('page_slug', '')
+                custom_url = item.get('url', '')
+                target = f"page slug='{page_slug}'" if page_slug else f"url='{custom_url}'"
+                menu_lines.append(f"  - {', '.join(label_parts)} → {target}")
+            menu_info = "\n".join(menu_lines)
+
+        pages_info = PromptTemplates._format_pages_info(pages, languages)
+
         # Section-specific context
         if section_type == 'header':
-            section_context = """
+            section_context = f"""
 **Header Specifics:**
 - Include navigation menu with links
-- Use logo: `{{ LOGO.url }}` or `{{ LOGO_DARK_BG.url }}`
-- Site name: `{{ SITE_NAME }}`
-- URL Pattern: Use `{% url 'core:page' slug='slug-here' %}` for page links
-- For home page: `{% url 'core:home' %}`
-- Language-specific URLs: Use `{% if LANGUAGE_CODE == 'pt' %}...{% else %}...{% endif %}`
+- Use logo: `{{{{ LOGO.url }}}}` or `{{{{ LOGO_DARK_BG.url }}}}`
+- Site name: `{{{{ SITE_NAME }}}}`
 - Interactive Elements: Use Alpine.js for dropdowns and mobile menus
 - ALWAYS include a language selector
-- Always include: `{% load i18n %}` and `{% get_current_language as LANGUAGE_CODE %}`
+- Always include: `{{% load i18n %}}`, `{{% load section_tags %}}`, and `{{% get_current_language as LANGUAGE_CODE %}}`
+
+**Navigation Menu — REQUIRED PATTERN:**
+Menu items are stored in the database and available via `MENU_ITEMS` context variable.
+Use the `get_menu_label` and `get_menu_url` template filters (from `section_tags`) to render them.
+Do NOT hardcode page links. Use this loop pattern instead:
+
+```html
+{{% for item in MENU_ITEMS %}}
+  <a href="{{{{ item|get_menu_url:LANGUAGE_CODE }}}}" class="...">
+    {{{{ item|get_menu_label:LANGUAGE_CODE }}}}
+  </a>
+{{% endfor %}}
+```
+
+- `get_menu_url` returns the correct language-specific URL for each menu item (handles page slugs per language automatically)
+- `get_menu_label` returns the label in the current language
+- Do NOT use `MENU_ITEMS.last` or any index-based access — the user can reorder items at any time
+- Do NOT use `{{{{ trans.menu_xxx }}}}` for menu labels — the menu items have their own i18n labels
+- For CTA buttons, use `{{{{ trans.cta_text }}}}` for the label and `{{% url 'core:page' slug='contact' %}}` or a `{{{{ trans.xxx }}}}` variable for the URL — keep CTAs separate from the menu loop
+- You can still use `{{{{ trans.xxx }}}}` for other translatable text (taglines, CTAs, etc.)
+{menu_info}
 
 **Language Switcher Pattern (REQUIRED):**
 ```html
-<form action="{% url 'set_language' %}" method="post" class="inline-block">
-  {% csrf_token %}
-  <input name="next" type="hidden" value="{{ request.path }}">
+<form action="{{% url 'set_language' %}}" method="post" class="inline-block">
+  {{% csrf_token %}}
+  <input name="next" type="hidden" value="{{{{ request.path }}}}">
   <select name="language" onchange="this.form.submit()" class="bg-gray-100 text-gray-700 border border-gray-300 rounded px-3 py-2 text-sm">
-    {% get_available_languages as LANGUAGES %}
-    {% for lang_code, lang_name in LANGUAGES %}
-      <option value="{{ lang_code }}" {% if lang_code == LANGUAGE_CODE %}selected{% endif %}>
-        {{ lang_code|upper }}
+    {{% get_available_languages as LANGUAGES %}}
+    {{% for lang_code, lang_name in LANGUAGES %}}
+      <option value="{{{{ lang_code }}}}" {{% if lang_code == LANGUAGE_CODE %}}selected{{% endif %}}>
+        {{{{ lang_code|upper }}}}
       </option>
-    {% endfor %}
+    {{% endfor %}}
   </select>
 </form>
 ```
 """
         else:
-            section_context = """
+            section_context = f"""
 **Footer Specifics:**
-- Multiple column layout
-- Links to important pages
-- URL Pattern: Use `{% url 'core:page' slug='slug-here' %}` for page links
-- Contact info: `{{ CONTACT_EMAIL }}`, `{{ CONTACT_PHONE }}`
-- Social media: `{{ SOCIAL_MEDIA.facebook }}`, etc.
-- Copyright notice
-- Use logo: `{{ LOGO.url }}`
+- Multiple column layout with link groups
+- Contact info: `{{{{ CONTACT_EMAIL }}}}`, `{{{{ CONTACT_PHONE }}}}`
+- Social media: `{{{{ SOCIAL_MEDIA.facebook }}}}`, `{{{{ SOCIAL_MEDIA.instagram }}}}`, etc.
+- Copyright notice with current year
+- Use logo: `{{{{ LOGO.url }}}}`
+- Always include: `{{% load i18n %}}` and `{{% get_current_language as LANGUAGE_CODE %}}`
+
+**Footer Navigation Links:**
+- Use `{{% url 'core:page' slug='slug-here' %}}` for page links
+- For home page: `{{% url 'core:home' %}}`
+- For pages with different slugs per language, use: `{{% if LANGUAGE_CODE == 'pt' %}}{{% url 'core:page' slug='pt-slug' %}}{{% else %}}{{% url 'core:page' slug='en-slug' %}}{{% endif %}}`
+- Use `{{{{ trans.xxx }}}}` for all link labels and other translatable text
+- Do NOT use MENU_ITEMS — footer links are managed directly in the template
+- Refer to the Available Pages list below for correct slugs in each language
+
+{pages_info}
 """
 
         design_guidelines = ""
@@ -361,7 +405,7 @@ Improve the provided {section_type} by applying the requested changes. Return a 
 - Use Tailwind CSS classes inline
 - Make responsive
 - Use `{{{{trans.field}}}}` for translatable text
-- URL tags: `{{% url 'core:home' %}}`, `{{% url 'core:page' slug='slug' %}}`
+- For home page link: `{{% url 'core:home' %}}`
 {section_context}
 **Content Structure:**
 - Translations in ALL languages: {langs_display}
@@ -374,7 +418,14 @@ Improve the provided {section_type} by applying the requested changes. Return a 
         # Format existing section
         section_json = json.dumps(existing_section, indent=2, ensure_ascii=False)
 
-        pages_info = PromptTemplates._format_pages_info(pages, languages)
+        # Section-specific navigation reminders for the user prompt
+        if section_type == 'header':
+            nav_reminder = f"""- Use `{{% for item in MENU_ITEMS %}}` loop with `get_menu_url` and `get_menu_label` filters for navigation — do NOT hardcode page links
+- Include `{{% load section_tags %}}` at the top of html_template (alongside `{{% load i18n %}}`)
+- Menu labels come from `MENU_ITEMS` — do NOT add them to translations"""
+        else:
+            nav_reminder = f"""- Use `{{% url 'core:page' slug='...' %}}` for page links — do NOT use MENU_ITEMS
+- Include `{{% load i18n %}}` at the top of html_template"""
 
         user_prompt = f"""# PROJECT CONTEXT
 
@@ -421,8 +472,8 @@ Return a JSON **object** with the refined {section_type}:
 - Return ONLY the JSON object
 - Apply ALL requested changes
 - Update translations in ALL languages: {langs_display}
-- Use `{{% url 'core:page' slug='exact-slug-here' %}}` for all page links
 - For home page: `{{% url 'core:home' %}}`
+{nav_reminder}
 - All classes in html_template, only text in translations
 - Every `{{{{trans.xxx}}}}` in html_template MUST have matching translations in all languages"""
 
