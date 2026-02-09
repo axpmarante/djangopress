@@ -545,6 +545,16 @@ class SettingsView(LoginRequiredMixin, TemplateView):
             context['ai_models'] = []
             context['default_model'] = 'gemini-pro'
 
+        # Integrations status (read-only, from .env)
+        from ai.utils.llm_config import get_env
+        context['integrations'] = [
+            {'name': 'Google Gemini', 'configured': bool(get_env('GEMINI_API_KEY')), 'description': 'AI generation (Gemini models)'},
+            {'name': 'OpenAI', 'configured': bool(get_env('OPENAI_API_KEY')), 'description': 'AI generation (GPT models)'},
+            {'name': 'Anthropic', 'configured': bool(get_env('ANTHROPIC_API_KEY')), 'description': 'AI generation (Claude models)'},
+            {'name': 'Mailgun', 'configured': bool(get_env('MAILGUN_API_KEY')), 'description': 'Email delivery'},
+            {'name': 'Google Cloud Storage', 'configured': bool(get_env('GS_BUCKET_NAME')), 'description': 'Media file storage'},
+        ]
+
         return context
 
     def post(self, request, *args, **kwargs):
