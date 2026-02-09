@@ -37,7 +37,6 @@ db.sqlite3
 db.sqlite3-journal
 /staticfiles/
 /media/
-/static/
 local_settings.py
 
 # Node
@@ -66,16 +65,14 @@ yarn-error.log*
 ehthumbs.db
 Thumbs.db
 
-# Environment Variables
+# Secrets & Credentials
 .env
 .env.local
 .env.*.local
-
-# Google Cloud Service Account Keys
-*.json
-!package.json
-!package-lock.json
-!tailwind.config.js
+*credentials*.json
+*service-account*.json
+*.pem
+*.key
 
 # Test/scratch files
 ai/TEST_README.md
@@ -86,13 +83,9 @@ ai/TEST_README.md
 htmlcov/
 .tox/
 
-# Backup files
-*.bak
-*.swp
-*~
-
 # Temporary files
 *.tmp
+*.bak
 .cache/
 
 # Claude AI
