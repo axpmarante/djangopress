@@ -16,4 +16,8 @@ urlpatterns = [
     # Image management endpoints
     path('api/images/', api_views.get_images, name='get_images'),
     path('api/images/upload/', api_views.upload_image, name='upload_image'),
+
+    # AI section refinement endpoints
+    path('api/refine-section/', api_views.refine_section, name='api_refine_section'),
+    path('api/save-ai-section/', api_views.save_ai_section, name='api_save_ai_section'),
 ]

@@ -9,6 +9,7 @@ from django.views.decorators.http import require_http_methods
 from django.contrib.admin.views.decorators import staff_member_required
 from django.views.decorators.csrf import csrf_exempt
 from core.models import Page, SiteImage
+from ai.models import RefinementSession
 from bs4 import BeautifulSoup
 
 
@@ -181,9 +182,11 @@ def update_page_element_attribute(request):
     Expected POST data:
     {
         "page_id": 1,
-        "element_id": "button_primary",
+        "element_id": "button_primary",   (or null with old_value fallback)
         "attribute": "href",
-        "value": "/new-page/"
+        "value": "/new-page/",
+        "old_value": "...",               (optional, fallback when element_id missing)
+        "tag_name": "img"                 (optional, fallback when element_id missing)
     }
     """
     try:
@@ -192,11 +195,19 @@ def update_page_element_attribute(request):
         element_id = data.get('element_id')
         attribute = data.get('attribute')
         value = data.get('value', '')
+        old_value = data.get('old_value')
+        tag_name = data.get('tag_name')
 
-        if not page_id or not element_id or not attribute:
+        if not page_id or not attribute:
             return JsonResponse({
                 'success': False,
-                'error': 'Missing required parameters: page_id, element_id, attribute'
+                'error': 'Missing required parameters: page_id, attribute'
+            }, status=400)
+
+        if not element_id and not old_value:
+            return JsonResponse({
+                'success': False,
+                'error': 'Missing element_id and no old_value fallback'
             }, status=400)
 
         try:
@@ -210,13 +221,19 @@ def update_page_element_attribute(request):
         # Parse HTML
         soup = BeautifulSoup(page.html_content, 'html.parser')
 
-        # Find element
-        element = soup.find(attrs={'data-element-id': element_id})
+        # Find element by data-element-id
+        element = None
+        if element_id:
+            element = soup.find(attrs={'data-element-id': element_id})
+
+        # Fallback: find by old attribute value + tag name
+        if not element and old_value and tag_name:
+            element = soup.find(tag_name, attrs={attribute: old_value})
 
         if not element:
             return JsonResponse({
                 'success': False,
-                'error': f'Element with data-element-id="{element_id}" not found'
+                'error': f'Element not found (element_id={element_id}, tag={tag_name})'
             }, status=404)
 
         # Store old value
@@ -330,6 +347,203 @@ def get_images(request):
         })
 
     return JsonResponse({'success': True, 'images': image_list})
+
+
+@staff_member_required
+@require_http_methods(["POST"])
+def refine_section(request):
+    """
+    Refine a single section using AI without saving to DB.
+    Returns the section's html_template and content for client-side preview.
+
+    Expected POST data:
+    {
+        "page_id": 1,
+        "section_name": "hero",
+        "instructions": "Make the title bolder",
+        "conversation_history": [{"role": "user", "content": "..."}, ...],
+        "model": "gemini-pro"
+    }
+    """
+    try:
+        data = json.loads(request.body)
+        page_id = data.get('page_id')
+        section_name = data.get('section_name')
+        instructions = data.get('instructions', '').strip()
+        conversation_history = data.get('conversation_history', [])
+        model = data.get('model', 'gemini-flash')
+        session_id = data.get('session_id')
+
+        if not page_id or not section_name:
+            return JsonResponse({
+                'success': False,
+                'error': 'Missing page_id or section_name'
+            }, status=400)
+
+        if not instructions:
+            return JsonResponse({
+                'success': False,
+                'error': 'Missing instructions'
+            }, status=400)
+
+        page = Page.objects.get(pk=page_id)
+
+        # Load or create RefinementSession
+        session = None
+        if session_id:
+            try:
+                session = RefinementSession.objects.get(id=session_id, page=page)
+            except RefinementSession.DoesNotExist:
+                session = None
+
+        if not session:
+            session = RefinementSession(
+                page=page,
+                title=f'[{section_name}] {instructions[:60]}',
+                model_used=model,
+                created_by=request.user if request.user.is_authenticated else None,
+            )
+            session.save()
+
+        # Add user message to session
+        session.add_user_message(instructions)
+
+        from ai.services import ContentGenerationService
+        service = ContentGenerationService(model_name=model)
+        result = service.refine_section_only(
+            page_id=page_id,
+            section_name=section_name,
+            instructions=instructions,
+            conversation_history=conversation_history,
+            model_override=model,
+        )
+
+        # Add assistant message to session
+        assistant_msg = result.get('assistant_message', 'Changes applied.')
+        session.add_assistant_message(assistant_msg, [section_name])
+        session.save()
+
+        return JsonResponse({
+            'success': True,
+            'section': {
+                'html_template': result['html_template'],
+                'content': result['content'],
+            },
+            'assistant_message': assistant_msg,
+            'session_id': session.id,
+        })
+
+    except Page.DoesNotExist:
+        return JsonResponse({
+            'success': False,
+            'error': 'Page not found'
+        }, status=404)
+    except json.JSONDecodeError:
+        return JsonResponse({
+            'success': False,
+            'error': 'Invalid JSON'
+        }, status=400)
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+
+
+@staff_member_required
+@require_http_methods(["POST"])
+def save_ai_section(request):
+    """
+    Save an AI-refined section to the page in DB.
+    Replaces only the target section in html_content and merges translations.
+
+    Expected POST data:
+    {
+        "page_id": 1,
+        "section_name": "hero",
+        "html_template": "<section data-section='hero'>...</section>",
+        "content": {"translations": {"pt": {...}, "en": {...}}}
+    }
+    """
+    try:
+        data = json.loads(request.body)
+        page_id = data.get('page_id')
+        section_name = data.get('section_name')
+        html_template = data.get('html_template', '')
+        content = data.get('content', {})
+
+        if not page_id or not section_name or not html_template:
+            return JsonResponse({
+                'success': False,
+                'error': 'Missing page_id, section_name, or html_template'
+            }, status=400)
+
+        try:
+            page = Page.objects.get(pk=page_id)
+        except Page.DoesNotExist:
+            return JsonResponse({
+                'success': False,
+                'error': 'Page not found'
+            }, status=404)
+
+        # Create version for rollback
+        page.create_version(user=request.user, change_summary=f'AI refined section: {section_name}')
+
+        # Parse current page HTML and replace the target section
+        soup = BeautifulSoup(page.html_content, 'html.parser')
+        old_section = soup.find('section', attrs={'data-section': section_name})
+
+        if not old_section:
+            return JsonResponse({
+                'success': False,
+                'error': f'Section "{section_name}" not found in page HTML'
+            }, status=404)
+
+        # Parse the new section HTML
+        new_section_soup = BeautifulSoup(html_template, 'html.parser')
+        new_section = new_section_soup.find('section')
+        if not new_section:
+            # If the html_template is a full section tag, the parser might put it at top level
+            new_section = new_section_soup
+
+        old_section.replace_with(new_section)
+
+        # Save updated HTML
+        new_html = str(soup)
+        if new_html.startswith('<html><body>'):
+            new_html = new_html[12:-14]
+        page.html_content = new_html
+
+        # Merge translations (don't overwrite other sections' translations)
+        new_translations = content.get('translations', {})
+        page_content = page.content or {}
+        if 'translations' not in page_content:
+            page_content['translations'] = {}
+
+        for lang_code, lang_trans in new_translations.items():
+            if lang_code not in page_content['translations']:
+                page_content['translations'][lang_code] = {}
+            page_content['translations'][lang_code].update(lang_trans)
+
+        page.content = page_content
+        page.save()
+
+        return JsonResponse({
+            'success': True,
+            'message': f'Section "{section_name}" saved successfully',
+            'page_id': page.id,
+        })
+
+    except json.JSONDecodeError:
+        return JsonResponse({
+            'success': False,
+            'error': 'Invalid JSON'
+        }, status=400)
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
 
 
 @csrf_exempt

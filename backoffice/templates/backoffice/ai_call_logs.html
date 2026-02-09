@@ -1,0 +1,167 @@
+{% extends 'backoffice/base.html' %}
+
+{% block title %}AI Call Logs{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <!-- Header -->
+    <div>
+        <h2 class="text-3xl font-bold text-gray-900">AI Call Logs</h2>
+        <p class="text-gray-600 mt-1">Browse all LLM API calls — prompts, responses, tokens, and timing</p>
+    </div>
+
+    <!-- Summary Stats -->
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div class="bg-white rounded-lg shadow p-4">
+            <p class="text-sm text-gray-500">Total Calls</p>
+            <p class="text-2xl font-bold text-gray-900">{{ stats.total_calls|default:"0" }}</p>
+        </div>
+        <div class="bg-white rounded-lg shadow p-4">
+            <p class="text-sm text-gray-500">Total Tokens</p>
+            <p class="text-2xl font-bold text-gray-900">{{ stats.total_tokens|default:"0" }}</p>
+        </div>
+        <div class="bg-white rounded-lg shadow p-4">
+            <p class="text-sm text-gray-500">Errors</p>
+            <p class="text-2xl font-bold {% if stats.total_errors %}text-red-600{% else %}text-gray-900{% endif %}">{{ stats.total_errors|default:"0" }}</p>
+        </div>
+    </div>
+
+    <!-- Filters -->
+    <form method="get" class="bg-white rounded-lg shadow p-4 flex flex-wrap gap-3 items-end">
+        <div>
+            <label class="block text-xs font-medium text-gray-500 mb-1">Action</label>
+            <select name="action" class="border border-gray-300 rounded px-3 py-1.5 text-sm">
+                <option value="">All actions</option>
+                {% for value, label in action_choices %}
+                <option value="{{ value }}" {% if value == current_action %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div>
+            <label class="block text-xs font-medium text-gray-500 mb-1">Model</label>
+            <select name="model" class="border border-gray-300 rounded px-3 py-1.5 text-sm">
+                <option value="">All models</option>
+                {% for m in model_choices %}
+                <option value="{{ m }}" {% if m == current_model %}selected{% endif %}>{{ m }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div>
+            <label class="block text-xs font-medium text-gray-500 mb-1">Status</label>
+            <select name="status" class="border border-gray-300 rounded px-3 py-1.5 text-sm">
+                <option value="">All</option>
+                <option value="ok" {% if current_status == 'ok' %}selected{% endif %}>OK</option>
+                <option value="error" {% if current_status == 'error' %}selected{% endif %}>Errors</option>
+            </select>
+        </div>
+        <button type="submit" class="bg-gray-800 text-white px-4 py-1.5 rounded text-sm hover:bg-gray-700">Filter</button>
+        {% if current_action or current_model or current_status %}
+        <a href="{% url 'backoffice:ai_call_logs' %}" class="text-sm text-gray-500 hover:text-gray-800 underline">Clear</a>
+        {% endif %}
+    </form>
+
+    <!-- Log Table -->
+    <div class="bg-white rounded-lg shadow overflow-hidden" x-data="{ expandedId: null }">
+        <table class="min-w-full divide-y divide-gray-200 text-sm">
+            <thead class="bg-gray-50">
+                <tr>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Time</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Action</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Model</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Page</th>
+                    <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Tokens</th>
+                    <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Duration</th>
+                    <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Status</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-100">
+                {% for log in logs %}
+                <tr class="hover:bg-gray-50 cursor-pointer" @click="expandedId = expandedId === {{ log.id }} ? null : {{ log.id }}">
+                    <td class="px-4 py-3 text-gray-600 whitespace-nowrap">{{ log.created_at|date:"M d H:i:s" }}</td>
+                    <td class="px-4 py-3">
+                        <span class="inline-flex px-2 py-0.5 rounded text-xs font-medium
+                            {% if 'refine' in log.action or 'chat' in log.action %}bg-blue-100 text-blue-800
+                            {% elif 'generate' in log.action %}bg-green-100 text-green-800
+                            {% elif 'templatize' in log.action %}bg-purple-100 text-purple-800
+                            {% elif 'analyze' in log.action %}bg-yellow-100 text-yellow-800
+                            {% else %}bg-gray-100 text-gray-800{% endif %}">
+                            {{ log.get_action_display }}
+                        </span>
+                        {% if log.section_name %}
+                        <span class="text-xs text-gray-400 ml-1">{{ log.section_name }}</span>
+                        {% endif %}
+                    </td>
+                    <td class="px-4 py-3 text-gray-700 whitespace-nowrap">{{ log.model_name }}</td>
+                    <td class="px-4 py-3 text-gray-600">
+                        {% if log.page %}
+                        <a href="{% url 'backoffice:page_edit' page_id=log.page_id %}" class="text-blue-600 hover:underline" @click.stop>{{ log.page.default_title|truncatechars:30 }}</a>
+                        {% else %}—{% endif %}
+                    </td>
+                    <td class="px-4 py-3 text-right text-gray-700 whitespace-nowrap font-mono">{{ log.total_tokens|default:"—" }}</td>
+                    <td class="px-4 py-3 text-right text-gray-600 whitespace-nowrap font-mono">
+                        {% if log.duration_ms >= 1000 %}{{ log.duration_ms|floatformat:"0" }}ms{% else %}{{ log.duration_ms }}ms{% endif %}
+                    </td>
+                    <td class="px-4 py-3 text-center">
+                        {% if log.success %}
+                        <span class="inline-block w-2 h-2 rounded-full bg-green-500" title="OK"></span>
+                        {% else %}
+                        <span class="inline-block w-2 h-2 rounded-full bg-red-500" title="{{ log.error_message|truncatechars:80 }}"></span>
+                        {% endif %}
+                    </td>
+                </tr>
+                <!-- Expandable detail row -->
+                <tr x-show="expandedId === {{ log.id }}" x-cloak class="bg-gray-50">
+                    <td colspan="7" class="px-4 py-4">
+                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 text-xs">
+                            <div>
+                                <p class="font-semibold text-gray-700 mb-1">System Prompt ({{ log.system_prompt|length }} chars)</p>
+                                <pre class="bg-white border border-gray-200 rounded p-3 max-h-64 overflow-auto whitespace-pre-wrap text-gray-600">{{ log.system_prompt|truncatechars:3000 }}</pre>
+                            </div>
+                            <div>
+                                <p class="font-semibold text-gray-700 mb-1">User Prompt ({{ log.user_prompt|length }} chars)</p>
+                                <pre class="bg-white border border-gray-200 rounded p-3 max-h-64 overflow-auto whitespace-pre-wrap text-gray-600">{{ log.user_prompt|truncatechars:3000 }}</pre>
+                            </div>
+                            <div class="lg:col-span-2">
+                                <p class="font-semibold text-gray-700 mb-1">Response ({{ log.response_text|length }} chars)</p>
+                                <pre class="bg-white border border-gray-200 rounded p-3 max-h-64 overflow-auto whitespace-pre-wrap text-gray-600">{{ log.response_text|truncatechars:5000 }}</pre>
+                            </div>
+                            {% if log.error_message %}
+                            <div class="lg:col-span-2">
+                                <p class="font-semibold text-red-700 mb-1">Error</p>
+                                <pre class="bg-red-50 border border-red-200 rounded p-3 whitespace-pre-wrap text-red-700">{{ log.error_message }}</pre>
+                            </div>
+                            {% endif %}
+                            <div class="lg:col-span-2 flex gap-6 text-gray-500">
+                                <span>Provider: <strong>{{ log.provider }}</strong></span>
+                                <span>Prompt tokens: <strong>{{ log.prompt_tokens }}</strong></span>
+                                <span>Completion tokens: <strong>{{ log.completion_tokens }}</strong></span>
+                                {% if log.user %}<span>User: <strong>{{ log.user.username }}</strong></span>{% endif %}
+                            </div>
+                        </div>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="7" class="px-4 py-8 text-center text-gray-400">No AI calls logged yet. Trigger an AI action to see logs here.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Pagination -->
+    {% if page_obj.has_other_pages %}
+    <div class="flex justify-center gap-2 mt-4">
+        {% if page_obj.has_previous %}
+        <a href="?page={{ page_obj.previous_page_number }}{% if current_action %}&action={{ current_action }}{% endif %}{% if current_model %}&model={{ current_model }}{% endif %}{% if current_status %}&status={{ current_status }}{% endif %}"
+           class="px-3 py-1 bg-white border border-gray-300 rounded text-sm hover:bg-gray-50">Previous</a>
+        {% endif %}
+        <span class="px-3 py-1 text-sm text-gray-600">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
+        {% if page_obj.has_next %}
+        <a href="?page={{ page_obj.next_page_number }}{% if current_action %}&action={{ current_action }}{% endif %}{% if current_model %}&model={{ current_model }}{% endif %}{% if current_status %}&status={{ current_status }}{% endif %}"
+           class="px-3 py-1 bg-white border border-gray-300 rounded text-sm hover:bg-gray-50">Next</a>
+        {% endif %}
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

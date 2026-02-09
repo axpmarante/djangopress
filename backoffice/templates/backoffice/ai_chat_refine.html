@@ -196,16 +196,12 @@
             </div>
             {% endif %}
 
-            <!-- Image Handling -->
+            <!-- Process Images -->
             <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-5">
-                <h3 class="text-sm font-semibold text-gray-900 mb-3">Image Handling</h3>
-                <label class="flex items-center gap-3 cursor-pointer">
-                    <input type="checkbox" id="handleImages" class="w-4 h-4 text-purple-600 border-gray-300 rounded focus:ring-purple-500">
-                    <span class="text-sm text-gray-700">Add image placeholders</span>
-                </label>
-                <p class="text-xs text-gray-500 mt-2">LLM will add image metadata for later generation/selection.</p>
+                <h3 class="text-sm font-semibold text-gray-900 mb-3">Images</h3>
+                <p class="text-xs text-gray-500 mb-3">AI automatically uses image placeholders. After refining, process them into real images.</p>
                 <button id="processImagesBtn" onclick="scanForImagePlaceholders()"
-                        class="hidden mt-3 w-full px-3 py-2 bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-lg hover:from-emerald-600 hover:to-teal-600 text-sm font-medium transition-all flex items-center justify-center gap-2">
+                        class="hidden w-full px-3 py-2 bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-lg hover:from-emerald-600 hover:to-teal-600 text-sm font-medium transition-all flex items-center justify-center gap-2">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
                     </svg>
@@ -369,8 +365,6 @@ async function sendMessage(event) {
     document.getElementById('typingIndicator').classList.remove('hidden');
     document.getElementById('sendButton').disabled = true;
 
-    const handleImages = document.getElementById('handleImages')?.checked || false;
-
     try {
         let fetchOptions;
         if (selectedFiles.length > 0) {
@@ -378,7 +372,6 @@ async function sendMessage(event) {
             fd.append('page_id', PAGE_ID);
             fd.append('message', message);
             fd.append('model', model);
-            if (handleImages) fd.append('handle_images', 'true');
             if (currentSessionId) fd.append('session_id', currentSessionId);
             selectedFiles.forEach(f => fd.append('reference_images', f));
             fetchOptions = {
@@ -391,7 +384,6 @@ async function sendMessage(event) {
                 page_id: PAGE_ID,
                 message: message,
                 model: model,
-                handle_images: handleImages,
             };
             if (currentSessionId) payload.session_id = currentSessionId;
             fetchOptions = {

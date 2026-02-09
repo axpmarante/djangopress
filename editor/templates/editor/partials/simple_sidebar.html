@@ -19,8 +19,26 @@
           <path d="M3 17a9 9 0 019-9 9 9 0 016 2.3l3 2.7"/>
         </svg>
       </button>
+      <button id="editor-close-btn" class="editor-icon-btn" title="Exit Editor">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <path d="M18 6L6 18"/><path d="M6 6l12 12"/>
+        </svg>
+      </button>
     </div>
   </div>
+
+  <!-- Language Bar -->
+  {% if SITE_LANGUAGES %}
+  <div class="editor-language-bar">
+    <span class="editor-language-label">Language:</span>
+    {% for lang_code, lang_name in SITE_LANGUAGES %}
+    <button class="editor-lang-btn {% if LANGUAGE_CODE == lang_code %}active{% endif %}"
+            onclick="switchEditorLanguage('{{ lang_code }}')">
+      {{ lang_code|upper }}
+    </button>
+    {% endfor %}
+  </div>
+  {% endif %}
 
   <!-- Tabs -->
   <div class="editor-tabs">
@@ -103,44 +121,12 @@
       </div>
     </div>
 
-    <!-- AI Tab -->
-    <div id="editor-ai-tab" class="editor-tab-panel">
-      <div class="editor-ai-intro">
-        <p class="editor-ai-description">
-          Use AI to refine this section's content, design, or structure.
-          Describe what you want to change and let AI help you.
-        </p>
+    <!-- AI Tab (Mini-Chat) -->
+    <div id="editor-ai-tab" class="editor-tab-panel editor-ai-chat-panel">
+      <!-- Chat Messages -->
+      <div id="editor-ai-chat-messages" class="editor-ai-chat-messages">
+        <p class="editor-ai-chat-empty">Describe what to change in this section. AI will update it while preserving context from previous messages.</p>
       </div>
-
-      <!-- Instructions -->
-      <div class="editor-field">
-        <label for="editor-ai-instructions">What would you like to change?</label>
-        <textarea
-          id="editor-ai-instructions"
-          class="editor-textarea editor-ai-textarea"
-          placeholder="Example: Make the title more compelling, add a blue gradient background, and improve the call-to-action button"
-          rows="6"
-        ></textarea>
-        <p class="editor-hint">Be specific about content, styling, or layout changes you want.</p>
-      </div>
-
-      <!-- Model Selection -->
-      <div class="editor-field">
-        <label for="editor-ai-model">AI Model</label>
-        <select id="editor-ai-model" class="editor-select">
-          <option value="gemini-flash">Gemini Flash (Fast)</option>
-          <option value="gemini-pro">Gemini Pro (Better Quality)</option>
-        </select>
-      </div>
-
-      <!-- Generate Button -->
-      <button id="editor-ai-generate-btn" class="editor-btn editor-btn-primary editor-ai-generate-btn">
-        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2">
-          <circle cx="8" cy="8" r="6"/>
-          <path d="M8 5v6M5 8h6"/>
-        </svg>
-        Generate with AI
-      </button>
 
       <!-- Loading State -->
       <div id="editor-ai-loading" class="editor-ai-loading" style="display: none;">
@@ -160,9 +146,28 @@
           </svg>
           <div>
             <strong>AI Changes Applied!</strong>
-            <p>Review the changes on the page. Click "Save Changes" below to keep them, or "Discard" to revert.</p>
+            <p>Click "Save Changes" below to keep them, or "Discard" to revert.</p>
           </div>
         </div>
+      </div>
+
+      <!-- Chat Input Area -->
+      <div class="editor-ai-chat-input-area">
+        <select id="editor-ai-model" class="editor-ai-model-select">
+          <option value="gemini-flash">Flash</option>
+          <option value="gemini-pro">Pro</option>
+        </select>
+        <textarea
+          id="editor-ai-chat-input"
+          class="editor-ai-chat-input"
+          placeholder="Describe what to change..."
+          rows="2"
+        ></textarea>
+        <button id="editor-ai-chat-send" class="editor-ai-chat-send-btn" title="Send (Enter)">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M22 2L11 13M22 2l-7 20-4-9-9-4z" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
       </div>
     </div>
   </div>
@@ -642,6 +647,46 @@ body[data-edit-mode="true"] main {
   margin-top: 4px;
 }
 
+/* Language bar */
+.editor-language-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 20px;
+  background: #f0f4ff;
+  border-bottom: 1px solid #c7d2fe;
+}
+
+.editor-language-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #6b7280;
+  margin-right: 4px;
+}
+
+.editor-lang-btn {
+  padding: 4px 10px;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  background: white;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  color: #6b7280;
+  transition: all 0.2s;
+}
+
+.editor-lang-btn:hover {
+  border-color: #3b82f6;
+  color: #3b82f6;
+}
+
+.editor-lang-btn.active {
+  background: #3b82f6;
+  color: white;
+  border-color: #3b82f6;
+}
+
 /* AI tab */
 .editor-tab-ai {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -784,4 +829,202 @@ body[data-edit-mode="true"] main {
   margin: 0;
   line-height: 1.5;
 }
+
+/* AI Chat layout */
+.editor-ai-chat-panel {
+  display: none;
+  flex-direction: column;
+  height: 100%;
+}
+
+.editor-ai-chat-panel.active {
+  display: flex;
+}
+
+.editor-ai-chat-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px;
+  min-height: 120px;
+  max-height: 300px;
+}
+
+.editor-ai-chat-empty {
+  color: #9ca3af;
+  font-size: 13px;
+  text-align: center;
+  padding: 24px 12px;
+  line-height: 1.5;
+}
+
+.editor-ai-chat-msg {
+  padding: 8px 12px;
+  border-radius: 8px;
+  margin-bottom: 8px;
+  font-size: 13px;
+  line-height: 1.5;
+  max-width: 90%;
+  word-wrap: break-word;
+}
+
+.editor-ai-chat-user {
+  background: #3b82f6;
+  color: white;
+  margin-left: auto;
+  border-bottom-right-radius: 2px;
+}
+
+.editor-ai-chat-assistant {
+  background: #f3f4f6;
+  color: #374151;
+  margin-right: auto;
+  border-bottom-left-radius: 2px;
+}
+
+.editor-ai-chat-input-area {
+  display: flex;
+  gap: 6px;
+  padding: 12px;
+  border-top: 1px solid #e5e7eb;
+  background: #f9fafb;
+  align-items: flex-end;
+}
+
+.editor-ai-model-select {
+  padding: 6px 4px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 11px;
+  background: white;
+  cursor: pointer;
+  min-width: 60px;
+  align-self: stretch;
+}
+
+.editor-ai-chat-input {
+  flex: 1;
+  padding: 8px 10px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 13px;
+  font-family: inherit;
+  resize: none;
+  min-height: 36px;
+  max-height: 100px;
+  transition: border-color 0.2s;
+}
+
+.editor-ai-chat-input:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+}
+
+.editor-ai-chat-send-btn {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  padding: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: opacity 0.2s;
+  min-width: 36px;
+  min-height: 36px;
+}
+
+.editor-ai-chat-send-btn:hover:not(:disabled) {
+  opacity: 0.9;
+}
+
+.editor-ai-chat-send-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Context Menu */
+.editor-context-menu {
+  position: fixed;
+  z-index: 100001;
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 8px;
+  padding: 4px 0;
+  min-width: 200px;
+  box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+  font-family: system-ui, -apple-system, sans-serif;
+  font-size: 13px;
+}
+
+.editor-context-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  color: #e2e8f0;
+  cursor: pointer;
+  transition: background 0.1s;
+}
+
+.editor-context-menu-item:hover {
+  background: #334155;
+}
+
+.editor-context-menu-item svg {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  opacity: 0.7;
+}
+
+.editor-context-menu-separator {
+  height: 1px;
+  background: #334155;
+  margin: 4px 0;
+}
+
+.editor-context-menu-toast {
+  position: fixed;
+  z-index: 100002;
+  background: #1e293b;
+  color: #e2e8f0;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-family: system-ui, -apple-system, sans-serif;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  pointer-events: none;
+  animation: editor-toast-fade 1.5s ease-out forwards;
+}
+
+@keyframes editor-toast-fade {
+  0% { opacity: 1; }
+  70% { opacity: 1; }
+  100% { opacity: 0; }
+}
 </style>
+
+<script>
+document.getElementById('editor-close-btn').addEventListener('click', function() {
+  if (window.SimpleTracker && window.SimpleTracker.getPendingChanges().length > 0) {
+    if (!confirm('You have unsaved changes. Exit editor anyway?')) return;
+  }
+  var url = new URL(window.location.href);
+  url.searchParams.delete('edit');
+  window.location.href = url.toString();
+});
+
+function switchEditorLanguage(langCode) {
+  if (window.SimpleTracker && window.SimpleTracker.getPendingChanges().length > 0) {
+    if (!confirm('You have unsaved changes. Switch language anyway?')) return;
+  }
+  var dataEl = document.getElementById('page-editor-data');
+  var data = dataEl ? JSON.parse(dataEl.textContent || '{}') : {};
+  var slugI18n = data.slug_i18n || {};
+  var slug = slugI18n[langCode] || 'home';
+  var newPath = (slug === 'home') ? ('/' + langCode + '/') : ('/' + langCode + '/' + slug + '/');
+  window.location.href = newPath + '?edit=true';
+}
+</script>

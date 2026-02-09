@@ -10,32 +10,26 @@ from django.conf import settings
 
 class DomainBasedStorage(GoogleCloudStorage):
     """
-    Storage backend that uses the current domain as the folder name.
+    Storage backend that uses SiteSettings.domain as the folder name.
 
     This allows multiple sites to share a single GCS bucket while keeping
     their files organized in separate folders.
 
-    Examples:
-    - example.com → example-com/
-    - blog.example.com → blog-example-com/
-    - mysite.org → mysite-org/
-    - localhost:8000 → localhost/
+    The folder is always derived from SiteSettings.domain (the configured
+    project identifier), NOT from the request hostname. This ensures files
+    are stored consistently regardless of whether the site is accessed via
+    localhost, a staging domain, or production.
     """
     def __init__(self, *args, **kwargs):
-        # Get domain from settings (set by DomainMiddleware during request)
-        domain = getattr(settings, 'CURRENT_DOMAIN', '')
-
-        # Fallback to SiteSettings.domain if no request context
-        if not domain or domain == 'default':
-            try:
-                from core.models import SiteSettings
-                site_settings = SiteSettings.objects.first()
-                if site_settings and site_settings.domain:
-                    domain = site_settings.domain
-                else:
-                    domain = 'default'
-            except Exception:
-                domain = 'default'
+        # Always use SiteSettings.domain as the canonical folder name
+        domain = 'default'
+        try:
+            from core.models import SiteSettings
+            site_settings = SiteSettings.objects.first()
+            if site_settings and site_settings.domain:
+                domain = site_settings.domain
+        except Exception:
+            domain = 'default'
 
         # Clean the domain for use as folder name
         # Replace dots with dashes and remove port numbers

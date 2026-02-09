@@ -14,6 +14,7 @@
 
   // State
   let selectedElement = null;
+  let contextMenuEl = null;
 
   // Initialize
   function init() {
@@ -48,6 +49,7 @@
     document.addEventListener('click', handleClick, true); // Capture phase to catch before links
     document.addEventListener('mouseover', handleMouseOver);
     document.addEventListener('mouseout', handleMouseOut);
+    document.addEventListener('contextmenu', handleContextMenu, true);
   }
 
   // Remove event listeners
@@ -55,10 +57,15 @@
     document.removeEventListener('click', handleClick, true);
     document.removeEventListener('mouseover', handleMouseOver);
     document.removeEventListener('mouseout', handleMouseOut);
+    document.removeEventListener('contextmenu', handleContextMenu, true);
+    hideContextMenu();
   }
 
   // Handle click
   function handleClick(e) {
+    // Always close context menu on left-click
+    hideContextMenu();
+
     console.log('🔵 Click detected:', {
       enabled: config.enabled,
       target: e.target.tagName,
@@ -122,7 +129,7 @@
         return true;
       }
 
-      // Specifically check for sidebar elements
+      // Specifically check for sidebar elements and context menu
       if (
         id === 'editor-sidebar' ||
         id.startsWith('editor-') && id !== 'editor-content-wrapper' ||
@@ -130,7 +137,8 @@
         (current.classList && current.classList.contains('editor-sidebar')) ||
         (current.classList && current.classList.contains('editor-tab')) ||
         (current.classList && current.classList.contains('editor-btn')) || // This includes editor-content-btn
-        (current.classList && current.classList.contains('admin-toolbar'))
+        (current.classList && current.classList.contains('admin-toolbar')) ||
+        (current.classList && current.classList.contains('editor-context-menu'))
       ) {
         console.log('🚫 Ignoring editor UI element:', current.tagName, current.className);
         return true; // Return TRUE to ignore/skip this element
@@ -200,6 +208,15 @@
     const sectionElement = findParentSection(element);
     const sectionName = sectionElement ? sectionElement.getAttribute('data-section') : null;
 
+    // Detect background image
+    const bgImage = window.getComputedStyle(element).backgroundImage;
+    const hasBackgroundImage = bgImage && bgImage !== 'none' && bgImage.startsWith('url(');
+    let backgroundImageUrl = null;
+    if (hasBackgroundImage) {
+      const bgMatch = bgImage.match(/url\(['"]?([^'")\s]+)['"]?\)/);
+      backgroundImageUrl = bgMatch ? bgMatch[1] : null;
+    }
+
     // Build data object
     const data = {
       element: element,
@@ -226,7 +243,11 @@
       // Special properties
       href: tagName === 'a' ? element.getAttribute('href') : null,
       src: tagName === 'img' ? element.getAttribute('src') : null,
-      alt: tagName === 'img' ? element.getAttribute('alt') : null
+      alt: tagName === 'img' ? element.getAttribute('alt') : null,
+
+      // Background image
+      hasBackgroundImage: hasBackgroundImage,
+      backgroundImageUrl: backgroundImageUrl
     };
 
     return data;
@@ -255,6 +276,182 @@
       current = current.parentElement;
     }
     return null;
+  }
+
+  // Handle right-click context menu
+  function handleContextMenu(e) {
+    if (!config.enabled) return;
+    if (isEditorUI(e.target)) return;
+
+    e.preventDefault();
+    e.stopPropagation();
+
+    // Select the element first (same as left-click)
+    const element = e.target;
+    selectElement(element);
+
+    // Build menu items based on element context
+    const items = buildMenuItems(element);
+    showContextMenu(e.clientX, e.clientY, items);
+  }
+
+  // Build context menu items based on the selected element
+  function buildMenuItems(element) {
+    const items = [];
+    const data = extractElementData(element);
+
+    // Edit Content — always shown
+    items.push({
+      label: 'Edit Content',
+      icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.83 2.83 0 114 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>',
+      action: () => {
+        document.dispatchEvent(new CustomEvent('editor:switchTab', { detail: { tab: 'content' } }));
+      }
+    });
+
+    // Edit Design — always shown
+    items.push({
+      label: 'Edit Design',
+      icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>',
+      action: () => {
+        document.dispatchEvent(new CustomEvent('editor:switchTab', { detail: { tab: 'design' } }));
+      }
+    });
+
+    // AI Refine Section — only if inside a <section>
+    if (data.sectionName) {
+      items.push({ separator: true });
+      items.push({
+        label: 'AI Refine Section',
+        icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.5 4.5H18l-3.5 2.5L16 14.5 12 11.5 8 14.5l1.5-4.5L6 7.5h4.5z"/></svg>',
+        action: () => {
+          document.dispatchEvent(new CustomEvent('editor:switchTab', { detail: { tab: 'ai', focusInput: true } }));
+        }
+      });
+    }
+
+    // Select Parent — if element has a parent that's not body
+    const parent = element.parentElement;
+    if (parent && parent.tagName && parent.tagName.toLowerCase() !== 'body') {
+      items.push({ separator: true });
+      items.push({
+        label: 'Select Parent',
+        icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5"/><path d="M5 12l7-7 7 7"/></svg>',
+        action: () => {
+          selectElement(parent);
+        }
+      });
+    }
+
+    // Copy Element ID — if element has data-element-id or id
+    const elementId = element.getAttribute('data-element-id') || element.id;
+    if (elementId) {
+      items.push({
+        label: 'Copy Element ID',
+        icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>',
+        action: (e) => {
+          navigator.clipboard.writeText(elementId).then(() => {
+            showToast(e.clientX || 0, e.clientY || 0, 'Copied!');
+          });
+        }
+      });
+    }
+
+    return items;
+  }
+
+  // Show context menu at position
+  function showContextMenu(x, y, items) {
+    hideContextMenu();
+
+    const menu = document.createElement('div');
+    menu.className = 'editor-context-menu';
+
+    items.forEach(item => {
+      if (item.separator) {
+        const sep = document.createElement('div');
+        sep.className = 'editor-context-menu-separator';
+        menu.appendChild(sep);
+        return;
+      }
+
+      const menuItem = document.createElement('div');
+      menuItem.className = 'editor-context-menu-item';
+      menuItem.innerHTML = item.icon + '<span>' + item.label + '</span>';
+      menuItem.addEventListener('click', (e) => {
+        e.stopPropagation();
+        hideContextMenu();
+        item.action(e);
+      });
+      menu.appendChild(menuItem);
+    });
+
+    document.body.appendChild(menu);
+    contextMenuEl = menu;
+
+    // Position: clamp to viewport
+    const rect = menu.getBoundingClientRect();
+    const viewportW = window.innerWidth;
+    const viewportH = window.innerHeight;
+
+    let left = x;
+    let top = y;
+
+    if (x + rect.width > viewportW) {
+      left = x - rect.width;
+    }
+    if (y + rect.height > viewportH) {
+      top = y - rect.height;
+    }
+
+    // Ensure not off-screen on the left/top
+    left = Math.max(4, left);
+    top = Math.max(4, top);
+
+    menu.style.left = left + 'px';
+    menu.style.top = top + 'px';
+
+    // Attach dismiss listeners
+    setTimeout(() => {
+      document.addEventListener('click', onDismissContextMenu);
+      document.addEventListener('keydown', onDismissContextMenuKey);
+      document.addEventListener('scroll', onDismissContextMenu, true);
+      window.addEventListener('resize', onDismissContextMenu);
+    }, 0);
+  }
+
+  // Hide context menu
+  function hideContextMenu() {
+    if (contextMenuEl) {
+      contextMenuEl.remove();
+      contextMenuEl = null;
+    }
+    document.removeEventListener('click', onDismissContextMenu);
+    document.removeEventListener('keydown', onDismissContextMenuKey);
+    document.removeEventListener('scroll', onDismissContextMenu, true);
+    window.removeEventListener('resize', onDismissContextMenu);
+  }
+
+  // Dismiss handlers
+  function onDismissContextMenu() {
+    hideContextMenu();
+  }
+
+  function onDismissContextMenuKey(e) {
+    if (e.key === 'Escape') {
+      hideContextMenu();
+    }
+  }
+
+  // Show a brief toast near cursor
+  function showToast(x, y, message) {
+    const toast = document.createElement('div');
+    toast.className = 'editor-context-menu-toast';
+    toast.textContent = message;
+    toast.style.left = x + 'px';
+    toast.style.top = (y - 30) + 'px';
+    document.body.appendChild(toast);
+    setTimeout(() => toast.remove(), 1500);
   }
 
   // Enable selector

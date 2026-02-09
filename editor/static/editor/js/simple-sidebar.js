@@ -14,11 +14,17 @@
   let aiChangesApplied = false;
   let refinedSection = null;
 
+  // AI chat state
+  let aiConversationHistory = []; // [{role: 'user', content: '...'}, ...]
+  let lastAISectionName = null;
+  let aiSessionId = null; // RefinementSession ID for persistence
+
   // DOM elements
   let sidebar, contentTab, designTab, structureTab, aiTab;
   let contentFields, classesInput;
   let parentsTree, currentElementDisplay, childrenTree;
-  let aiTabButton, aiInstructions, aiModel, aiGenerateBtn, aiLoading, aiStatus, aiChangesInfo;
+  let aiTabButton, aiModel, aiLoading, aiStatus, aiChangesInfo;
+  let aiChatMessages, aiChatInput, aiChatSendBtn;
   let saveBtn, discardBtn, statusEl;
 
   // Initialize
@@ -35,12 +41,13 @@
     currentElementDisplay = document.getElementById('editor-current-element');
     childrenTree = document.getElementById('editor-children-tree');
     aiTabButton = document.querySelector('.editor-tab[data-tab="ai"]');
-    aiInstructions = document.getElementById('editor-ai-instructions');
     aiModel = document.getElementById('editor-ai-model');
-    aiGenerateBtn = document.getElementById('editor-ai-generate-btn');
     aiLoading = document.getElementById('editor-ai-loading');
     aiStatus = document.getElementById('editor-ai-status');
     aiChangesInfo = document.getElementById('editor-ai-changes-info');
+    aiChatMessages = document.getElementById('editor-ai-chat-messages');
+    aiChatInput = document.getElementById('editor-ai-chat-input');
+    aiChatSendBtn = document.getElementById('editor-ai-chat-send');
     saveBtn = document.getElementById('editor-save-btn');
     discardBtn = document.getElementById('editor-discard-btn');
     statusEl = document.getElementById('editor-status');
@@ -67,10 +74,31 @@
     // Classes input
     classesInput.addEventListener('input', debounceClassesChange);
 
-    // AI Generate button
-    if (aiGenerateBtn) {
-      aiGenerateBtn.addEventListener('click', generateAIRefinement);
+    // AI Chat send button
+    if (aiChatSendBtn) {
+      aiChatSendBtn.addEventListener('click', generateAIRefinement);
     }
+
+    // AI Chat input - send on Enter (Shift+Enter for newline)
+    if (aiChatInput) {
+      aiChatInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+          e.preventDefault();
+          generateAIRefinement();
+        }
+      });
+    }
+
+    // Context menu tab switching
+    document.addEventListener('editor:switchTab', (e) => {
+      const tab = e.detail && e.detail.tab;
+      if (tab) {
+        switchTab(tab);
+        if (e.detail.focusInput && tab === 'ai' && aiChatInput) {
+          setTimeout(() => aiChatInput.focus(), 50);
+        }
+      }
+    });
 
     // Save/Discard buttons (will be handled by tracker)
     saveBtn.addEventListener('click', () => {
@@ -101,14 +129,14 @@
     // Populate structure tab
     populateStructureTab();
 
-    // Check if element is a section and show/hide AI tab
-    const isSection = currentElement.tagName && currentElement.tagName.toLowerCase() === 'section';
+    // Show AI tab when element is inside a section (has sectionName)
+    const hasSection = !!currentData.sectionName;
     if (aiTabButton) {
-      aiTabButton.style.display = isSection ? 'flex' : 'none';
+      aiTabButton.style.display = hasSection ? 'flex' : 'none';
     }
 
-    // Populate AI tab if section
-    if (isSection) {
+    // Populate AI tab if inside a section
+    if (hasSection) {
       populateAITab();
     }
 
@@ -161,8 +189,8 @@
   function populateContentTab() {
     contentFields.innerHTML = '';
 
-    // Text elements (H1-H6)
-    if (currentData.isHeading) {
+    // Simple text elements (H1-H6, SPAN, LABEL, BUTTON)
+    if (currentData.isHeading || ['span', 'label', 'button'].includes(currentData.tagName)) {
       createTextField('Content', currentData.textContent, (value) => {
         currentElement.textContent = value;
         trackChange('content', value);
@@ -207,6 +235,17 @@
     // Other elements - just show classes
     else {
       contentFields.innerHTML = '<p class="editor-placeholder">This element type doesn\'t have editable content. Use the Design tab to edit classes.</p>';
+    }
+
+    // Background image (available on any element)
+    if (currentData.hasBackgroundImage) {
+      createBackgroundImageField(currentData.backgroundImageUrl);
+    }
+
+    // Section images — show clickable thumbnails for <img> tags inside the
+    // current section so users can reach images hidden behind overlays
+    if (!currentData.isImage && currentData.sectionName) {
+      showSectionImages();
     }
   }
 
@@ -325,25 +364,17 @@
     button.textContent = '📷 Change Image';
     button.style.width = '100%';
     button.addEventListener('click', (e) => {
-      // Debug logging
-      console.log('🖼️ Image button clicked');
-      console.log('window.ImageModal:', window.ImageModal);
-      console.log('window.ImageModal.open:', window.ImageModal?.open);
-
       // Open image modal if available
       if (window.ImageModal && typeof window.ImageModal.open === 'function') {
-        console.log('✅ Opening image modal...');
+        // Capture old src BEFORE DOM update for save fallback
+        const oldSrc = currentElement.getAttribute('src') || '';
         window.ImageModal.open((imageUrl) => {
           currentElement.setAttribute('src', imageUrl);
-          trackChange('attribute', { name: 'src', value: imageUrl });
+          trackChange('attribute', { name: 'src', value: imageUrl }, oldSrc);
           // Refresh sidebar
           populateContentTab();
         });
       } else {
-        console.error('❌ ImageModal not available:', {
-          hasImageModal: !!window.ImageModal,
-          hasOpenFunction: typeof window.ImageModal?.open
-        });
         alert('Image modal not available. Please check that image-modal.js is loaded.');
       }
     });
@@ -352,10 +383,123 @@
     contentFields.appendChild(field);
 
     // Alt text
-    createTextField('Alt Text', alt || '', (value) => {
+    const oldAlt = alt || '';
+    createTextField('Alt Text', oldAlt, (value) => {
+      const prevAlt = currentElement.getAttribute('alt') || '';
       currentElement.setAttribute('alt', value);
-      trackChange('attribute', { name: 'alt', value });
+      trackChange('attribute', { name: 'alt', value }, prevAlt);
     });
+  }
+
+  // Create background image field
+  function createBackgroundImageField(bgUrl) {
+    // Separator
+    const separator = document.createElement('hr');
+    separator.style.cssText = 'border: none; border-top: 1px solid #e5e7eb; margin: 16px 0;';
+    contentFields.appendChild(separator);
+
+    const label = document.createElement('label');
+    label.textContent = 'Background Image';
+    label.style.cssText = 'display: block; font-size: 13px; font-weight: 600; color: #374151; margin-bottom: 6px;';
+    contentFields.appendChild(label);
+
+    // Preview
+    if (bgUrl) {
+      const preview = document.createElement('div');
+      preview.style.cssText = `width: 100%; height: 120px; background-image: url('${bgUrl}'); background-size: cover; background-position: center; border: 1px solid #e5e7eb; border-radius: 6px; margin-bottom: 12px;`;
+      contentFields.appendChild(preview);
+    }
+
+    // Change button
+    const field = document.createElement('div');
+    field.className = 'editor-field';
+    field.style.marginBottom = '8px';
+
+    const changeBtn = document.createElement('button');
+    changeBtn.type = 'button';
+    changeBtn.className = 'editor-btn editor-btn-secondary';
+    changeBtn.textContent = 'Change Background Image';
+    changeBtn.style.width = '100%';
+    changeBtn.addEventListener('click', () => {
+      if (window.ImageModal && typeof window.ImageModal.open === 'function') {
+        window.ImageModal.open((imageUrl) => {
+          currentElement.style.backgroundImage = `url('${imageUrl}')`;
+          trackChange('attribute', { name: 'style', value: currentElement.getAttribute('style') });
+          populateContentTab();
+        });
+      } else {
+        alert('Image modal not available.');
+      }
+    });
+    field.appendChild(changeBtn);
+    contentFields.appendChild(field);
+
+    // Remove button
+    const removeField = document.createElement('div');
+    removeField.className = 'editor-field';
+
+    const removeBtn = document.createElement('button');
+    removeBtn.type = 'button';
+    removeBtn.className = 'editor-btn editor-btn-secondary';
+    removeBtn.textContent = 'Remove Background Image';
+    removeBtn.style.cssText = 'width: 100%; color: #dc2626;';
+    removeBtn.addEventListener('click', () => {
+      currentElement.style.backgroundImage = 'none';
+      trackChange('attribute', { name: 'style', value: currentElement.getAttribute('style') });
+      populateContentTab();
+    });
+    removeField.appendChild(removeBtn);
+    contentFields.appendChild(removeField);
+  }
+
+  // Show images inside the current section so users can select them
+  // even when overlay divs block direct clicks on <img> tags
+  function showSectionImages() {
+    const sectionEl = findSectionElement();
+    if (!sectionEl) return;
+
+    const imgs = sectionEl.querySelectorAll('img');
+    if (imgs.length === 0) return;
+
+    // Separator
+    const separator = document.createElement('hr');
+    separator.style.cssText = 'border: none; border-top: 1px solid #e5e7eb; margin: 16px 0;';
+    contentFields.appendChild(separator);
+
+    const label = document.createElement('label');
+    label.textContent = 'Section Images';
+    label.style.cssText = 'display: block; font-size: 13px; font-weight: 600; color: #374151; margin-bottom: 8px;';
+    contentFields.appendChild(label);
+
+    const hint = document.createElement('p');
+    hint.textContent = 'Click a thumbnail to select and edit that image';
+    hint.style.cssText = 'font-size: 12px; color: #6b7280; margin-bottom: 8px;';
+    contentFields.appendChild(hint);
+
+    const grid = document.createElement('div');
+    grid.style.cssText = 'display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px;';
+
+    imgs.forEach(img => {
+      const thumb = document.createElement('div');
+      thumb.style.cssText = 'cursor: pointer; border: 2px solid #e5e7eb; border-radius: 6px; overflow: hidden; transition: all 0.2s;';
+      thumb.addEventListener('mouseenter', () => { thumb.style.borderColor = '#3b82f6'; });
+      thumb.addEventListener('mouseleave', () => { thumb.style.borderColor = '#e5e7eb'; });
+
+      const preview = document.createElement('img');
+      preview.src = img.src;
+      preview.alt = img.alt || '';
+      preview.style.cssText = 'width: 100%; height: 80px; object-fit: cover;';
+      thumb.appendChild(preview);
+
+      thumb.addEventListener('click', () => {
+        // Select the img element via the selector (handles highlight removal)
+        selectElementFromTree(img);
+      });
+
+      grid.appendChild(thumb);
+    });
+
+    contentFields.appendChild(grid);
   }
 
   // Populate design tab
@@ -365,26 +509,78 @@
 
   // Populate AI tab
   function populateAITab() {
-    if (!aiInstructions || !aiStatus || !aiChangesInfo) return;
+    if (!aiChatMessages || !aiStatus || !aiChangesInfo) return;
 
-    // Clear previous state
-    aiInstructions.value = '';
+    const sectionName = currentData.sectionName;
+
+    // If different section selected, reset conversation
+    if (sectionName !== lastAISectionName) {
+      aiConversationHistory = [];
+      lastAISectionName = sectionName;
+      aiSessionId = null;
+      originalSectionHTML = null;
+      aiChangesApplied = false;
+      refinedSection = null;
+    }
+
+    // Clear status
     aiStatus.textContent = '';
     aiStatus.className = 'editor-ai-status';
     aiChangesInfo.style.display = 'none';
-    aiGenerateBtn.disabled = false;
 
-    // Reset AI state
-    originalSectionHTML = null;
-    aiChangesApplied = false;
-    refinedSection = null;
+    // Render existing messages or empty state
+    renderChatMessages();
+
+    // Clear input
+    if (aiChatInput) {
+      aiChatInput.value = '';
+      aiChatInput.disabled = false;
+    }
+    if (aiChatSendBtn) {
+      aiChatSendBtn.disabled = false;
+    }
   }
 
-  // Generate AI refinement
+  // Render chat messages
+  function renderChatMessages() {
+    if (!aiChatMessages) return;
+
+    if (aiConversationHistory.length === 0) {
+      aiChatMessages.innerHTML = '<p class="editor-ai-chat-empty">Describe what to change in this section. AI will update it while preserving context from previous messages.</p>';
+      return;
+    }
+
+    aiChatMessages.innerHTML = '';
+    aiConversationHistory.forEach(msg => {
+      const msgDiv = document.createElement('div');
+      msgDiv.className = `editor-ai-chat-msg editor-ai-chat-${msg.role}`;
+      msgDiv.textContent = msg.content;
+      aiChatMessages.appendChild(msgDiv);
+    });
+
+    // Scroll to bottom
+    aiChatMessages.scrollTop = aiChatMessages.scrollHeight;
+  }
+
+  // Find the parent <section> element for AI operations
+  function findSectionElement() {
+    if (!currentElement || !currentData.sectionName) return null;
+    let el = currentElement;
+    while (el && el !== document.body) {
+      if (el.tagName && el.tagName.toLowerCase() === 'section' &&
+          el.getAttribute('data-section') === currentData.sectionName) {
+        return el;
+      }
+      el = el.parentElement;
+    }
+    return null;
+  }
+
+  // Generate AI refinement (chat-based)
   async function generateAIRefinement() {
     const pageId = currentData.pageId;
     const sectionName = currentData.sectionName;
-    const instructions = aiInstructions.value.trim();
+    const instructions = aiChatInput ? aiChatInput.value.trim() : '';
 
     // Validation
     if (!pageId) {
@@ -392,26 +588,44 @@
       return;
     }
 
-    if (!instructions) {
-      showAIStatus('error', 'Please enter instructions for what you want to change.');
+    if (!sectionName) {
+      showAIStatus('error', 'Select an element inside a section first.');
       return;
     }
 
-    // Store original HTML before making changes
-    if (!originalSectionHTML) {
-      originalSectionHTML = currentElement.outerHTML;
+    if (!instructions) {
+      showAIStatus('error', 'Please enter instructions.');
+      return;
     }
 
-    // Show loading
-    aiGenerateBtn.disabled = true;
+    // Find the actual section element
+    const sectionEl = findSectionElement();
+    if (!sectionEl) {
+      showAIStatus('error', 'Could not find parent section element.');
+      return;
+    }
+
+    // Store original HTML before first change
+    if (!originalSectionHTML) {
+      originalSectionHTML = sectionEl.outerHTML;
+    }
+
+    // Add user message to history and render
+    aiConversationHistory.push({ role: 'user', content: instructions });
+    renderChatMessages();
+
+    // Clear input and disable
+    if (aiChatInput) aiChatInput.value = '';
+    if (aiChatSendBtn) aiChatSendBtn.disabled = true;
+    if (aiChatInput) aiChatInput.disabled = true;
     aiLoading.style.display = 'block';
     aiStatus.textContent = '';
     aiChangesInfo.style.display = 'none';
 
     try {
-      console.log('🤖 Calling AI API:', { pageId, sectionName, instructions });
+      console.log('🤖 Calling AI section refine:', { pageId, sectionName, instructions });
 
-      const response = await fetch('/ai/api/refine-page-with-html/', {
+      const response = await fetch('/editor/api/refine-section/', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -419,9 +633,11 @@
         },
         body: JSON.stringify({
           page_id: pageId,
-          instructions: instructions,
           section_name: sectionName,
-          model: aiModel.value
+          instructions: instructions,
+          conversation_history: aiConversationHistory.slice(0, -1), // exclude the current message (it's in instructions)
+          model: aiModel ? aiModel.value : 'gemini-flash',
+          session_id: aiSessionId
         })
       });
 
@@ -429,18 +645,33 @@
 
       if (result.success && result.section) {
         console.log('✅ AI response received:', result.section);
+
+        // Track session ID for persistence
+        if (result.session_id) {
+          aiSessionId = result.session_id;
+        }
+
+        // Add assistant message to history
+        const assistantMsg = result.assistant_message || 'Changes applied.';
+        aiConversationHistory.push({ role: 'assistant', content: assistantMsg });
+        renderChatMessages();
+
         refinedSection = result.section;
         applyAIChanges(result.section);
       } else {
+        // Remove user message on failure
+        aiConversationHistory.pop();
+        renderChatMessages();
         throw new Error(result.error || 'Unknown error');
       }
 
     } catch (error) {
       console.error('❌ AI generation error:', error);
       showAIStatus('error', `Error: ${error.message}`);
-      aiGenerateBtn.disabled = false;
     } finally {
       aiLoading.style.display = 'none';
+      if (aiChatSendBtn) aiChatSendBtn.disabled = false;
+      if (aiChatInput) aiChatInput.disabled = false;
     }
   }
 
@@ -455,10 +686,17 @@
       // Render the template with actual content
       const renderedHTML = renderSectionTemplate(section);
 
-      // Update the section's HTML in the DOM
-      currentElement.outerHTML = renderedHTML;
+      // Find the section element to replace
+      const sectionEl = findSectionElement();
+      if (!sectionEl) {
+        showAIStatus('error', 'Could not find section element to update.');
+        return;
+      }
 
-      // Re-select the element (since we replaced it)
+      // Update the section's HTML in the DOM
+      sectionEl.outerHTML = renderedHTML;
+
+      // Re-select the section element (since we replaced it)
       const updatedElement = document.querySelector(`[data-page-id="${currentData.pageId}"] section[data-section="${currentData.sectionName}"]`);
       if (updatedElement) {
         currentElement = updatedElement;
@@ -490,8 +728,6 @@
     } catch (error) {
       console.error('❌ Error applying AI changes:', error);
       showAIStatus('error', `Failed to apply changes: ${error.message}`);
-    } finally {
-      aiGenerateBtn.disabled = false;
     }
   }
 
@@ -503,8 +739,9 @@
     }
 
     try {
-      // Restore original HTML
-      currentElement.outerHTML = originalSectionHTML;
+      // Find current section element and restore original HTML
+      const sectionEl = findSectionElement() || currentElement;
+      sectionEl.outerHTML = originalSectionHTML;
 
       // Re-select the element
       const restoredElement = document.querySelector(`[data-page-id="${currentData.pageId}"] section[data-section="${currentData.sectionName}"]`);
@@ -544,8 +781,8 @@
 
     console.log('🎨 Rendering template:', { currentLang, langContent });
 
-    // Replace all {{trans.field}} with actual content
-    html = html.replace(/\{\{trans\.(\w+)\}\}/g, (match, field) => {
+    // Replace all {{ trans.field }} with actual content (handles optional spaces)
+    html = html.replace(/\{\{\s*trans\.(\w+)\s*\}\}/g, (match, field) => {
       const value = langContent[field];
       if (value !== undefined && value !== null) {
         return value;
@@ -554,8 +791,8 @@
       return match; // Keep original if not found
     });
 
-    // Replace {{trans.field|safe}} (with safe filter)
-    html = html.replace(/\{\{trans\.(\w+)\|safe\}\}/g, (match, field) => {
+    // Replace {{ trans.field|safe }} (with safe filter, handles optional spaces)
+    html = html.replace(/\{\{\s*trans\.(\w+)\|safe\s*\}\}/g, (match, field) => {
       const value = langContent[field];
       if (value !== undefined && value !== null) {
         return value;
@@ -750,8 +987,8 @@
     console.log('🎨 Classes changed:', classArray);
   }
 
-  // Track change
-  function trackChange(type, value) {
+  // Track change (oldValue is optional, used for attribute save fallback)
+  function trackChange(type, value, oldValue) {
     if (!currentElement || !currentData) return;
 
     const changeData = {
@@ -762,6 +999,12 @@
       value: value,
       jsonPath: currentData.jsonPath
     };
+
+    // Pass explicit oldValue so the tracker can use it for save fallback
+    // (needed when elements lack data-element-id)
+    if (oldValue !== undefined) {
+      changeData.oldValue = oldValue;
+    }
 
     document.dispatchEvent(new CustomEvent('editor:change', {
       detail: changeData
@@ -782,6 +1025,7 @@
     init: init,
     hasAIChanges: () => aiChangesApplied,
     getRefinedSection: () => refinedSection,
+    getLastSectionName: () => lastAISectionName,
     revertAIChanges: revertAIChanges
   };
 

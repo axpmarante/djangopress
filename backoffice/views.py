@@ -1089,3 +1089,56 @@ class BlueprintView(LoginRequiredMixin, TemplateView):
             context['default_model'] = 'gemini-pro'
 
         return context
+
+
+class AICallLogsView(LoginRequiredMixin, TemplateView):
+    """AI Call Logs — browse all LLM API calls."""
+    template_name = 'backoffice/ai_call_logs.html'
+
+    def get_context_data(self, **kwargs):
+        from ai.models import AICallLog, ACTION_CHOICES
+        from django.db.models import Sum, Count, Q
+
+        context = super().get_context_data(**kwargs)
+        qs = AICallLog.objects.all()
+
+        # Filters
+        action = self.request.GET.get('action', '')
+        model_name = self.request.GET.get('model', '')
+        status = self.request.GET.get('status', '')
+
+        if action:
+            qs = qs.filter(action=action)
+        if model_name:
+            qs = qs.filter(model_name=model_name)
+        if status == 'error':
+            qs = qs.filter(success=False)
+        elif status == 'ok':
+            qs = qs.filter(success=True)
+
+        # Summary stats (on filtered qs)
+        stats = qs.aggregate(
+            total_calls=Count('id'),
+            total_tokens=Sum('total_tokens'),
+            total_errors=Count('id', filter=Q(success=False)),
+        )
+        context['stats'] = stats
+
+        # Paginate
+        from django.core.paginator import Paginator
+        paginator = Paginator(qs, 50)
+        page_number = self.request.GET.get('page', 1)
+        context['page_obj'] = paginator.get_page(page_number)
+        context['logs'] = context['page_obj']
+
+        # Filter options
+        context['action_choices'] = ACTION_CHOICES
+        context['model_choices'] = (
+            AICallLog.objects.values_list('model_name', flat=True)
+            .distinct().order_by('model_name')
+        )
+        context['current_action'] = action
+        context['current_model'] = model_name
+        context['current_status'] = status
+
+        return context

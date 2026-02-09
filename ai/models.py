@@ -1,6 +1,86 @@
+import time
+import traceback
+
 from django.db import models
 from django.conf import settings
 from django.utils import timezone
+
+
+ACTION_CHOICES = [
+    ('generate_page', 'Generate Page'),
+    ('refine_page', 'Refine Page'),
+    ('chat_refine', 'Chat Refine'),
+    ('refine_section', 'Refine Section'),
+    ('refine_header', 'Refine Header'),
+    ('refine_footer', 'Refine Footer'),
+    ('templatize', 'Templatize'),
+    ('generate_metadata', 'Generate Metadata'),
+    ('analyze_images', 'Analyze Images'),
+    ('analyze_bulk', 'Analyze Bulk Pages'),
+    ('generate_design_guide', 'Generate Design Guide'),
+    ('suggest_sections', 'Suggest Sections'),
+    ('fill_section', 'Fill Section'),
+]
+
+
+class AICallLog(models.Model):
+    """Log of every AI/LLM API call for debugging and analytics."""
+    created_at = models.DateTimeField(auto_now_add=True)
+    action = models.CharField(max_length=50, choices=ACTION_CHOICES)
+    model_name = models.CharField(max_length=100)
+    provider = models.CharField(max_length=20)
+    page = models.ForeignKey(
+        'core.Page', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='ai_call_logs',
+    )
+    section_name = models.CharField(max_length=100, blank=True, default='')
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
+        null=True, blank=True,
+    )
+    system_prompt = models.TextField(blank=True, default='')
+    user_prompt = models.TextField(blank=True, default='')
+    response_text = models.TextField(blank=True, default='')
+    prompt_tokens = models.IntegerField(default=0)
+    completion_tokens = models.IntegerField(default=0)
+    total_tokens = models.IntegerField(default=0)
+    duration_ms = models.IntegerField(default=0)
+    success = models.BooleanField(default=True)
+    error_message = models.TextField(blank=True, default='')
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        status = 'OK' if self.success else 'ERR'
+        return f"[{status}] {self.action} — {self.model_name} ({self.total_tokens} tok)"
+
+
+def log_ai_call(action, model_name, provider, system_prompt='', user_prompt='',
+                response_text='', prompt_tokens=0, completion_tokens=0,
+                total_tokens=0, duration_ms=0, success=True, error_message='',
+                page=None, section_name='', user=None):
+    """Log an AI API call to the database."""
+    try:
+        AICallLog.objects.create(
+            action=action,
+            model_name=model_name,
+            provider=provider,
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            response_text=response_text,
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
+            total_tokens=total_tokens,
+            duration_ms=duration_ms,
+            success=success,
+            error_message=error_message,
+            page=page,
+            section_name=section_name or '',
+            user=user,
+        )
+    except Exception:
+        traceback.print_exc()
 
 
 class RefinementSession(models.Model):

@@ -53,14 +53,30 @@ class PageView(TemplateView):
             translations = (page_obj.content or {}).get('translations', {})
             trans = translations.get(language, translations.get('pt', {}))
 
-            template = Template(page_obj.html_content)
-            render_context = Context({
-                'trans': trans,
-                'LANGUAGE_CODE': language,
-                'page': page_obj,
-                **context,
-            })
-            context['page_content'] = template.render(render_context)
+            try:
+                template = Template(page_obj.html_content)
+                render_context = Context({
+                    'trans': trans,
+                    'LANGUAGE_CODE': language,
+                    'page': page_obj,
+                    **context,
+                })
+                context['page_content'] = template.render(render_context)
+            except Exception as e:
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.error(f"Template error rendering page '{page_slug}' (id={page_obj.id}): {e}")
+                if self.request.user.is_staff:
+                    context['page_content'] = (
+                        f'<div class="max-w-3xl mx-auto my-12 p-6 bg-red-50 border border-red-200 rounded-lg">'
+                        f'<h2 class="text-xl font-bold text-red-700 mb-2">Template Error</h2>'
+                        f'<p class="text-red-600 mb-4">{e}</p>'
+                        f'<p class="text-sm text-red-500">This page has corrupted template syntax. '
+                        f'Go to <a href="/backoffice/page/{page_obj.id}/edit/" class="underline">Page Settings</a> '
+                        f'to restore from a previous version.</p></div>'
+                    )
+                else:
+                    raise
         else:
             context['page_content'] = ''
 

@@ -86,8 +86,13 @@
     );
 
     if (existingIndex >= 0) {
-      // Update existing change
+      // Update existing change but preserve the original oldValue
+      // (the DB still has the first old value, not intermediate ones)
+      const originalOldValue = pendingChanges[existingIndex].oldValue;
       pendingChanges[existingIndex] = change;
+      if (originalOldValue !== undefined) {
+        pendingChanges[existingIndex].oldValue = originalOldValue;
+      }
     } else {
       // Add new change
       pendingChanges.push(change);
@@ -231,6 +236,12 @@
 
   // Save content change
   async function saveContentChange(change) {
+    const fieldKey = change.jsonPath || change.elementId;
+    if (!change.pageId || !fieldKey) {
+      console.warn('⚠️ Skipping content save: missing pageId or field_key', change);
+      return { success: true }; // Don't block other saves
+    }
+
     try {
       const response = await fetch('/editor/api/update-page-content/', {
         method: 'POST',
@@ -240,7 +251,7 @@
         },
         body: JSON.stringify({
           page_id: change.pageId,
-          field_key: change.jsonPath || change.elementId,
+          field_key: fieldKey,
           value: change.value,
           language: getCurrentLanguage()
         })
@@ -249,7 +260,7 @@
       const data = await response.json();
 
       if (data.success) {
-        console.log('✅ Content saved:', change.elementId);
+        console.log('✅ Content saved:', fieldKey);
         return { success: true };
       } else {
         console.error('❌ Content save failed:', data.error);
@@ -263,6 +274,11 @@
 
   // Save class change
   async function saveClassChange(change) {
+    if (!change.pageId || !change.elementId) {
+      console.warn('⚠️ Skipping class save: missing pageId or elementId', change);
+      return { success: true };
+    }
+
     try {
       // Convert array of classes to space-separated string
       const classString = Array.isArray(change.value)
@@ -299,19 +315,39 @@
 
   // Save attribute change
   async function saveAttributeChange(change) {
+    if (!change.pageId) {
+      console.warn('⚠️ Skipping attribute save: missing pageId', change);
+      return { success: true };
+    }
+
+    // When elementId is missing, we need old_value + tag_name for fallback lookup
+    if (!change.elementId && !change.oldValue) {
+      console.warn('⚠️ Skipping attribute save: no elementId and no oldValue for fallback', change);
+      return { success: true };
+    }
+
     try {
+      const payload = {
+        page_id: change.pageId,
+        element_id: change.elementId || null,
+        attribute: change.value.name,
+        value: change.value.value
+      };
+
+      // Send fallback data when elementId is missing
+      if (!change.elementId) {
+        payload.old_value = change.oldValue;
+        payload.tag_name = change.element ? change.element.tagName.toLowerCase() : null;
+        console.log('📌 Using old_value fallback for attribute save:', payload);
+      }
+
       const response = await fetch('/editor/api/update-page-attribute/', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'X-CSRFToken': getCSRFToken()
         },
-        body: JSON.stringify({
-          page_id: change.pageId,
-          element_id: change.elementId,
-          attribute: change.value.name,
-          value: change.value.value
-        })
+        body: JSON.stringify(payload)
       });
 
       const data = await response.json();
@@ -329,12 +365,19 @@
     }
   }
 
-  // Save AI-refined page
+  // Save AI-refined section
   async function saveAIPage() {
     try {
-      console.log('💾 Saving AI page:', aiPageId, aiPageData);
+      const sectionName = window.SimpleSidebar ? window.SimpleSidebar.getLastSectionName() : null;
 
-      const response = await fetch('/ai/api/refine-page-with-html/', {
+      if (!sectionName || !aiPageData || !aiPageData.html_template) {
+        console.error('❌ Missing AI section data for save');
+        return { success: false, error: 'Missing section data' };
+      }
+
+      console.log('💾 Saving AI section:', aiPageId, sectionName, aiPageData);
+
+      const response = await fetch('/editor/api/save-ai-section/', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -342,22 +385,23 @@
         },
         body: JSON.stringify({
           page_id: aiPageId,
-          page_data: aiPageData,
-          change_summary: 'AI-refined page'
+          section_name: sectionName,
+          html_template: aiPageData.html_template,
+          content: aiPageData.content
         })
       });
 
       const data = await response.json();
 
       if (data.success) {
-        console.log('✅ AI page saved successfully');
+        console.log('✅ AI section saved successfully');
         return { success: true };
       } else {
-        console.error('❌ AI page save failed:', data.error);
+        console.error('❌ AI section save failed:', data.error);
         return { success: false, error: data.error };
       }
     } catch (error) {
-      console.error('AI page save error:', error);
+      console.error('AI section save error:', error);
       return { success: false, error: error.message };
     }
   }

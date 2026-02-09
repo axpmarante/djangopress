@@ -635,6 +635,12 @@ class Page(models.Model):
         except:
             return self.get_slug('pt')
 
+    @property
+    def slug_i18n_json(self):
+        """Return slug_i18n as a JSON string for use in templates"""
+        import json
+        return json.dumps(self.slug_i18n or {})
+
     def get_slug(self, lang='pt'):
         """
         Get slug in specified language.

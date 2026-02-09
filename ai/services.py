@@ -4,9 +4,11 @@ Main service layer for generating and refining pages and global sections (header
 """
 import json
 import re
+import time
 from typing import Dict, List, Any, Optional, Union
-from .utils.llm_config import LLMBase
+from .utils.llm_config import LLMBase, MODEL_CONFIG
 from .utils.prompts import PromptTemplates
+from .models import log_ai_call
 
 
 class ContentGenerationService:
@@ -23,6 +25,26 @@ class ContentGenerationService:
         """
         self.llm = LLMBase()
         self.model_name = model_name
+
+    @staticmethod
+    def _get_model_info(tool_name: str) -> tuple:
+        """Return (actual_model_name, provider_string) for a tool_name key."""
+        config = MODEL_CONFIG.get(tool_name)
+        if config:
+            return config.model_name, config.provider.value
+        return tool_name, 'unknown'
+
+    @staticmethod
+    def _extract_usage(response) -> dict:
+        """Extract token usage from a StandardizedLLMResponse."""
+        usage = getattr(response, 'usage', None)
+        if usage is None:
+            return {'prompt_tokens': 0, 'completion_tokens': 0, 'total_tokens': 0}
+        return {
+            'prompt_tokens': getattr(usage, 'prompt_tokens', 0) or 0,
+            'completion_tokens': getattr(usage, 'completion_tokens', 0) or 0,
+            'total_tokens': getattr(usage, 'total_tokens', 0) or 0,
+        }
 
     def _extract_json_from_response(self, content: str, retry_count: int = 0, max_retries: int = 2) -> Union[Dict, List]:
         """
@@ -202,7 +224,26 @@ Return the complete, corrected JSON now:"""
             {'role': 'user', 'content': user_prompt}
         ]
 
-        response = self.llm.get_completion(messages, tool_name=model)
+        actual_model, provider = self._get_model_info(model)
+        t0 = time.time()
+        try:
+            response = self.llm.get_completion(messages, tool_name=model)
+            usage = self._extract_usage(response)
+            log_ai_call(
+                action='templatize', model_name=actual_model, provider=provider,
+                system_prompt=system_prompt, user_prompt=user_prompt,
+                response_text=response.choices[0].message.content,
+                duration_ms=int((time.time() - t0) * 1000), **usage,
+            )
+        except Exception as e:
+            log_ai_call(
+                action='templatize', model_name=actual_model, provider=provider,
+                system_prompt=system_prompt, user_prompt=user_prompt,
+                duration_ms=int((time.time() - t0) * 1000),
+                success=False, error_message=str(e),
+            )
+            raise
+
         content = response.choices[0].message.content
         mappings = self._extract_json_from_response(content)
 
@@ -242,6 +283,11 @@ Return the complete, corrected JSON now:"""
             if not var_name or not original_text:
                 continue
 
+            # Sanitize variable name: Django template variables must be valid
+            # Python identifiers (no hyphens, spaces, or special chars)
+            var_name = re.sub(r'[^a-zA-Z0-9_]', '_', var_name)
+            var_name = re.sub(r'_+', '_', var_name).strip('_')
+
             # Replace original text in HTML with {{ trans.var_name }}
             template_var = '{{ trans.' + var_name + ' }}'
             if original_text in templatized_html:
@@ -270,6 +316,26 @@ Return the complete, corrected JSON now:"""
                     print(f"  - {lang.upper()}: {', '.join(vars_list)}")
 
         print(f"Templatized HTML with {len(trans_vars)} translation variables")
+
+        # Validate template syntax before returning
+        from django.template import Template, TemplateSyntaxError
+        try:
+            Template(templatized_html)
+        except TemplateSyntaxError as e:
+            print(f"ERROR: Templatized HTML has broken template syntax: {e}")
+            print("Attempting auto-fix of broken template tags...")
+            # Fix common issues: nested {{ inside {{ trans.xxx }}
+            templatized_html = re.sub(
+                r'\{\{\s*trans\.(\w+)\s+\{\{[^}]*\}\}\s*\}\}',
+                r'{{ trans.\1 }}',
+                templatized_html
+            )
+            # Verify fix worked
+            try:
+                Template(templatized_html)
+                print("Auto-fix successful")
+            except TemplateSyntaxError as e2:
+                raise ValueError(f"Templatized HTML has invalid template syntax that could not be auto-fixed: {e2}")
 
         return {
             'html_content': templatized_html,
@@ -302,9 +368,18 @@ Return the complete, corrected JSON now:"""
             {'role': 'user', 'content': user_prompt}
         ]
 
+        actual_model, provider = self._get_model_info(model)
+        t0 = time.time()
         try:
             response = self.llm.get_completion(messages, tool_name=model)
+            usage = self._extract_usage(response)
             content = response.choices[0].message.content
+            log_ai_call(
+                action='generate_metadata', model_name=actual_model, provider=provider,
+                system_prompt=system_prompt, user_prompt=user_prompt,
+                response_text=content,
+                duration_ms=int((time.time() - t0) * 1000), **usage,
+            )
             metadata = self._extract_json_from_response(content)
 
             title_i18n = metadata.get('title_i18n', {})
@@ -323,6 +398,12 @@ Return the complete, corrected JSON now:"""
             return {'title_i18n': title_i18n, 'slug_i18n': slug_i18n}
 
         except Exception as e:
+            log_ai_call(
+                action='generate_metadata', model_name=actual_model, provider=provider,
+                system_prompt=system_prompt, user_prompt=user_prompt,
+                duration_ms=int((time.time() - t0) * 1000),
+                success=False, error_message=str(e),
+            )
             print(f"WARNING: Metadata generation failed: {e}")
             return {'title_i18n': {}, 'slug_i18n': {}}
 
@@ -392,21 +473,40 @@ Return the complete, corrected JSON now:"""
 
         print(f"GENERATION PROMPT (≈{int(total_token_estimate)} tokens)")
 
-        if reference_images:
-            # Use vision call with images — combine system + user prompt
-            print(f"Using vision call with {len(reference_images)} reference image(s)")
-            combined_prompt = system_prompt + "\n\n" + user_prompt
-            response = self.llm.get_vision_completion(
-                prompt=combined_prompt,
-                images=reference_images,
-                tool_name=model
+        actual_model, provider = self._get_model_info(model)
+        t0 = time.time()
+        try:
+            if reference_images:
+                # Use vision call with images — combine system + user prompt
+                print(f"Using vision call with {len(reference_images)} reference image(s)")
+                combined_prompt = system_prompt + "\n\n" + user_prompt
+                response = self.llm.get_vision_completion(
+                    prompt=combined_prompt,
+                    images=reference_images,
+                    tool_name=model
+                )
+            else:
+                messages = [
+                    {'role': 'system', 'content': system_prompt},
+                    {'role': 'user', 'content': user_prompt}
+                ]
+                response = self.llm.get_completion(messages, tool_name=model)
+
+            usage = self._extract_usage(response)
+            log_ai_call(
+                action='generate_page', model_name=actual_model, provider=provider,
+                system_prompt=system_prompt, user_prompt=user_prompt,
+                response_text=response.choices[0].message.content,
+                duration_ms=int((time.time() - t0) * 1000), **usage,
             )
-        else:
-            messages = [
-                {'role': 'system', 'content': system_prompt},
-                {'role': 'user', 'content': user_prompt}
-            ]
-            response = self.llm.get_completion(messages, tool_name=model)
+        except Exception as e:
+            log_ai_call(
+                action='generate_page', model_name=actual_model, provider=provider,
+                system_prompt=system_prompt, user_prompt=user_prompt,
+                duration_ms=int((time.time() - t0) * 1000),
+                success=False, error_message=str(e),
+            )
+            raise
 
         raw_html = self._extract_html_from_response(response.choices[0].message.content)
 
@@ -545,20 +645,39 @@ Return the complete, corrected JSON now:"""
         # Get LLM completion with higher max_tokens for complete HTML templates
         model = model_override or self.model_name
 
-        from .utils.llm_config import MODEL_CONFIG, ModelProvider
-        config = MODEL_CONFIG.get(model, None)
-        if config and config.provider == ModelProvider.GOOGLE:
-            response = self.llm.get_completion(
-                messages,
-                tool_name=model,
-                max_output_tokens=16384
+        from .utils.llm_config import ModelProvider
+        config = MODEL_CONFIG.get(model)
+        actual_model, provider = self._get_model_info(model)
+        action = 'refine_header' if section_key == 'main-header' else 'refine_footer'
+        t0 = time.time()
+        try:
+            if config and config.provider == ModelProvider.GOOGLE:
+                response = self.llm.get_completion(
+                    messages,
+                    tool_name=model,
+                    max_output_tokens=16384
+                )
+            else:
+                response = self.llm.get_completion(
+                    messages,
+                    tool_name=model,
+                    max_tokens=16384
+                )
+            usage = self._extract_usage(response)
+            log_ai_call(
+                action=action, model_name=actual_model, provider=provider,
+                system_prompt=system_prompt, user_prompt=user_prompt,
+                response_text=response.choices[0].message.content,
+                duration_ms=int((time.time() - t0) * 1000), **usage,
             )
-        else:
-            response = self.llm.get_completion(
-                messages,
-                tool_name=model,
-                max_tokens=16384
+        except Exception as e:
+            log_ai_call(
+                action=action, model_name=actual_model, provider=provider,
+                system_prompt=system_prompt, user_prompt=user_prompt,
+                duration_ms=int((time.time() - t0) * 1000),
+                success=False, error_message=str(e),
             )
+            raise
 
         # Extract and parse response
         content = response.choices[0].message.content
@@ -724,21 +843,43 @@ Return the complete, corrected JSON now:"""
 
         print(f"REFINEMENT PROMPT (≈{int(total_token_estimate)} tokens)")
 
-        if reference_images:
-            # Use vision call with images — combine system + user prompt
-            print(f"Using vision call with {len(reference_images)} reference image(s)")
-            combined_prompt = system_prompt + "\n\n" + user_prompt
-            response = self.llm.get_vision_completion(
-                prompt=combined_prompt,
-                images=reference_images,
-                tool_name=model
+        actual_model, provider_str = self._get_model_info(model)
+        log_action = 'chat_refine' if conversation_history else 'refine_page'
+        t0 = time.time()
+        try:
+            if reference_images:
+                # Use vision call with images — combine system + user prompt
+                print(f"Using vision call with {len(reference_images)} reference image(s)")
+                combined_prompt = system_prompt + "\n\n" + user_prompt
+                response = self.llm.get_vision_completion(
+                    prompt=combined_prompt,
+                    images=reference_images,
+                    tool_name=model
+                )
+            else:
+                messages = [
+                    {'role': 'system', 'content': system_prompt},
+                    {'role': 'user', 'content': user_prompt}
+                ]
+                response = self.llm.get_completion(messages, tool_name=model)
+
+            usage = self._extract_usage(response)
+            log_ai_call(
+                action=log_action, model_name=actual_model, provider=provider_str,
+                system_prompt=system_prompt, user_prompt=user_prompt,
+                response_text=response.choices[0].message.content,
+                duration_ms=int((time.time() - t0) * 1000),
+                page=page, section_name=section_name or '', **usage,
             )
-        else:
-            messages = [
-                {'role': 'system', 'content': system_prompt},
-                {'role': 'user', 'content': user_prompt}
-            ]
-            response = self.llm.get_completion(messages, tool_name=model)
+        except Exception as e:
+            log_ai_call(
+                action=log_action, model_name=actual_model, provider=provider_str,
+                system_prompt=system_prompt, user_prompt=user_prompt,
+                duration_ms=int((time.time() - t0) * 1000),
+                page=page, section_name=section_name or '',
+                success=False, error_message=str(e),
+            )
+            raise
 
         refined_html = self._extract_html_from_response(response.choices[0].message.content)
 
@@ -752,6 +893,169 @@ Return the complete, corrected JSON now:"""
 
         print(f"Successfully refined page (two-step)")
         return refined_data
+
+    def refine_section_only(
+        self,
+        page_id: int,
+        section_name: str,
+        instructions: str,
+        conversation_history: list = None,
+        model_override: str = None
+    ) -> Dict:
+        """
+        Refine a single section without saving to DB.
+        Returns the section's html_template and content (translations).
+
+        Args:
+            page_id: ID of the page
+            section_name: data-section attribute value
+            instructions: User's refinement instructions
+            conversation_history: List of {role, content} dicts for chat context
+            model_override: Override the default model
+
+        Returns:
+            Dict with 'html_template', 'content', and 'assistant_message'
+        """
+        from core.models import Page, SiteSettings
+        from bs4 import BeautifulSoup
+
+        print(f"\n=== Refining Section Only ===")
+        print(f"Page ID: {page_id}, Section: {section_name}")
+        print(f"Instructions: {instructions}")
+
+        try:
+            page = Page.objects.get(id=page_id)
+        except Page.DoesNotExist:
+            raise ValueError(f"Page with ID {page_id} not found")
+
+        site_settings = SiteSettings.objects.first()
+        default_language = site_settings.get_default_language() if site_settings else 'pt'
+        site_name = site_settings.get_site_name(default_language) if site_settings else 'Website'
+        site_description = site_settings.get_site_description(default_language) if site_settings else ''
+        project_briefing = site_settings.get_project_briefing() if site_settings else ''
+        languages = site_settings.get_language_codes() if site_settings else ['pt', 'en']
+        design_guide = site_settings.design_guide if site_settings else ''
+        model = model_override or self.model_name
+
+        page_title = page.default_title
+        page_slug = page.default_slug
+
+        # Build pages list for inter-page linking context
+        pages_data = []
+        for p in Page.objects.filter(is_active=True).order_by('id'):
+            pages_data.append({'title': p.title_i18n or {}, 'slug': p.slug_i18n or {}})
+
+        # De-templatize full page HTML
+        current_html = page.html_content or ''
+        current_translations = (page.content or {}).get('translations', {})
+
+        if current_translations.get(default_language):
+            clean_html = self._detemplatize_html(current_html, current_translations, default_language)
+        else:
+            clean_html = current_html
+
+        # Build conversation history string for prompt
+        history_text = ''
+        if conversation_history:
+            for msg in conversation_history:
+                role = msg.get('role', 'user')
+                content = msg.get('content', '')
+                if role == 'user':
+                    history_text += f"\nUser: {content}"
+                elif role == 'assistant':
+                    history_text += f"\nAssistant: {content}"
+
+        # Step 1: Refine section HTML (section-only prompt — LLM returns just the target section)
+        print(f"\n--- Step 1: Refine section '{section_name}' in {default_language.upper()} ---")
+
+        system_prompt, user_prompt = PromptTemplates.get_section_refinement_prompt(
+            site_name=site_name,
+            site_description=site_description,
+            project_briefing=project_briefing,
+            default_language=default_language,
+            full_page_html=clean_html,
+            section_name=section_name,
+            user_request=instructions,
+            page_title=page_title,
+            page_slug=page_slug,
+            design_guide=design_guide,
+            conversation_history=history_text,
+            pages=pages_data,
+            languages=languages,
+        )
+
+        messages = [
+            {'role': 'system', 'content': system_prompt},
+            {'role': 'user', 'content': user_prompt}
+        ]
+
+        actual_model, provider_str = self._get_model_info(model)
+        t0 = time.time()
+        try:
+            response = self.llm.get_completion(messages, tool_name=model)
+            usage = self._extract_usage(response)
+            log_ai_call(
+                action='refine_section', model_name=actual_model, provider=provider_str,
+                system_prompt=system_prompt, user_prompt=user_prompt,
+                response_text=response.choices[0].message.content,
+                duration_ms=int((time.time() - t0) * 1000),
+                page=page, section_name=section_name, **usage,
+            )
+        except Exception as e:
+            log_ai_call(
+                action='refine_section', model_name=actual_model, provider=provider_str,
+                system_prompt=system_prompt, user_prompt=user_prompt,
+                duration_ms=int((time.time() - t0) * 1000),
+                page=page, section_name=section_name,
+                success=False, error_message=str(e),
+            )
+            raise
+
+        refined_html = self._extract_html_from_response(response.choices[0].message.content)
+
+        if not refined_html or len(refined_html.strip()) < 50:
+            raise ValueError("Step 1 returned empty or too-short HTML")
+
+        print(f"Step 1 produced {len(refined_html)} chars of refined section HTML")
+
+        # Verify the response contains the target section
+        soup = BeautifulSoup(refined_html, 'html.parser')
+        section_el = soup.find('section', attrs={'data-section': section_name})
+
+        if section_el:
+            # LLM returned proper section — use it
+            section_html = str(section_el)
+        else:
+            # LLM might have returned the section content without the wrapper,
+            # or the entire page. Try to extract just the section.
+            all_sections = soup.find_all('section')
+            if len(all_sections) == 1:
+                section_html = str(all_sections[0])
+            elif len(all_sections) > 1:
+                # LLM returned multiple sections despite instructions — extract target
+                print(f"WARNING: LLM returned {len(all_sections)} sections, extracting target")
+                target = soup.find('section', attrs={'data-section': section_name})
+                if target:
+                    section_html = str(target)
+                else:
+                    raise ValueError(f"Section '{section_name}' not found in AI response with {len(all_sections)} sections")
+            else:
+                # No section tags — wrap the response
+                section_html = refined_html
+
+        print(f"Section '{section_name}': {len(section_html)} chars")
+
+        # Step 2: Templatize + translate just the section
+        section_data = self._templatize_and_translate(section_html, languages, default_language, model)
+
+        # Build assistant message for chat display
+        assistant_message = f"I've updated the {section_name} section based on your instructions."
+
+        return {
+            'html_template': section_data['html_content'],
+            'content': section_data['content'],
+            'assistant_message': assistant_message,
+        }
 
     def process_page_images(
         self,
@@ -992,7 +1296,26 @@ Return the complete, corrected JSON now:"""
             {'role': 'user', 'content': user_prompt}
         ]
 
-        response = self.llm.get_completion(messages, tool_name=model)
+        actual_model, provider_str = self._get_model_info(model)
+        t0 = time.time()
+        try:
+            response = self.llm.get_completion(messages, tool_name=model)
+            usage = self._extract_usage(response)
+            log_ai_call(
+                action='analyze_images', model_name=actual_model, provider=provider_str,
+                system_prompt=system_prompt, user_prompt=user_prompt,
+                response_text=response.choices[0].message.content,
+                duration_ms=int((time.time() - t0) * 1000), page=page, **usage,
+            )
+        except Exception as e:
+            log_ai_call(
+                action='analyze_images', model_name=actual_model, provider=provider_str,
+                system_prompt=system_prompt, user_prompt=user_prompt,
+                duration_ms=int((time.time() - t0) * 1000), page=page,
+                success=False, error_message=str(e),
+            )
+            raise
+
         content = response.choices[0].message.content
         suggestions = self._extract_json_from_response(content)
 

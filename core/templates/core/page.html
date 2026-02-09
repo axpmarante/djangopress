@@ -18,6 +18,11 @@
     DRAFT — This page is not published. Only staff can see this preview.
 </div>
 {% endif %}
+{% if edit_mode %}
+<script type="application/json" id="page-editor-data">
+  {"page_id": {{ page_obj.id }}, "slug_i18n": {{ page_obj.slug_i18n_json|safe }}}
+</script>
+{% endif %}
 <div {% if edit_mode %}data-page-id="{{ page_obj.id }}"{% endif %}>
   {{ page_content }}
 </div>

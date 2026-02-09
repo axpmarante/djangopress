@@ -65,6 +65,7 @@ urlpatterns = [
     path('ai/refine/page/', views.AIRefinePageView.as_view(), name='ai_refine_page'),
     path('ai/refine/page/<str:page_slug>/', views.AIRefinePageView.as_view(), name='ai_refine_page_with_slug'),
     path('ai/chat/refine/<int:page_id>/', views.AIChatRefineView.as_view(), name='ai_chat_refine'),
+    path('ai/logs/', views.AICallLogsView.as_view(), name='ai_call_logs'),
 
     # Version Management
     path('version/page/<int:version_id>/restore/', views.restore_page_version, name='restore_page_version'),

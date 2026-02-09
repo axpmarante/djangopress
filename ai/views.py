@@ -2,6 +2,7 @@
 AI Content Generation Views
 """
 import json
+import time
 from django.shortcuts import render
 from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
@@ -9,6 +10,28 @@ from django.contrib.admin.views.decorators import staff_member_required
 from django.views.decorators.csrf import csrf_exempt
 from core.models import Page
 from .services import ContentGenerationService
+from .models import log_ai_call
+
+
+def _get_model_info(tool_name):
+    """Return (actual_model_name, provider_string) for a tool_name key."""
+    from .utils.llm_config import MODEL_CONFIG
+    config = MODEL_CONFIG.get(tool_name)
+    if config:
+        return config.model_name, config.provider.value
+    return tool_name, 'unknown'
+
+
+def _extract_usage(response):
+    """Extract token usage from a StandardizedLLMResponse."""
+    usage = getattr(response, 'usage', None)
+    if usage is None:
+        return {'prompt_tokens': 0, 'completion_tokens': 0, 'total_tokens': 0}
+    return {
+        'prompt_tokens': getattr(usage, 'prompt_tokens', 0) or 0,
+        'completion_tokens': getattr(usage, 'completion_tokens', 0) or 0,
+        'total_tokens': getattr(usage, 'total_tokens', 0) or 0,
+    }
 
 
 @staff_member_required
@@ -370,7 +393,26 @@ def analyze_bulk_pages_api(request):
         ]
 
         # Get LLM completion
-        response = llm.get_completion(messages, tool_name=model)
+        actual_model, provider = _get_model_info(model)
+        t0 = time.time()
+        try:
+            response = llm.get_completion(messages, tool_name=model)
+            usage = _extract_usage(response)
+            log_ai_call(
+                action='analyze_bulk', model_name=actual_model, provider=provider,
+                user_prompt=user_prompt,
+                response_text=response.choices[0].message.content,
+                duration_ms=int((time.time() - t0) * 1000),
+                user=request.user, **usage,
+            )
+        except Exception as e:
+            log_ai_call(
+                action='analyze_bulk', model_name=actual_model, provider=provider,
+                user_prompt=user_prompt,
+                duration_ms=int((time.time() - t0) * 1000),
+                success=False, error_message=str(e), user=request.user,
+            )
+            raise
 
         # Extract and parse response
         content = response.choices[0].message.content
@@ -855,21 +897,41 @@ Aim for 80-150 lines of concise, actionable markdown."""
 
         # Call LLM
         llm = LLMBase()
+        actual_model, provider = _get_model_info(model)
+        t0 = time.time()
 
-        if reference_images:
-            # Vision call with images
-            combined_prompt = system_prompt + "\n\n" + user_prompt
-            response = llm.get_vision_completion(
-                prompt=combined_prompt,
-                images=reference_images,
-                tool_name=model
+        try:
+            if reference_images:
+                # Vision call with images
+                combined_prompt = system_prompt + "\n\n" + user_prompt
+                response = llm.get_vision_completion(
+                    prompt=combined_prompt,
+                    images=reference_images,
+                    tool_name=model
+                )
+            else:
+                messages = [
+                    {'role': 'system', 'content': system_prompt},
+                    {'role': 'user', 'content': user_prompt}
+                ]
+                response = llm.get_completion(messages, tool_name=model)
+
+            usage = _extract_usage(response)
+            log_ai_call(
+                action='generate_design_guide', model_name=actual_model, provider=provider,
+                system_prompt=system_prompt, user_prompt=user_prompt,
+                response_text=response.choices[0].message.content,
+                duration_ms=int((time.time() - t0) * 1000),
+                user=request.user, **usage,
             )
-        else:
-            messages = [
-                {'role': 'system', 'content': system_prompt},
-                {'role': 'user', 'content': user_prompt}
-            ]
-            response = llm.get_completion(messages, tool_name=model)
+        except Exception as e:
+            log_ai_call(
+                action='generate_design_guide', model_name=actual_model, provider=provider,
+                system_prompt=system_prompt, user_prompt=user_prompt,
+                duration_ms=int((time.time() - t0) * 1000),
+                success=False, error_message=str(e), user=request.user,
+            )
+            raise
 
         design_guide = response.choices[0].message.content
 
@@ -1072,7 +1134,27 @@ def suggest_page_sections_api(request):
             {'role': 'system', 'content': system_prompt},
             {'role': 'user', 'content': user_prompt},
         ]
-        response = llm.get_completion(messages, tool_name=model)
+        actual_model, provider = _get_model_info(model)
+        t0 = time.time()
+        try:
+            response = llm.get_completion(messages, tool_name=model)
+            usage = _extract_usage(response)
+            log_ai_call(
+                action='suggest_sections', model_name=actual_model, provider=provider,
+                system_prompt=system_prompt, user_prompt=user_prompt,
+                response_text=response.choices[0].message.content,
+                duration_ms=int((time.time() - t0) * 1000),
+                user=request.user, **usage,
+            )
+        except Exception as e:
+            log_ai_call(
+                action='suggest_sections', model_name=actual_model, provider=provider,
+                system_prompt=system_prompt, user_prompt=user_prompt,
+                duration_ms=int((time.time() - t0) * 1000),
+                success=False, error_message=str(e), user=request.user,
+            )
+            raise
+
         content = response.choices[0].message.content
 
         # Extract JSON from response
@@ -1146,7 +1228,27 @@ def fill_section_content_api(request):
             {'role': 'system', 'content': system_prompt},
             {'role': 'user', 'content': user_prompt},
         ]
-        response = llm.get_completion(messages, tool_name=model)
+        actual_model, provider = _get_model_info(model)
+        t0 = time.time()
+        try:
+            response = llm.get_completion(messages, tool_name=model)
+            usage = _extract_usage(response)
+            log_ai_call(
+                action='fill_section', model_name=actual_model, provider=provider,
+                system_prompt=system_prompt, user_prompt=user_prompt,
+                response_text=response.choices[0].message.content,
+                duration_ms=int((time.time() - t0) * 1000),
+                user=request.user, **usage,
+            )
+        except Exception as e:
+            log_ai_call(
+                action='fill_section', model_name=actual_model, provider=provider,
+                system_prompt=system_prompt, user_prompt=user_prompt,
+                duration_ms=int((time.time() - t0) * 1000),
+                success=False, error_message=str(e), user=request.user,
+            )
+            raise
+
         content = response.choices[0].message.content
 
         # Strip code fences if present
