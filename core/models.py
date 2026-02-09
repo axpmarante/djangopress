@@ -454,15 +454,6 @@ class Contact(models.Model):
 class SiteImage(models.Model):
     """Model for managing all images across the site"""
 
-    IMAGE_CATEGORIES = [
-        ('general', 'General'),
-        ('project', 'Project'),
-        ('news', 'News'),
-        ('hero', 'Hero/Banner'),
-        ('logo', 'Logo/Badge'),
-        ('other', 'Other'),
-    ]
-
     # OLD FIELDS (will be removed after migration)
     title = models.CharField('Title (OLD)', max_length=100, null=True, blank=True)
     alt_text = models.CharField('Alt text (OLD)', max_length=200, blank=True, null=True)
@@ -483,7 +474,6 @@ class SiteImage(models.Model):
 
     key = models.SlugField('Key', unique=True, blank=True, help_text='Optional unique identifier to reference this image in templates')
     image = models.ImageField('Image', upload_to='site_images/')
-    category = models.CharField('Category', max_length=20, choices=IMAGE_CATEGORIES, default='general', help_text='Category for organizing images')
     tags = models.CharField('Tags', max_length=200, blank=True, default='', help_text='Comma-separated tags for filtering (e.g., construction, villa, pool)')
     is_active = models.BooleanField('Active', default=True)
     uploaded_at = models.DateTimeField('Uploaded At', auto_now_add=True, null=True, blank=True)

@@ -1158,7 +1158,6 @@ Return the complete, corrected JSON now:"""
                         key=key,
                         title_i18n={lang: title_text for lang in languages},
                         alt_text_i18n={lang: prompt[:200] for lang in languages},
-                        category='general',
                         tags='ai-generated',
                         is_active=True,
                     )
@@ -1273,7 +1272,6 @@ Return the complete, corrected JSON now:"""
                 'title': title,
                 'alt_text': alt_text,
                 'key': img.key or '',
-                'category': img.category or '',
                 'tags': img.tags or '',
             })
 

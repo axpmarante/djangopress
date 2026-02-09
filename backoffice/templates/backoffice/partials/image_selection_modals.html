@@ -49,9 +49,6 @@ Requires: form object with featured_image and gallery_images fields
                         </div>
                     </div>
                     <p class="text-xs text-gray-600 mt-1 truncate text-center" title="{{ image.title }}">{{ image.title }}</p>
-                    {% if image.category %}
-                    <p class="text-xs text-gray-400 text-center">{{ image.get_category_display }}</p>
-                    {% endif %}
                 </div>
                 {% empty %}
                 <div class="col-span-full text-center py-8 text-gray-500">
@@ -199,9 +196,6 @@ Requires: form object with featured_image and gallery_images fields
                         </div>
                     </div>
                     <p class="text-xs text-gray-600 mt-1 truncate text-center" title="{{ image.title }}">{{ image.title }}</p>
-                    {% if image.category %}
-                    <p class="text-xs text-gray-400 text-center">{{ image.get_category_display }}</p>
-                    {% endif %}
                 </div>
                 {% empty %}
                 <div class="col-span-full text-center py-8 text-gray-500">

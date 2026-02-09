@@ -357,8 +357,8 @@ class ContactAdmin(admin.ModelAdmin):
 class SiteImageAdmin(admin.ModelAdmin):
     """Admin for site images - Central media library"""
 
-    list_display = ('__str__', 'category', 'tags', 'is_active', 'uploaded_at')
-    list_filter = ('is_active', 'category', 'uploaded_at')
+    list_display = ('__str__', 'tags', 'is_active', 'uploaded_at')
+    list_filter = ('is_active', 'uploaded_at')
     search_fields = ('key', 'tags')
     readonly_fields = ('uploaded_at', 'updated_at')
     date_hierarchy = 'uploaded_at'
@@ -370,8 +370,8 @@ class SiteImageAdmin(admin.ModelAdmin):
             'description': 'Upload image and provide title and alt text in all languages.'
         }),
         ('Organization', {
-            'fields': ('category', 'tags', 'key'),
-            'description': 'Organize images with categories and tags. The key field is optional and only needed for template references.'
+            'fields': ('tags', 'key'),
+            'description': 'Organize images with tags. The key field is optional and only needed for template references.'
         }),
         ('Status', {
             'fields': ('is_active',)

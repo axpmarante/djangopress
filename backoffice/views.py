@@ -12,6 +12,120 @@ from core.utils import resize_and_compress_image
 from django.utils.text import slugify
 
 
+class MediaDetailView(LoginRequiredMixin, TemplateView):
+    """Media image detail/edit view"""
+    template_name = 'backoffice/media_detail.html'
+
+    def get_context_data(self, **kwargs):
+        from PIL import Image as PILImage
+        from django.db.models import Q
+        import os
+
+        context = super().get_context_data(**kwargs)
+        pk = kwargs.get('pk')
+
+        try:
+            image = SiteImage.objects.get(pk=pk)
+        except SiteImage.DoesNotExist:
+            context['image'] = None
+            return context
+
+        context['image'] = image
+
+        # Languages
+        site_settings = SiteSettings.load()
+        context['languages'] = site_settings.get_enabled_languages()
+
+        # File info
+        try:
+            if image.image and image.image.storage.exists(image.image.name):
+                context['file_size'] = image.image.size
+                try:
+                    img = PILImage.open(image.image)
+                    context['dimensions'] = f"{img.width} x {img.height}"
+                    img.close()
+                except Exception:
+                    context['dimensions'] = 'Unknown'
+            else:
+                context['file_size'] = 0
+                context['dimensions'] = 'Unknown'
+        except Exception:
+            context['file_size'] = 0
+            context['dimensions'] = 'Unknown'
+
+        # Usage count: scan pages for this image URL
+        usage_count = 0
+        if image.image:
+            url = image.image.url
+            for page in Page.objects.exclude(html_content=''):
+                if url in page.html_content:
+                    usage_count += 1
+        context['usage_count'] = usage_count
+
+        # Prev/next navigation (same -id ordering as list view)
+        all_ids = list(SiteImage.objects.order_by('-id').values_list('id', flat=True))
+        try:
+            idx = all_ids.index(pk)
+            context['prev_image'] = SiteImage.objects.get(pk=all_ids[idx - 1]) if idx > 0 else None
+            context['next_image'] = SiteImage.objects.get(pk=all_ids[idx + 1]) if idx < len(all_ids) - 1 else None
+        except (ValueError, SiteImage.DoesNotExist):
+            context['prev_image'] = None
+            context['next_image'] = None
+
+        return context
+
+    def post(self, request, *args, **kwargs):
+        from django.db import IntegrityError
+
+        pk = kwargs.get('pk')
+        try:
+            image = SiteImage.objects.get(pk=pk)
+        except SiteImage.DoesNotExist:
+            messages.error(request, 'Image not found.')
+            return redirect('backoffice:media')
+
+        action = request.POST.get('action')
+
+        if action == 'delete':
+            title = str(image)
+            image.delete()
+            messages.success(request, f'Image "{title}" deleted.')
+            return redirect('backoffice:media')
+
+        # Update fields
+        site_settings = SiteSettings.load()
+        lang_codes = site_settings.get_language_codes()
+
+        title_i18n = {}
+        alt_text_i18n = {}
+        for lang in lang_codes:
+            t = request.POST.get(f'title_{lang}', '').strip()
+            a = request.POST.get(f'alt_text_{lang}', '').strip()
+            if t:
+                title_i18n[lang] = t
+            if a:
+                alt_text_i18n[lang] = a
+
+        image.title_i18n = title_i18n
+        image.alt_text_i18n = alt_text_i18n
+        image.key = request.POST.get('key', '').strip()
+        image.tags = request.POST.get('tags', '').strip()
+        image.is_active = 'is_active' in request.POST
+
+        # Replace image file
+        if 'image' in request.FILES:
+            image.image = request.FILES['image']
+
+        try:
+            image.save()
+            messages.success(request, f'Image "{image}" updated successfully!')
+        except IntegrityError:
+            messages.error(request, f'An image with key "{image.key}" already exists. Please choose a different key.')
+            return redirect('backoffice:media_detail', pk=pk)
+
+        return redirect('backoffice:media_detail', pk=pk)
+
+
 class DashboardView(LoginRequiredMixin, TemplateView):
     """Main dashboard view"""
     template_name = 'backoffice/dashboard.html'

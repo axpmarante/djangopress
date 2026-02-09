@@ -171,12 +171,10 @@ def upload_images(request):
                     processed_image = image
                     skipped_count += 1
 
-                # Create SiteImage object with 'project' category
                 site_image = SiteImage(
                     title=title,
                     key=key,
                     alt_text=title,
-                    category='project',
                     is_active=True
                 )
                 site_image.image.save(image.name, processed_image, save=False)

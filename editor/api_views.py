@@ -283,16 +283,10 @@ def get_media_library(request):
     Get list of all active SiteImages for the media picker modal.
 
     Query parameters:
-    - category: Filter by image category (optional)
     - search: Search in title and tags (optional)
     """
     try:
         images = SiteImage.objects.filter(is_active=True).order_by('-uploaded_at')
-
-        # Filter by category
-        category = request.GET.get('category')
-        if category and category != 'all':
-            images = images.filter(category=category)
 
         # Search
         search = request.GET.get('search')
@@ -311,7 +305,6 @@ def get_media_library(request):
                 'title': img.title,
                 'url': img.image.url,
                 'alt_text': img.alt_text,
-                'category': img.category,
                 'tags': img.get_tags_list()
             })
 
@@ -342,7 +335,6 @@ def get_images(request):
             'url': img.image.url if img.image else '',
             'title': img.get_title('pt') or img.get_title('en'),
             'alt_text': alt_text,
-            'category': img.category,
             'tags': img.tags or '',
         })
 
@@ -557,8 +549,6 @@ def upload_image(request):
     image_file = request.FILES['image']
     title = request.POST.get('title', image_file.name)
     alt_text = request.POST.get('alt_text', '')
-    category = request.POST.get('category', 'other')
-
     if image_file.size > 10 * 1024 * 1024:
         return JsonResponse({'success': False, 'error': 'File size exceeds 10MB limit'}, status=400)
 
@@ -571,7 +561,6 @@ def upload_image(request):
             image=image_file,
             title_i18n={'pt': title, 'en': title},
             alt_text_i18n={'pt': alt_text, 'en': alt_text},
-            category=category,
             is_active=True
         )
         return JsonResponse({

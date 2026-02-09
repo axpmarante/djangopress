@@ -1243,7 +1243,7 @@ Return ONLY the updated `<section data-section="{section_name}">...</section>` b
             page_title: Title of the page
             page_html: De-templatized page HTML (real text)
             images: List of dicts with index, src, alt, name
-            library_catalog: List of dicts with id, title, alt_text, key, category, tags
+            library_catalog: List of dicts with id, title, alt_text, key, tags
 
         Returns:
             Tuple of (system_prompt, user_prompt)

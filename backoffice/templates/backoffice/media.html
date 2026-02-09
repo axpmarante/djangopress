@@ -32,7 +32,7 @@
     {% if images %}
     <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
         {% for image in images %}
-        <div class="bg-white rounded-lg shadow overflow-hidden hover:shadow-lg transition-shadow">
+        <a href="{% url 'backoffice:media_detail' pk=image.pk %}" class="block bg-white rounded-lg shadow overflow-hidden hover:shadow-lg transition-shadow">
             <div class="aspect-square bg-gray-100 relative">
                 {% if image.image %}
                 <img src="{{ image.image.url }}" alt="{{ image.alt_text|default:image.title }}"
@@ -51,20 +51,9 @@
                 {% endif %}
             </div>
             <div class="p-4">
-                <h3 class="font-medium text-gray-900 truncate">{{ image.title }}</h3>
-                <p class="text-xs text-gray-500 mt-1 font-mono truncate">{{ image.key }}</p>
-                <div class="mt-3 flex items-center justify-between">
-                    <button onclick="copyToClipboard('{{ image.key }}')"
-                            class="text-xs text-blue-600 hover:text-blue-800">
-                        Copy Key
-                    </button>
-                    <button onclick="copyToClipboard('{{ image.image.url }}')"
-                            class="text-xs text-gray-600 hover:text-gray-800">
-                        Copy URL
-                    </button>
-                </div>
+                <h3 class="font-medium text-gray-900 truncate">{{ image }}</h3>
             </div>
-        </div>
+        </a>
         {% endfor %}
     </div>
 
@@ -112,16 +101,4 @@
     {% endif %}
 </div>
 
-<script>
-function copyToClipboard(text) {
-    navigator.clipboard.writeText(text).then(function() {
-        // Show a temporary success message
-        const message = document.createElement('div');
-        message.className = 'fixed top-4 right-4 bg-green-500 text-white px-4 py-2 rounded shadow-lg z-50';
-        message.textContent = 'Copied to clipboard!';
-        document.body.appendChild(message);
-        setTimeout(() => message.remove(), 2000);
-    });
-}
-</script>
 {% endblock %}
