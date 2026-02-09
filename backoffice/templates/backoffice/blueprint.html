@@ -147,11 +147,6 @@
                         </svg>
                         <span x-text="aiLoading ? 'Thinking...' : 'AI Suggest Sections'"></span>
                     </button>
-                    <button @click="fillAllEmpty()"
-                            :disabled="aiLoading"
-                            class="bg-purple-100 text-purple-700 px-3 py-1.5 rounded-md hover:bg-purple-200 text-xs font-medium disabled:opacity-50">
-                        AI Fill All
-                    </button>
                     <button @click="addSection()"
                             class="bg-gray-100 text-gray-700 px-3 py-1.5 rounded-md hover:bg-gray-200 text-xs font-medium flex items-center">
                         <svg class="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -201,6 +196,33 @@
     </div>
 </div>
 
+<!-- AI Fill context modal -->
+<div x-data="aiFillModal()" x-on:open-ai-fill.window="open($event.detail)"
+     x-show="visible" x-cloak
+     class="fixed inset-0 z-50 flex items-center justify-center"
+     @keydown.escape.window="cancel()">
+    <div class="fixed inset-0 bg-black/40" @click="cancel()"></div>
+    <div x-show="visible" x-transition:enter="transition ease-out duration-150"
+         x-transition:enter-start="opacity-0 scale-95" x-transition:enter-end="opacity-100 scale-100"
+         x-transition:leave="transition ease-in duration-100"
+         x-transition:leave-start="opacity-100 scale-100" x-transition:leave-end="opacity-0 scale-95"
+         class="relative bg-white rounded-lg shadow-xl max-w-lg w-full mx-4 p-6">
+        <h3 class="text-lg font-semibold text-gray-900 mb-1">AI Fill Section</h3>
+        <p class="text-sm text-gray-600 mb-3">Generating content for <span class="font-medium text-gray-900" x-text="sectionTitle"></span></p>
+        <label class="block text-xs font-medium text-gray-500 mb-1">Additional context or instructions (optional)</label>
+        <textarea x-ref="contextInput" x-model="context" rows="4"
+                  class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:ring-1 focus:ring-purple-300 focus:border-purple-300"
+                  placeholder="e.g. Focus on sustainability, include 3 pricing tiers, mention the free trial..."></textarea>
+        <div class="flex justify-end gap-2 mt-4">
+            <button @click="cancel()" class="px-4 py-2 text-sm text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200">Cancel</button>
+            <button @click="submit()" class="px-4 py-2 text-sm text-white bg-purple-600 rounded-md hover:bg-purple-700 flex items-center">
+                <svg class="w-3.5 h-3.5 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                Generate
+            </button>
+        </div>
+    </div>
+</div>
+
 <!-- Toast notification -->
 <div x-data="toastStore()" x-on:show-toast.window="show($event.detail)"
      class="fixed bottom-4 right-4 z-50 space-y-2">
@@ -224,6 +246,22 @@ function deleteModal() {
         },
         confirm() { this.visible = false; window.dispatchEvent(new CustomEvent('section-delete-confirmed')); },
         cancel()  { this.visible = false; window.dispatchEvent(new CustomEvent('section-delete-cancelled')); }
+    };
+}
+
+function aiFillModal() {
+    return {
+        visible: false,
+        sectionTitle: '',
+        context: '',
+        open({title}) {
+            this.sectionTitle = title;
+            this.context = '';
+            this.visible = true;
+            this.$nextTick(() => this.$refs.contextInput?.focus());
+        },
+        submit() { this.visible = false; window.dispatchEvent(new CustomEvent('ai-fill-confirmed', {detail: {context: this.context}})); },
+        cancel()  { this.visible = false; window.dispatchEvent(new CustomEvent('ai-fill-cancelled')); }
     };
 }
 
@@ -335,13 +373,20 @@ function blueprintApp() {
             idInput.className = 'w-28 bg-transparent border border-dashed border-gray-300 rounded text-xs text-gray-500 font-mono px-1.5 py-0.5 focus:border-blue-400 focus:ring-0 flex-shrink-0';
             idInput.title = 'Section key / data-section id';
             idInput.addEventListener('input', () => {
-                // Auto-slugify: lowercase, replace non-alphanumeric with hyphens
-                const raw = idInput.value.toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/^-|-$/g, '');
-                idInput.value = raw;
-                section.id = raw;
-                card.dataset.sectionId = raw;
+                // Allow typing: lowercase, keep a-z 0-9 - _
+                const val = idInput.value.toLowerCase().replace(/[^a-z0-9_-]+/g, '-');
+                idInput.value = val;
+                section.id = val;
+                card.dataset.sectionId = val;
                 this.markDirty();
                 this._highlightDuplicateIds();
+            });
+            idInput.addEventListener('change', () => {
+                // Trim leading/trailing hyphens on blur
+                const trimmed = idInput.value.replace(/^[-_]+|[-_]+$/g, '');
+                idInput.value = trimmed;
+                section.id = trimmed;
+                card.dataset.sectionId = trimmed;
             });
 
             // AI Fill button
@@ -349,7 +394,20 @@ function blueprintApp() {
             aiBtn.className = 'text-purple-500 hover:text-purple-700 text-xs px-2 py-1 rounded hover:bg-purple-50 flex-shrink-0';
             aiBtn.title = 'AI Fill';
             aiBtn.innerHTML = '<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>';
-            aiBtn.addEventListener('click', () => this.fillSectionContent(section, card));
+            aiBtn.addEventListener('click', () => {
+                window.dispatchEvent(new CustomEvent('open-ai-fill', {
+                    detail: {title: section.title || section.id}
+                }));
+                const handler = (e) => {
+                    window.removeEventListener('ai-fill-confirmed', handler);
+                    window.removeEventListener('ai-fill-cancelled', handler);
+                    if (e.type === 'ai-fill-confirmed') {
+                        this.fillSectionContent(section, card, e.detail?.context || '');
+                    }
+                };
+                window.addEventListener('ai-fill-confirmed', handler);
+                window.addEventListener('ai-fill-cancelled', handler);
+            });
 
             // Collapse toggle
             const collapseBtn = document.createElement('button');
@@ -640,24 +698,27 @@ function blueprintApp() {
             });
         },
 
-        fillSectionContent(section, card) {
+        fillSectionContent(section, card, context = '') {
             if (!this.selectedPageId) return;
             this.aiLoading = true;
 
             const otherSections = this.currentSections
                 .filter(s => s.id !== section.id)
-                .map(s => ({title: s.title}));
+                .map(s => ({title: s.title, content: s.content || ''}));
+
+            const payload = {
+                blueprint_page_id: this.selectedPageId,
+                section_id: section.id,
+                section_title: section.title,
+                other_sections: otherSections,
+                model: this.selectedModel
+            };
+            if (context.trim()) payload.context = context.trim();
 
             fetch('/ai/api/fill-section-content/', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token }}'},
-                body: JSON.stringify({
-                    blueprint_page_id: this.selectedPageId,
-                    section_id: section.id,
-                    section_title: section.title,
-                    other_sections: otherSections,
-                    model: this.selectedModel
-                })
+                body: JSON.stringify(payload)
             })
             .then(r => r.json())
             .then(data => {
@@ -679,48 +740,6 @@ function blueprintApp() {
                 this.aiLoading = false;
                 showToast('Network error', 'error');
             });
-        },
-
-        async fillAllEmpty() {
-            if (!this.selectedPageId) return;
-            const empty = this.currentSections.filter(s => !s.content || s.content.trim() === '');
-            if (empty.length === 0) {
-                showToast('All sections already have content');
-                return;
-            }
-
-            this.aiLoading = true;
-            let filled = 0;
-
-            for (const section of empty) {
-                try {
-                    const otherSections = this.currentSections
-                        .filter(s => s.id !== section.id)
-                        .map(s => ({title: s.title}));
-
-                    const resp = await fetch('/ai/api/fill-section-content/', {
-                        method: 'POST',
-                        headers: {'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token }}'},
-                        body: JSON.stringify({
-                            blueprint_page_id: this.selectedPageId,
-                            section_id: section.id,
-                            section_title: section.title,
-                            other_sections: otherSections,
-                            model: this.selectedModel
-                        })
-                    });
-                    const data = await resp.json();
-                    if (data.success) {
-                        section.content = data.content;
-                        filled++;
-                    }
-                } catch(e) {}
-            }
-
-            this.aiLoading = false;
-            this.markDirty();
-            this.renderSections();
-            showToast(`Filled ${filled} of ${empty.length} sections`);
         },
 
         createPagesFromBlueprint() {

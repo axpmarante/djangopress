@@ -1108,6 +1108,7 @@ def fill_section_content_api(request):
         section_id = data.get('section_id', '')
         section_title = data.get('section_title', '')
         other_sections = data.get('other_sections', [])
+        context = data.get('context', '')
         model = data.get('model', 'gemini-pro')
 
         if not bp_page_id or not section_title:
@@ -1126,6 +1127,7 @@ def fill_section_content_api(request):
             section_title=section_title,
             section_id=section_id,
             other_sections=other_sections,
+            context=context,
         )
 
         llm = LLMBase()

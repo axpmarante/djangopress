@@ -657,6 +657,7 @@ Suggest 4-8 content sections for this page. Return ONLY the JSON array."""
         section_title: str,
         section_id: str,
         other_sections: list,
+        context: str = '',
     ) -> tuple:
         """
         Fill markdown content for a single blueprint section.
@@ -673,16 +674,28 @@ Write in plain markdown. No code blocks wrapping the output, no JSON. Just the m
 
         other_info = ""
         if other_sections:
-            titles = [s.get('title', '') for s in other_sections if s.get('title')]
-            if titles:
-                other_info = f"\n**Other sections on this page:** {', '.join(titles)}"
+            parts = []
+            for s in other_sections:
+                title = s.get('title', '')
+                content = s.get('content', '')
+                if title:
+                    if content:
+                        parts.append(f"### {title}\n{content}")
+                    else:
+                        parts.append(f"### {title}\n(no content yet)")
+            if parts:
+                other_info = "\n\n**Other sections on this page (for context — avoid repeating their content):**\n" + "\n\n".join(parts)
+
+        context_info = ""
+        if context:
+            context_info = f"\n**Additional instructions:** {context}"
 
         user_prompt = f"""**Site:** {site_name}
 **Project Briefing:** {project_briefing}
 **Page:** {page_title}
-**Section:** {section_title} (id: {section_id}){other_info}
+**Section to write:** {section_title} (id: {section_id}){context_info}{other_info}
 
-Write 5-15 lines of markdown describing the planned content for this section."""
+Write 5-15 lines of markdown describing the planned content for this section. Do not repeat content already covered by other sections."""
 
         return (system_prompt, user_prompt)
 
