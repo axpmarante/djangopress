@@ -276,6 +276,17 @@ def save_generated_page_api(request):
             )
             created = True
 
+        # Link BlueprintPage if provided
+        blueprint_page_id = data.get('blueprint_page_id')
+        if blueprint_page_id:
+            try:
+                from core.models import BlueprintPage
+                bp_page = BlueprintPage.objects.get(pk=int(blueprint_page_id))
+                bp_page.page = page
+                bp_page.save(update_fields=['page'])
+            except (BlueprintPage.DoesNotExist, ValueError, TypeError):
+                pass
+
         # Get default language slug for response
         default_lang = site_settings.get_default_language() if site_settings else 'pt'
         return_slug = slug_i18n.get(default_lang, list(slug_i18n.values())[0] if slug_i18n else 'home')

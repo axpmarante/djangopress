@@ -16,6 +16,16 @@
                     <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
                 </svg>
             </li>
+            {% if blueprint_page %}
+            <li>
+                <a href="{% url 'backoffice:blueprint' %}" class="hover:text-gray-700">Blueprint</a>
+            </li>
+            <li>
+                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+                </svg>
+            </li>
+            {% endif %}
             <li class="text-gray-900 font-medium">Generate Page</li>
         </ol>
     </nav>
@@ -48,7 +58,7 @@
                         </label>
                         <textarea id="brief" name="brief" rows="8" required
                                   class="w-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
-                                  placeholder="Example: Create a services page showcasing our athlete management, training programs, and career guidance services. Include a hero section welcoming visitors, a features section highlighting our 15 years of experience, testimonials from successful athletes, and a call-to-action to schedule a consultation."></textarea>
+                                  placeholder="Example: Create a services page showcasing our athlete management, training programs, and career guidance services. Include a hero section welcoming visitors, a features section highlighting our 15 years of experience, testimonials from successful athletes, and a call-to-action to schedule a consultation.">{{ blueprint_brief|default:'' }}</textarea>
                         <p class="mt-2 text-xs text-gray-500">Describe the page purpose, target audience, and key content you want to include. The more detail you provide, the better the results.</p>
                     </div>
 
@@ -245,6 +255,9 @@ let suggestedTitle = {};
 let suggestedSlug = {};
 let enabledLanguages = [];
 let selectedFiles = [];
+let blueprintPageId = {{ blueprint_page_id|default:'null' }};
+let blueprintTitle = '{{ blueprint_title|default:""|escapejs }}';
+let blueprintSlug = '{{ blueprint_slug|default:""|escapejs }}';
 
 // --- Image upload handling ---
 function handleImageSelect(event) {
@@ -354,6 +367,24 @@ function renderLanguageFields() {
             document.getElementById(`slugPreview_${lang}`).textContent = slug || 'slug';
         });
     });
+
+    // Pre-fill title/slug from blueprint data
+    if (blueprintTitle || blueprintSlug) {
+        enabledLanguages.forEach(lang => {
+            if (blueprintTitle) {
+                const titleInput = document.getElementById(`pageTitle_${lang.code}`);
+                if (titleInput && !titleInput.value) titleInput.value = blueprintTitle;
+            }
+            if (blueprintSlug) {
+                const slugInput = document.getElementById(`pageSlug_${lang.code}`);
+                const slugPreview = document.getElementById(`slugPreview_${lang.code}`);
+                if (slugInput && !slugInput.value) {
+                    slugInput.value = blueprintSlug;
+                    if (slugPreview) slugPreview.textContent = blueprintSlug;
+                }
+            }
+        });
+    }
 }
 
 document.addEventListener('DOMContentLoaded', loadLanguages);
@@ -388,6 +419,7 @@ document.getElementById('generatePageForm').addEventListener('submit', async fun
             const fd = new FormData();
             fd.append('brief', brief);
             fd.append('model', model);
+            if (blueprintPageId) fd.append('blueprint_page_id', blueprintPageId);
             selectedFiles.forEach(f => fd.append('reference_images', f));
             fetchOptions = {
                 method: 'POST',
@@ -396,13 +428,15 @@ document.getElementById('generatePageForm').addEventListener('submit', async fun
             };
         } else {
             // Use JSON body when no images
+            const payload = { brief, model };
+            if (blueprintPageId) payload.blueprint_page_id = blueprintPageId;
             fetchOptions = {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     'X-CSRFToken': getCookie('csrftoken')
                 },
-                body: JSON.stringify({ brief, model })
+                body: JSON.stringify(payload)
             };
         }
 
@@ -555,7 +589,8 @@ async function saveGeneratedPage() {
             body: JSON.stringify({
                 title: finalTitle,
                 slug: finalSlug,
-                page_data: generatedPageData
+                page_data: generatedPageData,
+                blueprint_page_id: blueprintPageId
             })
         });
 

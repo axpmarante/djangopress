@@ -705,6 +705,34 @@ class AIGeneratePageView(LoginRequiredMixin, TemplateView):
             context['ai_models'] = []
             context['default_model'] = None
 
+        # Load blueprint page data if provided
+        blueprint_page_id = self.request.GET.get('blueprint_page_id')
+        if blueprint_page_id:
+            try:
+                from core.models import BlueprintPage
+                bp_page = BlueprintPage.objects.get(pk=int(blueprint_page_id))
+                context['blueprint_page'] = bp_page
+                context['blueprint_page_id'] = bp_page.pk
+                context['blueprint_title'] = bp_page.title
+                context['blueprint_slug'] = bp_page.slug
+
+                # Build brief from description + sections
+                parts = []
+                if bp_page.description:
+                    parts.append(bp_page.description)
+                if bp_page.sections:
+                    parts.append('\nSections:')
+                    for section in bp_page.sections:
+                        title = section.get('title', '')
+                        content = section.get('content', '')
+                        if title:
+                            parts.append(f'\n## {title}')
+                        if content:
+                            parts.append(content)
+                context['blueprint_brief'] = '\n'.join(parts)
+            except (BlueprintPage.DoesNotExist, ValueError, TypeError):
+                pass
+
         return context
 
 
