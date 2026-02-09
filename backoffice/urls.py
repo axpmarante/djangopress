@@ -22,6 +22,8 @@ urlpatterns = [
     path('api/page-content/<int:page_id>/', api_views.get_page_content, name='api_page_content'),
     path('api/generate-design-guide/', api_views.generate_design_guide, name='api_generate_design_guide'),
     path('api/update-page-order/', api_views.update_page_order, name='api_update_page_order'),
+    path('api/update-menu-order/', api_views.update_menu_order, name='api_update_menu_order'),
+    path('api/update-menu-parent/', api_views.update_menu_parent, name='api_update_menu_parent'),
 
     # Media Management
     path('media/', views.MediaView.as_view(), name='media'),

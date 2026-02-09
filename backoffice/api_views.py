@@ -10,7 +10,7 @@ from django.contrib.admin.views.decorators import staff_member_required
 from django.views.decorators.csrf import csrf_exempt
 from django.core.cache import cache
 from django.utils.text import slugify
-from core.models import SiteSettings, SiteImage, Page
+from core.models import SiteSettings, SiteImage, Page, MenuItem
 from core.utils import resize_and_compress_image
 
 
@@ -415,6 +415,134 @@ def update_page_order(request):
         return JsonResponse({
             'success': True,
             'message': f'Updated order for {len(pages_data)} page(s)'
+        })
+
+    except json.JSONDecodeError:
+        return JsonResponse({
+            'success': False,
+            'error': 'Invalid JSON'
+        }, status=400)
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+
+
+@staff_member_required
+@require_http_methods(["POST"])
+def update_menu_order(request):
+    """
+    Bulk update menu item sort_order.
+
+    Expected POST data:
+    {
+        "items": [{"id": 1, "sort_order": 0}, {"id": 2, "sort_order": 1}]
+    }
+    """
+    try:
+        data = json.loads(request.body)
+        items_data = data.get('items', [])
+
+        if not items_data:
+            return JsonResponse({
+                'success': False,
+                'error': 'No items provided'
+            }, status=400)
+
+        for item_data in items_data:
+            MenuItem.objects.filter(id=item_data['id']).update(
+                sort_order=item_data['sort_order']
+            )
+
+        # Clear header/footer cache so menu order changes are visible
+        from core.models import GlobalSection
+        for section in GlobalSection.objects.filter(key__in=['main-header', 'main-footer']):
+            section.clear_cache()
+
+        return JsonResponse({
+            'success': True,
+            'message': f'Updated order for {len(items_data)} item(s)'
+        })
+
+    except json.JSONDecodeError:
+        return JsonResponse({
+            'success': False,
+            'error': 'Invalid JSON'
+        }, status=400)
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+
+
+@staff_member_required
+@require_http_methods(["POST"])
+def update_menu_parent(request):
+    """
+    Update a menu item's parent (indent/outdent).
+
+    Expected POST data:
+    {
+        "item_id": 5,
+        "parent_id": 3    // null to make top-level (outdent)
+    }
+    """
+    try:
+        data = json.loads(request.body)
+        item_id = data.get('item_id')
+        parent_id = data.get('parent_id')
+
+        if not item_id:
+            return JsonResponse({
+                'success': False,
+                'error': 'item_id is required'
+            }, status=400)
+
+        try:
+            item = MenuItem.objects.get(pk=item_id)
+        except MenuItem.DoesNotExist:
+            return JsonResponse({
+                'success': False,
+                'error': 'Menu item not found'
+            }, status=404)
+
+        if parent_id:
+            if int(parent_id) == item.id:
+                return JsonResponse({
+                    'success': False,
+                    'error': 'An item cannot be its own parent'
+                }, status=400)
+
+            try:
+                parent = MenuItem.objects.get(pk=parent_id)
+            except MenuItem.DoesNotExist:
+                return JsonResponse({
+                    'success': False,
+                    'error': 'Parent item not found'
+                }, status=404)
+
+            if parent.parent_id is not None:
+                return JsonResponse({
+                    'success': False,
+                    'error': 'Cannot nest more than one level deep'
+                }, status=400)
+
+            item.parent = parent
+        else:
+            item.parent = None
+
+        item.save()
+
+        # Clear header/footer cache
+        from core.models import GlobalSection
+        for section in GlobalSection.objects.filter(key__in=['main-header', 'main-footer']):
+            section.clear_cache()
+
+        return JsonResponse({
+            'success': True,
+            'message': 'Menu item parent updated'
         })
 
     except json.JSONDecodeError:

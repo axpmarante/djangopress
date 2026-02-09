@@ -542,13 +542,38 @@ class MenuView(LoginRequiredMixin, TemplateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context['menu_items'] = MenuItem.objects.select_related('page', 'parent').all()
+        all_items = list(MenuItem.objects.select_related('page', 'parent').all())
         context['pages'] = Page.objects.filter(is_active=True)
 
         # Get enabled languages
         site_settings = SiteSettings.objects.first()
         context['languages'] = site_settings.get_enabled_languages() if site_settings else [('pt', 'Portuguese'), ('en', 'English')]
 
+        # Build tree-ordered list: top-level items interleaved with their children
+        top_level = [i for i in all_items if i.parent_id is None]
+        children_by_parent = {}
+        for i in all_items:
+            if i.parent_id is not None:
+                children_by_parent.setdefault(i.parent_id, []).append(i)
+
+        ordered_items = []
+        prev_top_level_id = None
+        for item in top_level:
+            has_children = item.id in children_by_parent
+            item.can_indent = prev_top_level_id is not None and not has_children
+            item.can_outdent = False
+            item.indent_parent_id = prev_top_level_id
+            item.is_child = False
+            ordered_items.append(item)
+            for child in children_by_parent.get(item.id, []):
+                child.can_indent = False
+                child.can_outdent = True
+                child.indent_parent_id = None
+                child.is_child = True
+                ordered_items.append(child)
+            prev_top_level_id = item.id
+
+        context['menu_items'] = ordered_items
         return context
 
     def post(self, request, *args, **kwargs):

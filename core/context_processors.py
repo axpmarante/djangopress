@@ -46,10 +46,16 @@ def site_settings(request):
     # Button border width mapping
     button_border_class = f"border-{settings.button_border_width}" if settings.button_border_width != '0' else "border-0"
 
-    # Menu items (top-level with children prefetched)
+    # Menu items (top-level with active children prefetched)
+    from django.db.models import Prefetch
     menu_items = MenuItem.objects.filter(
         is_active=True, parent__isnull=True
-    ).select_related('page').prefetch_related('children')
+    ).select_related('page').prefetch_related(
+        Prefetch(
+            'children',
+            queryset=MenuItem.objects.filter(is_active=True).select_related('page').order_by('sort_order', 'id'),
+        )
+    )
 
     return {
         'FAVICON': settings.favicon if settings.favicon else None,

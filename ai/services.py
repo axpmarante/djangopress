@@ -486,15 +486,22 @@ Return the complete, corrected JSON now:"""
 
         design_guide = site_settings.design_guide if site_settings else ''
 
-        # Get menu items for header/footer context
+        # Get menu items for header/footer context (top-level with children)
         from core.models import MenuItem
         menu_items_data = []
-        for item in MenuItem.objects.filter(is_active=True, parent__isnull=True).select_related('page').order_by('sort_order', 'id'):
+        for item in MenuItem.objects.filter(is_active=True, parent__isnull=True).select_related('page').prefetch_related('children', 'children__page').order_by('sort_order', 'id'):
             item_data = {
                 'label_i18n': item.label_i18n or {},
                 'url': item.url,
                 'page_slug': item.page.slug_i18n if item.page else {},
+                'children': [],
             }
+            for child in item.children.filter(is_active=True).order_by('sort_order', 'id'):
+                item_data['children'].append({
+                    'label_i18n': child.label_i18n or {},
+                    'url': child.url,
+                    'page_slug': child.page.slug_i18n if child.page else {},
+                })
             menu_items_data.append(item_data)
 
         # Build prompt for global section

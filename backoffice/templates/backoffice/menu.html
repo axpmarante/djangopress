@@ -25,7 +25,7 @@
         <table class="min-w-full divide-y divide-gray-200">
             <thead class="bg-gray-50">
                 <tr>
-                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase w-16">Order</th>
+                    <th class="px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase w-12"></th>
                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Label</th>
                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Link</th>
                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Parent</th>
@@ -35,8 +35,30 @@
             </thead>
             <tbody class="bg-white divide-y divide-gray-200">
                 {% for item in menu_items %}
-                <tr class="hover:bg-gray-50">
-                    <td class="px-4 py-4 text-sm text-gray-600">{{ item.sort_order }}</td>
+                <tr class="hover:bg-gray-50 sortable-row" data-item-id="{{ item.id }}">
+                    <td class="px-2 py-4 text-center whitespace-nowrap">
+                        <span class="drag-handle cursor-grab active:cursor-grabbing text-gray-400 hover:text-gray-600">
+                            <svg class="w-5 h-5 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8h16M4 16h16"/>
+                            </svg>
+                        </span>
+                        {% if item.can_outdent %}
+                        <button onclick="updateParent({{ item.id }}, null)" title="Outdent (make top-level)"
+                                class="ml-1 text-gray-400 hover:text-blue-600 align-middle">
+                            <svg class="w-4 h-4 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+                            </svg>
+                        </button>
+                        {% endif %}
+                        {% if item.can_indent %}
+                        <button onclick="updateParent({{ item.id }}, {{ item.indent_parent_id }})" title="Indent (make child of item above)"
+                                class="ml-1 text-gray-400 hover:text-blue-600 align-middle">
+                            <svg class="w-4 h-4 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                            </svg>
+                        </button>
+                        {% endif %}
+                    </td>
                     <td class="px-6 py-4">
                         <div>
                             {% if item.parent %}
@@ -332,5 +354,59 @@ document.getElementById('menuModal').addEventListener('click', function(e) {
 document.getElementById('deleteModal').addEventListener('click', function(e) {
     if (e.target === this) closeDeleteModal();
 });
+
+function updateParent(itemId, newParentId) {
+    fetch('{% url "backoffice:api_update_menu_parent" %}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': '{{ csrf_token }}'
+        },
+        body: JSON.stringify({ item_id: itemId, parent_id: newParentId })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            location.reload();
+        } else {
+            alert('Error: ' + (data.error || 'Unknown error'));
+        }
+    })
+    .catch(error => alert('Error: ' + error.message));
+}
+</script>
+
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.6/Sortable.min.js"></script>
+<script>
+// Drag-and-drop menu ordering
+const tbody = document.querySelector('table tbody');
+if (tbody) {
+    Sortable.create(tbody, {
+        handle: '.drag-handle',
+        animation: 150,
+        ghostClass: 'bg-blue-50',
+        onEnd: function() {
+            const rows = tbody.querySelectorAll('.sortable-row');
+            const items = Array.from(rows).map((row, index) => ({
+                id: parseInt(row.dataset.itemId),
+                sort_order: index
+            }));
+
+            fetch('{% url "backoffice:api_update_menu_order" %}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': '{{ csrf_token }}'
+                },
+                body: JSON.stringify({ items: items })
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (!data.success) alert('Error saving order: ' + (data.error || 'Unknown error'));
+            })
+            .catch(error => alert('Error: ' + error.message));
+        }
+    });
+}
 </script>
 {% endblock %}

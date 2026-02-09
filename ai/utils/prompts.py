@@ -314,7 +314,18 @@ Return a JSON **object** with the complete updated page:
                 page_slug = item.get('page_slug', '')
                 custom_url = item.get('url', '')
                 target = f"page slug='{page_slug}'" if page_slug else f"url='{custom_url}'"
-                menu_lines.append(f"  - {', '.join(label_parts)} → {target}")
+                children = item.get('children', [])
+                if children:
+                    menu_lines.append(f"  - {', '.join(label_parts)} → {target} **[has dropdown children]**")
+                    for child in children:
+                        child_labels = child.get('label_i18n', {})
+                        child_label_parts = [f"{lang.upper()}: \"{child_labels.get(lang, '')}\"" for lang in languages if child_labels.get(lang)]
+                        child_slug = child.get('page_slug', '')
+                        child_url = child.get('url', '')
+                        child_target = f"page slug='{child_slug}'" if child_slug else f"url='{child_url}'"
+                        menu_lines.append(f"    - {', '.join(child_label_parts)} → {child_target}")
+                else:
+                    menu_lines.append(f"  - {', '.join(label_parts)} → {target}")
             menu_info = "\n".join(menu_lines)
 
         pages_info = PromptTemplates._format_pages_info(pages, languages)
@@ -331,20 +342,56 @@ Return a JSON **object** with the complete updated page:
 - Always include: `{{% load i18n %}}`, `{{% load section_tags %}}`, and `{{% get_current_language as LANGUAGE_CODE %}}`
 
 **Navigation Menu — REQUIRED PATTERN:**
-Menu items are stored in the database and available via `MENU_ITEMS` context variable.
+Menu items are stored in the database and available via `MENU_ITEMS` context variable (top-level items only).
+Each item may have `item.children.all` for dropdown sub-items.
 Use the `get_menu_label` and `get_menu_url` template filters (from `section_tags`) to render them.
-Do NOT hardcode page links. Use this loop pattern instead:
+Do NOT hardcode page links. Use this loop pattern:
 
+**Desktop nav — items with children get an Alpine.js dropdown:**
 ```html
 {{% for item in MENU_ITEMS %}}
-  <a href="{{{{ item|get_menu_url:LANGUAGE_CODE }}}}" class="...">
-    {{{{ item|get_menu_label:LANGUAGE_CODE }}}}
-  </a>
+  {{% if item.children.all %}}
+  <div x-data="{{{{ open: false }}}}" @mouseenter="open = true" @mouseleave="open = false" class="relative">
+    <button @click="open = !open" class="inline-flex items-center text-sm font-semibold ...">
+      {{{{ item|get_menu_label:LANGUAGE_CODE }}}}
+      <svg class="ml-1 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+    </button>
+    <div x-show="open" x-cloak x-transition class="absolute left-0 mt-2 w-48 rounded-md bg-white shadow-lg ring-1 ring-black/5 z-50">
+      {{% for child in item.children.all %}}
+      <a href="{{{{ child|get_menu_url:LANGUAGE_CODE }}}}" class="block px-4 py-2 text-sm ..."{{% if child.open_in_new_tab %}} target="_blank"{{% endif %}}>{{{{ child|get_menu_label:LANGUAGE_CODE }}}}</a>
+      {{% endfor %}}
+    </div>
+  </div>
+  {{% else %}}
+  <a href="{{{{ item|get_menu_url:LANGUAGE_CODE }}}}" class="text-sm font-semibold ..."{{% if item.open_in_new_tab %}} target="_blank"{{% endif %}}>{{{{ item|get_menu_label:LANGUAGE_CODE }}}}</a>
+  {{% endif %}}
+{{% endfor %}}
+```
+
+**Mobile nav — children shown nested under parent:**
+```html
+{{% for item in MENU_ITEMS %}}
+  {{% if item.children.all %}}
+  <div x-data="{{{{ open: false }}}}">
+    <button @click="open = !open" class="flex w-full items-center justify-between ...">
+      {{{{ item|get_menu_label:LANGUAGE_CODE }}}}
+      <svg :class="{{'rotate-180': open}}" class="h-4 w-4 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+    </button>
+    <div x-show="open" x-cloak class="pl-4 mt-1 space-y-1">
+      {{% for child in item.children.all %}}
+      <a href="{{{{ child|get_menu_url:LANGUAGE_CODE }}}}" class="block ..."{{% if child.open_in_new_tab %}} target="_blank"{{% endif %}}>{{{{ child|get_menu_label:LANGUAGE_CODE }}}}</a>
+      {{% endfor %}}
+    </div>
+  </div>
+  {{% else %}}
+  <a href="{{{{ item|get_menu_url:LANGUAGE_CODE }}}}" class="block ..."{{% if item.open_in_new_tab %}} target="_blank"{{% endif %}}>{{{{ item|get_menu_label:LANGUAGE_CODE }}}}</a>
+  {{% endif %}}
 {{% endfor %}}
 ```
 
 - `get_menu_url` returns the correct language-specific URL for each menu item (handles page slugs per language automatically)
 - `get_menu_label` returns the label in the current language
+- Use `item.children.all` to check for and iterate over sub-items — these are prefetched and ready to use
 - Do NOT use `MENU_ITEMS.last` or any index-based access — the user can reorder items at any time
 - Do NOT use `{{{{ trans.menu_xxx }}}}` for menu labels — the menu items have their own i18n labels
 - For CTA buttons, use `{{{{ trans.cta_text }}}}` for the label and `{{% url 'core:page' slug='contact' %}}` or a `{{{{ trans.xxx }}}}` variable for the URL — keep CTAs separate from the menu loop
@@ -421,6 +468,7 @@ Improve the provided {section_type} by applying the requested changes. Return a 
         # Section-specific navigation reminders for the user prompt
         if section_type == 'header':
             nav_reminder = f"""- Use `{{% for item in MENU_ITEMS %}}` loop with `get_menu_url` and `get_menu_label` filters for navigation — do NOT hardcode page links
+- For items with children, use `{{% if item.children.all %}}` to render Alpine.js dropdown menus, and `{{% for child in item.children.all %}}` for sub-items
 - Include `{{% load section_tags %}}` at the top of html_template (alongside `{{% load i18n %}}`)
 - Menu labels come from `MENU_ITEMS` — do NOT add them to translations"""
         else:
