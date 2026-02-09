@@ -14,7 +14,7 @@
             <!-- AI Model Selector -->
             <select x-model="selectedModel" class="text-sm border border-gray-300 rounded-md px-3 py-2 bg-white">
                 {% for model in ai_models %}
-                <option value="{{ model.key }}" {% if model.key == default_model %}selected{% endif %}>{{ model.name }}</option>
+                <option value="{{ model.0 }}" {% if model.0 == default_model %}selected{% endif %}>{{ model.1 }}</option>
                 {% endfor %}
             </select>
             <button @click="createPagesFromBlueprint()"
@@ -180,6 +180,27 @@
     </div>
 </div>
 
+<!-- Delete section confirmation modal -->
+<div x-data="deleteModal()" x-on:confirm-delete-section.window="open($event.detail)"
+     x-show="visible" x-cloak
+     class="fixed inset-0 z-50 flex items-center justify-center"
+     @keydown.escape.window="cancel()">
+    <div class="fixed inset-0 bg-black/40" @click="cancel()"></div>
+    <div x-show="visible" x-transition:enter="transition ease-out duration-150"
+         x-transition:enter-start="opacity-0 scale-95" x-transition:enter-end="opacity-100 scale-100"
+         x-transition:leave="transition ease-in duration-100"
+         x-transition:leave-start="opacity-100 scale-100" x-transition:leave-end="opacity-0 scale-95"
+         class="relative bg-white rounded-lg shadow-xl max-w-sm w-full mx-4 p-6">
+        <h3 class="text-lg font-semibold text-gray-900 mb-1">Delete Section</h3>
+        <p class="text-sm text-gray-600 mb-1">Are you sure you want to delete</p>
+        <p class="text-sm font-medium text-gray-900 mb-4 truncate" x-text="sectionTitle || 'this section'"></p>
+        <div class="flex justify-end gap-2">
+            <button @click="cancel()" class="px-4 py-2 text-sm text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200">Cancel</button>
+            <button @click="confirm()" class="px-4 py-2 text-sm text-white bg-red-600 rounded-md hover:bg-red-700">Delete</button>
+        </div>
+    </div>
+</div>
+
 <!-- Toast notification -->
 <div x-data="toastStore()" x-on:show-toast.window="show($event.detail)"
      class="fixed bottom-4 right-4 z-50 space-y-2">
@@ -193,6 +214,19 @@
 
 <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.6/Sortable.min.js"></script>
 <script>
+function deleteModal() {
+    return {
+        visible: false,
+        sectionTitle: '',
+        open({title}) {
+            this.sectionTitle = title;
+            this.visible = true;
+        },
+        confirm() { this.visible = false; window.dispatchEvent(new CustomEvent('section-delete-confirmed')); },
+        cancel()  { this.visible = false; window.dispatchEvent(new CustomEvent('section-delete-cancelled')); }
+    };
+}
+
 function showToast(message, type = 'success') {
     window.dispatchEvent(new CustomEvent('show-toast', {detail: {message, type}}));
 }
@@ -320,21 +354,28 @@ function blueprintApp() {
             // Collapse toggle
             const collapseBtn = document.createElement('button');
             collapseBtn.className = 'text-gray-400 hover:text-gray-600 flex-shrink-0';
-            const chevron = document.createElement('svg');
-            chevron.setAttribute('class', 'w-4 h-4 transition-transform rotate-180');
-            chevron.setAttribute('fill', 'none');
-            chevron.setAttribute('stroke', 'currentColor');
-            chevron.setAttribute('viewBox', '0 0 24 24');
-            chevron.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>';
-            collapseBtn.appendChild(chevron);
+            collapseBtn.innerHTML = '<svg class="w-4 h-4 transition-transform rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>';
+            const chevron = collapseBtn.querySelector('svg');
 
             // Remove button
             const removeBtn = document.createElement('button');
             removeBtn.className = 'text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0';
             removeBtn.innerHTML = '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>';
             removeBtn.addEventListener('click', () => {
-                const i = this.currentSections.indexOf(section);
-                if (i !== -1) { this.currentSections.splice(i, 1); this.markDirty(); this.renderSections(); }
+                window.dispatchEvent(new CustomEvent('confirm-delete-section', {
+                    detail: {title: section.title || section.id}
+                }));
+                // Listen for modal result
+                const handler = (e) => {
+                    window.removeEventListener('section-delete-confirmed', handler);
+                    window.removeEventListener('section-delete-cancelled', handler);
+                    if (e.type === 'section-delete-confirmed') {
+                        const i = this.currentSections.indexOf(section);
+                        if (i !== -1) { this.currentSections.splice(i, 1); this.markDirty(); this.renderSections(); }
+                    }
+                };
+                window.addEventListener('section-delete-confirmed', handler);
+                window.addEventListener('section-delete-cancelled', handler);
             });
 
             header.append(handle, titleInput, idInput, aiBtn, collapseBtn, removeBtn);
