@@ -33,6 +33,91 @@ class PromptTemplates:
         return "\n".join(lines) + "\n"
 
     @staticmethod
+    def _get_components_reference():
+        """Return HTML patterns doc for interactive components pre-loaded in base.html."""
+        return """
+
+## Interactive Components (Available Libraries)
+
+The following JS libraries are pre-loaded and auto-initialize from HTML attributes. Use them when the user requests interactive elements.
+
+### Carousel / Slider (Splide.js)
+```html
+<div class="splide" data-splide='{"type":"loop","perPage":3,"gap":"1.5rem","breakpoints":{"768":{"perPage":1},"1024":{"perPage":2}}}'>
+  <div class="splide__track">
+    <ul class="splide__list">
+      <li class="splide__slide"><!-- slide content --></li>
+      <li class="splide__slide"><!-- slide content --></li>
+    </ul>
+  </div>
+</div>
+```
+Options: `type` (slide|loop|fade), `perPage`, `gap`, `autoplay`, `interval`, `breakpoints`, `arrows`, `pagination`.
+
+### Image Lightbox / Gallery
+```html
+<div class="grid grid-cols-3 gap-4">
+  <a href="/media/full-image.jpg" data-lightbox="gallery-name">
+    <img src="/media/thumb.jpg" alt="Description" class="rounded-lg">
+  </a>
+</div>
+```
+Use `data-lightbox="same-group-name"` on `<a>` wrapping each image. Images with the same group name become a navigable gallery.
+
+### Tabs (Alpine.js)
+```html
+<div x-data="{ tab: 'tab1' }">
+  <div class="flex border-b">
+    <button @click="tab = 'tab1'" :class="tab === 'tab1' ? 'border-b-2 border-blue-500 text-blue-600' : 'text-gray-500'" class="px-4 py-2 font-medium">Tab 1</button>
+    <button @click="tab = 'tab2'" :class="tab === 'tab2' ? 'border-b-2 border-blue-500 text-blue-600' : 'text-gray-500'" class="px-4 py-2 font-medium">Tab 2</button>
+  </div>
+  <div class="relative overflow-hidden min-h-[400px]">
+    <div class="absolute inset-0 p-6" x-show="tab === 'tab1'" x-transition:enter="transition ease-out duration-300" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100" x-transition:leave="transition ease-in duration-200" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0">Content 1</div>
+    <div class="absolute inset-0 p-6" x-show="tab === 'tab2'" x-cloak x-transition:enter="transition ease-out duration-300" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100" x-transition:leave="transition ease-in duration-200" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0">Content 2</div>
+  </div>
+</div>
+```
+CRITICAL for tabs: Each panel MUST use `absolute inset-0` so panels stack on top of each other — this prevents flicker from both panels being visible during transitions. The container needs `relative overflow-hidden min-h-[400px]` (adjust height as needed). Add `x-cloak` on initially-hidden panels. Move padding from the container to each panel (`p-6` or `p-8 md:p-12`).
+
+### Accordion (Alpine.js)
+```html
+<div x-data="{ open: null }" class="space-y-2">
+  <div class="border rounded-lg">
+    <button @click="open = open === 1 ? null : 1" class="w-full flex justify-between items-center p-4 font-medium">
+      <span>Question 1</span>
+      <svg :class="open === 1 && 'rotate-180'" class="w-5 h-5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+    </button>
+    <div x-show="open === 1" x-collapse>
+      <div class="p-4 pt-0">Answer 1</div>
+    </div>
+  </div>
+</div>
+```
+
+### Modal (Alpine.js)
+```html
+<div x-data="{ open: false }">
+  <button @click="open = true" class="px-4 py-2 bg-blue-600 text-white rounded">Open Modal</button>
+  <div x-show="open" x-transition.opacity class="fixed inset-0 bg-black/50 z-40" @click="open = false"></div>
+  <div x-show="open" x-transition class="fixed inset-0 z-50 flex items-center justify-center p-4" @click.self="open = false">
+    <div class="bg-white rounded-xl shadow-xl max-w-lg w-full p-6">
+      <h3 class="text-xl font-bold mb-4">Modal Title</h3>
+      <p>Modal content here.</p>
+      <button @click="open = false" class="mt-4 px-4 py-2 bg-gray-200 rounded">Close</button>
+    </div>
+  </div>
+</div>
+```
+
+**Rules:**
+- Always use the exact class names shown (e.g. `splide`, `splide__track`, `splide__list`, `splide__slide`)
+- Splide options go in the `data-splide` JSON attribute — do NOT add inline `<script>` tags
+- Lightbox uses `data-lightbox` on `<a>` tags wrapping images
+- Alpine.js components use `x-data`, `x-show`, `x-transition`, `x-collapse`, `@click`
+- All components are responsive — use Tailwind breakpoint classes and Splide `breakpoints` option
+"""
+
+    @staticmethod
     def get_page_generation_prompt(
         site_name: str,
         site_description: str,
@@ -85,10 +170,18 @@ Generate a complete page as a single HTML document with multiple sections. Use `
 - All URLs hardcoded: `href="/about/"`, `src="/media/image.jpg"`
 - All styling inline via Tailwind classes
 
+## Images
+When adding images, NEVER use external URLs (Unsplash, Pexels, etc.). Use placeholder images:
+- `<img>` tags: use `src="https://placehold.co/WIDTHxHEIGHT?text=Short+Label"` with `data-image-prompt="detailed description for AI image generation"` and `data-image-name="slug_name"`
+- Background images: use a CSS background-color as fallback and add a child `<img>` with `class="absolute inset-0 w-full h-full object-cover"` using the same placeholder pattern
+- Choose appropriate dimensions: hero 1200x600, cards 600x400, avatars 400x400, etc.
+- Write rich, specific prompts in data-image-prompt (style, subject, mood, setting)
+
 ## Content Structure
 - Provide translations in ALL languages: {langs_display}
 - Format: `{{"translations": {{{langs_json}: {{...}}}}}}`
-- Only text content in translations (no URLs, no HTML)"""
+- Only text content in translations (no URLs, no HTML)
+{PromptTemplates._get_components_reference()}"""
 
         user_prompt = f"""# PROJECT CONTEXT
 
@@ -788,7 +881,7 @@ Generate a complete, professional web page as clean HTML with real text content 
 - The header and footer are managed separately as global site components
 - Your output is ONLY the page body content — a series of `<section>` blocks
 - Do NOT include `<script>` or `<link>` tags for Tailwind/Alpine — they are already loaded
-
+{PromptTemplates._get_components_reference()}
 ## Important
 - Write ALL text in {lang_name} — real words, real sentences
 - Do NOT use `{{{{ trans.xxx }}}}` or any template variables for text
@@ -901,19 +994,16 @@ Edit the provided HTML page by applying the requested changes. Return the comple
 - Return ONLY the complete updated HTML
 - Do NOT use `{{{{ trans.xxx }}}}` or any template variables
 - Do NOT wrap the output in JSON
-- No markdown code blocks, no explanations{design_guidelines}"""
+- No markdown code blocks, no explanations
 
-        if handle_images:
-            system_prompt += """
-
-## Image Handling
-For every image on the page:
-- Use a placeholder src: `https://placehold.co/{width}x{height}?text={Short+Label}`
-- Add `data-image-prompt="detailed description for AI image generation"` attribute
-- Add `data-image-name="descriptive-slug-name"` attribute
-- Write rich, specific prompts (style, subject, mood, setting) in data-image-prompt
-- Choose appropriate dimensions for each image's context (hero: 1200x600, card: 600x400, avatar: 400x400, etc.)
-- Example: <img src="https://placehold.co/800x400?text=Hero+Image" data-image-name="hero-banner" data-image-prompt="Aerial photo of luxury villa with infinity pool overlooking ocean at golden hour, Mediterranean architecture" alt="..." class="...">"""
+## Images
+- **PRESERVE existing image `src` URLs exactly as they are.** Do NOT replace, remove, or change any existing `src` attribute unless the user explicitly asks to change the image itself.
+- When adding NEW images, NEVER use external URLs (Unsplash, Pexels, etc.). Use placeholder images:
+  - `<img>` tags: use `src="https://placehold.co/WIDTHxHEIGHT?text=Short+Label"` with `data-image-prompt="detailed description for AI image generation"` and `data-image-name="slug_name"`
+  - Background images: use a CSS background-color as fallback and add a child `<img>` with `class="absolute inset-0 w-full h-full object-cover"` using the same placeholder pattern
+  - Choose appropriate dimensions: hero 1200x600, cards 600x400, avatars 400x400, etc.
+  - Write rich, specific prompts in data-image-prompt (style, subject, mood, setting){design_guidelines}
+{PromptTemplates._get_components_reference()}"""
 
         if has_reference_images:
             system_prompt += """
@@ -1016,6 +1106,119 @@ Do NOT undo any of these previous changes unless specifically asked to.
                 '# USER REQUEST',
                 history_block + '# USER REQUEST',
             )
+
+        return (system_prompt, user_prompt)
+
+    @staticmethod
+    def get_section_refinement_prompt(
+        site_name: str,
+        site_description: str,
+        project_briefing: str,
+        default_language: str,
+        full_page_html: str,
+        section_name: str,
+        user_request: str,
+        page_title: str = '',
+        page_slug: str = '',
+        design_guide: str = '',
+        conversation_history: str = '',
+        pages: list = None,
+        languages: list = None
+    ) -> tuple:
+        """
+        Generate prompt for section-only refinement.
+        Sends the full page for design context but asks the LLM to return
+        ONLY the target section — drastically reducing output tokens.
+
+        Returns:
+            Tuple of (system_prompt, user_prompt)
+        """
+        lang_name = {'pt': 'Portuguese', 'en': 'English', 'es': 'Spanish', 'fr': 'French', 'de': 'German', 'it': 'Italian'}.get(default_language, default_language.upper())
+
+        design_guidelines = ""
+        if design_guide:
+            design_guidelines = "\n\n## Design Guide\nFollow these design patterns and conventions:\n" + design_guide
+
+        system_prompt = f"""You are a web designer specializing in Tailwind CSS. Your goal is to edit ONE specific section of a webpage.
+
+## Your Task
+Edit ONLY the `<section data-section="{section_name}">` section based on the user's instructions. Return ONLY that single section — nothing else.
+
+## Technical Requirements
+- Use Tailwind CSS classes inline for all styling
+- Make responsive: `md:text-6xl`, `lg:grid-cols-3`, `sm:flex-row`
+- The `<section>` MUST keep `data-section="{section_name}"` and `id="{section_name}"` attributes
+- Use `data-element-id="unique_id"` on editable text elements
+- All text is in {lang_name} — keep it that way, do NOT use template variables
+
+## Images
+- **PRESERVE existing image `src` URLs exactly as they are.** Do NOT replace, remove, or change any existing `src` attribute unless the user explicitly asks to change the image itself.
+- When adding NEW images, NEVER use external URLs (Unsplash, Pexels, etc.). Instead use placeholder images:
+  - `<img>` tags: use `src="https://placehold.co/WIDTHxHEIGHT?text=Label"` with `data-image-prompt="description of ideal image"` and `data-image-name="slug_name"`
+  - Background images: use a CSS background-color as fallback and add a child `<img>` with `class="absolute inset-0 w-full h-full object-cover"` using the same placeholder pattern above, so the image can be processed later
+
+## CRITICAL: Return ONLY the Target Section
+- Output ONLY the single `<section data-section="{section_name}">...</section>` block
+- Do NOT return any other sections from the page
+- Do NOT include `<html>`, `<head>`, `<body>`, `<header>`, `<nav>`, or `<footer>` tags
+- Do NOT include `<script>` or `<link>` tags
+
+## Important
+- Return ONLY the updated section HTML
+- Do NOT use `{{{{ trans.xxx }}}}` or any template variables
+- Do NOT wrap the output in JSON
+- No markdown code blocks, no explanations{design_guidelines}
+{PromptTemplates._get_components_reference()}"""
+
+        pages_info = PromptTemplates._format_pages_info(pages, languages or [])
+
+        history_block = ""
+        if conversation_history:
+            history_block = f"""
+# PREVIOUS REFINEMENTS
+
+This section has been refined through a conversation:
+
+{conversation_history}
+
+Do NOT undo any of these previous changes unless specifically asked to.
+
+---
+"""
+
+        user_prompt = f"""# PROJECT CONTEXT
+
+**Site Name:** {site_name}
+**Description:** {site_description}
+
+**Project Briefing:**
+{project_briefing}
+{pages_info}
+---
+
+# FULL PAGE (for design context only — do NOT output the entire page)
+
+The full page HTML is provided below so you can see the overall design, colors, spacing, and style. Use it as context to keep the section visually consistent with the rest of the page.
+
+**Page:** {page_title if page_title else 'Untitled'}
+**Slug:** {page_slug if page_slug else 'unknown'}
+**Language:** {lang_name}
+
+```html
+{full_page_html if full_page_html.strip() else "<!-- EMPTY PAGE -->"}
+```
+
+---
+{history_block}
+# USER REQUEST
+
+Edit the `<section data-section="{section_name}">` section:
+
+{user_request}
+
+---
+
+Return ONLY the updated `<section data-section="{section_name}">...</section>` block. Nothing else. All text in {lang_name}. No template variables, no JSON, no code blocks."""
 
         return (system_prompt, user_prompt)
 
@@ -1132,14 +1335,19 @@ Rules:
         system_prompt = f"""You are a localization specialist. Your job is to extract all human-readable text from HTML and produce a variable mapping with translations.
 
 ## What to Extract
-- ALL visible text: headings, paragraphs, button labels, link text, list items, spans, etc.
+- ALL visible text that a user would read: headings, paragraphs, button labels, link text, list items, spans, etc.
 - Extract the EXACT text as it appears (preserve whitespace trimming)
 - Do NOT extract: HTML tags, CSS classes, URLs, attribute values, SVG code, Alpine.js directives, HTML comments
+- Do NOT extract code snippets, technical identifiers, or decorative/presentational text (e.g. code examples, variable names like `INSTALLED_APPS`, syntax characters like `[]` `{{}}`, programming strings like `'core'`, color hex values, etc.)
+- Do NOT extract text from image attributes: `alt`, `data-image-prompt`, `data-image-name`, `title`, or any text inside `src` URLs (including placehold.co `?text=` labels)
+- Only extract text that would actually need translation for a different language audience
 
-## Variable Naming
+## Variable Naming — CRITICAL
+- Variable names MUST use **snake_case** with ONLY letters, digits, and underscores
+- NO hyphens, NO dots, NO spaces, NO special characters in variable names
+- For elements with `data-element-id`, convert the ID to snake_case: `data-element-id="stack-heading"` → variable name `stack_heading`
 - Use descriptive names based on the `data-section` attribute and element role: `hero_title`, `hero_subtitle`, `features_card1_title`, `cta_button`
-- For elements with `data-element-id`, use that as the variable name
-- Keep names short and descriptive using snake_case
+- Examples: `hero_title`, `stack_heading`, `cta_button_text` (NEVER `hero-title`, `stack-heading`)
 
 ## Translation Rules
 - The original text is in {lang_name} — use it as the {default_language.upper()} translation

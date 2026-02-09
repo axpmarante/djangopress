@@ -20,11 +20,15 @@
     <link href="{{ GOOGLE_FONTS_URL }}" rel="stylesheet">
     {% endif %}
 
+    <!-- Splide.js Carousel -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@splidejs/splide@4/dist/css/splide.min.css">
+
     <!-- Custom site styles -->
     <link href="{% static 'css/lightbox.css' %}" rel="stylesheet">
     {% if edit_mode %}
-    <link href="{% static 'css/inline-editor.css' %}?v=4" rel="stylesheet">
+    <link href="{% static 'css/inline-editor.css' %}?v=5" rel="stylesheet">
     {% endif %}
+    <style>[x-cloak] { display: none !important; }</style>
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 
     {% if GOOGLE_ANALYTICS_ID %}
@@ -73,13 +77,23 @@
     {% include 'editor/partials/image_modal.html' %}
     {% endif %}
 
+    <!-- Splide.js Carousel -->
+    <script src="https://cdn.jsdelivr.net/npm/@splidejs/splide@4/dist/js/splide.min.js"></script>
+    <script>
+      document.addEventListener('DOMContentLoaded', function() {
+        document.querySelectorAll('.splide').forEach(function(el) {
+          new Splide(el).mount();
+        });
+      });
+    </script>
+
     <script src="{% static 'js/lightbox.js' %}"></script>
     {% if edit_mode %}
     <!-- Simple Editor System -->
-    <script src="{% static 'editor/js/simple-selector.js' %}?v=17"></script>
-    <script src="{% static 'editor/js/simple-sidebar.js' %}?v=17"></script>
-    <script src="{% static 'editor/js/simple-tracker.js' %}?v=17"></script>
-    <script src="{% static 'editor/js/image-modal.js' %}?v=17"></script>
+    <script src="{% static 'editor/js/simple-selector.js' %}?v=19"></script>
+    <script src="{% static 'editor/js/simple-sidebar.js' %}?v=19"></script>
+    <script src="{% static 'editor/js/simple-tracker.js' %}?v=19"></script>
+    <script src="{% static 'editor/js/image-modal.js' %}?v=19"></script>
     <script>
       // Initialize simple editor when page loads
       document.addEventListener('DOMContentLoaded', function() {
