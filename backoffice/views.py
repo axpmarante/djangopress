@@ -7,7 +7,7 @@ from django.shortcuts import redirect
 from django.urls import reverse_lazy
 
 from django.conf.global_settings import LANGUAGES as ALL_LANGUAGES
-from core.models import SiteSettings, SiteImage, Page, GOOGLE_FONTS_CHOICES, GlobalSection
+from core.models import SiteSettings, SiteImage, Page, GOOGLE_FONTS_CHOICES, GlobalSection, Blueprint, BlueprintPage
 from core.utils import resize_and_compress_image
 from django.utils.text import slugify
 
@@ -1024,3 +1024,40 @@ class FooterEditView(LoginRequiredMixin, TemplateView):
         
         messages.success(request, 'Footer updated successfully!')
         return redirect('backoffice:footer_edit')
+
+
+class BlueprintView(LoginRequiredMixin, TemplateView):
+    """Blueprint — site-level content plan"""
+    template_name = 'backoffice/blueprint.html'
+
+    def get_context_data(self, **kwargs):
+        import json as json_mod
+        context = super().get_context_data(**kwargs)
+
+        # Auto-create default blueprint
+        blueprint, _ = Blueprint.objects.get_or_create(
+            name='Main Blueprint',
+            defaults={'description': '', 'is_active': True}
+        )
+        context['blueprint'] = blueprint
+
+        # Serialize pages for JS
+        bp_pages = list(blueprint.blueprint_pages.all().values(
+            'id', 'title', 'slug', 'description', 'sections', 'sort_order', 'page_id'
+        ))
+        context['pages_json'] = json_mod.dumps(bp_pages)
+
+        # Active Page objects for "link to page" dropdown
+        context['site_pages'] = Page.objects.filter(is_active=True)
+
+        # AI models
+        try:
+            from ai.utils.llm_config import LLMConfig
+            config = LLMConfig()
+            context['ai_models'] = config.get_available_models()
+            context['default_model'] = config.default_model
+        except Exception:
+            context['ai_models'] = []
+            context['default_model'] = 'gemini-pro'
+
+        return context

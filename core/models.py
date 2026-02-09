@@ -948,3 +948,36 @@ class MenuItem(models.Model):
         return self.url or '#'
 
 
+class Blueprint(models.Model):
+    """Site-level content plan / wireframe"""
+    name = models.CharField(max_length=200, default='Main Blueprint')
+    description = models.TextField(blank=True, default='')
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-updated_at']
+
+    def __str__(self):
+        return self.name
+
+
+class BlueprintPage(models.Model):
+    """A page within a blueprint"""
+    blueprint = models.ForeignKey(Blueprint, on_delete=models.CASCADE, related_name='blueprint_pages')
+    title = models.CharField(max_length=200)
+    slug = models.SlugField(max_length=200, blank=True)
+    description = models.TextField(blank=True, default='')
+    sections = models.JSONField(default=list, blank=True)
+    sort_order = models.IntegerField(default=0)
+    page = models.ForeignKey('Page', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='blueprint_source')
+
+    class Meta:
+        ordering = ['sort_order', 'id']
+
+    def __str__(self):
+        return self.title
+
+

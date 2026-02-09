@@ -592,6 +592,100 @@ Example:
 
 Return ONLY the JSON array, no markdown, no explanations."""
 
+    # =========================================================================
+    # Blueprint Prompts
+    # =========================================================================
+
+    @staticmethod
+    def get_suggest_sections_prompt(
+        site_name: str,
+        project_briefing: str,
+        page_title: str,
+        page_description: str,
+        existing_sections: list,
+        all_pages_info: list,
+    ) -> tuple:
+        """
+        Suggest 4-8 sections for a blueprint page.
+        Returns (system_prompt, user_prompt).
+        """
+        system_prompt = """You are a web content strategist. Given a page title, description, and project context, suggest 4-8 content sections for the page.
+
+Return a JSON array where each item has:
+- "id": a short kebab-case identifier (e.g. "hero", "services-grid", "testimonials")
+- "title": human-readable section title
+- "content": a detailed markdown content plan for this section (5-15 lines). For each section describe:
+  - What headings and body text should say (specific, not generic)
+  - Calls to action (button labels, where they link)
+  - Visual elements (images, icons, background treatment)
+  - Tone and key messages
+  - Any data points, features, or items to list
+  - Layout hints (grid, cards, split layout, etc.)
+- "order": integer starting at 0
+
+The content field is a planning document that will guide HTML generation — be specific and actionable, not vague.
+
+Return ONLY the JSON array. No markdown code blocks, no explanations."""
+
+        existing_info = ""
+        if existing_sections:
+            titles = [s.get('title', '') for s in existing_sections if s.get('title')]
+            if titles:
+                existing_info = f"\n\n**Existing sections (keep or improve these):** {', '.join(titles)}"
+
+        pages_list = ""
+        if all_pages_info:
+            pages_list = "\n**Other pages in the site:** " + ", ".join(
+                [p.get('title', '') for p in all_pages_info if p.get('title')]
+            )
+
+        user_prompt = f"""**Site:** {site_name}
+**Project Briefing:** {project_briefing}
+
+**Page Title:** {page_title}
+**Page Description:** {page_description}{existing_info}{pages_list}
+
+Suggest 4-8 content sections for this page. Return ONLY the JSON array."""
+
+        return (system_prompt, user_prompt)
+
+    @staticmethod
+    def get_fill_section_content_prompt(
+        site_name: str,
+        project_briefing: str,
+        page_title: str,
+        section_title: str,
+        section_id: str,
+        other_sections: list,
+    ) -> tuple:
+        """
+        Fill markdown content for a single blueprint section.
+        Returns (system_prompt, user_prompt).
+        """
+        system_prompt = """You are a web content writer. Write a concise markdown description (5-15 lines) for a website section.
+
+This is a content plan, not final copy. Describe:
+- What content appears in this section (headings, body text, lists, CTAs)
+- The tone and key messages
+- Any specific data points or features to highlight
+
+Write in plain markdown. No code blocks wrapping the output, no JSON. Just the markdown content."""
+
+        other_info = ""
+        if other_sections:
+            titles = [s.get('title', '') for s in other_sections if s.get('title')]
+            if titles:
+                other_info = f"\n**Other sections on this page:** {', '.join(titles)}"
+
+        user_prompt = f"""**Site:** {site_name}
+**Project Briefing:** {project_briefing}
+**Page:** {page_title}
+**Section:** {section_title} (id: {section_id}){other_info}
+
+Write 5-15 lines of markdown describing the planned content for this section."""
+
+        return (system_prompt, user_prompt)
+
     @staticmethod
     def get_page_metadata_prompt(brief: str, languages: list) -> tuple:
         """
@@ -644,7 +738,8 @@ Return a JSON object:
         has_reference_images: bool = False,
         design_guide: str = '',
         pages: list = None,
-        languages: list = None
+        languages: list = None,
+        outline: list = None
     ) -> tuple:
         """
         Generate prompt for Step 1: create clean HTML with real text in the default language.
@@ -707,6 +802,20 @@ Match the design style shown in the images while following all other technical r
 
         pages_info = PromptTemplates._format_pages_info(pages, languages or [])
 
+        # Build outline block if provided
+        outline_block = ""
+        if outline:
+            outline_lines = ["\n## CONTENT PLAN\nFollow this section structure. Use the provided `data-section` ids.\n"]
+            for section in outline:
+                sid = section.get('id', '')
+                stitle = section.get('title', '')
+                scontent = section.get('content', '')
+                outline_lines.append(f"### `data-section=\"{sid}\"` — {stitle}")
+                if scontent:
+                    outline_lines.append(scontent)
+                outline_lines.append("")
+            outline_block = "\n".join(outline_lines)
+
         user_prompt = f"""# PROJECT CONTEXT
 
 **Site Name:** {site_name}
@@ -719,7 +828,7 @@ Match the design style shown in the images while following all other technical r
 # PAGE REQUEST
 
 **Brief:** {brief}
-
+{outline_block}
 ---
 
 Return ONLY the raw HTML for this page. All text must be real content in {lang_name}. No template variables, no JSON, no code blocks."""

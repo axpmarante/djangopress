@@ -42,6 +42,14 @@ urlpatterns = [
     path('page/<int:page_id>/edit/', views.PageEditView.as_view(), name='page_edit'),
     path('page/<int:page_id>/images/', views.ProcessImagesView.as_view(), name='process_images'),
 
+    # Blueprint
+    path('blueprint/', views.BlueprintView.as_view(), name='blueprint'),
+    path('api/save-blueprint-page/', api_views.save_blueprint_page, name='api_save_blueprint_page'),
+    path('api/delete-blueprint-page/', api_views.delete_blueprint_page, name='api_delete_blueprint_page'),
+    path('api/reorder-blueprint-pages/', api_views.reorder_blueprint_pages, name='api_reorder_blueprint_pages'),
+    path('api/save-blueprint-sections/', api_views.save_blueprint_sections, name='api_save_blueprint_sections'),
+    path('api/create-pages-from-blueprint/', api_views.create_pages_from_blueprint, name='api_create_pages_from_blueprint'),
+
     # Menu
     path('menu/', views.MenuView.as_view(), name='menu'),
 

@@ -35,6 +35,7 @@ def generate_page_api(request):
             brief = request.POST.get('brief')
             language = request.POST.get('language', 'pt')
             model = request.POST.get('model', 'gemini-pro')
+            blueprint_page_id = request.POST.get('blueprint_page_id')
             reference_images = []
             for f in request.FILES.getlist('reference_images'):
                 reference_images.append({'bytes': f.read(), 'mime_type': f.content_type})
@@ -43,6 +44,7 @@ def generate_page_api(request):
             brief = data.get('brief')
             language = data.get('language', 'pt')
             model = data.get('model', 'gemini-pro')
+            blueprint_page_id = data.get('blueprint_page_id')
             reference_images = []
 
         if not brief:
@@ -51,13 +53,25 @@ def generate_page_api(request):
                 'error': 'Brief is required'
             }, status=400)
 
+        # Load blueprint outline if provided
+        outline = None
+        if blueprint_page_id:
+            try:
+                from core.models import BlueprintPage
+                bp_page = BlueprintPage.objects.get(pk=int(blueprint_page_id))
+                if bp_page.sections:
+                    outline = bp_page.sections
+            except (BlueprintPage.DoesNotExist, ValueError):
+                pass
+
         # Generate page
         service = ContentGenerationService()
         page_data = service.generate_page(
             brief=brief,
             language=language,
             model_override=model,
-            reference_images=reference_images or None
+            reference_images=reference_images or None,
+            outline=outline
         )
 
         return JsonResponse({
@@ -992,3 +1006,165 @@ def process_page_images_api(request):
             'success': False,
             'error': str(e)
         }, status=500)
+
+
+# === Blueprint AI Endpoints ===
+
+@staff_member_required
+@require_http_methods(["POST"])
+def suggest_page_sections_api(request):
+    """
+    Suggest sections for a blueprint page using AI.
+
+    POST /ai/api/suggest-page-sections/
+    Body: {"blueprint_page_id": 3, "model": "gemini-pro"}
+
+    Returns: {"success": true, "sections": [...]}
+    """
+    try:
+        from core.models import SiteSettings, BlueprintPage
+        from .utils.llm_config import LLMBase
+        from .utils.prompts import PromptTemplates
+
+        data = json.loads(request.body)
+        bp_page_id = data.get('blueprint_page_id')
+        model = data.get('model', 'gemini-pro')
+
+        if not bp_page_id:
+            return JsonResponse({'success': False, 'error': 'blueprint_page_id is required'}, status=400)
+
+        bp_page = BlueprintPage.objects.get(pk=bp_page_id)
+        blueprint = bp_page.blueprint
+
+        # Load site context
+        site_settings = SiteSettings.objects.first()
+        site_name = site_settings.get_site_name() if site_settings else 'Website'
+        project_briefing = site_settings.get_project_briefing() if site_settings else ''
+
+        # All pages info for context
+        all_pages_info = [
+            {'title': p.title, 'slug': p.slug}
+            for p in blueprint.blueprint_pages.exclude(pk=bp_page_id)
+        ]
+
+        system_prompt, user_prompt = PromptTemplates.get_suggest_sections_prompt(
+            site_name=site_name,
+            project_briefing=project_briefing,
+            page_title=bp_page.title,
+            page_description=bp_page.description,
+            existing_sections=bp_page.sections or [],
+            all_pages_info=all_pages_info,
+        )
+
+        llm = LLMBase()
+        messages = [
+            {'role': 'system', 'content': system_prompt},
+            {'role': 'user', 'content': user_prompt},
+        ]
+        response = llm.get_completion(messages, tool_name=model)
+        content = response.choices[0].message.content
+
+        # Extract JSON from response
+        sections = _extract_json_from_response(content)
+
+        if not isinstance(sections, list):
+            return JsonResponse({'success': False, 'error': 'AI did not return a valid sections list'}, status=500)
+
+        return JsonResponse({'success': True, 'sections': sections})
+
+    except BlueprintPage.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Blueprint page not found'}, status=404)
+    except Exception as e:
+        print(f"Error in suggest_page_sections_api: {e}")
+        import traceback
+        traceback.print_exc()
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
+@staff_member_required
+@require_http_methods(["POST"])
+def fill_section_content_api(request):
+    """
+    Fill markdown content for a single blueprint section using AI.
+
+    POST /ai/api/fill-section-content/
+    Body: {
+        "blueprint_page_id": 3,
+        "section_id": "hero",
+        "section_title": "Hero Section",
+        "other_sections": [{"title": "Services"}],
+        "model": "gemini-pro"
+    }
+
+    Returns: {"success": true, "content": "...markdown..."}
+    """
+    try:
+        from core.models import SiteSettings, BlueprintPage
+        from .utils.llm_config import LLMBase
+        from .utils.prompts import PromptTemplates
+
+        data = json.loads(request.body)
+        bp_page_id = data.get('blueprint_page_id')
+        section_id = data.get('section_id', '')
+        section_title = data.get('section_title', '')
+        other_sections = data.get('other_sections', [])
+        model = data.get('model', 'gemini-pro')
+
+        if not bp_page_id or not section_title:
+            return JsonResponse({'success': False, 'error': 'blueprint_page_id and section_title are required'}, status=400)
+
+        bp_page = BlueprintPage.objects.get(pk=bp_page_id)
+
+        site_settings = SiteSettings.objects.first()
+        site_name = site_settings.get_site_name() if site_settings else 'Website'
+        project_briefing = site_settings.get_project_briefing() if site_settings else ''
+
+        system_prompt, user_prompt = PromptTemplates.get_fill_section_content_prompt(
+            site_name=site_name,
+            project_briefing=project_briefing,
+            page_title=bp_page.title,
+            section_title=section_title,
+            section_id=section_id,
+            other_sections=other_sections,
+        )
+
+        llm = LLMBase()
+        messages = [
+            {'role': 'system', 'content': system_prompt},
+            {'role': 'user', 'content': user_prompt},
+        ]
+        response = llm.get_completion(messages, tool_name=model)
+        content = response.choices[0].message.content
+
+        # Strip code fences if present
+        if content.startswith('```'):
+            lines = content.split('\n')
+            if lines[0].startswith('```'):
+                lines = lines[1:]
+            if lines and lines[-1].strip() == '```':
+                lines = lines[:-1]
+            content = '\n'.join(lines)
+
+        return JsonResponse({'success': True, 'content': content.strip()})
+
+    except BlueprintPage.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Blueprint page not found'}, status=404)
+    except Exception as e:
+        print(f"Error in fill_section_content_api: {e}")
+        import traceback
+        traceback.print_exc()
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
+def _extract_json_from_response(content):
+    """Extract JSON array or object from LLM response text."""
+    import re as _re
+    # Try code-fenced JSON first
+    json_match = _re.search(r'```(?:json)?\s*(\[.*?\]|\{.*?\})\s*```', content, _re.DOTALL)
+    if json_match:
+        return json.loads(json_match.group(1))
+    # Try bare JSON
+    json_match = _re.search(r'(\[.*\]|\{.*\})', content, _re.DOTALL)
+    if json_match:
+        return json.loads(json_match.group(1))
+    return json.loads(content)

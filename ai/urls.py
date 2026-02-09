@@ -30,4 +30,8 @@ urlpatterns = [
     # Image processing
     path('api/analyze-page-images/', views.analyze_page_images_api, name='analyze_page_images'),
     path('api/process-page-images/', views.process_page_images_api, name='process_page_images'),
+
+    # Blueprint AI
+    path('api/suggest-page-sections/', views.suggest_page_sections_api, name='suggest_page_sections'),
+    path('api/fill-section-content/', views.fill_section_content_api, name='fill_section_content'),
 ]

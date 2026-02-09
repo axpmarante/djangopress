@@ -1,0 +1,718 @@
+{% extends 'backoffice/base.html' %}
+
+{% block title %}Blueprint{% endblock %}
+
+{% block content %}
+<div x-data="blueprintApp()" x-init="init()" class="h-[calc(100vh-7rem)]">
+    <!-- Header -->
+    <div class="flex items-center justify-between mb-4">
+        <div>
+            <h2 class="text-3xl font-bold text-gray-900">Blueprint</h2>
+            <p class="text-gray-600 mt-1">Plan your site structure and content before building</p>
+        </div>
+        <div class="flex items-center gap-3">
+            <!-- AI Model Selector -->
+            <select x-model="selectedModel" class="text-sm border border-gray-300 rounded-md px-3 py-2 bg-white">
+                {% for model in ai_models %}
+                <option value="{{ model.key }}" {% if model.key == default_model %}selected{% endif %}>{{ model.name }}</option>
+                {% endfor %}
+            </select>
+            <button @click="createPagesFromBlueprint()"
+                    class="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 flex items-center text-sm">
+                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                </svg>
+                Create All Pages
+            </button>
+        </div>
+    </div>
+
+    <!-- Two-Panel Layout -->
+    <div class="flex gap-4 h-[calc(100%-4rem)]">
+        <!-- Left Panel: Page List -->
+        <div class="w-80 flex-shrink-0 bg-white rounded-lg shadow flex flex-col overflow-hidden">
+            <div class="px-4 py-3 border-b border-gray-200 bg-gray-50">
+                <h3 class="font-semibold text-gray-700 text-sm">Pages</h3>
+            </div>
+
+            <div class="flex-1 overflow-y-auto p-3 space-y-2" id="pageListContainer">
+                <template x-for="page in pages" :key="page.id">
+                    <div class="border rounded-lg cursor-pointer transition-colors group"
+                         :class="selectedPageId === page.id ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-gray-300 bg-white'"
+                         @click="selectPage(page.id)"
+                         :data-page-id="page.id">
+                        <div class="px-3 py-2 flex items-center justify-between">
+                            <div class="flex items-center min-w-0">
+                                <span class="drag-handle cursor-grab active:cursor-grabbing text-gray-400 hover:text-gray-600 mr-2 flex-shrink-0">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8h16M4 16h16"/>
+                                    </svg>
+                                </span>
+                                <div class="min-w-0">
+                                    <div class="font-medium text-sm text-gray-900 truncate" x-text="page.title || 'Untitled'"></div>
+                                    <div class="text-xs text-gray-500 truncate" x-text="page.slug ? '/' + page.slug + '/' : ''"></div>
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-1 flex-shrink-0 ml-2">
+                                <span x-show="page.sections && page.sections.length > 0"
+                                      class="text-xs bg-gray-200 text-gray-600 px-1.5 py-0.5 rounded-full"
+                                      x-text="page.sections.length"></span>
+                                <span x-show="page.linked_page_id || page.page_id"
+                                      class="text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full"
+                                      title="Linked to page">
+                                    <svg class="w-3 h-3 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/>
+                                    </svg>
+                                </span>
+                                <button @click.stop="removePage(page.id)"
+                                        class="text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </template>
+
+                <div x-show="pages.length === 0" class="text-center text-gray-400 py-8">
+                    <svg class="w-12 h-12 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7"/>
+                    </svg>
+                    <p class="text-sm">No pages yet</p>
+                </div>
+            </div>
+
+            <div class="px-3 py-3 border-t border-gray-200">
+                <button @click="addPage()"
+                        class="w-full bg-blue-600 text-white px-3 py-2 rounded-md hover:bg-blue-700 text-sm flex items-center justify-center">
+                    <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                    </svg>
+                    Add Page
+                </button>
+            </div>
+        </div>
+
+        <!-- Right Panel: Page Detail + Sections -->
+        <div class="flex-1 bg-white rounded-lg shadow flex flex-col overflow-hidden">
+            <!-- No page selected -->
+            <div x-show="!selectedPageId" class="flex-1 flex items-center justify-center text-gray-400">
+                <div class="text-center">
+                    <svg class="w-16 h-16 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                    </svg>
+                    <p>Select a page from the left panel</p>
+                    <p class="text-sm mt-1">or add a new one to get started</p>
+                </div>
+            </div>
+
+            <!-- Page selected -->
+            <div x-show="selectedPageId" x-cloak class="flex flex-col h-full">
+                <!-- Page Header -->
+                <div class="px-5 py-4 border-b border-gray-200 bg-gray-50 space-y-3">
+                    <div class="flex gap-3">
+                        <div class="flex-1">
+                            <label class="block text-xs font-medium text-gray-500 mb-1">Title</label>
+                            <input type="text" x-model="editTitle"
+                                   @change="updateCurrentPage()"
+                                   class="w-full border border-gray-300 rounded-md px-3 py-1.5 text-sm font-medium"
+                                   placeholder="Page Title">
+                        </div>
+                        <div class="w-48">
+                            <label class="block text-xs font-medium text-gray-500 mb-1">Slug</label>
+                            <input type="text" x-model="editSlug"
+                                   @change="updateCurrentPage()"
+                                   class="w-full border border-gray-300 rounded-md px-3 py-1.5 text-sm"
+                                   placeholder="page-slug">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-gray-500 mb-1">Description</label>
+                        <textarea x-model="editDescription"
+                                  @change="updateCurrentPage()"
+                                  class="w-full border border-gray-300 rounded-md px-3 py-1.5 text-sm"
+                                  rows="2"
+                                  placeholder="Brief description of this page's purpose and content..."></textarea>
+                    </div>
+                </div>
+
+                <!-- Section Toolbar -->
+                <div class="px-5 py-2 border-b border-gray-200 flex items-center gap-2">
+                    <button @click="suggestSections()"
+                            :disabled="aiLoading"
+                            class="bg-gradient-to-r from-purple-600 to-indigo-600 text-white px-3 py-1.5 rounded-md hover:from-purple-700 hover:to-indigo-700 text-xs font-medium flex items-center disabled:opacity-50">
+                        <svg class="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                        </svg>
+                        <span x-text="aiLoading ? 'Thinking...' : 'AI Suggest Sections'"></span>
+                    </button>
+                    <button @click="fillAllEmpty()"
+                            :disabled="aiLoading"
+                            class="bg-purple-100 text-purple-700 px-3 py-1.5 rounded-md hover:bg-purple-200 text-xs font-medium disabled:opacity-50">
+                        AI Fill All
+                    </button>
+                    <button @click="addSection()"
+                            class="bg-gray-100 text-gray-700 px-3 py-1.5 rounded-md hover:bg-gray-200 text-xs font-medium flex items-center">
+                        <svg class="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                        </svg>
+                        Add Section
+                    </button>
+                    <div class="flex-1"></div>
+                    <button @click="saveSections()"
+                            :disabled="!isDirty"
+                            class="bg-green-600 text-white px-4 py-1.5 rounded-md hover:bg-green-700 text-xs font-medium disabled:opacity-50 flex items-center">
+                        <svg class="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                        </svg>
+                        Save
+                    </button>
+                </div>
+
+                <!-- Sections List (rendered manually — SortableJS conflicts with x-for) -->
+                <div class="flex-1 overflow-y-auto px-5 py-4 space-y-3" id="sectionsContainer"></div>
+                <div x-show="selectedPageId && currentSections.length === 0 && !aiLoading" class="text-center text-gray-400 py-12 -mt-12 pointer-events-none">
+                    <p class="text-sm">No sections yet. Click "Add Section" or "AI Suggest Sections".</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Toast notification -->
+<div x-data="toastStore()" x-on:show-toast.window="show($event.detail)"
+     class="fixed bottom-4 right-4 z-50 space-y-2">
+    <template x-for="(toast, idx) in toasts" :key="idx">
+        <div x-show="toast.visible" x-transition class="px-4 py-3 rounded-lg shadow-lg text-white text-sm max-w-sm"
+             :class="toast.type === 'error' ? 'bg-red-600' : 'bg-green-600'">
+            <span x-text="toast.message"></span>
+        </div>
+    </template>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.6/Sortable.min.js"></script>
+<script>
+function showToast(message, type = 'success') {
+    window.dispatchEvent(new CustomEvent('show-toast', {detail: {message, type}}));
+}
+
+function toastStore() {
+    return {
+        toasts: [],
+        show({message, type}) {
+            const toast = {message, type, visible: true};
+            this.toasts.push(toast);
+            setTimeout(() => { toast.visible = false; }, 3000);
+            setTimeout(() => { this.toasts = this.toasts.filter(t => t !== toast); }, 3500);
+        }
+    };
+}
+
+function blueprintApp() {
+    return {
+        blueprintId: {{ blueprint.id }},
+        pages: [],
+        selectedPageId: null,
+        currentSections: [],
+        editTitle: '',
+        editSlug: '',
+        editDescription: '',
+        isDirty: false,
+        aiLoading: false,
+        selectedModel: '{{ default_model }}',
+        pageSortable: null,
+        sectionSortable: null,
+
+        init() {
+            this.pages = {{ pages_json|safe }};
+            this.pages.forEach(p => {
+                if (p.page_id && !p.linked_page_id) p.linked_page_id = p.page_id;
+            });
+            this.$nextTick(() => this.initPageSortable());
+        },
+
+        initPageSortable() {
+            const container = document.getElementById('pageListContainer');
+            if (!container || this.pageSortable) return;
+            this.pageSortable = new Sortable(container, {
+                handle: '.drag-handle',
+                animation: 150,
+                ghostClass: 'opacity-30',
+                onEnd: (evt) => {
+                    const items = container.querySelectorAll('[data-page-id]');
+                    const newOrder = [];
+                    items.forEach((el, idx) => {
+                        const pageId = parseInt(el.dataset.pageId);
+                        const page = this.pages.find(p => p.id === pageId);
+                        if (page) {
+                            page.sort_order = idx;
+                            newOrder.push(page);
+                        }
+                    });
+                    this.pages = newOrder;
+                    this.savePageOrder();
+                }
+            });
+        },
+
+        // --- Section rendering (manual DOM — avoids x-for + SortableJS conflict) ---
+
+        renderSections() {
+            const container = document.getElementById('sectionsContainer');
+            if (!container) return;
+            container.innerHTML = '';
+
+            this.currentSections.forEach((section, idx) => {
+                const card = this._buildSectionCard(section, idx);
+                container.appendChild(card);
+            });
+
+            this._initSectionSortable();
+        },
+
+        _buildSectionCard(section, idx) {
+            const card = document.createElement('div');
+            card.className = 'border border-gray-200 rounded-lg bg-white group section-card';
+            card.dataset.sectionId = section.id;
+
+            // Header row
+            const header = document.createElement('div');
+            header.className = 'flex items-center px-3 py-2 bg-gray-50 rounded-t-lg gap-2';
+
+            // Drag handle
+            const handle = document.createElement('span');
+            handle.className = 'section-drag-handle cursor-grab active:cursor-grabbing text-gray-400 hover:text-gray-600 flex-shrink-0';
+            handle.innerHTML = '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8h16M4 16h16"/></svg>';
+
+            // Title input
+            const titleInput = document.createElement('input');
+            titleInput.type = 'text';
+            titleInput.value = section.title;
+            titleInput.placeholder = 'Section Title';
+            titleInput.className = 'flex-1 bg-transparent border-0 text-sm font-medium text-gray-800 focus:ring-0 px-1 py-0 min-w-0';
+            titleInput.addEventListener('input', () => { section.title = titleInput.value; this.markDirty(); });
+
+            // ID/key input (editable, auto-slugified)
+            const idInput = document.createElement('input');
+            idInput.type = 'text';
+            idInput.value = section.id;
+            idInput.placeholder = 'key';
+            idInput.className = 'w-28 bg-transparent border border-dashed border-gray-300 rounded text-xs text-gray-500 font-mono px-1.5 py-0.5 focus:border-blue-400 focus:ring-0 flex-shrink-0';
+            idInput.title = 'Section key / data-section id';
+            idInput.addEventListener('input', () => {
+                // Auto-slugify: lowercase, replace non-alphanumeric with hyphens
+                const raw = idInput.value.toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/^-|-$/g, '');
+                idInput.value = raw;
+                section.id = raw;
+                card.dataset.sectionId = raw;
+                this.markDirty();
+                this._highlightDuplicateIds();
+            });
+
+            // AI Fill button
+            const aiBtn = document.createElement('button');
+            aiBtn.className = 'text-purple-500 hover:text-purple-700 text-xs px-2 py-1 rounded hover:bg-purple-50 flex-shrink-0';
+            aiBtn.title = 'AI Fill';
+            aiBtn.innerHTML = '<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>';
+            aiBtn.addEventListener('click', () => this.fillSectionContent(section, card));
+
+            // Collapse toggle
+            const collapseBtn = document.createElement('button');
+            collapseBtn.className = 'text-gray-400 hover:text-gray-600 flex-shrink-0';
+            const chevron = document.createElement('svg');
+            chevron.setAttribute('class', 'w-4 h-4 transition-transform rotate-180');
+            chevron.setAttribute('fill', 'none');
+            chevron.setAttribute('stroke', 'currentColor');
+            chevron.setAttribute('viewBox', '0 0 24 24');
+            chevron.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>';
+            collapseBtn.appendChild(chevron);
+
+            // Remove button
+            const removeBtn = document.createElement('button');
+            removeBtn.className = 'text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0';
+            removeBtn.innerHTML = '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>';
+            removeBtn.addEventListener('click', () => {
+                const i = this.currentSections.indexOf(section);
+                if (i !== -1) { this.currentSections.splice(i, 1); this.markDirty(); this.renderSections(); }
+            });
+
+            header.append(handle, titleInput, idInput, aiBtn, collapseBtn, removeBtn);
+
+            // Body (textarea)
+            const body = document.createElement('div');
+            body.className = 'px-3 py-2';
+            const textarea = document.createElement('textarea');
+            textarea.value = section.content || '';
+            textarea.placeholder = 'Describe the content for this section...';
+            textarea.rows = 4;
+            textarea.className = 'w-full border border-gray-200 rounded-md px-3 py-2 text-sm font-mono text-gray-700 focus:ring-1 focus:ring-blue-300 focus:border-blue-300 resize-y min-h-[4rem] max-h-[24rem] overflow-auto';
+            textarea.addEventListener('input', () => { section.content = textarea.value; this.markDirty(); });
+            body.appendChild(textarea);
+
+            // Collapse toggle behaviour
+            let expanded = true;
+            collapseBtn.addEventListener('click', () => {
+                expanded = !expanded;
+                body.style.display = expanded ? '' : 'none';
+                chevron.style.transform = expanded ? 'rotate(180deg)' : 'rotate(0deg)';
+            });
+
+            card.append(header, body);
+            return card;
+        },
+
+        _initSectionSortable() {
+            if (this.sectionSortable) {
+                this.sectionSortable.destroy();
+                this.sectionSortable = null;
+            }
+            const container = document.getElementById('sectionsContainer');
+            if (!container || container.children.length === 0) return;
+
+            this.sectionSortable = new Sortable(container, {
+                handle: '.section-drag-handle',
+                animation: 150,
+                ghostClass: 'opacity-30',
+                onEnd: (evt) => {
+                    const cards = container.querySelectorAll('.section-card');
+                    const newSections = [];
+                    cards.forEach((el, i) => {
+                        const sid = el.dataset.sectionId;
+                        const sec = this.currentSections.find(s => s.id === sid);
+                        if (sec) { sec.order = i; newSections.push(sec); }
+                    });
+                    this.currentSections = newSections;
+                    this.markDirty();
+                }
+            });
+        },
+
+        _getDuplicateIds() {
+            const ids = this.currentSections.map(s => s.id).filter(id => id);
+            const seen = new Set();
+            const dupes = new Set();
+            for (const id of ids) {
+                if (seen.has(id)) dupes.add(id);
+                seen.add(id);
+            }
+            return dupes;
+        },
+
+        _highlightDuplicateIds() {
+            const dupes = this._getDuplicateIds();
+            const container = document.getElementById('sectionsContainer');
+            if (!container) return;
+            container.querySelectorAll('.section-card').forEach(card => {
+                const idInput = card.querySelector('input[title]');
+                if (!idInput) return;
+                const sid = card.dataset.sectionId;
+                if (dupes.has(sid)) {
+                    idInput.classList.remove('border-gray-300', 'focus:border-blue-400');
+                    idInput.classList.add('border-red-500', 'bg-red-50', 'text-red-600');
+                } else {
+                    idInput.classList.remove('border-red-500', 'bg-red-50', 'text-red-600');
+                    idInput.classList.add('border-gray-300', 'focus:border-blue-400');
+                }
+            });
+        },
+
+        selectPage(id) {
+            if (this.isDirty) {
+                if (!confirm('You have unsaved changes. Discard?')) return;
+            }
+            this.selectedPageId = id;
+            const page = this.pages.find(p => p.id === id);
+            if (page) {
+                this.editTitle = page.title || '';
+                this.editSlug = page.slug || '';
+                this.editDescription = page.description || '';
+                this.currentSections = JSON.parse(JSON.stringify(page.sections || []));
+            }
+            this.isDirty = false;
+            this.$nextTick(() => this.renderSections());
+        },
+
+        addPage() {
+            const title = prompt('Page title:');
+            if (!title) return;
+            const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+
+            fetch('{% url "backoffice:api_save_blueprint_page" %}', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token }}'},
+                body: JSON.stringify({blueprint_id: this.blueprintId, title, slug, description: '', sections: []})
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    this.pages.push(data.page);
+                    this.selectPage(data.page.id);
+                    showToast('Page added');
+                } else {
+                    showToast(data.error || 'Error adding page', 'error');
+                }
+            })
+            .catch(() => showToast('Network error', 'error'));
+        },
+
+        removePage(id) {
+            if (!confirm('Delete this blueprint page?')) return;
+            fetch('{% url "backoffice:api_delete_blueprint_page" %}', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token }}'},
+                body: JSON.stringify({page_id: id})
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    this.pages = this.pages.filter(p => p.id !== id);
+                    if (this.selectedPageId === id) {
+                        this.selectedPageId = null;
+                        this.currentSections = [];
+                        document.getElementById('sectionsContainer').innerHTML = '';
+                    }
+                    showToast('Page removed');
+                } else {
+                    showToast(data.error || 'Error', 'error');
+                }
+            })
+            .catch(() => showToast('Network error', 'error'));
+        },
+
+        updateCurrentPage() {
+            const page = this.pages.find(p => p.id === this.selectedPageId);
+            if (page) {
+                page.title = this.editTitle;
+                page.slug = this.editSlug;
+                page.description = this.editDescription;
+            }
+            this.markDirty();
+        },
+
+        addSection() {
+            const id = 'section-' + Date.now();
+            this.currentSections.push({id, title: '', content: '', order: this.currentSections.length});
+            this.markDirty();
+            this.renderSections();
+            // Scroll to bottom
+            this.$nextTick(() => {
+                const container = document.getElementById('sectionsContainer');
+                if (container) container.scrollTop = container.scrollHeight;
+            });
+        },
+
+        markDirty() {
+            this.isDirty = true;
+        },
+
+        saveSections() {
+            const page = this.pages.find(p => p.id === this.selectedPageId);
+            if (!page) return;
+
+            // Check for empty or duplicate section IDs
+            const emptyIds = this.currentSections.filter(s => !s.id || !s.id.trim());
+            if (emptyIds.length > 0) {
+                showToast('All sections must have a key/ID', 'error');
+                return;
+            }
+            const dupes = this._getDuplicateIds();
+            if (dupes.size > 0) {
+                showToast(`Duplicate section IDs: ${[...dupes].join(', ')}`, 'error');
+                this._highlightDuplicateIds();
+                return;
+            }
+
+            fetch('{% url "backoffice:api_save_blueprint_page" %}', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token }}'},
+                body: JSON.stringify({
+                    blueprint_id: this.blueprintId,
+                    page_id: this.selectedPageId,
+                    title: this.editTitle,
+                    slug: this.editSlug,
+                    description: this.editDescription,
+                    sections: this.currentSections
+                })
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    Object.assign(page, data.page);
+                    this.isDirty = false;
+                    showToast('Saved');
+                } else {
+                    showToast(data.error || 'Error saving', 'error');
+                }
+            })
+            .catch(() => showToast('Network error', 'error'));
+        },
+
+        savePageOrder() {
+            const order = this.pages.map((p, idx) => ({id: p.id, sort_order: idx}));
+            fetch('{% url "backoffice:api_reorder_blueprint_pages" %}', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token }}'},
+                body: JSON.stringify({pages: order})
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (!data.success) showToast(data.error || 'Reorder failed', 'error');
+            })
+            .catch(() => showToast('Network error', 'error'));
+        },
+
+        // --- AI Functions ---
+
+        suggestSections() {
+            if (!this.selectedPageId) return;
+            this.aiLoading = true;
+
+            fetch('/ai/api/suggest-page-sections/', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token }}'},
+                body: JSON.stringify({
+                    blueprint_page_id: this.selectedPageId,
+                    model: this.selectedModel
+                })
+            })
+            .then(r => r.json())
+            .then(data => {
+                this.aiLoading = false;
+                if (data.success && data.sections) {
+                    this.currentSections = data.sections.map((s, i) => ({
+                        id: s.id || ('section-' + i),
+                        title: s.title || '',
+                        content: s.content || '',
+                        order: s.order !== undefined ? s.order : i
+                    }));
+                    this.markDirty();
+                    this.renderSections();
+                    showToast(`${data.sections.length} sections suggested`);
+                } else {
+                    showToast(data.error || 'AI suggestion failed', 'error');
+                }
+            })
+            .catch(() => {
+                this.aiLoading = false;
+                showToast('Network error', 'error');
+            });
+        },
+
+        fillSectionContent(section, card) {
+            if (!this.selectedPageId) return;
+            this.aiLoading = true;
+
+            const otherSections = this.currentSections
+                .filter(s => s.id !== section.id)
+                .map(s => ({title: s.title}));
+
+            fetch('/ai/api/fill-section-content/', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token }}'},
+                body: JSON.stringify({
+                    blueprint_page_id: this.selectedPageId,
+                    section_id: section.id,
+                    section_title: section.title,
+                    other_sections: otherSections,
+                    model: this.selectedModel
+                })
+            })
+            .then(r => r.json())
+            .then(data => {
+                this.aiLoading = false;
+                if (data.success) {
+                    section.content = data.content;
+                    // Update the textarea in the DOM card
+                    if (card) {
+                        const ta = card.querySelector('textarea');
+                        if (ta) ta.value = data.content;
+                    }
+                    this.markDirty();
+                    showToast('Section filled');
+                } else {
+                    showToast(data.error || 'AI fill failed', 'error');
+                }
+            })
+            .catch(() => {
+                this.aiLoading = false;
+                showToast('Network error', 'error');
+            });
+        },
+
+        async fillAllEmpty() {
+            if (!this.selectedPageId) return;
+            const empty = this.currentSections.filter(s => !s.content || s.content.trim() === '');
+            if (empty.length === 0) {
+                showToast('All sections already have content');
+                return;
+            }
+
+            this.aiLoading = true;
+            let filled = 0;
+
+            for (const section of empty) {
+                try {
+                    const otherSections = this.currentSections
+                        .filter(s => s.id !== section.id)
+                        .map(s => ({title: s.title}));
+
+                    const resp = await fetch('/ai/api/fill-section-content/', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token }}'},
+                        body: JSON.stringify({
+                            blueprint_page_id: this.selectedPageId,
+                            section_id: section.id,
+                            section_title: section.title,
+                            other_sections: otherSections,
+                            model: this.selectedModel
+                        })
+                    });
+                    const data = await resp.json();
+                    if (data.success) {
+                        section.content = data.content;
+                        filled++;
+                    }
+                } catch(e) {}
+            }
+
+            this.aiLoading = false;
+            this.markDirty();
+            this.renderSections();
+            showToast(`Filled ${filled} of ${empty.length} sections`);
+        },
+
+        createPagesFromBlueprint() {
+            if (this.pages.length === 0) {
+                showToast('No blueprint pages to create', 'error');
+                return;
+            }
+
+            if (this.isDirty) {
+                this.saveSections();
+            }
+
+            if (!confirm(`Create actual site pages from ${this.pages.length} blueprint page(s)?\nPages already linked will be skipped.`)) return;
+
+            fetch('{% url "backoffice:api_create_pages_from_blueprint" %}', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token }}'},
+                body: JSON.stringify({blueprint_id: this.blueprintId})
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    showToast(data.message);
+                    if (data.created && data.created.length > 0) {
+                        setTimeout(() => location.reload(), 1000);
+                    }
+                } else {
+                    showToast(data.error || 'Error', 'error');
+                }
+            })
+            .catch(() => showToast('Network error', 'error'));
+        }
+    };
+}
+</script>
+{% endblock %}

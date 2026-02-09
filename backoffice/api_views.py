@@ -10,7 +10,7 @@ from django.contrib.admin.views.decorators import staff_member_required
 from django.views.decorators.csrf import csrf_exempt
 from django.core.cache import cache
 from django.utils.text import slugify
-from core.models import SiteSettings, SiteImage, Page, MenuItem
+from core.models import SiteSettings, SiteImage, Page, MenuItem, Blueprint, BlueprintPage
 from core.utils import resize_and_compress_image
 
 
@@ -633,3 +633,248 @@ def update_languages(request):
             'success': False,
             'error': str(e)
         }, status=500)
+
+
+# === Blueprint API ===
+
+@staff_member_required
+@require_http_methods(["POST"])
+def save_blueprint_page(request):
+    """
+    Create or update a BlueprintPage.
+
+    POST data: {
+        "blueprint_id": 1,
+        "page_id": null,  // BlueprintPage id, null to create new
+        "title": "About Us",
+        "slug": "about-us",
+        "description": "Company info...",
+        "sections": [{"id": "hero", "title": "Hero", "content": "...", "order": 0}]
+    }
+    """
+    try:
+        data = json.loads(request.body)
+        blueprint_id = data.get('blueprint_id')
+        bp_page_id = data.get('page_id')
+        title = data.get('title', '').strip()
+        slug_val = data.get('slug', '').strip()
+        description = data.get('description', '').strip()
+        sections = data.get('sections', [])
+
+        if not blueprint_id or not title:
+            return JsonResponse({
+                'success': False,
+                'error': 'blueprint_id and title are required'
+            }, status=400)
+
+        # Validate unique section IDs
+        if sections:
+            section_ids = [s.get('id', '') for s in sections if s.get('id')]
+            if len(section_ids) != len(set(section_ids)):
+                dupes = [sid for sid in section_ids if section_ids.count(sid) > 1]
+                return JsonResponse({
+                    'success': False,
+                    'error': f'Duplicate section IDs: {", ".join(set(dupes))}'
+                }, status=400)
+
+        blueprint = Blueprint.objects.get(pk=blueprint_id)
+
+        if bp_page_id:
+            bp_page = BlueprintPage.objects.get(pk=bp_page_id, blueprint=blueprint)
+            bp_page.title = title
+            bp_page.slug = slug_val
+            bp_page.description = description
+            bp_page.sections = sections
+            bp_page.save()
+        else:
+            from django.db.models import Max
+            max_order = blueprint.blueprint_pages.aggregate(
+                m=Max('sort_order'))['m'] or 0
+            bp_page = BlueprintPage.objects.create(
+                blueprint=blueprint,
+                title=title,
+                slug=slug_val,
+                description=description,
+                sections=sections,
+                sort_order=max_order + 1,
+            )
+
+        return JsonResponse({
+            'success': True,
+            'page': {
+                'id': bp_page.id,
+                'title': bp_page.title,
+                'slug': bp_page.slug,
+                'description': bp_page.description,
+                'sections': bp_page.sections,
+                'sort_order': bp_page.sort_order,
+                'linked_page_id': bp_page.page_id,
+            }
+        })
+
+    except Blueprint.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Blueprint not found'}, status=404)
+    except BlueprintPage.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Blueprint page not found'}, status=404)
+    except json.JSONDecodeError:
+        return JsonResponse({'success': False, 'error': 'Invalid JSON'}, status=400)
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
+@staff_member_required
+@require_http_methods(["POST"])
+def delete_blueprint_page(request):
+    """Delete a BlueprintPage. POST data: {"page_id": 5}"""
+    try:
+        data = json.loads(request.body)
+        bp_page_id = data.get('page_id')
+        if not bp_page_id:
+            return JsonResponse({'success': False, 'error': 'page_id is required'}, status=400)
+
+        bp_page = BlueprintPage.objects.get(pk=bp_page_id)
+        bp_page.delete()
+        return JsonResponse({'success': True})
+
+    except BlueprintPage.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Blueprint page not found'}, status=404)
+    except json.JSONDecodeError:
+        return JsonResponse({'success': False, 'error': 'Invalid JSON'}, status=400)
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
+@staff_member_required
+@require_http_methods(["POST"])
+def reorder_blueprint_pages(request):
+    """
+    Bulk reorder BlueprintPages.
+    POST data: {"pages": [{"id": 1, "sort_order": 0}, {"id": 2, "sort_order": 1}]}
+    """
+    try:
+        data = json.loads(request.body)
+        pages_data = data.get('pages', [])
+
+        if not pages_data:
+            return JsonResponse({'success': False, 'error': 'No pages provided'}, status=400)
+
+        for item in pages_data:
+            BlueprintPage.objects.filter(id=item['id']).update(sort_order=item['sort_order'])
+
+        return JsonResponse({
+            'success': True,
+            'message': f'Updated order for {len(pages_data)} page(s)'
+        })
+
+    except json.JSONDecodeError:
+        return JsonResponse({'success': False, 'error': 'Invalid JSON'}, status=400)
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
+@staff_member_required
+@require_http_methods(["POST"])
+def save_blueprint_sections(request):
+    """
+    Update sections JSON for a single BlueprintPage.
+    POST data: {"blueprint_page_id": 3, "sections": [...]}
+    """
+    try:
+        data = json.loads(request.body)
+        bp_page_id = data.get('blueprint_page_id')
+        sections = data.get('sections', [])
+
+        if not bp_page_id:
+            return JsonResponse({'success': False, 'error': 'blueprint_page_id is required'}, status=400)
+
+        # Validate unique section IDs
+        if sections:
+            section_ids = [s.get('id', '') for s in sections if s.get('id')]
+            if len(section_ids) != len(set(section_ids)):
+                dupes = [sid for sid in section_ids if section_ids.count(sid) > 1]
+                return JsonResponse({
+                    'success': False,
+                    'error': f'Duplicate section IDs: {", ".join(set(dupes))}'
+                }, status=400)
+
+        bp_page = BlueprintPage.objects.get(pk=bp_page_id)
+        bp_page.sections = sections
+        bp_page.save()
+
+        return JsonResponse({'success': True, 'sections': bp_page.sections})
+
+    except BlueprintPage.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Blueprint page not found'}, status=404)
+    except json.JSONDecodeError:
+        return JsonResponse({'success': False, 'error': 'Invalid JSON'}, status=400)
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
+@staff_member_required
+@require_http_methods(["POST"])
+def create_pages_from_blueprint(request):
+    """
+    Create actual Page objects from a Blueprint.
+    For each BlueprintPage without a linked Page, creates a Page with matching title/slug.
+    POST data: {"blueprint_id": 1}
+    """
+    try:
+        data = json.loads(request.body)
+        blueprint_id = data.get('blueprint_id')
+
+        if not blueprint_id:
+            return JsonResponse({'success': False, 'error': 'blueprint_id is required'}, status=400)
+
+        blueprint = Blueprint.objects.get(pk=blueprint_id)
+
+        site_settings = SiteSettings.objects.first()
+        lang_codes = site_settings.get_language_codes() if site_settings else ['pt', 'en']
+
+        created = []
+        skipped = []
+
+        for bp_page in blueprint.blueprint_pages.all():
+            if bp_page.page_id:
+                skipped.append(bp_page.title)
+                continue
+
+            title_i18n = {lang: bp_page.title for lang in lang_codes}
+            slug_val = bp_page.slug or slugify(bp_page.title)
+            slug_i18n = {lang: slug_val for lang in lang_codes}
+
+            # Check for duplicate slugs
+            duplicate = False
+            for lang, s in slug_i18n.items():
+                for existing in Page.objects.all():
+                    if existing.get_slug(lang) == s:
+                        skipped.append(f'{bp_page.title} (slug "{s}" exists)')
+                        duplicate = True
+                        break
+                if duplicate:
+                    break
+            if duplicate:
+                continue
+
+            page = Page.objects.create(
+                title_i18n=title_i18n,
+                slug_i18n=slug_i18n,
+                is_active=True
+            )
+            bp_page.page = page
+            bp_page.save()
+            created.append(bp_page.title)
+
+        return JsonResponse({
+            'success': True,
+            'created': created,
+            'skipped': skipped,
+            'message': f'Created {len(created)} page(s), skipped {len(skipped)}'
+        })
+
+    except Blueprint.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Blueprint not found'}, status=404)
+    except json.JSONDecodeError:
+        return JsonResponse({'success': False, 'error': 'Invalid JSON'}, status=400)
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)

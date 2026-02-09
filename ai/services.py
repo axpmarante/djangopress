@@ -331,7 +331,8 @@ Return the complete, corrected JSON now:"""
         brief: str,
         language: str = 'pt',
         model_override: str = None,
-        reference_images: list = None
+        reference_images: list = None,
+        outline: list = None
     ) -> Dict:
         """
         Generate a complete page as a single HTML document with translations
@@ -380,7 +381,8 @@ Return the complete, corrected JSON now:"""
             has_reference_images=bool(reference_images),
             design_guide=design_guide,
             pages=pages_data,
-            languages=languages
+            languages=languages,
+            outline=outline
         )
 
         # Debug output
