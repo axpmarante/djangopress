@@ -1,3 +1,5 @@
+import json
+
 from django.views.generic import TemplateView, ListView, CreateView
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth.decorators import login_required
@@ -526,8 +528,14 @@ class SettingsView(LoginRequiredMixin, TemplateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context['settings'], _ = SiteSettings.objects.get_or_create(pk=1)
+        site_settings, _ = SiteSettings.objects.get_or_create(pk=1)
+        context['settings'] = site_settings
         context['google_fonts'] = GOOGLE_FONTS_CHOICES
+
+        # Serialize i18n JSON fields for JavaScript
+        context['site_name_i18n_json'] = json.dumps(site_settings.site_name_i18n or {})
+        context['site_description_i18n_json'] = json.dumps(site_settings.site_description_i18n or {})
+        context['contact_address_i18n_json'] = json.dumps(site_settings.contact_address_i18n or {})
         context['available_languages'] = ALL_LANGUAGES
 
         # Pages with content (for AI design guide generation)
@@ -561,9 +569,14 @@ class SettingsView(LoginRequiredMixin, TemplateView):
         """Handle settings form submission"""
         settings, _ = SiteSettings.objects.get_or_create(pk=1)
 
-        # Update general information
-        settings.site_name = request.POST.get('site_name', settings.site_name)
-        settings.site_description = request.POST.get('site_description', '')
+        # Update general information (i18n JSON fields)
+        for i18n_field in ('site_name_i18n', 'site_description_i18n', 'contact_address_i18n'):
+            raw = request.POST.get(i18n_field, '')
+            if raw:
+                try:
+                    setattr(settings, i18n_field, json.loads(raw))
+                except (ValueError, TypeError):
+                    pass
         settings.project_briefing = request.POST.get('project_briefing', '')
 
         # Update logos and favicon if provided
@@ -580,7 +593,6 @@ class SettingsView(LoginRequiredMixin, TemplateView):
         # Update contact information
         settings.contact_email = request.POST.get('contact_email', settings.contact_email)
         settings.contact_phone = request.POST.get('contact_phone', '')
-        settings.contact_address = request.POST.get('contact_address', '')
 
         # Update social media links
         settings.facebook_url = request.POST.get('facebook_url', '')

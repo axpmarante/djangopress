@@ -88,5 +88,7 @@ htmlcov/
 *.bak
 .cache/
 
-# Claude AI
-.claude/
+# Claude AI — ignore local settings but track shared skills
+.claude/*
+!.claude/skills/
+.claude/settings.local.json

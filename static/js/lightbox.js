@@ -132,20 +132,23 @@ document.addEventListener('DOMContentLoaded', () => {
     const lightbox = new Lightbox();
 
     // Attach to all gallery images
-    document.querySelectorAll('[data-lightbox]').forEach((element, index) => {
+    document.querySelectorAll('[data-lightbox]').forEach((element) => {
         element.addEventListener('click', (e) => {
             e.preventDefault();
 
-            // Get all images in the same gallery
+            // Get all images in the same gallery group
             const galleryName = element.dataset.lightbox;
-            const galleryImages = Array.from(
+            const galleryElements = Array.from(
                 document.querySelectorAll(`[data-lightbox="${galleryName}"]`)
-            ).map(el => ({
-                src: el.href || el.dataset.src,
+            );
+            const galleryImages = galleryElements.map(el => ({
+                src: el.href || el.dataset.src || el.src || '',
                 alt: el.dataset.alt || el.alt || ''
             }));
 
-            lightbox.open(galleryImages, index);
+            // Use index within this gallery group, not global index
+            const clickedIndex = galleryElements.indexOf(element);
+            lightbox.open(galleryImages, clickedIndex);
         });
     });
 });

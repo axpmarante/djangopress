@@ -83,10 +83,10 @@ Go to `/backoffice/settings/` and fill in:
 - **Site Name** (all languages) — e.g. `{"pt": "O Moinho", "en": "The Windmill"}`
 - **Site Description** (all languages)
 - **Project Briefing** (plain text) — detailed description of the business, services, tone, target audience. This is the most important field — the AI reads it for every generation.
-- **Domain** — e.g. `windmillrestaurant-pt` (used as GCS folder name in production)
+- **Domain** — e.g. `windmillrestaurant-pt` (used as GCS folder name in production). **Set this BEFORE uploading any media (logos, images).** Changing the domain after uploads requires migrating files with `python manage.py migrate_storage_folder --from default`.
 - **Languages** — enable the languages you need, set default
 - **Contact info** — email, phone, address, social media URLs
-- **Logos** — upload light and dark background versions
+- **Logos** — upload light and dark background versions (after setting the domain)
 - **Design System** — colors, fonts, buttons, spacing, shadows
 - **Design Guide** — freeform markdown with UI patterns and conventions (optional, AI uses this for consistency)
 
@@ -118,6 +118,35 @@ These files rarely need changes for a new site — everything is DB-driven:
 - `SiteSettings` in the database — all branding, design, content
 - Add new **decoupled apps** if the site needs features beyond pages (blog, shop, booking, etc.)
 - `static/` — custom CSS/JS if needed (rare — Tailwind covers most cases)
+
+---
+
+## Claude Code Skills
+
+DjangoPress ships with Claude Code skills (`.claude/skills/`) that automate common workflows. These are inherited by every child project cloned from the template.
+
+### User-Invocable Skills
+
+| Skill | Usage | What It Does |
+|-------|-------|-------------|
+| `/new-site` | `/new-site my-project` | Interactive setup wizard for a freshly cloned project. Walks through `.env`, dependencies, migrations, SiteSettings configuration, and validates everything is ready for content generation. **Start here for every new site.** |
+| `/add-app` | `/add-app properties` | Scaffolds a new decoupled feature app with i18n models, views, templates, and URL registration. Handles the `i18n_patterns` registration before the `core.urls` catch-all. |
+| `/generate-content` | `/generate-content` | Guides through the full content pipeline: pre-flight check, page planning, bulk/individual generation, chat refinement, header/footer, image processing, design system polish. |
+
+### Auto-Loaded Skills (Claude uses automatically)
+
+| Skill | Purpose |
+|-------|---------|
+| `djangopress-architecture` | CMS architecture reference — request flow, data model, AI pipeline, URL structure, common gotchas. Loaded automatically when architectural questions arise. |
+
+### Typical New Site Flow
+
+```
+1. Clone template → cd into project
+2. /new-site my-project          ← configures everything interactively
+3. /generate-content             ← generates pages, header, footer, images
+4. /add-app blog                 ← if the site needs extra features
+```
 
 ---
 
@@ -215,6 +244,20 @@ When generating `html_content` for pages or GlobalSections:
 9. **Page content only** — do NOT include `<html>`, `<head>`, `<body>`, `<header>`, `<nav>`, or `<footer>` tags. Those are handled by `base.html` and GlobalSections.
 10. **Interactive components are pre-loaded** — Splide.js (carousel), lightbox.js (gallery), Alpine.js (tabs, accordion, modal). Use HTML attributes to configure — no inline `<script>` needed. See prompt reference for patterns.
 
+### Lightbox Gallery Pattern
+
+Use `data-lightbox="group-name"` on `<a>` tags wrapping images. All elements sharing the same group name become a navigable gallery:
+
+```html
+<a href="{{ image.url }}" data-lightbox="my-gallery" data-alt="Caption">
+    <img src="{{ image.url }}" alt="Caption" class="w-full h-full object-cover">
+</a>
+<!-- Hidden items are still navigable in lightbox -->
+<a href="{{ extra.url }}" data-lightbox="my-gallery" data-alt="Caption" class="hidden"></a>
+```
+
+Key points: use `<a href="full-size-url">` for the lightbox source, `data-alt` for caption, different `data-lightbox` group names for independent galleries on the same page.
+
 ## Translation JSON Structure
 
 ```json
@@ -306,7 +349,14 @@ When "Add image placeholders" is enabled during refinement:
 2. Add to `INSTALLED_APPS` in `config/settings.py`
 3. Create models, views, templates within the app
 4. Add URL patterns in `appname/urls.py`
-5. Include in `config/urls.py`
+5. Include in `config/urls.py` — if the app has public-facing URLs, add them inside `i18n_patterns()` **before** `core.urls` (which is a catch-all):
+   ```python
+   urlpatterns += i18n_patterns(
+       path('', include('myapp.urls')),    # <-- before core
+       path('', include('core.urls')),
+       prefix_default_language=True,
+   )
+   ```
 6. The app should NOT import from other apps (except `core` for shared models like SiteSettings)
 
 ## Key Files Reference
@@ -370,8 +420,11 @@ The first merge requires `--allow-unrelated-histories` since GitHub template rep
 ## Commands
 
 ```bash
-python manage.py runserver 8000    # Dev server
-python manage.py createsuperuser   # Create admin user
-python manage.py migrate           # Run migrations
-python manage.py shell             # Django shell
+python manage.py runserver 8000                        # Dev server
+python manage.py createsuperuser                       # Create admin user
+python manage.py migrate                               # Run migrations
+python manage.py shell                                 # Django shell
+python manage.py migrate_storage_folder                # Copy GCS files from default/ to current domain
+python manage.py migrate_storage_folder --from old-dom # Copy from specific folder
+python manage.py migrate_storage_folder --dry-run      # Preview without copying
 ```

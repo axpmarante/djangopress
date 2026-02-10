@@ -938,10 +938,20 @@ class MenuItem(models.Model):
         return ''
 
     def get_url(self, lang='pt'):
-        """Get URL: page URL if linked, otherwise custom URL"""
+        """Get URL: page URL if linked, otherwise custom URL with language prefix"""
         if self.page:
             return self.page.get_absolute_url(lang)
-        return self.url or '#'
+        url = self.url or '#'
+        # Add language prefix for relative URLs when not the default language
+        if url.startswith('/') and url != '/':
+            try:
+                site_settings = SiteSettings.objects.first()
+                default_lang = site_settings.get_default_language() if site_settings else 'pt'
+            except Exception:
+                default_lang = 'pt'
+            if lang != default_lang:
+                return f'/{lang}{url}'
+        return url
 
 
 class Blueprint(models.Model):

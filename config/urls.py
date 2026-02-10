@@ -33,6 +33,11 @@ urlpatterns = [
     path('robots.txt', robots_txt, name='robots_txt'),
 ]
 
+# Serve media/static files in development (must be before i18n catch-all)
+if settings.DEBUG:
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+    urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
+
 # Add i18n patterns for core URLs
 # prefix_default_language=True means ALL languages get a URL prefix
 # Our DynamicLanguageMiddleware handles unprefixed URLs by routing them to the default language
@@ -41,8 +46,3 @@ urlpatterns += i18n_patterns(
     path('', include('core.urls')),
     prefix_default_language=True,  # All languages use prefixes (middleware handles unprefixed URLs)
 )
-
-# Serve media files in development
-if settings.DEBUG:
-    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
-    urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
