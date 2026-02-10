@@ -21,26 +21,51 @@ DjangoPress is a **reusable CMS blueprint** — the Django equivalent of WordPre
 
 When starting a new site from this template:
 
-### 1. Create the repo
+### 1. Create the repo and clone
 
-Go to the template on GitHub → **"Use this template"** → name the new repo → clone it.
+Using the GitHub CLI (recommended):
 
-### 2. Environment
+```bash
+cd /path/to/DjangoSites
+gh repo create my-project-name --template axpmarante/djangopress --private --clone --description "Project description"
+```
+
+Or via GitHub web: go to `github.com/axpmarante/djangopress` → **"Use this template"** → create repo → clone it manually.
+
+### 2. Set up upstream remote
+
+This allows the child project to pull future djangopress engine updates:
+
+```bash
+cd my-project-name
+git remote add upstream https://github.com/axpmarante/djangopress.git
+```
+
+### 3. Environment
 
 ```bash
 cp .env.example .env
 ```
 
-Edit `.env`:
-```
-SECRET_KEY=<generate-a-real-key>
-ENVIRONMENT=development
-GEMINI_API_KEY=<your-gemini-key>        # Required for AI features
-# OPENAI_API_KEY=<optional>
-# ANTHROPIC_API_KEY=<optional>
+Generate a unique secret key and fill in API keys:
+
+```bash
+# Generate a SECRET_KEY:
+python -c "from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())"
 ```
 
-### 3. Install & migrate
+Edit `.env`:
+```
+SECRET_KEY=<paste-generated-key>
+ENVIRONMENT=development
+GEMINI_API_KEY=<your-gemini-key>        # Required for AI features
+OPENAI_API_KEY=<optional>
+ANTHROPIC_API_KEY=<optional>
+```
+
+If you have an existing djangopress project, copy the AI provider keys, GCS credentials, and Mailgun config from its `.env`. The `SECRET_KEY` must be unique per project.
+
+### 4. Install & migrate
 
 ```bash
 python -m venv venv
@@ -51,7 +76,7 @@ python manage.py createsuperuser
 python manage.py runserver 8000
 ```
 
-### 4. Configure the site
+### 5. Configure the site
 
 Go to `/backoffice/settings/` and fill in:
 
@@ -65,15 +90,15 @@ Go to `/backoffice/settings/` and fill in:
 - **Design System** — colors, fonts, buttons, spacing, shadows
 - **Design Guide** — freeform markdown with UI patterns and conventions (optional, AI uses this for consistency)
 
-### 5. Generate content
+### 6. Generate content
 
 Go to `/backoffice/ai/` → use **Bulk Pages** to describe all pages at once, or **Generate Page** one at a time. Then use **Chat Refine** to iterate on each page conversationally.
 
-### 6. Generate header/footer
+### 7. Generate header/footer
 
 Go to `/backoffice/settings/header/` and `/backoffice/settings/footer/` → use "Quick AI Edit" to generate or refine the header and footer with optional reference images.
 
-### 7. Process images
+### 8. Process images
 
 After generating pages with image placeholders, go to `/backoffice/page/<id>/images/` (or click "Process Images" from the page edit view). Use "AI Suggest Prompts" to auto-fill generation prompts and find matching library images, then "Process Selected" to replace placeholders with real images.
 
@@ -329,13 +354,9 @@ When "Add image placeholders" is enabled during refinement:
 
 ## Syncing Template Updates to Child Projects
 
-Projects created from this template can pull future djangopress updates:
+The upstream remote should already be configured (see New Project Setup step 2). To pull updates:
 
 ```bash
-# One-time setup (in the child project):
-git remote add upstream https://github.com/axpmarante/djangopress.git
-
-# Sync (whenever djangopress is updated):
 git fetch upstream
 git merge upstream/main
 ```
