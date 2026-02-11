@@ -79,7 +79,7 @@ class DynamicLanguageMiddleware:
     def __init__(self, get_response):
         self.get_response = get_response
         # Paths that should bypass language handling
-        self.bypass_paths = ['/django-admin/', '/backoffice/', '/ai/', '/editor/', '/site-assistant/', '/i18n/', '/sitemap.xml', '/media/', '/static/']
+        self.bypass_paths = ['/django-admin/', '/backoffice/', '/ai/', '/editor/', '/site-assistant/', '/i18n/', '/set-language/', '/sitemap.xml', '/media/', '/static/']
 
     def __call__(self, request):
         from django.urls import resolve, Resolver404

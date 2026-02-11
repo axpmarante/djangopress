@@ -1,8 +1,14 @@
+import re
+
+from django.conf import settings
 from django.views.generic import TemplateView, FormView
-from django.urls import reverse_lazy
+from django.urls import reverse_lazy, reverse
 from django.contrib import messages
 from django.shortcuts import get_object_or_404
-from django.http import Http404
+from django.http import Http404, HttpResponseRedirect
+from django.utils import translation
+from django.views.decorators.http import require_POST
+
 from .forms import ContactForm
 from .models import Contact, Page
 
@@ -116,3 +122,61 @@ class ContactFormView(FormView):
     def form_invalid(self, form):
         messages.error(self.request, 'Please correct the errors below.')
         return super().form_invalid(form)
+
+
+@require_POST
+def set_language(request):
+    """
+    Custom language switcher that redirects to the correct URL in the target
+    language, handling both language prefixes and per-language page slugs.
+
+    Django's built-in set_language redirects to `next` as-is, but that URL
+    contains the OLD language prefix and slug — so the middleware re-activates
+    the old language and the switch never takes effect.
+    """
+    target_lang = request.POST.get('language', '')
+    available = [code for code, _ in settings.LANGUAGES]
+    if target_lang not in available:
+        return HttpResponseRedirect('/')
+
+    next_url = request.POST.get('next', request.META.get('HTTP_REFERER', '/'))
+
+    # Strip existing language prefix from the URL: /en/about/ → /about/
+    lang_prefix_re = re.compile(r'^/(' + '|'.join(re.escape(c) for c in available) + r')(/|$)')
+    match = lang_prefix_re.match(next_url)
+    source_lang = match.group(1) if match else None
+    stripped_path = lang_prefix_re.sub('/', next_url) if match else next_url
+    slug = stripped_path.strip('/')
+
+    # Try to find the page by its slug in the source language and get the
+    # equivalent slug in the target language
+    target_slug = slug
+    if slug:
+        for page in Page.objects.filter(is_active=True):
+            # Check if this page matches the slug in any language
+            check_lang = source_lang or translation.get_language()
+            if page.get_slug(check_lang) == slug:
+                target_slug = page.get_slug(target_lang) or slug
+                break
+
+    # Activate the target language and set cookie
+    translation.activate(target_lang)
+
+    # Build redirect URL with new language prefix and translated slug
+    if target_slug:
+        redirect_url = f'/{target_lang}/{target_slug}/'
+    else:
+        redirect_url = f'/{target_lang}/'
+
+    response = HttpResponseRedirect(redirect_url)
+    response.set_cookie(
+        settings.LANGUAGE_COOKIE_NAME,
+        target_lang,
+        max_age=settings.LANGUAGE_COOKIE_AGE or 365 * 24 * 60 * 60,
+        path=settings.LANGUAGE_COOKIE_PATH or '/',
+        domain=settings.LANGUAGE_COOKIE_DOMAIN,
+        secure=settings.LANGUAGE_COOKIE_SECURE,
+        httponly=settings.LANGUAGE_COOKIE_HTTPONLY,
+        samesite=settings.LANGUAGE_COOKIE_SAMESITE or 'Lax',
+    )
+    return response
