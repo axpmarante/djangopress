@@ -2,7 +2,7 @@
 
 import logging
 
-from django.core.mail import send_mail
+from django.core.mail import EmailMessage
 from django.conf import settings
 
 logger = logging.getLogger(__name__)
@@ -36,14 +36,14 @@ def send_form_notification(form_def, submission):
     reply_to_list = [reply_to] if reply_to else []
 
     try:
-        send_mail(
+        email = EmailMessage(
             subject=f"[{form_def.name}] New submission",
-            message=body,
+            body=body,
             from_email=settings.DEFAULT_FROM_EMAIL,
-            recipient_list=[to_email],
+            to=[to_email],
             reply_to=reply_to_list,
-            fail_silently=False,
         )
+        email.send(fail_silently=False)
         submission.notification_sent = True
         submission.save(update_fields=['notification_sent'])
         return True
@@ -70,13 +70,13 @@ def send_form_confirmation(form_def, submission, lang='en'):
     body = body_i18n.get(lang, body_i18n.get('en', 'Thank you for your submission.'))
 
     try:
-        send_mail(
+        email = EmailMessage(
             subject=subject,
-            message=body,
+            body=body,
             from_email=settings.DEFAULT_FROM_EMAIL,
-            recipient_list=[to_email],
-            fail_silently=False,
+            to=[to_email],
         )
+        email.send(fail_silently=False)
         return True
     except Exception as e:
         logger.error(f"Failed to send confirmation email for '{form_def.name}': {e}")

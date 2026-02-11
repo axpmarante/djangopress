@@ -43,13 +43,13 @@ class PageView(TemplateView):
         language = current_lang or 'pt'
 
         if page_obj.html_content:
-            from django.template import Template, Context
+            from django.template import Template, RequestContext
             translations = (page_obj.content or {}).get('translations', {})
             trans = translations.get(language, translations.get('pt', {}))
 
             try:
                 template = Template(page_obj.html_content)
-                render_context = Context({
+                render_context = RequestContext(self.request, {
                     'trans': trans,
                     'LANGUAGE_CODE': language,
                     'page': page_obj,
