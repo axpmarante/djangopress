@@ -28,6 +28,7 @@ urlpatterns = [
     path('ai/', include('ai.urls')),  # AI content generation
     path('backoffice/', include('backoffice.urls')),  # Custom backoffice
     path('editor/', include('editor.urls')),  # Inline editor
+    path('site-assistant/', include('site_assistant.urls')),  # Site Assistant
     path('i18n/', include('django.conf.urls.i18n')),
     path('sitemap.xml', sitemap, {'sitemaps': sitemaps}, name='django.contrib.sitemaps.views.sitemap'),
     path('robots.txt', robots_txt, name='robots_txt'),
@@ -43,6 +44,7 @@ if settings.DEBUG:
 # Our DynamicLanguageMiddleware handles unprefixed URLs by routing them to the default language
 # This allows the default language to be changed in the database without code changes
 urlpatterns += i18n_patterns(
+    path('site-assistant/', include('site_assistant.urls')),  # Before core catch-all
     path('', include('core.urls')),
     prefix_default_language=True,  # All languages use prefixes (middleware handles unprefixed URLs)
 )

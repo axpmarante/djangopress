@@ -49,6 +49,7 @@ INSTALLED_APPS = [
     'editor',
     'core',
     'news',
+    'site_assistant',
 ]
 
 # Add whitenoise.runserver_nostatic only in production

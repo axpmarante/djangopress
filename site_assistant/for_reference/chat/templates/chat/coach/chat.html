@@ -1,0 +1,401 @@
+{% extends 'base.html' %}
+
+{% block title %}Executive Coach - ZemoNotes{% endblock %}
+
+{% block extra_head %}
+<script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/dompurify/dist/purify.min.js"></script>
+{% endblock %}
+
+{% block content %}
+<div class="flex h-[calc(100vh-64px)] overflow-hidden max-w-full">
+    <!-- Main Chat Area -->
+    <div class="flex-1 flex flex-col bg-white min-w-0">
+        <!-- Chat Header -->
+        <div class="px-4 py-3 border-b border-gray-200 flex items-center justify-between bg-gradient-to-r from-slate-800 to-slate-700">
+            <div class="flex items-center space-x-3">
+                <!-- Coach Icon -->
+                <div class="w-10 h-10 bg-amber-500 rounded-full flex items-center justify-center">
+                    <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path>
+                    </svg>
+                </div>
+                <div>
+                    <h1 class="text-base font-semibold text-white">Executive Coach</h1>
+                    <div class="text-xs text-slate-300">
+                        {% if time_of_day == 'morning' %}
+                        Morning Planning
+                        {% elif time_of_day == 'evening' %}
+                        Evening Reflection
+                        {% elif time_of_day == 'midday' %}
+                        Midday Check-in
+                        {% else %}
+                        Direct Accountability
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            <div class="flex items-center space-x-3">
+                <!-- Context Summary -->
+                <div class="hidden md:flex items-center space-x-4 text-xs text-slate-300">
+                    {% if journal_context.goals.counts.monthly > 0 %}
+                    <span class="flex items-center">
+                        <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z"></path>
+                        </svg>
+                        {{ journal_context.goals.counts.monthly }} monthly goals
+                    </span>
+                    {% endif %}
+                    {% if journal_context.tasks.overdue > 0 %}
+                    <span class="flex items-center text-amber-300">
+                        <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+                        </svg>
+                        {{ journal_context.tasks.overdue }} overdue
+                    </span>
+                    {% endif %}
+                </div>
+                <!-- New Conversation -->
+                <button onclick="startNewConversation()" class="inline-flex items-center px-3 py-1.5 text-sm text-slate-300 hover:text-white hover:bg-slate-600 rounded-lg transition-colors border border-slate-500">
+                    <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                    </svg>
+                    New Session
+                </button>
+                <!-- Back to Journal -->
+                <a href="{% url 'journal:dashboard' %}" class="text-xs text-slate-300 hover:text-white transition-colors">
+                    Back to Journal
+                </a>
+            </div>
+        </div>
+
+        <!-- Messages Container -->
+        <div id="messages-container" class="flex-1 overflow-y-auto px-4 py-4 space-y-4 bg-slate-50">
+            {% for msg in messages %}
+            <div class="flex {% if msg.role == 'user' %}justify-end{% else %}justify-start{% endif %}">
+                <div class="max-w-[80%]">
+                    <div class="{% if msg.role == 'user' %}bg-slate-700 text-white{% else %}bg-white text-gray-900 shadow-sm border border-slate-200{% endif %} rounded-lg px-4 py-3 {% if msg.is_error %}border-2 border-red-300 bg-red-50 text-red-800{% endif %}">
+                        {% if msg.role == 'assistant' %}
+                        <div class="prose prose-sm max-w-none message-content markdown-pending" data-msg-id="{{ msg.id }}">{{ msg.content|linebreaks }}</div>
+                        {% else %}
+                        <div class="whitespace-pre-wrap">{{ msg.content }}</div>
+                        {% endif %}
+                        {% if msg.role == 'assistant' and msg.processing_time_ms %}
+                        <div class="mt-2 text-xs text-slate-400">
+                            {{ msg.processing_time_ms }}ms
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            {% empty %}
+            <!-- Empty state with coaching context -->
+            <div class="text-center py-8">
+                <div class="w-16 h-16 mx-auto bg-amber-100 rounded-full flex items-center justify-center mb-4">
+                    <svg class="w-8 h-8 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path>
+                    </svg>
+                </div>
+                <h3 class="text-base font-medium text-gray-900 mb-2">Your Executive Coach</h3>
+                <p class="text-sm text-gray-600 mb-6 max-w-md mx-auto">
+                    I'm here to help you think clearly, prioritize ruthlessly, and follow through on what matters. No sugarcoating - just direct, honest accountability.
+                </p>
+
+                <!-- Quick Prompts -->
+                <div class="flex flex-wrap justify-center gap-2 max-w-lg mx-auto">
+                    <button onclick="sendQuickPrompt('How am I doing on my goals?')" class="px-3 py-1.5 bg-white border border-slate-300 text-sm text-slate-700 rounded-full hover:bg-slate-50 transition-colors">
+                        Check my goals
+                    </button>
+                    <button onclick="sendQuickPrompt('What should I focus on today?')" class="px-3 py-1.5 bg-white border border-slate-300 text-sm text-slate-700 rounded-full hover:bg-slate-50 transition-colors">
+                        Today's focus
+                    </button>
+                    <button onclick="sendQuickPrompt('I feel stuck on my priorities.')" class="px-3 py-1.5 bg-white border border-slate-300 text-sm text-slate-700 rounded-full hover:bg-slate-50 transition-colors">
+                        I'm stuck
+                    </button>
+                    <button onclick="sendQuickPrompt('Help me plan this week.')" class="px-3 py-1.5 bg-white border border-slate-300 text-sm text-slate-700 rounded-full hover:bg-slate-50 transition-colors">
+                        Weekly planning
+                    </button>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+
+        <!-- Loading Indicator -->
+        <div id="loading-indicator" class="hidden px-4 py-2 bg-slate-50">
+            <div class="flex justify-start">
+                <div class="bg-white rounded-lg px-4 py-3 shadow-sm border border-slate-200">
+                    <div class="flex items-center space-x-2">
+                        <div class="animate-pulse flex space-x-1">
+                            <div class="w-2 h-2 bg-slate-400 rounded-full"></div>
+                            <div class="w-2 h-2 bg-slate-400 rounded-full animation-delay-200"></div>
+                            <div class="w-2 h-2 bg-slate-400 rounded-full animation-delay-400"></div>
+                        </div>
+                        <span class="text-sm text-slate-500">Thinking...</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Input Form -->
+        <div class="px-4 py-3 border-t border-slate-200 bg-white">
+            <form id="message-form" class="flex space-x-3">
+                <div class="flex-1">
+                    <textarea id="message-input"
+                              rows="1"
+                              placeholder="What's on your mind?"
+                              class="w-full px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-slate-500 focus:border-slate-500 resize-none"
+                              onkeydown="handleKeyDown(event)"></textarea>
+                </div>
+                <button type="submit" id="send-button"
+                        class="px-6 py-3 bg-slate-700 hover:bg-slate-800 disabled:bg-slate-300 text-white font-medium rounded-lg transition-colors flex items-center">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path>
+                    </svg>
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+
+<style>
+    [x-cloak] { display: none !important; }
+    .animation-delay-200 { animation-delay: 0.2s; }
+    .animation-delay-400 { animation-delay: 0.4s; }
+
+    /* Markdown content styling */
+    .message-content p { margin-bottom: 0.5rem; }
+    .message-content p:last-child { margin-bottom: 0; }
+    .message-content pre { background-color: #1f2937; color: #e5e7eb; padding: 1rem; border-radius: 0.5rem; overflow-x: auto; margin: 0.5rem 0; }
+    .message-content code { background-color: #f1f5f9; padding: 0.125rem 0.375rem; border-radius: 0.25rem; font-size: 0.875rem; font-family: ui-monospace, monospace; }
+    .message-content pre code { background: none; padding: 0; color: #e5e7eb; }
+    .message-content h1, .message-content h2, .message-content h3 { font-weight: 600; margin-top: 1rem; margin-bottom: 0.5rem; }
+    .message-content h1 { font-size: 1.25rem; }
+    .message-content h2 { font-size: 1.125rem; }
+    .message-content h3 { font-size: 1rem; }
+    .message-content ul, .message-content ol { margin: 0.5rem 0; padding-left: 1.5rem; }
+    .message-content ul { list-style-type: disc; }
+    .message-content ol { list-style-type: decimal; }
+    .message-content li { margin-bottom: 0.25rem; }
+    .message-content blockquote { border-left: 3px solid #cbd5e1; padding-left: 1rem; margin: 0.5rem 0; color: #64748b; font-style: italic; }
+    .message-content a { color: #475569; text-decoration: underline; }
+    .message-content a:hover { color: #334155; }
+    .message-content hr { border: none; border-top: 1px solid #e2e8f0; margin: 1rem 0; }
+    .message-content strong { font-weight: 600; color: #1e293b; }
+</style>
+
+<script>
+    const conversationId = {{ conversation.id }};
+    const csrfToken = '{{ csrf_token }}';
+
+    // Raw message content for markdown rendering
+    const rawMessageContent = {
+        {% for msg in messages %}{% if msg.role == 'assistant' %}
+        "{{ msg.id }}": "{{ msg.content|escapejs }}",
+        {% endif %}{% endfor %}
+    };
+
+    // Auto-resize textarea
+    const textarea = document.getElementById('message-input');
+    textarea.addEventListener('input', function() {
+        this.style.height = 'auto';
+        this.style.height = Math.min(this.scrollHeight, 200) + 'px';
+    });
+
+    // Handle Enter key
+    function handleKeyDown(event) {
+        if (event.key === 'Enter' && !event.shiftKey) {
+            event.preventDefault();
+            document.getElementById('message-form').dispatchEvent(new Event('submit'));
+        }
+    }
+
+    // Scroll to bottom
+    function scrollToBottom() {
+        const container = document.getElementById('messages-container');
+        container.scrollTop = container.scrollHeight;
+    }
+    scrollToBottom();
+
+    // Render markdown for server-side messages
+    function renderPendingMarkdown() {
+        if (typeof marked === 'undefined' || typeof DOMPurify === 'undefined') {
+            setTimeout(renderPendingMarkdown, 100);
+            return;
+        }
+
+        marked.setOptions({ breaks: true, gfm: true });
+
+        document.querySelectorAll('.markdown-pending').forEach(el => {
+            const msgId = el.dataset.msgId;
+            const rawContent = rawMessageContent[msgId];
+            if (rawContent) {
+                const html = marked.parse(rawContent);
+                let sanitized = DOMPurify.sanitize(html);
+                if (typeof linkifyIds === 'function') {
+                    sanitized = linkifyIds(sanitized);
+                }
+                el.innerHTML = sanitized;
+                el.classList.remove('markdown-pending');
+            }
+        });
+    }
+    setTimeout(renderPendingMarkdown, 50);
+
+    // Add message to UI
+    function addMessage(role, content, extra = {}) {
+        const container = document.getElementById('messages-container');
+
+        // Remove empty state if present
+        const emptyState = container.querySelector('.text-center.py-8');
+        if (emptyState) emptyState.remove();
+
+        const div = document.createElement('div');
+        div.className = `flex ${role === 'user' ? 'justify-end' : 'justify-start'}`;
+
+        let bgClass = role === 'user'
+            ? 'bg-slate-700 text-white'
+            : 'bg-white text-gray-900 shadow-sm border border-slate-200';
+
+        if (extra.is_error) {
+            bgClass = 'border-2 border-red-300 bg-red-50 text-red-800';
+        }
+
+        let metaHtml = '';
+        if (role === 'assistant' && extra.processing_time_ms) {
+            metaHtml = `<div class="mt-2 text-xs text-slate-400">${extra.processing_time_ms}ms</div>`;
+        }
+
+        const contentHtml = role === 'user'
+            ? `<div class="whitespace-pre-wrap">${escapeHtml(content)}</div>`
+            : `<div class="prose prose-sm max-w-none message-content">${formatContent(content)}</div>`;
+
+        div.innerHTML = `
+            <div class="max-w-[80%]">
+                <div class="${bgClass} rounded-lg px-4 py-3">
+                    ${contentHtml}
+                    ${metaHtml}
+                </div>
+            </div>
+        `;
+        container.appendChild(div);
+        scrollToBottom();
+    }
+
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
+    // Convert prefixed IDs to clickable links
+    function linkifyIds(html) {
+        const idPatterns = {
+            'G': '/journal/goals/',   // #G5 -> goals
+            'T': '/tasks/',           // #T15 -> tasks
+            'P': '/para/projects/',   // #P8 -> projects
+            'A': '/para/areas/',      // #A5 -> areas
+            'N': '/notes/'            // #N42 -> notes
+        };
+
+        return html.replace(/`?#([GTPAN])(\d+)`?/g, function(match, type, id) {
+            const basePath = idPatterns[type];
+            if (basePath) {
+                const url = basePath + id + '/';
+                const typeNames = { 'G': 'Goal', 'T': 'Task', 'P': 'Project', 'A': 'Area', 'N': 'Note' };
+                return `<a href="${url}" class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-700 hover:bg-amber-200 transition-colors" title="View ${typeNames[type]} ${id}">#${type}${id}</a>`;
+            }
+            return match;
+        });
+    }
+
+    function formatContent(text) {
+        if (typeof marked !== 'undefined' && typeof DOMPurify !== 'undefined') {
+            marked.setOptions({ breaks: true, gfm: true });
+            const html = marked.parse(text);
+            const sanitized = DOMPurify.sanitize(html);
+            return linkifyIds(sanitized);
+        }
+        let result = text
+            .replace(/\n/g, '<br>')
+            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+            .replace(/\*(.*?)\*/g, '<em>$1</em>')
+            .replace(/`([^`]+)`/g, '<code>$1</code>');
+        return linkifyIds(result);
+    }
+
+    // Send message
+    document.getElementById('message-form').addEventListener('submit', async function(e) {
+        e.preventDefault();
+
+        const input = document.getElementById('message-input');
+        const content = input.value.trim();
+        if (!content) return;
+
+        const sendButton = document.getElementById('send-button');
+        const loading = document.getElementById('loading-indicator');
+
+        addMessage('user', content);
+        input.value = '';
+        input.style.height = 'auto';
+
+        sendButton.disabled = true;
+        loading.classList.remove('hidden');
+        scrollToBottom();
+
+        try {
+            const response = await fetch('{% url "coach:send" %}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrfToken,
+                },
+                body: JSON.stringify({ content }),
+            });
+
+            const data = await response.json();
+            console.log('[Coach] Response:', data);
+
+            if (data.success) {
+                addMessage('assistant', data.response, {
+                    processing_time_ms: data.processing_time_ms,
+                });
+            } else {
+                addMessage('assistant', data.response || 'Something went wrong.', {
+                    is_error: true,
+                    processing_time_ms: data.processing_time_ms,
+                });
+            }
+        } catch (error) {
+            addMessage('assistant', `Network error: ${error.message}`, { is_error: true });
+        } finally {
+            sendButton.disabled = false;
+            loading.classList.add('hidden');
+        }
+    });
+
+    // Quick prompt buttons
+    function sendQuickPrompt(text) {
+        document.getElementById('message-input').value = text;
+        document.getElementById('message-form').dispatchEvent(new Event('submit'));
+    }
+
+    // Start new conversation
+    async function startNewConversation() {
+        if (!confirm('Start a fresh conversation? Your current conversation will be archived.')) return;
+
+        try {
+            const response = await fetch('{% url "coach:new" %}', {
+                method: 'POST',
+                headers: { 'X-CSRFToken': csrfToken },
+            });
+            const data = await response.json();
+            if (data.success) {
+                window.location.reload();
+            }
+        } catch (error) {
+            console.error('Failed to start new conversation:', error);
+        }
+    }
+</script>
+{% endblock %}

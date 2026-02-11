@@ -1,0 +1,116 @@
+{% extends 'base.html' %}
+
+{% block title %}Archived Chats - ZemoNotes{% endblock %}
+
+{% block content %}
+<div class="space-y-5">
+    <!-- Header -->
+    <div class="mb-6">
+        <a href="{% url 'chat:list' %}" class="text-sm text-gray-500 hover:text-indigo-600 flex items-center mb-3">
+            <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+            </svg>
+            Back to Chats
+        </a>
+
+        <div class="flex items-center space-x-3">
+            <div class="w-12 h-12 rounded-lg flex items-center justify-center text-white text-xl bg-gray-500">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"></path>
+                </svg>
+            </div>
+            <div>
+                <h1 class="text-xl font-semibold text-gray-900">Archived Conversations</h1>
+                <p class="text-sm text-gray-500">{{ conversations.count }} archived chat{{ conversations.count|pluralize }}</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Conversations List -->
+    <div class="bg-white border border-gray-200 rounded-lg overflow-hidden">
+        {% if conversations %}
+        <div class="divide-y divide-gray-100">
+            {% for conv in conversations %}
+            <div class="px-4 py-4 hover:bg-gray-50 transition-colors">
+                <div class="flex items-start justify-between">
+                    <div class="flex-1 min-w-0">
+                        <div class="flex items-center space-x-2">
+                            <h3 class="text-sm font-medium text-gray-900 truncate">{{ conv.title|default:"New Conversation" }}</h3>
+                            {% if conv.context_type != 'general' %}
+                            <span class="inline-flex px-2 py-0.5 text-xs font-medium rounded-full
+                                {% if conv.context_type == 'project' %}bg-blue-100 text-blue-700{% else %}bg-purple-100 text-purple-700{% endif %}">
+                                {{ conv.context_type|title }}
+                            </span>
+                            {% endif %}
+                            <span class="inline-flex px-2 py-0.5 text-xs font-medium rounded-full bg-gray-100 text-gray-600">
+                                Archived
+                            </span>
+                        </div>
+                        <div class="mt-1 flex items-center space-x-4 text-xs text-gray-500">
+                            <span>{{ conv.messages.count }} message{{ conv.messages.count|pluralize }}</span>
+                            {% if conv.last_message_at %}
+                            <span>{{ conv.last_message_at|timesince }} ago</span>
+                            {% else %}
+                            <span>{{ conv.created_at|timesince }} ago</span>
+                            {% endif %}
+                            <span class="text-gray-400">{{ conv.model_name }}</span>
+                        </div>
+                    </div>
+                    <div class="ml-4 flex items-center space-x-2">
+                        <button onclick="unarchiveConversation({{ conv.pk }})"
+                                class="px-3 py-1 text-xs font-medium text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 rounded transition-colors">
+                            Restore
+                        </button>
+                        <button onclick="deleteConversation({{ conv.pk }})"
+                                class="px-3 py-1 text-xs font-medium text-red-600 hover:text-red-800 hover:bg-red-50 rounded transition-colors">
+                            Delete
+                        </button>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <!-- Empty State -->
+        <div class="px-4 py-12 text-center">
+            <div class="w-16 h-16 mx-auto bg-gray-100 rounded-full flex items-center justify-center mb-4">
+                <svg class="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"></path>
+                </svg>
+            </div>
+            <h3 class="text-sm font-medium text-gray-900 mb-1">No archived conversations</h3>
+            <p class="text-sm text-gray-500">Conversations you archive will appear here</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<script>
+    const csrfToken = '{{ csrf_token }}';
+
+    async function unarchiveConversation(id) {
+        try {
+            await fetch(`/chat/api/conversations/${id}/unarchive/`, {
+                method: 'POST',
+                headers: { 'X-CSRFToken': csrfToken },
+            });
+            location.reload();
+        } catch (error) {
+            alert('Failed to restore conversation');
+        }
+    }
+
+    async function deleteConversation(id) {
+        if (!confirm('Delete this conversation permanently? This cannot be undone.')) return;
+        try {
+            await fetch(`/chat/api/conversations/${id}/delete/`, {
+                method: 'POST',
+                headers: { 'X-CSRFToken': csrfToken },
+            });
+            location.reload();
+        } catch (error) {
+            alert('Failed to delete conversation');
+        }
+    }
+</script>
+{% endblock %}

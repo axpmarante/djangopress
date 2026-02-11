@@ -206,6 +206,9 @@ Return the complete, corrected JSON now:"""
         """
         print(f"\n--- Step 2: Templatize + Translate ---")
 
+        # Always use gemini-flash for templatization — fast and reliable for text extraction/translation
+        model = 'gemini-flash'
+
         system_prompt, user_prompt = PromptTemplates.get_templatize_and_translate_prompt(
             html=html,
             languages=languages,
@@ -357,6 +360,9 @@ Return the complete, corrected JSON now:"""
             Dict with 'title_i18n' and 'slug_i18n'
         """
         print(f"\n--- Generating page metadata (title/slug) ---")
+
+        # Always use gemini-flash for metadata — fast and reliable for title/slug generation
+        model = 'gemini-flash'
 
         system_prompt, user_prompt = PromptTemplates.get_page_metadata_prompt(
             brief=brief,
