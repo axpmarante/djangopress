@@ -168,7 +168,7 @@ static/          → CSS/JS assets
 
 | Model | Purpose |
 |-------|---------|
-| `SiteSettings` | Singleton. Branding, contact info, design system (colors, fonts, spacing, buttons), languages, project briefing, design guide, SEO. Accessed via `SiteSettings.load()`. |
+| `SiteSettings` | Singleton. Branding, contact info, social media (7 platforms), design system (colors, fonts, spacing, buttons), languages, project briefing, design guide, SEO, Open Graph defaults, custom code injection (head/body). Accessed via `SiteSettings.load()`. |
 | `Page` | A website page. `title_i18n` / `slug_i18n` (JSON), `html_content` (Tailwind HTML with `{{ trans.field }}`), `content` (JSON translations). |
 | `GlobalSection` | Site-wide sections (header, footer). `key` (slug), `html_template` (Django template), `content` (JSON translations). Cached per language. |
 | `SiteImage` | Media library. Multi-language titles/alt text (`title_i18n`, `alt_text_i18n`), categories, tags. |

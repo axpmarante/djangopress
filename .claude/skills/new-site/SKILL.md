@@ -66,7 +66,7 @@ Ask the user for the following information. These will be used to configure Site
 3. **Domain identifier** — e.g. `prestige-realestate-pt` (used as GCS folder name)
 4. **Business description** — 2-3 sentences about what the business does, target audience, tone
 5. **Contact info** — email, phone, address
-6. **Social media URLs** — any of: Facebook, Instagram, LinkedIn, Twitter/X
+6. **Social media URLs** — any of: Facebook, Instagram, LinkedIn, Twitter/X, YouTube, TikTok, Pinterest, WhatsApp
 
 ## Step 5: Configure SiteSettings via Django Shell
 
@@ -107,9 +107,15 @@ settings.contact_address_i18n = {
     '<lang2>': '<address>',
 }
 
-# Social media
+# Social media (set whichever apply)
 settings.facebook_url = '<url>'
 settings.instagram_url = '<url>'
+settings.linkedin_url = '<url>'
+settings.youtube_url = '<url>'
+settings.twitter_url = '<url>'
+settings.whatsapp_number = '<+351...>'
+settings.tiktok_url = '<url>'
+settings.pinterest_url = '<url>'
 
 settings.save()
 print('SiteSettings configured successfully!')
@@ -129,8 +135,9 @@ python manage.py runserver 8000
 Tell the user:
 1. Visit `http://localhost:8000/backoffice/settings/` to upload logos and configure the design system (colors, fonts)
 2. **Upload logos AFTER the domain is set** (it's already set from Step 5)
-3. Use `/generate-content` skill (or go to `/backoffice/ai/`) to start generating pages
-4. The project briefing is the most important field for AI quality — encourage them to make it detailed
+3. Configure **SEO & Code** settings (OG image for social sharing, custom tracking scripts) at `/backoffice/settings/seo/`
+4. Use `/generate-content` skill (or go to `/backoffice/ai/`) to start generating pages
+5. The project briefing is the most important field for AI quality — encourage them to make it detailed
 
 ## Important Reminders
 

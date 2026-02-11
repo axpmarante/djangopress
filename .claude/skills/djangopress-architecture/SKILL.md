@@ -28,12 +28,12 @@ Browser request
 1. **base.html** — master layout, loads Google Fonts, Tailwind CDN, Alpine.js, Splide, lightbox
 2. **GlobalSections** (header/footer) — loaded via `{% load_global_section 'main-header' %}` template tag, rendered as Django templates with their own `{{ trans.field }}` context
 3. **Page content** — the `html_content` field rendered as a Django template, sandwiched between header and footer
-4. **Context processor** (`core/context_processors.py`) — injects `THEME.*`, `SITE_NAME`, `LOGO`, `CONTACT_*`, `SOCIAL_MEDIA` into every template
+4. **Context processor** (`core/context_processors.py`) — injects `THEME.*`, `SITE_NAME`, `LOGO`, `CONTACT_*`, `SOCIAL_MEDIA`, `OG_IMAGE`, `DEFAULT_OG_DESCRIPTION_I18N`, `CUSTOM_HEAD_CODE`, `CUSTOM_BODY_CODE` into every template
 
 ## Data Architecture
 
 **Everything is DB-driven:**
-- `SiteSettings` (singleton, pk=1) — branding, design system, languages, project briefing
+- `SiteSettings` (singleton, pk=1) — branding, design system, languages, project briefing, social media, OG defaults, custom code injection
 - `Page` — website pages with `html_content` (Tailwind HTML) and `content` (translation JSON)
 - `GlobalSection` — header/footer with `html_template` and `content` JSON
 - `SiteImage` — media library with i18n title/alt text
