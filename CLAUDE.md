@@ -172,7 +172,8 @@ static/          → CSS/JS assets
 | `GlobalSection` | Site-wide sections (header, footer). `key` (slug), `html_template` (Django template), `content` (JSON translations). Cached per language. |
 | `SiteImage` | Media library. Multi-language titles/alt text (`title_i18n`, `alt_text_i18n`), categories, tags. |
 | `PageVersion` | Page revision history for rollback. Auto-created before AI edits. |
-| `Contact` | Contact form submissions. |
+| `DynamicForm` | DB-driven form definitions. `slug` determines submission URL (`/forms/<slug>/submit/`), `fields_schema` (JSON) for validation/labels, i18n success messages, optional confirmation email. A default `contact` form is seeded on migrate. |
+| `FormSubmission` | Form submissions stored as JSON (`data` field). Tracks source page, language, IP, read status. Managed at `/backoffice/forms/`. |
 
 ### AI Models (ai app)
 
@@ -287,6 +288,9 @@ Both `Page.content` and `GlobalSection.content` use this structure.
 - `/backoffice/ai/generate/page/` → generate a new page
 - `/backoffice/ai/bulk/pages/` → bulk page creation
 - `/backoffice/ai/chat/refine/<page_id>/` → chat-based page refinement
+- `/forms/<slug>/submit/` → form submission endpoint (outside i18n_patterns)
+- `/backoffice/forms/` → manage dynamic forms
+- `/backoffice/forms/<id>/submissions/` → view form submissions
 - `/ai/api/*` → AI API endpoints
 - `/editor/api/*` → inline editor API (staff only)
 
@@ -368,8 +372,9 @@ When "Add image placeholders" is enabled during refinement:
 - `.env` — secrets (never committed)
 
 ### Core CMS
-- `core/models.py` — Page, SiteSettings, GlobalSection, SiteImage, PageVersion, Contact
-- `core/views.py` — PageView (catches all page URLs), set_language, contact form
+- `core/models.py` — Page, SiteSettings, GlobalSection, SiteImage, PageVersion, DynamicForm, FormSubmission
+- `core/views.py` — PageView (catches all page URLs), set_language, form_submit
+- `core/email.py` — form notification + confirmation email helpers
 - `core/context_processors.py` — injects THEME, SITE_NAME, LOGO, etc. into all templates
 - `core/templatetags/section_tags.py` — `load_global_section`, `get_translation` filters
 - `templates/base.html` — master layout, loads header/footer GlobalSections
