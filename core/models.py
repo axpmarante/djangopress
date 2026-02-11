@@ -433,22 +433,114 @@ class SiteSettings(models.Model):
         cache.delete('default_language_code')  # Clear language cache for middleware
 
 
-class Contact(models.Model):
-    """Model to store contact form submissions"""
+class DynamicForm(models.Model):
+    """A configurable form definition (contact, quote request, booking, etc.)"""
 
-    name = models.CharField("Name", max_length=100)
-    email = models.EmailField("Email")
-    subject = models.CharField("Subject", max_length=200)
-    message = models.TextField("Message")
+    name = models.CharField("Name", max_length=200)
+    slug = models.SlugField("Slug", max_length=100, unique=True)
+    notification_email = models.EmailField(
+        "Notification Email", blank=True,
+        help_text="Where to send submissions. Falls back to SiteSettings.contact_email."
+    )
+    fields_schema = models.JSONField(
+        "Fields Schema", default=list, blank=True,
+        help_text='[{"name": "email", "type": "email", "label": "Email", "required": true}]'
+    )
+    success_message_i18n = models.JSONField(
+        "Success Message", default=dict, blank=True,
+        help_text='{"pt": "Obrigado!", "en": "Thank you!"}'
+    )
+    send_confirmation_email = models.BooleanField("Send Confirmation Email", default=False)
+    confirmation_subject_i18n = models.JSONField(
+        "Confirmation Subject", default=dict, blank=True,
+        help_text='Auto-reply subject per language'
+    )
+    confirmation_body_i18n = models.JSONField(
+        "Confirmation Body", default=dict, blank=True,
+        help_text='Auto-reply body per language'
+    )
+    is_active = models.BooleanField("Active", default=True)
+    created_at = models.DateTimeField("Created At", auto_now_add=True)
+    updated_at = models.DateTimeField("Updated At", auto_now=True)
+
+    class Meta:
+        ordering = ['name']
+        verbose_name = "Dynamic Form"
+        verbose_name_plural = "Dynamic Forms"
+
+    def __str__(self):
+        return self.name
+
+    def get_notification_email(self):
+        if self.notification_email:
+            return self.notification_email
+        settings = SiteSettings.load()
+        return settings.contact_email if settings else ''
+
+    def get_success_message(self, lang='en'):
+        if self.success_message_i18n and isinstance(self.success_message_i18n, dict):
+            return self.success_message_i18n.get(lang, self.success_message_i18n.get('en', 'Thank you!'))
+        return 'Thank you!'
+
+    def get_field_label(self, name):
+        if self.fields_schema and isinstance(self.fields_schema, list):
+            for field in self.fields_schema:
+                if field.get('name') == name:
+                    return field.get('label', name)
+        return name.replace('_', ' ').title()
+
+    def get_reply_to_field(self):
+        if self.fields_schema and isinstance(self.fields_schema, list):
+            for field in self.fields_schema:
+                if field.get('type') == 'email':
+                    return field.get('name')
+        return 'email'
+
+    def validate_submission(self, data):
+        errors = {}
+        if not self.fields_schema or not isinstance(self.fields_schema, list):
+            return errors
+        for field in self.fields_schema:
+            name = field.get('name', '')
+            required = field.get('required', False)
+            field_type = field.get('type', 'text')
+            value = data.get(name, '')
+            if required and not value:
+                errors[name] = f'{field.get("label", name)} is required.'
+            if value and field_type == 'email':
+                import re
+                if not re.match(r'^[^@]+@[^@]+\.[^@]+$', value):
+                    errors[name] = f'{field.get("label", name)} must be a valid email.'
+        return errors
+
+
+class FormSubmission(models.Model):
+    """A submission to a DynamicForm"""
+
+    form = models.ForeignKey(DynamicForm, on_delete=models.CASCADE, related_name='submissions')
+    data = models.JSONField("Submitted Data", default=dict)
+    source_page = models.ForeignKey('Page', on_delete=models.SET_NULL, null=True, blank=True)
+    language = models.CharField("Language", max_length=10, blank=True, default='')
+    ip_address = models.GenericIPAddressField("IP Address", null=True, blank=True)
+    user_agent = models.TextField("User Agent", blank=True, default='')
+    is_read = models.BooleanField("Read", default=False)
+    notification_sent = models.BooleanField("Notification Sent", default=False)
     created_at = models.DateTimeField("Created At", auto_now_add=True)
 
     class Meta:
         ordering = ['-created_at']
-        verbose_name = "Contact Submission"
-        verbose_name_plural = "Contact Submissions"
+        verbose_name = "Form Submission"
+        verbose_name_plural = "Form Submissions"
 
     def __str__(self):
-        return f"{self.name} - {self.subject}"
+        return f"{self.form.name} - {self.created_at:%Y-%m-%d %H:%M}"
+
+    def get_display_fields(self):
+        result = []
+        for key, value in self.data.items():
+            label = self.form.get_field_label(key)
+            result.append({'name': key, 'label': label, 'value': value})
+        return result
 
 
 class SiteImage(models.Model):

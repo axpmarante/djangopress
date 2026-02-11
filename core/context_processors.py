@@ -1,4 +1,4 @@
-from .models import SiteSettings, SiteImage, MenuItem
+from .models import SiteSettings, SiteImage, MenuItem, FormSubmission
 
 
 def site_settings(request):
@@ -159,4 +159,7 @@ def site_settings(request):
         'SITE_LANGUAGES': settings.get_enabled_languages(),
         'DEFAULT_LANGUAGE': settings.get_default_language(),
         'LANGUAGE_CODES': settings.get_language_codes(),
+
+        # Forms
+        'unread_form_submissions': FormSubmission.objects.filter(is_read=False).count() if request.user.is_staff else 0,
     }

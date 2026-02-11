@@ -1,0 +1,143 @@
+{% extends "backoffice/base.html" %}
+
+{% block title %}Edit Form — {{ form_obj.name }}{% endblock %}
+
+{% block content %}
+<div class="p-6">
+    {% if form_obj %}
+    <!-- Header -->
+    <div class="flex items-center justify-between mb-6">
+        <div>
+            <div class="flex items-center gap-2 text-sm text-gray-500 mb-1">
+                <a href="{% url 'backoffice:forms' %}" class="hover:text-blue-600">Forms</a>
+                <span>/</span>
+                <span>{{ form_obj.name }}</span>
+            </div>
+            <h1 class="text-2xl font-bold text-gray-900">Edit Form</h1>
+        </div>
+        <a href="{% url 'backoffice:form_submissions' form_id=form_obj.id %}"
+           class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors text-sm font-medium">
+            View Submissions
+        </a>
+    </div>
+
+    <!-- Form Action URL -->
+    <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+        <p class="text-sm font-medium text-blue-800 mb-1">Form Action URL</p>
+        <code class="text-sm text-blue-600 bg-blue-100 px-2 py-1 rounded">/forms/{{ form_obj.slug }}/submit/</code>
+        <p class="text-xs text-blue-500 mt-2">Use this as the <code>action</code> attribute in your HTML form. Always include <code>{&#37; csrf_token &#37;}</code>.</p>
+    </div>
+
+    <form method="post">
+        {% csrf_token %}
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <!-- Left: Basic Settings -->
+            <div class="space-y-6">
+                <div class="bg-white rounded-lg shadow p-6">
+                    <h2 class="text-lg font-semibold text-gray-900 mb-4">Settings</h2>
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Name</label>
+                            <input type="text" name="name" value="{{ form_obj.name }}" required class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Slug</label>
+                            <input type="text" name="slug" value="{{ form_obj.slug }}" required class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-mono">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Notification Email</label>
+                            <input type="email" name="notification_email" value="{{ form_obj.notification_email }}" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" placeholder="Falls back to site contact email">
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <input type="checkbox" name="is_active" id="is_active" {% if form_obj.is_active %}checked{% endif %} class="rounded border-gray-300">
+                            <label for="is_active" class="text-sm text-gray-700">Active</label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Fields Schema -->
+                <div class="bg-white rounded-lg shadow p-6">
+                    <h2 class="text-lg font-semibold text-gray-900 mb-2">Fields Schema</h2>
+                    <p class="text-xs text-gray-500 mb-3">Optional. Defines validation rules and labels for email notifications. JSON array of field objects.</p>
+                    <textarea name="fields_schema" rows="8" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-mono" placeholder='[{"name": "email", "type": "email", "label": "Email", "required": true}]'>{{ fields_schema_json }}</textarea>
+                </div>
+            </div>
+
+            <!-- Right: i18n + Confirmation -->
+            <div class="space-y-6">
+                <!-- Success Message -->
+                <div class="bg-white rounded-lg shadow p-6">
+                    <h2 class="text-lg font-semibold text-gray-900 mb-4">Success Message</h2>
+                    {% for lang_code, lang_name in languages %}
+                    <div class="mb-3">
+                        <label class="block text-sm font-medium text-gray-700 mb-1">{{ lang_name }} ({{ lang_code|upper }})</label>
+                        <input type="text" name="success_message_{{ lang_code }}" data-i18n="success_message" data-lang="{{ lang_code }}"
+                               class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                               placeholder="Thank you for your message!">
+                    </div>
+                    {% endfor %}
+                </div>
+
+                <!-- Confirmation Email -->
+                <div class="bg-white rounded-lg shadow p-6">
+                    <h2 class="text-lg font-semibold text-gray-900 mb-4">Confirmation Email</h2>
+                    <div class="flex items-center gap-3 mb-4">
+                        <input type="checkbox" name="send_confirmation_email" id="send_confirmation"
+                               {% if form_obj.send_confirmation_email %}checked{% endif %} class="rounded border-gray-300">
+                        <label for="send_confirmation" class="text-sm text-gray-700">Send auto-reply to submitter</label>
+                    </div>
+
+                    {% for lang_code, lang_name in languages %}
+                    <div class="mb-3 pl-6 border-l-2 border-gray-200">
+                        <p class="text-xs font-semibold text-gray-500 mb-2">{{ lang_name }} ({{ lang_code|upper }})</p>
+                        <div class="mb-2">
+                            <label class="block text-xs text-gray-500 mb-1">Subject</label>
+                            <input type="text" name="confirmation_subject_{{ lang_code }}" data-i18n="confirmation_subject" data-lang="{{ lang_code }}"
+                                   class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
+                        </div>
+                        <div>
+                            <label class="block text-xs text-gray-500 mb-1">Body</label>
+                            <textarea name="confirmation_body_{{ lang_code }}" data-i18n="confirmation_body" data-lang="{{ lang_code }}" rows="3"
+                                      class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"></textarea>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Save Button -->
+        <div class="mt-6 flex justify-end">
+            <button type="submit" class="px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium">
+                Save Changes
+            </button>
+        </div>
+    </form>
+
+    {% else %}
+    <p class="text-gray-500">Form not found.</p>
+    {% endif %}
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Populate i18n fields from JSON
+    const i18nData = {
+        success_message: {{ success_message_json|safe }},
+        confirmation_subject: {{ confirmation_subject_json|safe }},
+        confirmation_body: {{ confirmation_body_json|safe }},
+    };
+
+    document.querySelectorAll('[data-i18n]').forEach(el => {
+        const group = el.dataset.i18n;
+        const lang = el.dataset.lang;
+        const val = (i18nData[group] || {})[lang] || '';
+        if (el.tagName === 'TEXTAREA') {
+            el.textContent = val;
+        } else {
+            el.value = val;
+        }
+    });
+});
+</script>
+{% endblock %}

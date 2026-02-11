@@ -1,5 +1,4 @@
 from django import template
-from django.urls import reverse
 from django.utils.safestring import mark_safe
 
 register = template.Library()
@@ -12,7 +11,7 @@ def cta_section(title=None, text=None, button_text=None, button_url=None):
         'section_title': title,
         'section_text': text,
         'button_text': button_text,
-        'button_url': button_url or reverse('core:contact'),
+        'button_url': button_url or '#',
     }
 
 

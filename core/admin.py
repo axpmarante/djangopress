@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django import forms
 from django.conf import settings as django_settings
-from .models import SiteSettings, Contact, SiteImage, Page, PageVersion, GlobalSection, MenuItem
+from .models import SiteSettings, DynamicForm, FormSubmission, SiteImage, Page, PageVersion, GlobalSection, MenuItem
 
 
 # ===================================
@@ -340,14 +340,23 @@ class SiteSettingsAdmin(admin.ModelAdmin):
         return False
 
 
-@admin.register(Contact)
-class ContactAdmin(admin.ModelAdmin):
-    """Admin for contact submissions"""
+@admin.register(DynamicForm)
+class DynamicFormAdmin(admin.ModelAdmin):
+    """Admin for dynamic form definitions"""
 
-    list_display = ('name', 'email', 'subject', 'created_at')
-    list_filter = ('created_at',)
-    search_fields = ('name', 'email', 'subject', 'message')
-    readonly_fields = ('name', 'email', 'subject', 'message', 'created_at')
+    list_display = ('name', 'slug', 'notification_email', 'is_active', 'created_at')
+    list_filter = ('is_active',)
+    search_fields = ('name', 'slug')
+    prepopulated_fields = {'slug': ('name',)}
+
+
+@admin.register(FormSubmission)
+class FormSubmissionAdmin(admin.ModelAdmin):
+    """Admin for form submissions"""
+
+    list_display = ('form', 'is_read', 'language', 'created_at')
+    list_filter = ('form', 'is_read', 'created_at')
+    readonly_fields = ('form', 'data', 'source_page', 'language', 'ip_address', 'user_agent', 'notification_sent', 'created_at')
 
     def has_add_permission(self, request):
         return False

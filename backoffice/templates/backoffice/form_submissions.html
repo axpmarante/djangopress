@@ -1,0 +1,107 @@
+{% extends "backoffice/base.html" %}
+
+{% block title %}Submissions — {{ form_obj.name }}{% endblock %}
+
+{% block content %}
+<div class="p-6">
+    {% if form_obj %}
+    <!-- Header -->
+    <div class="flex items-center justify-between mb-6">
+        <div>
+            <div class="flex items-center gap-2 text-sm text-gray-500 mb-1">
+                <a href="{% url 'backoffice:forms' %}" class="hover:text-blue-600">Forms</a>
+                <span>/</span>
+                <a href="{% url 'backoffice:form_edit' form_id=form_obj.id %}" class="hover:text-blue-600">{{ form_obj.name }}</a>
+                <span>/</span>
+                <span>Submissions</span>
+            </div>
+            <h1 class="text-2xl font-bold text-gray-900">{{ form_obj.name }} — Submissions</h1>
+            <p class="text-sm text-gray-500 mt-1">{{ total }} total, {{ unread }} unread</p>
+        </div>
+    </div>
+
+    <!-- Submissions Table -->
+    <form method="post" id="bulk-form">
+        {% csrf_token %}
+        <div class="bg-white rounded-lg shadow overflow-hidden">
+            <!-- Bulk Actions -->
+            <div class="px-6 py-3 bg-gray-50 border-b flex items-center gap-3">
+                <input type="checkbox" id="select-all" class="rounded border-gray-300" onchange="toggleAll(this)">
+                <label for="select-all" class="text-xs text-gray-500">Select all</label>
+                <div class="ml-auto flex gap-2">
+                    <button type="submit" name="action" value="mark_read" class="px-3 py-1 text-xs bg-gray-200 text-gray-700 rounded hover:bg-gray-300">Mark Read</button>
+                    <button type="submit" name="action" value="delete" class="px-3 py-1 text-xs bg-red-100 text-red-700 rounded hover:bg-red-200" onclick="return confirm('Delete selected submissions?')">Delete</button>
+                </div>
+            </div>
+
+            <table class="min-w-full divide-y divide-gray-200">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="px-6 py-3 w-10"></th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Key Fields</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                        <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="bg-white divide-y divide-gray-200">
+                    {% for submission in submissions %}
+                    <tr class="hover:bg-gray-50 {% if not submission.is_read %}bg-blue-50{% endif %}">
+                        <td class="px-6 py-4">
+                            <input type="checkbox" name="submission_ids" value="{{ submission.id }}" class="submission-cb rounded border-gray-300">
+                        </td>
+                        <td class="px-6 py-4 text-sm text-gray-500 whitespace-nowrap">{{ submission.created_at|date:"M d, Y H:i" }}</td>
+                        <td class="px-6 py-4 text-sm text-gray-700">
+                            {% for key, value in submission.data.items %}
+                                {% if forloop.counter <= 3 %}
+                                <span class="inline-block mr-3"><span class="text-gray-400">{{ key }}:</span> {{ value|truncatechars:40 }}</span>
+                                {% endif %}
+                            {% endfor %}
+                        </td>
+                        <td class="px-6 py-4 text-sm">
+                            {% if submission.is_read %}
+                            <span class="text-gray-400 text-xs">Read</span>
+                            {% else %}
+                            <span class="px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full text-xs font-semibold">New</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-6 py-4 text-sm text-right">
+                            <a href="{% url 'backoffice:submission_detail' submission_id=submission.id %}" class="text-blue-600 hover:underline text-xs">View</a>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="5" class="px-6 py-12 text-center text-gray-500">
+                            No submissions yet.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </form>
+
+    <!-- Pagination -->
+    {% if page_obj.has_other_pages %}
+    <div class="flex justify-center mt-6 gap-2">
+        {% if page_obj.has_previous %}
+        <a href="?page={{ page_obj.previous_page_number }}" class="px-3 py-1 bg-white border rounded text-sm hover:bg-gray-50">Previous</a>
+        {% endif %}
+        <span class="px-3 py-1 text-sm text-gray-500">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
+        {% if page_obj.has_next %}
+        <a href="?page={{ page_obj.next_page_number }}" class="px-3 py-1 bg-white border rounded text-sm hover:bg-gray-50">Next</a>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    {% else %}
+    <p class="text-gray-500">Form not found.</p>
+    {% endif %}
+</div>
+
+<script>
+function toggleAll(el) {
+    document.querySelectorAll('.submission-cb').forEach(cb => cb.checked = el.checked);
+}
+</script>
+{% endblock %}

@@ -8,7 +8,7 @@ from django.conf.urls.i18n import i18n_patterns
 from django.contrib.sitemaps.views import sitemap
 from django.http import HttpResponse
 from core.sitemaps import PageSitemap
-from core.views import set_language
+from core.views import set_language, form_submit
 
 sitemaps = {
     'pages': PageSitemap,
@@ -32,6 +32,7 @@ urlpatterns = [
     path('site-assistant/', include('site_assistant.urls')),  # Site Assistant
     path('i18n/', include('django.conf.urls.i18n')),  # Django's built-in (keep for any other i18n URLs)
     path('set-language/', set_language, name='set_language'),  # Must be AFTER i18n/ to override the name
+    path('forms/<slug:slug>/submit/', form_submit, name='form_submit'),
     path('sitemap.xml', sitemap, {'sitemaps': sitemaps}, name='django.contrib.sitemaps.views.sitemap'),
     path('robots.txt', robots_txt, name='robots_txt'),
 ]

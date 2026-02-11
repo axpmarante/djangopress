@@ -22,8 +22,12 @@ TOOL_DEFINITIONS = """
 - `get_settings` — Read site settings. Params: `{"fields": ["field1", "field2"]}` (optional, returns all if omitted)
 - `update_settings` — Update settings. Params: `{"updates": {"field": "value"}}`. Allowed fields: contact_email, contact_phone, site_name_i18n, site_description_i18n, contact_address_i18n, facebook_url, instagram_url, linkedin_url, twitter_url, youtube_url, google_maps_embed_url, maintenance_mode.
 - `list_images` — Browse media library. Params: `{"search": "...", "limit": int}` (optional)
-- `list_contacts` — Recent contact form submissions. Params: `{"limit": int}` (optional)
-- `get_stats` — Page/image/contact counts. No params.
+- `list_forms` — List all dynamic forms. No params.
+- `create_form` — Create a dynamic form. Params: `{"name": "Contact Form", "slug": "contact", "notification_email": "...", "fields_schema": [...], "success_message_i18n": {"pt": "...", "en": "..."}, "is_active": true}`. The slug determines the form action URL: `/forms/<slug>/submit/`.
+- `update_form` — Update a form. Params: `{"form_id": int, "name": "...", "notification_email": "...", "fields_schema": [...], "success_message_i18n": {...}, "is_active": bool}` (lookup by form_id or slug, all fields optional).
+- `delete_form` — Delete a form and all submissions. Params: `{"form_id": int}` or `{"slug": "..."}`. DESTRUCTIVE — requires confirmation.
+- `list_form_submissions` — Recent form submissions. Params: `{"form_slug": "contact", "limit": int}` (optional)
+- `get_stats` — Page/image/submission counts. No params.
 - `set_active_page` — Switch focus to a specific page. Params: `{"page_id": int}`
 
 ### Page-Level Tools (require active page)
@@ -60,7 +64,7 @@ Your message to the user.
 [{"tool": "tool_name", "params": {...}}]
 </actions>
 
-### Destructive actions (delete_page, delete_menu_item):
+### Destructive actions (delete_page, delete_menu_item, delete_form):
 Output <response> with <pending_confirmation>. No <actions> tag.
 
 <response>
@@ -72,13 +76,13 @@ Are you sure you want to delete "Page Name"? This cannot be undone.
 </pending_confirmation>
 
 RULES:
-- When you need data (list_pages, get_page_info, get_settings, get_stats, list_menu_items, list_images, list_contacts), use Mode 1 FIRST to see results, then respond with Mode 2.
+- When you need data (list_pages, get_page_info, get_settings, get_stats, list_menu_items, list_images, list_forms, list_form_submissions), use Mode 1 FIRST to see results, then respond with Mode 2.
 - When you can act without needing to see results first (update_translations, create_page with known params, etc.), use Mode 2 directly with <response> and <actions>.
 - You can chain multiple tool calls: Mode 1 → see results → Mode 1 again → see results → Mode 2.
 - Maximum 8 tool-call rounds before you must give a final <response>.
 - Multiple actions can be in one <actions> list — they execute sequentially.
 - Use the LIGHTEST tool possible. For text changes, use `update_translations` (free, instant). Only use `refine_section` or `refine_page` when structural/design changes are needed.
-- For destructive operations (delete_page, delete_menu_item), ALWAYS use <pending_confirmation> instead of <actions>.
+- For destructive operations (delete_page, delete_menu_item, delete_form), ALWAYS use <pending_confirmation> instead of <actions>.
 - Provide all i18n fields in ALL enabled languages when creating/updating content.
 - When you execute a write action, you MUST include the tool call in <actions>. Never claim you performed an action without actually calling the tool.
 """

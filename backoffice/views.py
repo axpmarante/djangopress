@@ -9,7 +9,7 @@ from django.shortcuts import redirect
 from django.urls import reverse_lazy
 
 from django.conf.global_settings import LANGUAGES as ALL_LANGUAGES
-from core.models import SiteSettings, SiteImage, Page, GOOGLE_FONTS_CHOICES, GlobalSection, Blueprint, BlueprintPage
+from core.models import SiteSettings, SiteImage, Page, GOOGLE_FONTS_CHOICES, GlobalSection, Blueprint, BlueprintPage, DynamicForm, FormSubmission
 from core.utils import resize_and_compress_image
 from django.utils.text import slugify
 
@@ -1277,4 +1277,194 @@ class AICallLogsView(LoginRequiredMixin, TemplateView):
         context['current_model'] = model_name
         context['current_status'] = status
 
+        return context
+
+
+class FormsView(LoginRequiredMixin, TemplateView):
+    """List all dynamic forms with stats."""
+    template_name = 'backoffice/forms.html'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        forms = DynamicForm.objects.all()
+        form_data = []
+        for f in forms:
+            total = f.submissions.count()
+            unread = f.submissions.filter(is_read=False).count()
+            form_data.append({'form': f, 'total': total, 'unread': unread})
+        context['forms'] = form_data
+        context['total_forms'] = forms.count()
+        context['total_submissions'] = FormSubmission.objects.count()
+        context['total_unread'] = FormSubmission.objects.filter(is_read=False).count()
+        return context
+
+    def post(self, request, *args, **kwargs):
+        action = request.POST.get('action')
+
+        if action == 'create':
+            name = request.POST.get('name', '').strip()
+            slug = request.POST.get('slug', '').strip()
+            notification_email = request.POST.get('notification_email', '').strip()
+
+            if not name or not slug:
+                messages.error(request, 'Name and slug are required.')
+                return redirect('backoffice:forms')
+
+            if DynamicForm.objects.filter(slug=slug).exists():
+                messages.error(request, f'A form with slug "{slug}" already exists.')
+                return redirect('backoffice:forms')
+
+            DynamicForm.objects.create(
+                name=name,
+                slug=slug,
+                notification_email=notification_email,
+            )
+            messages.success(request, f'Form "{name}" created.')
+
+        elif action == 'delete':
+            form_id = request.POST.get('form_id')
+            try:
+                form = DynamicForm.objects.get(pk=form_id)
+                form_name = form.name
+                form.delete()
+                messages.success(request, f'Form "{form_name}" deleted.')
+            except DynamicForm.DoesNotExist:
+                messages.error(request, 'Form not found.')
+
+        return redirect('backoffice:forms')
+
+
+class FormEditView(LoginRequiredMixin, TemplateView):
+    """Edit a dynamic form definition."""
+    template_name = 'backoffice/form_edit.html'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        form_id = kwargs.get('form_id')
+        try:
+            form = DynamicForm.objects.get(pk=form_id)
+            context['form_obj'] = form
+
+            site_settings = SiteSettings.objects.first()
+            context['languages'] = site_settings.get_enabled_languages() if site_settings else [('en', 'English')]
+
+            # Serialize i18n dicts for JS population
+            context['success_message_json'] = json.dumps(form.success_message_i18n or {})
+            context['confirmation_subject_json'] = json.dumps(form.confirmation_subject_i18n or {})
+            context['confirmation_body_json'] = json.dumps(form.confirmation_body_i18n or {})
+            context['fields_schema_json'] = json.dumps(form.fields_schema or [], indent=2)
+        except DynamicForm.DoesNotExist:
+            context['form_obj'] = None
+            context['languages'] = [('en', 'English')]
+        return context
+
+    def post(self, request, *args, **kwargs):
+        form_id = kwargs.get('form_id')
+        try:
+            form = DynamicForm.objects.get(pk=form_id)
+        except DynamicForm.DoesNotExist:
+            messages.error(request, 'Form not found.')
+            return redirect('backoffice:forms')
+
+        form.name = request.POST.get('name', form.name).strip()
+        form.slug = request.POST.get('slug', form.slug).strip()
+        form.notification_email = request.POST.get('notification_email', '').strip()
+        form.is_active = 'is_active' in request.POST
+        form.send_confirmation_email = 'send_confirmation_email' in request.POST
+
+        # Fields schema JSON
+        fields_schema_raw = request.POST.get('fields_schema', '').strip()
+        if fields_schema_raw:
+            try:
+                form.fields_schema = json.loads(fields_schema_raw)
+            except (ValueError, TypeError):
+                messages.error(request, 'Invalid JSON in fields schema.')
+                return redirect('backoffice:form_edit', form_id=form_id)
+        else:
+            form.fields_schema = []
+
+        # i18n fields
+        site_settings = SiteSettings.objects.first()
+        lang_codes = site_settings.get_language_codes() if site_settings else ['en']
+
+        success_msg = {}
+        confirm_subject = {}
+        confirm_body = {}
+        for lang in lang_codes:
+            s = request.POST.get(f'success_message_{lang}', '').strip()
+            cs = request.POST.get(f'confirmation_subject_{lang}', '').strip()
+            cb = request.POST.get(f'confirmation_body_{lang}', '').strip()
+            if s:
+                success_msg[lang] = s
+            if cs:
+                confirm_subject[lang] = cs
+            if cb:
+                confirm_body[lang] = cb
+
+        form.success_message_i18n = success_msg
+        form.confirmation_subject_i18n = confirm_subject
+        form.confirmation_body_i18n = confirm_body
+
+        form.save()
+        messages.success(request, f'Form "{form.name}" updated.')
+        return redirect('backoffice:form_edit', form_id=form_id)
+
+
+class FormSubmissionsView(LoginRequiredMixin, TemplateView):
+    """List submissions for a specific form."""
+    template_name = 'backoffice/form_submissions.html'
+
+    def get_context_data(self, **kwargs):
+        from django.core.paginator import Paginator
+        context = super().get_context_data(**kwargs)
+        form_id = kwargs.get('form_id')
+        try:
+            form = DynamicForm.objects.get(pk=form_id)
+            context['form_obj'] = form
+
+            qs = form.submissions.all()
+            paginator = Paginator(qs, 25)
+            page_number = self.request.GET.get('page', 1)
+            page_obj = paginator.get_page(page_number)
+            context['page_obj'] = page_obj
+            context['submissions'] = page_obj
+            context['total'] = qs.count()
+            context['unread'] = qs.filter(is_read=False).count()
+        except DynamicForm.DoesNotExist:
+            context['form_obj'] = None
+            context['submissions'] = []
+        return context
+
+    def post(self, request, *args, **kwargs):
+        form_id = kwargs.get('form_id')
+        action = request.POST.get('action')
+        ids = request.POST.getlist('submission_ids')
+
+        if action == 'mark_read' and ids:
+            FormSubmission.objects.filter(pk__in=ids).update(is_read=True)
+            messages.success(request, f'{len(ids)} submission(s) marked as read.')
+        elif action == 'delete' and ids:
+            FormSubmission.objects.filter(pk__in=ids).delete()
+            messages.success(request, f'{len(ids)} submission(s) deleted.')
+
+        return redirect('backoffice:form_submissions', form_id=form_id)
+
+
+class SubmissionDetailView(LoginRequiredMixin, TemplateView):
+    """View a single form submission."""
+    template_name = 'backoffice/submission_detail.html'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        submission_id = kwargs.get('submission_id')
+        try:
+            submission = FormSubmission.objects.select_related('form', 'source_page').get(pk=submission_id)
+            if not submission.is_read:
+                submission.is_read = True
+                submission.save(update_fields=['is_read'])
+            context['submission'] = submission
+            context['fields'] = submission.get_display_fields()
+        except FormSubmission.DoesNotExist:
+            context['submission'] = None
+            context['fields'] = []
         return context

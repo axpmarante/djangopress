@@ -1,0 +1,97 @@
+{% extends "backoffice/base.html" %}
+
+{% block title %}Submission Detail{% endblock %}
+
+{% block content %}
+<div class="p-6">
+    {% if submission %}
+    <!-- Header -->
+    <div class="mb-6">
+        <div class="flex items-center gap-2 text-sm text-gray-500 mb-1">
+            <a href="{% url 'backoffice:forms' %}" class="hover:text-blue-600">Forms</a>
+            <span>/</span>
+            <a href="{% url 'backoffice:form_edit' form_id=submission.form.id %}" class="hover:text-blue-600">{{ submission.form.name }}</a>
+            <span>/</span>
+            <a href="{% url 'backoffice:form_submissions' form_id=submission.form.id %}" class="hover:text-blue-600">Submissions</a>
+            <span>/</span>
+            <span>#{{ submission.id }}</span>
+        </div>
+        <h1 class="text-2xl font-bold text-gray-900">Submission #{{ submission.id }}</h1>
+        <p class="text-sm text-gray-500 mt-1">{{ submission.created_at|date:"F d, Y H:i:s" }}</p>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- Submitted Data -->
+        <div class="lg:col-span-2">
+            <div class="bg-white rounded-lg shadow">
+                <div class="px-6 py-4 border-b">
+                    <h2 class="text-lg font-semibold text-gray-900">Submitted Data</h2>
+                </div>
+                <div class="divide-y divide-gray-100">
+                    {% for field in fields %}
+                    <div class="px-6 py-4">
+                        <dt class="text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">{{ field.label }}</dt>
+                        <dd class="text-sm text-gray-900 whitespace-pre-wrap">{% if field.value == True %}Yes{% elif field.value == False %}No{% else %}{{ field.value }}{% endif %}</dd>
+                    </div>
+                    {% empty %}
+                    <div class="px-6 py-8 text-center text-gray-500">No data.</div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Metadata -->
+        <div>
+            <div class="bg-white rounded-lg shadow">
+                <div class="px-6 py-4 border-b">
+                    <h2 class="text-lg font-semibold text-gray-900">Metadata</h2>
+                </div>
+                <div class="px-6 py-4 space-y-3 text-sm">
+                    <div>
+                        <span class="text-gray-500">Form:</span>
+                        <span class="ml-2 text-gray-900">{{ submission.form.name }}</span>
+                    </div>
+                    <div>
+                        <span class="text-gray-500">Date:</span>
+                        <span class="ml-2 text-gray-900">{{ submission.created_at|date:"M d, Y H:i" }}</span>
+                    </div>
+                    <div>
+                        <span class="text-gray-500">Language:</span>
+                        <span class="ml-2 text-gray-900">{{ submission.language|default:"—" }}</span>
+                    </div>
+                    <div>
+                        <span class="text-gray-500">IP Address:</span>
+                        <span class="ml-2 text-gray-900 font-mono text-xs">{{ submission.ip_address|default:"—" }}</span>
+                    </div>
+                    {% if submission.source_page %}
+                    <div>
+                        <span class="text-gray-500">Source Page:</span>
+                        <a href="{% url 'backoffice:page_edit' page_id=submission.source_page.id %}" class="ml-2 text-blue-600 hover:underline">{{ submission.source_page.default_title }}</a>
+                    </div>
+                    {% endif %}
+                    <div>
+                        <span class="text-gray-500">Notification:</span>
+                        <span class="ml-2">
+                            {% if submission.notification_sent %}
+                            <span class="text-green-600">Sent</span>
+                            {% else %}
+                            <span class="text-gray-400">Not sent</span>
+                            {% endif %}
+                        </span>
+                    </div>
+                    {% if submission.user_agent %}
+                    <div>
+                        <span class="text-gray-500">User Agent:</span>
+                        <p class="text-xs text-gray-600 mt-1 break-all">{{ submission.user_agent }}</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {% else %}
+    <p class="text-gray-500">Submission not found.</p>
+    {% endif %}
+</div>
+{% endblock %}

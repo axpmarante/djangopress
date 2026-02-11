@@ -1,16 +1,14 @@
 import re
 
 from django.conf import settings
-from django.views.generic import TemplateView, FormView
-from django.urls import reverse_lazy, reverse
+from django.views.generic import TemplateView
 from django.contrib import messages
-from django.shortcuts import get_object_or_404
-from django.http import Http404, HttpResponseRedirect
+from django.http import Http404, HttpResponseRedirect, JsonResponse
 from django.utils import translation
+from django.utils.translation import get_language
 from django.views.decorators.http import require_POST
 
-from .forms import ContactForm
-from .models import Contact, Page
+from .models import Page, DynamicForm, FormSubmission
 
 
 class PageView(TemplateView):
@@ -90,28 +88,84 @@ class PageView(TemplateView):
         return context
 
 
-class ContactFormView(FormView):
-    """Contact form submission handler"""
-    form_class = ContactForm
+@require_POST
+def form_submit(request, slug):
+    """Handle dynamic form submissions."""
+    from .email import send_form_notification, send_form_confirmation
 
-    def get_success_url(self):
-        # Redirect back to the contact page
-        return reverse_lazy('core:page', kwargs={'slug': 'contact'})
+    try:
+        form_def = DynamicForm.objects.get(slug=slug, is_active=True)
+    except DynamicForm.DoesNotExist:
+        if _is_ajax(request):
+            return JsonResponse({'success': False, 'error': 'Form not found.'}, status=404)
+        raise Http404("Form not found.")
 
-    def form_valid(self, form):
-        # Save to database
-        Contact.objects.create(
-            name=form.cleaned_data['name'],
-            email=form.cleaned_data['email'],
-            subject=form.cleaned_data['subject'],
-            message=form.cleaned_data['message'],
-        )
-        messages.success(self.request, 'Thank you for your message. We will get back to you soon!')
-        return super().form_valid(form)
+    # Collect POST fields, excluding Django internals
+    data = {}
+    for key, value in request.POST.items():
+        if key in ('csrfmiddlewaretoken',):
+            continue
+        data[key] = True if value == 'on' else value
 
-    def form_invalid(self, form):
-        messages.error(self.request, 'Please correct the errors below.')
-        return super().form_invalid(form)
+    # Validate
+    errors = form_def.validate_submission(data)
+    if errors:
+        if _is_ajax(request):
+            return JsonResponse({'success': False, 'errors': errors}, status=400)
+        for field, msg in errors.items():
+            messages.error(request, msg)
+        referer = request.META.get('HTTP_REFERER', '/')
+        return HttpResponseRedirect(referer)
+
+    # Determine source page from referer
+    source_page = None
+    referer = request.META.get('HTTP_REFERER', '')
+    if referer:
+        from urllib.parse import urlparse
+        path = urlparse(referer).path.strip('/')
+        # Strip language prefix
+        parts = path.split('/', 1)
+        page_slug = parts[1] if len(parts) > 1 else parts[0]
+        if page_slug:
+            lang = get_language() or 'en'
+            source_page = Page.get_by_slug(page_slug, lang)
+
+    # Get IP
+    x_forwarded = request.META.get('HTTP_X_FORWARDED_FOR')
+    ip = x_forwarded.split(',')[0].strip() if x_forwarded else request.META.get('REMOTE_ADDR')
+
+    submission = FormSubmission.objects.create(
+        form=form_def,
+        data=data,
+        source_page=source_page,
+        language=get_language() or '',
+        ip_address=ip,
+        user_agent=request.META.get('HTTP_USER_AGENT', ''),
+    )
+
+    # Send emails
+    send_form_notification(form_def, submission)
+    if form_def.send_confirmation_email:
+        send_form_confirmation(form_def, submission, lang=get_language() or 'en')
+
+    if _is_ajax(request):
+        lang = get_language() or 'en'
+        return JsonResponse({
+            'success': True,
+            'message': form_def.get_success_message(lang),
+        })
+
+    lang = get_language() or 'en'
+    messages.success(request, form_def.get_success_message(lang))
+    referer = request.META.get('HTTP_REFERER', '/')
+    return HttpResponseRedirect(referer)
+
+
+def _is_ajax(request):
+    return (
+        request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+        or 'application/json' in request.headers.get('Accept', '')
+    )
 
 
 @require_POST

@@ -109,6 +109,33 @@ CRITICAL for tabs: Each panel MUST use `absolute inset-0` so panels stack on top
 </div>
 ```
 
+### Form Submission (Dynamic Forms)
+Forms are handled by the DynamicForm system. Each form has a **slug** and a submission endpoint at `/forms/SLUG/submit/`.
+
+**How it works:**
+1. A `DynamicForm` record must exist in the database with a matching slug (e.g. slug=`contact`)
+2. The HTML form's `action` points to `/forms/SLUG/submit/`
+3. On submit, all form fields are saved as JSON and the site owner gets an email notification
+4. Common slugs: `contact`, `quote-request`, `booking`, `newsletter`
+
+```html
+<form action="/forms/contact/submit/" method="post" class="space-y-6">
+  {{% csrf_token %}}
+  <input type="text" name="name" required placeholder="..." class="w-full px-4 py-3 border rounded-lg">
+  <input type="email" name="email" required placeholder="..." class="w-full px-4 py-3 border rounded-lg">
+  <textarea name="message" rows="5" required placeholder="..." class="w-full px-4 py-3 border rounded-lg"></textarea>
+  <button type="submit" class="...">{{{{ trans.form_submit }}}}</button>
+</form>
+```
+
+**Rules:**
+- The `action` MUST be `/forms/SLUG/submit/` where SLUG matches a DynamicForm slug
+- Always include `{{% csrf_token %}}`
+- Input `name` attributes are fixed identifiers (not translated) — they become the JSON keys in the submission
+- Use `{{{{ trans.xxx }}}}` for visible text: labels, placeholders, and button text
+- For checkbox fields use `<input type="checkbox" name="consent">`
+- The form slug MUST correspond to an existing DynamicForm record — if no form exists for that slug, submissions will fail
+
 **Rules:**
 - Always use the exact class names shown (e.g. `splide`, `splide__track`, `splide__list`, `splide__slide`)
 - Splide options go in the `data-splide` JSON attribute — do NOT add inline `<script>` tags
@@ -487,7 +514,7 @@ Do NOT hardcode page links. Use this loop pattern:
 - Use `item.children.all` to check for and iterate over sub-items — these are prefetched and ready to use
 - Do NOT use `MENU_ITEMS.last` or any index-based access — the user can reorder items at any time
 - Do NOT use `{{{{ trans.menu_xxx }}}}` for menu labels — the menu items have their own i18n labels
-- For CTA buttons, use `{{{{ trans.cta_text }}}}` for the label and `{{% url 'core:page' slug='contact' %}}` or a `{{{{ trans.xxx }}}}` variable for the URL — keep CTAs separate from the menu loop
+- For CTA buttons, use `{{{{ trans.cta_text }}}}` for the label and `/forms/contact/submit/` or a `{{{{ trans.xxx }}}}` variable for the URL — keep CTAs separate from the menu loop
 - You can still use `{{{{ trans.xxx }}}}` for other translatable text (taglines, CTAs, etc.)
 {menu_info}
 

@@ -43,6 +43,12 @@ urlpatterns = [
     path('page/<int:page_id>/edit/', views.PageEditView.as_view(), name='page_edit'),
     path('page/<int:page_id>/images/', views.ProcessImagesView.as_view(), name='process_images'),
 
+    # Forms
+    path('forms/', views.FormsView.as_view(), name='forms'),
+    path('forms/<int:form_id>/edit/', views.FormEditView.as_view(), name='form_edit'),
+    path('forms/<int:form_id>/submissions/', views.FormSubmissionsView.as_view(), name='form_submissions'),
+    path('forms/submission/<int:submission_id>/', views.SubmissionDetailView.as_view(), name='submission_detail'),
+
     # Blueprint
     path('blueprint/', views.BlueprintView.as_view(), name='blueprint'),
     path('api/save-blueprint-page/', api_views.save_blueprint_page, name='api_save_blueprint_page'),

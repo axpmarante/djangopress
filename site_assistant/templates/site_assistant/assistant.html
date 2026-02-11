@@ -567,11 +567,11 @@ function formatToolData(action) {
         return `<p class="text-xs text-gray-500 mt-2">${action.images.length} image(s) found</p>`;
     }
 
-    // Contacts
-    if (action.contacts) {
-        if (action.contacts.length === 0) return '<p class="text-xs text-gray-500 mt-2 italic">No contacts found.</p>';
-        const rows = action.contacts.map(c =>
-            `<tr class="border-t border-gray-200"><td class="py-1 pr-3">${escapeHtml(c.name)}</td><td class="py-1 pr-3 text-gray-500">${escapeHtml(c.email)}</td><td class="py-1 text-gray-400">${escapeHtml(c.created_at?.substring(0, 10) || '')}</td></tr>`
+    // Form Submissions
+    if (action.submissions) {
+        if (action.submissions.length === 0) return '<p class="text-xs text-gray-500 mt-2 italic">No submissions found.</p>';
+        const rows = action.submissions.map(s =>
+            `<tr class="border-t border-gray-200"><td class="py-1 pr-3">${escapeHtml(s.form)}</td><td class="py-1 pr-3 text-gray-500">${s.is_read ? 'Read' : 'Unread'}</td><td class="py-1 text-gray-400">${escapeHtml(s.created_at?.substring(0, 10) || '')}</td></tr>`
         ).join('');
         return `<div class="mt-2 overflow-x-auto"><table class="text-xs w-full"><tbody>${rows}</tbody></table></div>`;
     }

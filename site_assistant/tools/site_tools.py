@@ -1,6 +1,6 @@
 """Site-wide tools — always available regardless of active page."""
 
-from core.models import Page, SiteSettings, MenuItem, SiteImage, Contact
+from core.models import Page, SiteSettings, MenuItem, SiteImage, DynamicForm, FormSubmission
 
 
 def list_pages(params, context):
@@ -371,19 +371,118 @@ def list_images(params, context):
     return {'success': True, 'images': data, 'message': f'{len(data)} images found'}
 
 
-def list_contacts(params, context):
-    limit = params.get('limit', 10)
-    contacts = Contact.objects.order_by('-created_at')[:limit]
+def list_forms(params, context):
+    forms = DynamicForm.objects.all()
     data = []
-    for c in contacts:
+    for f in forms:
         data.append({
-            'id': c.id,
-            'name': c.name,
-            'email': c.email,
-            'message': c.message[:100],
-            'created_at': c.created_at.isoformat(),
+            'id': f.id,
+            'name': f.name,
+            'slug': f.slug,
+            'notification_email': f.notification_email,
+            'is_active': f.is_active,
+            'submission_count': f.submissions.count(),
         })
-    return {'success': True, 'contacts': data, 'message': f'{len(data)} recent contacts'}
+    return {'success': True, 'forms': data, 'message': f'{len(data)} forms found'}
+
+
+def create_form(params, context):
+    name = params.get('name', '')
+    slug = params.get('slug', '')
+    if not name or not slug:
+        return {'success': False, 'message': 'Missing name or slug'}
+
+    if DynamicForm.objects.filter(slug=slug).exists():
+        return {'success': False, 'message': f'Form with slug "{slug}" already exists'}
+
+    form = DynamicForm.objects.create(
+        name=name,
+        slug=slug,
+        notification_email=params.get('notification_email', ''),
+        fields_schema=params.get('fields_schema', []),
+        success_message_i18n=params.get('success_message_i18n', {}),
+        is_active=params.get('is_active', True),
+    )
+    return {
+        'success': True,
+        'form_id': form.id,
+        'message': f'Created form "{name}" (slug: {slug}). Action URL: /forms/{slug}/submit/',
+    }
+
+
+def update_form(params, context):
+    form_id = params.get('form_id')
+    slug = params.get('slug')
+    if not form_id and not slug:
+        return {'success': False, 'message': 'Missing form_id or slug'}
+
+    try:
+        if form_id:
+            form = DynamicForm.objects.get(pk=form_id)
+        else:
+            form = DynamicForm.objects.get(slug=slug)
+    except DynamicForm.DoesNotExist:
+        return {'success': False, 'message': f'Form not found'}
+
+    updated = []
+    if 'name' in params:
+        form.name = params['name']
+        updated.append('name')
+    if 'notification_email' in params:
+        form.notification_email = params['notification_email']
+        updated.append('notification_email')
+    if 'fields_schema' in params:
+        form.fields_schema = params['fields_schema']
+        updated.append('fields_schema')
+    if 'success_message_i18n' in params:
+        form.success_message_i18n = params['success_message_i18n']
+        updated.append('success_message')
+    if 'is_active' in params:
+        form.is_active = params['is_active']
+        updated.append('is_active')
+
+    if updated:
+        form.save()
+
+    return {'success': True, 'message': f'Updated form "{form.name}": {", ".join(updated)}'}
+
+
+def delete_form(params, context):
+    form_id = params.get('form_id')
+    slug = params.get('slug')
+    if not form_id and not slug:
+        return {'success': False, 'message': 'Missing form_id or slug'}
+
+    try:
+        if form_id:
+            form = DynamicForm.objects.get(pk=form_id)
+        else:
+            form = DynamicForm.objects.get(slug=slug)
+    except DynamicForm.DoesNotExist:
+        return {'success': False, 'message': 'Form not found'}
+
+    name = form.name
+    form.delete()
+    return {'success': True, 'message': f'Deleted form "{name}" and all its submissions'}
+
+
+def list_form_submissions(params, context):
+    limit = params.get('limit', 10)
+    form_slug = params.get('form_slug', '')
+    qs = FormSubmission.objects.select_related('form').order_by('-created_at')
+    if form_slug:
+        qs = qs.filter(form__slug=form_slug)
+    submissions = qs[:limit]
+    data = []
+    for s in submissions:
+        data.append({
+            'id': s.id,
+            'form': s.form.name,
+            'data': s.data,
+            'is_read': s.is_read,
+            'created_at': s.created_at.isoformat(),
+        })
+    return {'success': True, 'submissions': data, 'message': f'{len(data)} recent submissions'}
 
 
 def get_stats(params, context):
@@ -393,7 +492,7 @@ def get_stats(params, context):
             'total_pages': Page.objects.count(),
             'active_pages': Page.objects.filter(is_active=True).count(),
             'total_images': SiteImage.objects.filter(is_active=True).count(),
-            'total_contacts': Contact.objects.count(),
+            'total_submissions': FormSubmission.objects.count(),
             'total_menu_items': MenuItem.objects.count(),
         },
         'message': 'Site statistics retrieved',
@@ -436,7 +535,11 @@ SITE_TOOLS = {
     'get_settings': get_settings,
     'update_settings': update_settings,
     'list_images': list_images,
-    'list_contacts': list_contacts,
+    'list_forms': list_forms,
+    'create_form': create_form,
+    'update_form': update_form,
+    'delete_form': delete_form,
+    'list_form_submissions': list_form_submissions,
     'get_stats': get_stats,
     'set_active_page': set_active_page,
 }
