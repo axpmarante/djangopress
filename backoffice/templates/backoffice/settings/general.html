@@ -1,0 +1,204 @@
+{% extends 'backoffice/base.html' %}
+
+{% block title %}General Settings{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <!-- Breadcrumb + Header -->
+    <div>
+        <nav class="text-sm text-gray-500 mb-2">
+            <a href="{% url 'backoffice:settings' %}" class="hover:text-blue-600">Settings</a>
+            <span class="mx-1">/</span>
+            <span class="text-gray-900">General</span>
+        </nav>
+        <h2 class="text-3xl font-bold text-gray-900">General Settings</h2>
+        <p class="text-gray-600 mt-1">Site name, description, project briefing, logos, and domain</p>
+    </div>
+
+    <form method="post" enctype="multipart/form-data">
+        {% csrf_token %}
+
+        <!-- Site Name & Description -->
+        <div class="bg-white rounded-lg shadow overflow-hidden mb-6">
+            <div class="p-6 border-b border-gray-200">
+                <h3 class="text-lg font-semibold text-gray-900">Site Identity</h3>
+            </div>
+            <div class="p-6 space-y-6">
+                <!-- Site Name (i18n) -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Site Name *</label>
+                    <input type="hidden" name="site_name_i18n" id="id_site_name_i18n">
+                    <div class="space-y-2">
+                        {% for lang in settings.enabled_languages %}
+                        <div class="flex items-center gap-2">
+                            <span class="text-xs font-medium text-gray-500 uppercase w-8">{{ lang.code }}</span>
+                            <input type="text"
+                                   data-i18n-field="site_name" data-lang="{{ lang.code }}"
+                                   required
+                                   class="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                   placeholder="Site name ({{ lang.name }})">
+                        </div>
+                        {% endfor %}
+                    </div>
+                    <p class="mt-1 text-xs text-gray-500">Brand name is typically the same in all languages</p>
+                </div>
+
+                <!-- Site Description (i18n) -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Site Description</label>
+                    <input type="hidden" name="site_description_i18n" id="id_site_description_i18n">
+                    <div class="space-y-2">
+                        {% for lang in settings.enabled_languages %}
+                        <div class="flex items-center gap-2">
+                            <span class="text-xs font-medium text-gray-500 uppercase w-8">{{ lang.code }}</span>
+                            <input type="text"
+                                   data-i18n-field="site_description" data-lang="{{ lang.code }}"
+                                   class="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                   placeholder="Site description ({{ lang.name }})">
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                <!-- Project Briefing -->
+                <div>
+                    <label for="id_project_briefing" class="block text-sm font-medium text-gray-700 mb-2">
+                        Project Briefing
+                        <span class="text-blue-600 ml-1" title="This helps AI generate better content">i</span>
+                    </label>
+                    <textarea name="project_briefing"
+                              id="id_project_briefing"
+                              rows="8"
+                              class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-mono text-sm"
+                              placeholder="Detailed description of your project/business for AI context.&#10;&#10;Include:&#10;- Business type and what you do&#10;- Target audience&#10;- Brand values&#10;- Tone of voice (professional, casual, friendly, etc.)&#10;- Key messaging">{{ settings.project_briefing }}</textarea>
+                    <p class="mt-2 text-xs text-gray-500">
+                        This information is used by AI to generate content that matches your brand voice and messaging.
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Logos & Favicon -->
+        <div class="bg-white rounded-lg shadow overflow-hidden mb-6">
+            <div class="p-6 border-b border-gray-200">
+                <h3 class="text-lg font-semibold text-gray-900">Logos & Favicon</h3>
+            </div>
+            <div class="p-6 space-y-6">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <!-- Main Logo (Light Backgrounds) -->
+                    <div>
+                        <label for="id_logo" class="block text-sm font-medium text-gray-700 mb-2">Logo (Light Backgrounds)</label>
+                        {% if settings.logo %}
+                        <div class="mb-3 p-4 bg-white border border-gray-200 rounded-lg">
+                            <img src="{{ settings.logo.url }}" alt="Current logo" class="h-16 object-contain">
+                            <p class="text-xs text-gray-500 mt-2">Current main logo</p>
+                        </div>
+                        {% endif %}
+                        <input type="file" name="logo" id="id_logo" accept="image/*"
+                               class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
+                        <p class="mt-1 text-xs text-gray-500">Main logo for light/white backgrounds</p>
+                    </div>
+
+                    <!-- Secondary Logo (Dark Backgrounds) -->
+                    <div>
+                        <label for="id_logo_dark_bg" class="block text-sm font-medium text-gray-700 mb-2">Logo (Dark Backgrounds)</label>
+                        {% if settings.logo_dark_bg %}
+                        <div class="mb-3 p-4 bg-gray-800 border border-gray-700 rounded-lg">
+                            <img src="{{ settings.logo_dark_bg.url }}" alt="Current dark logo" class="h-16 object-contain">
+                            <p class="text-xs text-gray-400 mt-2">Current dark logo</p>
+                        </div>
+                        {% endif %}
+                        <input type="file" name="logo_dark_bg" id="id_logo_dark_bg" accept="image/*"
+                               class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
+                        <p class="mt-1 text-xs text-gray-500">Alternative logo for dark backgrounds</p>
+                    </div>
+                </div>
+
+                <!-- Favicon -->
+                <div>
+                    <label for="id_favicon" class="block text-sm font-medium text-gray-700 mb-2">Favicon</label>
+                    {% if settings.favicon %}
+                    <div class="mb-3 p-3 bg-gray-50 border border-gray-200 rounded-lg inline-block">
+                        <img src="{{ settings.favicon.url }}" alt="Current favicon" class="h-8 w-8 object-contain">
+                        <p class="text-xs text-gray-500 mt-1">Current favicon</p>
+                    </div>
+                    {% endif %}
+                    <input type="file" name="favicon" id="id_favicon" accept="image/png,image/x-icon,image/svg+xml"
+                           class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
+                    <p class="mt-1 text-xs text-gray-500">Browser tab icon. Recommended: 32x32 or 48x48 PNG.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Domain -->
+        <div class="bg-white rounded-lg shadow overflow-hidden mb-6">
+            <div class="p-6 border-b border-gray-200">
+                <h3 class="text-lg font-semibold text-gray-900">Domain</h3>
+            </div>
+            <div class="p-6">
+                <div>
+                    <label for="id_domain" class="block text-sm font-medium text-gray-700 mb-2">Site Domain</label>
+                    <input type="text" name="domain" id="id_domain" value="{{ settings.domain }}"
+                           class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                           placeholder="get-algarve-com">
+                    <p class="mt-1 text-xs text-gray-500">Used as the storage folder name in Google Cloud Storage. Set this BEFORE uploading media.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Maintenance Mode -->
+        <div class="bg-white rounded-lg shadow overflow-hidden mb-6">
+            <div class="p-6 border-b border-gray-200">
+                <h3 class="text-lg font-semibold text-gray-900">Maintenance</h3>
+            </div>
+            <div class="p-6">
+                <div class="flex items-center">
+                    <input type="checkbox" name="maintenance_mode" id="id_maintenance_mode"
+                           {% if settings.maintenance_mode %}checked{% endif %}
+                           class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
+                    <label for="id_maintenance_mode" class="ml-2 block text-sm text-gray-700">Enable Maintenance Mode</label>
+                </div>
+                <p class="mt-2 text-xs text-gray-500">When enabled, your site will show a maintenance page to visitors</p>
+            </div>
+        </div>
+
+        <!-- Form Actions -->
+        <div class="flex items-center justify-end space-x-4">
+            <a href="{% url 'backoffice:settings' %}" class="px-6 py-2 text-sm font-medium text-gray-700 hover:text-gray-900">Cancel</a>
+            <button type="submit" class="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">Save General Settings</button>
+        </div>
+    </form>
+</div>
+
+<script>
+const I18N_DATA = {
+    site_name: {{ site_name_i18n_json|safe }},
+    site_description: {{ site_description_i18n_json|safe }},
+};
+
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('[data-i18n-field]').forEach(input => {
+        const field = input.dataset.i18nField;
+        const lang = input.dataset.lang;
+        const data = I18N_DATA[field];
+        if (data && data[lang]) {
+            input.value = data[lang];
+        }
+    });
+});
+
+document.querySelector('form').addEventListener('submit', function() {
+    ['site_name', 'site_description'].forEach(field => {
+        const inputs = document.querySelectorAll(`[data-i18n-field="${field}"]`);
+        const jsonData = {};
+        inputs.forEach(input => {
+            const lang = input.dataset.lang;
+            const val = input.value.trim();
+            if (val) jsonData[lang] = val;
+        });
+        const hidden = document.getElementById(`id_${field}_i18n`);
+        if (hidden) hidden.value = JSON.stringify(jsonData);
+    });
+});
+</script>
+{% endblock %}

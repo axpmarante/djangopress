@@ -62,6 +62,12 @@ urlpatterns = [
 
     # Settings
     path('settings/', views.SettingsView.as_view(), name='settings'),
+    path('settings/general/', views.SettingsGeneralView.as_view(), name='settings_general'),
+    path('settings/languages/', views.SettingsLanguagesView.as_view(), name='settings_languages'),
+    path('settings/contact/', views.SettingsContactView.as_view(), name='settings_contact'),
+    path('settings/seo/', views.SettingsSEOView.as_view(), name='settings_seo'),
+    path('settings/design/', views.SettingsDesignSystemView.as_view(), name='settings_design'),
+    path('settings/integrations/', views.SettingsIntegrationsView.as_view(), name='settings_integrations'),
     path('settings/header/', views.HeaderEditView.as_view(), name='header_edit'),
     path('settings/footer/', views.FooterEditView.as_view(), name='footer_edit'),
 

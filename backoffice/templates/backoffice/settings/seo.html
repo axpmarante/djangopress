@@ -1,0 +1,47 @@
+{% extends 'backoffice/base.html' %}
+
+{% block title %}SEO Settings{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <!-- Breadcrumb + Header -->
+    <div>
+        <nav class="text-sm text-gray-500 mb-2">
+            <a href="{% url 'backoffice:settings' %}" class="hover:text-blue-600">Settings</a>
+            <span class="mx-1">/</span>
+            <span class="text-gray-900">SEO</span>
+        </nav>
+        <h2 class="text-3xl font-bold text-gray-900">SEO & Analytics</h2>
+        <p class="text-gray-600 mt-1">Search engine optimization and analytics tracking</p>
+    </div>
+
+    <form method="post">
+        {% csrf_token %}
+
+        <div class="bg-white rounded-lg shadow overflow-hidden mb-6">
+            <div class="p-6 space-y-6">
+                <div>
+                    <label for="id_meta_keywords" class="block text-sm font-medium text-gray-700 mb-2">Meta Keywords</label>
+                    <input type="text" name="meta_keywords" id="id_meta_keywords" value="{{ settings.meta_keywords }}"
+                           class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                           placeholder="keyword1, keyword2, keyword3">
+                    <p class="mt-1 text-xs text-gray-500">Comma-separated list of keywords</p>
+                </div>
+
+                <div>
+                    <label for="id_google_analytics_id" class="block text-sm font-medium text-gray-700 mb-2">Google Analytics ID</label>
+                    <input type="text" name="google_analytics_id" id="id_google_analytics_id" value="{{ settings.google_analytics_id }}"
+                           class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                           placeholder="G-XXXXXXXXXX or UA-XXXXXXXXX-X">
+                </div>
+            </div>
+        </div>
+
+        <!-- Form Actions -->
+        <div class="flex items-center justify-end space-x-4">
+            <a href="{% url 'backoffice:settings' %}" class="px-6 py-2 text-sm font-medium text-gray-700 hover:text-gray-900">Cancel</a>
+            <button type="submit" class="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">Save SEO Settings</button>
+        </div>
+    </form>
+</div>
+{% endblock %}

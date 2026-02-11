@@ -523,8 +523,137 @@ class PageEditView(LoginRequiredMixin, TemplateView):
 
 
 class SettingsView(LoginRequiredMixin, TemplateView):
-    """Site settings management"""
+    """Site settings hub — cards linking to child pages"""
     template_name = 'backoffice/settings.html'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        site_settings, _ = SiteSettings.objects.get_or_create(pk=1)
+        context['settings'] = site_settings
+
+        # Integrations summary for hub card
+        from ai.utils.llm_config import get_env
+        integrations = [
+            bool(get_env('GEMINI_API_KEY')),
+            bool(get_env('OPENAI_API_KEY')),
+            bool(get_env('ANTHROPIC_API_KEY')),
+            bool(get_env('MAILGUN_API_KEY')),
+            bool(get_env('GS_BUCKET_NAME')),
+        ]
+        context['integrations_configured'] = sum(integrations)
+        context['integrations_total'] = len(integrations)
+
+        return context
+
+
+class SettingsGeneralView(LoginRequiredMixin, TemplateView):
+    """General settings: site name, description, briefing, logos, domain"""
+    template_name = 'backoffice/settings/general.html'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        site_settings, _ = SiteSettings.objects.get_or_create(pk=1)
+        context['settings'] = site_settings
+        context['site_name_i18n_json'] = json.dumps(site_settings.site_name_i18n or {})
+        context['site_description_i18n_json'] = json.dumps(site_settings.site_description_i18n or {})
+        return context
+
+    def post(self, request, *args, **kwargs):
+        settings, _ = SiteSettings.objects.get_or_create(pk=1)
+
+        for i18n_field in ('site_name_i18n', 'site_description_i18n'):
+            raw = request.POST.get(i18n_field, '')
+            if raw:
+                try:
+                    setattr(settings, i18n_field, json.loads(raw))
+                except (ValueError, TypeError):
+                    pass
+
+        settings.project_briefing = request.POST.get('project_briefing', '')
+        settings.domain = request.POST.get('domain', settings.domain)
+        settings.maintenance_mode = 'maintenance_mode' in request.POST
+
+        if 'logo' in request.FILES:
+            settings.logo = request.FILES['logo']
+        if 'logo_dark_bg' in request.FILES:
+            settings.logo_dark_bg = request.FILES['logo_dark_bg']
+        if 'favicon' in request.FILES:
+            settings.favicon = request.FILES['favicon']
+
+        settings.save()
+        messages.success(request, 'General settings updated successfully!')
+        return redirect('backoffice:settings_general')
+
+
+class SettingsLanguagesView(LoginRequiredMixin, TemplateView):
+    """Language settings — AJAX save via existing API endpoint"""
+    template_name = 'backoffice/settings/languages.html'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        site_settings, _ = SiteSettings.objects.get_or_create(pk=1)
+        context['settings'] = site_settings
+        context['available_languages'] = ALL_LANGUAGES
+        return context
+
+
+class SettingsContactView(LoginRequiredMixin, TemplateView):
+    """Contact info and social media links"""
+    template_name = 'backoffice/settings/contact.html'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        site_settings, _ = SiteSettings.objects.get_or_create(pk=1)
+        context['settings'] = site_settings
+        context['contact_address_i18n_json'] = json.dumps(site_settings.contact_address_i18n or {})
+        return context
+
+    def post(self, request, *args, **kwargs):
+        settings, _ = SiteSettings.objects.get_or_create(pk=1)
+
+        raw = request.POST.get('contact_address_i18n', '')
+        if raw:
+            try:
+                settings.contact_address_i18n = json.loads(raw)
+            except (ValueError, TypeError):
+                pass
+
+        settings.contact_email = request.POST.get('contact_email', settings.contact_email)
+        settings.contact_phone = request.POST.get('contact_phone', '')
+        settings.facebook_url = request.POST.get('facebook_url', '')
+        settings.instagram_url = request.POST.get('instagram_url', '')
+        settings.linkedin_url = request.POST.get('linkedin_url', '')
+        settings.twitter_url = request.POST.get('twitter_url', '')
+
+        settings.save()
+        messages.success(request, 'Contact & social settings updated successfully!')
+        return redirect('backoffice:settings_contact')
+
+
+class SettingsSEOView(LoginRequiredMixin, TemplateView):
+    """SEO and analytics"""
+    template_name = 'backoffice/settings/seo.html'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        site_settings, _ = SiteSettings.objects.get_or_create(pk=1)
+        context['settings'] = site_settings
+        return context
+
+    def post(self, request, *args, **kwargs):
+        settings, _ = SiteSettings.objects.get_or_create(pk=1)
+
+        settings.meta_keywords = request.POST.get('meta_keywords', '')
+        settings.google_analytics_id = request.POST.get('google_analytics_id', '')
+
+        settings.save()
+        messages.success(request, 'SEO settings updated successfully!')
+        return redirect('backoffice:settings_seo')
+
+
+class SettingsDesignSystemView(LoginRequiredMixin, TemplateView):
+    """Design — guide, colors, typography, layout, buttons"""
+    template_name = 'backoffice/settings/design_system.html'
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -532,18 +661,11 @@ class SettingsView(LoginRequiredMixin, TemplateView):
         context['settings'] = site_settings
         context['google_fonts'] = GOOGLE_FONTS_CHOICES
 
-        # Serialize i18n JSON fields for JavaScript
-        context['site_name_i18n_json'] = json.dumps(site_settings.site_name_i18n or {})
-        context['site_description_i18n_json'] = json.dumps(site_settings.site_description_i18n or {})
-        context['contact_address_i18n_json'] = json.dumps(site_settings.contact_address_i18n or {})
-        context['available_languages'] = ALL_LANGUAGES
-
-        # Pages with content (for AI design guide generation)
+        # Design guide: pages + AI models
         context['pages_with_content'] = Page.objects.filter(
             is_active=True
         ).exclude(html_content='').order_by('id')
 
-        # AI models
         try:
             from ai.utils.llm_config import LLMConfig
             config = LLMConfig()
@@ -553,7 +675,109 @@ class SettingsView(LoginRequiredMixin, TemplateView):
             context['ai_models'] = []
             context['default_model'] = 'gemini-pro'
 
-        # Integrations status (read-only, from .env)
+        # Color fields
+        context['color_fields'] = [
+            {'name': 'primary_color', 'label': 'Primary Color', 'value': site_settings.primary_color},
+            {'name': 'primary_color_hover', 'label': 'Primary Hover', 'value': site_settings.primary_color_hover},
+            {'name': 'secondary_color', 'label': 'Secondary Color', 'value': site_settings.secondary_color},
+            {'name': 'accent_color', 'label': 'Accent Color', 'value': site_settings.accent_color},
+            {'name': 'background_color', 'label': 'Background Color', 'value': site_settings.background_color},
+            {'name': 'text_color', 'label': 'Text Color', 'value': site_settings.text_color},
+            {'name': 'heading_color', 'label': 'Heading Color', 'value': site_settings.heading_color},
+        ]
+
+        # Heading levels for template loop
+        context['heading_levels'] = [
+            {'prefix': 'h1', 'label': 'H1', 'font_value': site_settings.h1_font, 'size_value': site_settings.h1_size},
+            {'prefix': 'h2', 'label': 'H2', 'font_value': site_settings.h2_font, 'size_value': site_settings.h2_size},
+            {'prefix': 'h3', 'label': 'H3', 'font_value': site_settings.h3_font, 'size_value': site_settings.h3_size},
+            {'prefix': 'h4', 'label': 'H4', 'font_value': site_settings.h4_font, 'size_value': site_settings.h4_size},
+            {'prefix': 'h5', 'label': 'H5', 'font_value': site_settings.h5_font, 'size_value': site_settings.h5_size},
+            {'prefix': 'h6', 'label': 'H6', 'font_value': site_settings.h6_font, 'size_value': site_settings.h6_size},
+        ]
+
+        context['tailwind_sizes'] = [
+            'text-xs', 'text-sm', 'text-base', 'text-lg', 'text-xl',
+            'text-2xl', 'text-3xl', 'text-4xl', 'text-5xl', 'text-6xl',
+            'text-7xl', 'text-8xl', 'text-9xl',
+        ]
+
+        # Layout choices from model field
+        context['container_width_choices'] = SiteSettings._meta.get_field('container_width').choices
+        context['border_radius_choices'] = SiteSettings._meta.get_field('border_radius_preset').choices
+        context['spacing_scale_choices'] = SiteSettings._meta.get_field('spacing_scale').choices
+        context['shadow_preset_choices'] = SiteSettings._meta.get_field('shadow_preset').choices
+
+        # Button choices from model field
+        context['button_style_choices'] = SiteSettings._meta.get_field('button_style').choices
+        context['button_size_choices'] = SiteSettings._meta.get_field('button_size').choices
+        context['button_border_width_choices'] = SiteSettings._meta.get_field('button_border_width').choices
+
+        # Button color fields
+        context['primary_button_colors'] = [
+            {'name': 'primary_button_bg', 'label': 'Background', 'value': site_settings.primary_button_bg},
+            {'name': 'primary_button_text', 'label': 'Text', 'value': site_settings.primary_button_text},
+            {'name': 'primary_button_border', 'label': 'Border', 'value': site_settings.primary_button_border},
+            {'name': 'primary_button_hover', 'label': 'Hover', 'value': site_settings.primary_button_hover},
+        ]
+        context['secondary_button_colors'] = [
+            {'name': 'secondary_button_bg', 'label': 'Background', 'value': site_settings.secondary_button_bg},
+            {'name': 'secondary_button_text', 'label': 'Text', 'value': site_settings.secondary_button_text},
+            {'name': 'secondary_button_border', 'label': 'Border', 'value': site_settings.secondary_button_border},
+            {'name': 'secondary_button_hover', 'label': 'Hover', 'value': site_settings.secondary_button_hover},
+        ]
+
+        return context
+
+    def post(self, request, *args, **kwargs):
+        settings, _ = SiteSettings.objects.get_or_create(pk=1)
+
+        # Design guide
+        settings.design_guide = request.POST.get('design_guide', settings.design_guide)
+
+        # Colors
+        settings.primary_color = request.POST.get('primary_color', settings.primary_color)
+        settings.primary_color_hover = request.POST.get('primary_color_hover', settings.primary_color_hover)
+        settings.secondary_color = request.POST.get('secondary_color', settings.secondary_color)
+        settings.accent_color = request.POST.get('accent_color', settings.accent_color)
+        settings.background_color = request.POST.get('background_color', settings.background_color)
+        settings.text_color = request.POST.get('text_color', settings.text_color)
+        settings.heading_color = request.POST.get('heading_color', settings.heading_color)
+
+        # Typography
+        settings.heading_font = request.POST.get('heading_font', settings.heading_font)
+        settings.body_font = request.POST.get('body_font', settings.body_font)
+        for i in range(1, 7):
+            setattr(settings, f'h{i}_font', request.POST.get(f'h{i}_font', getattr(settings, f'h{i}_font')))
+            setattr(settings, f'h{i}_size', request.POST.get(f'h{i}_size', getattr(settings, f'h{i}_size')))
+
+        # Layout
+        settings.container_width = request.POST.get('container_width', settings.container_width)
+        settings.border_radius_preset = request.POST.get('border_radius_preset', settings.border_radius_preset)
+        settings.spacing_scale = request.POST.get('spacing_scale', settings.spacing_scale)
+        settings.shadow_preset = request.POST.get('shadow_preset', settings.shadow_preset)
+
+        # Buttons
+        settings.button_style = request.POST.get('button_style', settings.button_style)
+        settings.button_size = request.POST.get('button_size', settings.button_size)
+        settings.button_border_width = request.POST.get('button_border_width', settings.button_border_width)
+
+        for prefix in ('primary_button', 'secondary_button'):
+            for suffix in ('bg', 'text', 'border', 'hover'):
+                field = f'{prefix}_{suffix}'
+                setattr(settings, field, request.POST.get(field, getattr(settings, field)))
+
+        settings.save()
+        messages.success(request, 'Design settings updated successfully!')
+        return redirect('backoffice:settings_design')
+
+
+class SettingsIntegrationsView(LoginRequiredMixin, TemplateView):
+    """Integrations status — read-only"""
+    template_name = 'backoffice/settings/integrations.html'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
         from ai.utils.llm_config import get_env
         context['integrations'] = [
             {'name': 'Google Gemini', 'configured': bool(get_env('GEMINI_API_KEY')), 'description': 'AI generation (Gemini models)'},
@@ -562,110 +786,7 @@ class SettingsView(LoginRequiredMixin, TemplateView):
             {'name': 'Mailgun', 'configured': bool(get_env('MAILGUN_API_KEY')), 'description': 'Email delivery'},
             {'name': 'Google Cloud Storage', 'configured': bool(get_env('GS_BUCKET_NAME')), 'description': 'Media file storage'},
         ]
-
         return context
-
-    def post(self, request, *args, **kwargs):
-        """Handle settings form submission"""
-        settings, _ = SiteSettings.objects.get_or_create(pk=1)
-
-        # Update general information (i18n JSON fields)
-        for i18n_field in ('site_name_i18n', 'site_description_i18n', 'contact_address_i18n'):
-            raw = request.POST.get(i18n_field, '')
-            if raw:
-                try:
-                    setattr(settings, i18n_field, json.loads(raw))
-                except (ValueError, TypeError):
-                    pass
-        settings.project_briefing = request.POST.get('project_briefing', '')
-
-        # Update logos and favicon if provided
-        if 'logo' in request.FILES:
-            settings.logo = request.FILES['logo']
-        if 'logo_dark_bg' in request.FILES:
-            settings.logo_dark_bg = request.FILES['logo_dark_bg']
-        if 'favicon' in request.FILES:
-            settings.favicon = request.FILES['favicon']
-
-        # Update domain
-        settings.domain = request.POST.get('domain', settings.domain)
-
-        # Update contact information
-        settings.contact_email = request.POST.get('contact_email', settings.contact_email)
-        settings.contact_phone = request.POST.get('contact_phone', '')
-
-        # Update social media links
-        settings.facebook_url = request.POST.get('facebook_url', '')
-        settings.instagram_url = request.POST.get('instagram_url', '')
-        settings.linkedin_url = request.POST.get('linkedin_url', '')
-        settings.twitter_url = request.POST.get('twitter_url', '')
-
-        # Update SEO settings
-        settings.meta_keywords = request.POST.get('meta_keywords', '')
-        settings.google_analytics_id = request.POST.get('google_analytics_id', '')
-
-        # Update design guide
-        settings.design_guide = request.POST.get('design_guide', settings.design_guide)
-
-        # Update design system settings (if they exist)
-        if hasattr(settings, 'primary_color'):
-            # Colors
-            settings.primary_color = request.POST.get('primary_color', settings.primary_color)
-            settings.primary_color_hover = request.POST.get('primary_color_hover', settings.primary_color_hover)
-            settings.secondary_color = request.POST.get('secondary_color', settings.secondary_color)
-            settings.accent_color = request.POST.get('accent_color', settings.accent_color)
-            settings.background_color = request.POST.get('background_color', settings.background_color)
-            settings.text_color = request.POST.get('text_color', settings.text_color)
-            settings.heading_color = request.POST.get('heading_color', settings.heading_color)
-
-            # General Typography
-            settings.heading_font = request.POST.get('heading_font', settings.heading_font)
-            settings.body_font = request.POST.get('body_font', settings.body_font)
-
-            # Individual Heading Fonts & Sizes
-            settings.h1_font = request.POST.get('h1_font', settings.h1_font)
-            settings.h1_size = request.POST.get('h1_size', settings.h1_size)
-            settings.h2_font = request.POST.get('h2_font', settings.h2_font)
-            settings.h2_size = request.POST.get('h2_size', settings.h2_size)
-            settings.h3_font = request.POST.get('h3_font', settings.h3_font)
-            settings.h3_size = request.POST.get('h3_size', settings.h3_size)
-            settings.h4_font = request.POST.get('h4_font', settings.h4_font)
-            settings.h4_size = request.POST.get('h4_size', settings.h4_size)
-            settings.h5_font = request.POST.get('h5_font', settings.h5_font)
-            settings.h5_size = request.POST.get('h5_size', settings.h5_size)
-            settings.h6_font = request.POST.get('h6_font', settings.h6_font)
-            settings.h6_size = request.POST.get('h6_size', settings.h6_size)
-
-            # Layout
-            settings.container_width = request.POST.get('container_width', settings.container_width)
-            settings.border_radius_preset = request.POST.get('border_radius_preset', settings.border_radius_preset)
-            settings.spacing_scale = request.POST.get('spacing_scale', settings.spacing_scale)
-            settings.shadow_preset = request.POST.get('shadow_preset', settings.shadow_preset)
-
-            # Button Settings - Style & Size
-            settings.button_style = request.POST.get('button_style', settings.button_style)
-            settings.button_size = request.POST.get('button_size', settings.button_size)
-            settings.button_border_width = request.POST.get('button_border_width', settings.button_border_width)
-
-            # Button Settings - Primary Colors
-            settings.primary_button_bg = request.POST.get('primary_button_bg', settings.primary_button_bg)
-            settings.primary_button_text = request.POST.get('primary_button_text', settings.primary_button_text)
-            settings.primary_button_border = request.POST.get('primary_button_border', settings.primary_button_border)
-            settings.primary_button_hover = request.POST.get('primary_button_hover', settings.primary_button_hover)
-
-            # Button Settings - Secondary Colors
-            settings.secondary_button_bg = request.POST.get('secondary_button_bg', settings.secondary_button_bg)
-            settings.secondary_button_text = request.POST.get('secondary_button_text', settings.secondary_button_text)
-            settings.secondary_button_border = request.POST.get('secondary_button_border', settings.secondary_button_border)
-            settings.secondary_button_hover = request.POST.get('secondary_button_hover', settings.secondary_button_hover)
-
-        # Update maintenance mode
-        settings.maintenance_mode = 'maintenance_mode' in request.POST
-
-        settings.save()
-
-        messages.success(request, 'Settings updated successfully!')
-        return redirect('backoffice:settings')
 
 
 from django.http import JsonResponse

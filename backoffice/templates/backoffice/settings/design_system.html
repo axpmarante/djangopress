@@ -1,0 +1,401 @@
+{% extends 'backoffice/base.html' %}
+
+{% block title %}Design{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <!-- Breadcrumb + Header -->
+    <div>
+        <nav class="text-sm text-gray-500 mb-2">
+            <a href="{% url 'backoffice:settings' %}" class="hover:text-blue-600">Settings</a>
+            <span class="mx-1">/</span>
+            <span class="text-gray-900">Design</span>
+        </nav>
+        <h2 class="text-3xl font-bold text-gray-900">Design</h2>
+        <p class="text-gray-600 mt-1">Design guide, colors, typography, layout, and button styles</p>
+    </div>
+
+    <form method="post">
+        {% csrf_token %}
+
+        <!-- DESIGN GUIDE -->
+        <div class="bg-white rounded-lg shadow overflow-hidden mb-6">
+            <div class="p-6 border-b border-gray-200">
+                <h3 class="text-lg font-semibold text-gray-900">Design Guide</h3>
+                <p class="text-sm text-gray-600 mt-1">Design rules and component patterns injected into all AI prompts</p>
+            </div>
+            <div class="p-6 space-y-6">
+                <!-- AI Generation Panel -->
+                <div class="p-4 bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-200 rounded-lg">
+                    <h4 class="text-sm font-semibold text-purple-900 mb-3">AI-Powered Generation</h4>
+                    <p class="text-xs text-purple-700 mb-4">
+                        Use AI to generate or update the design guide by analyzing your settings, existing pages, and reference design images.
+                    </p>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                        <div>
+                            <label for="id_ai_guide_model" class="block text-xs font-medium text-gray-700 mb-1">AI Model</label>
+                            <select id="id_ai_guide_model"
+                                    class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500">
+                                {% for model_id, model_name in ai_models %}
+                                <option value="{{ model_id }}" {% if model_id == default_model %}selected{% endif %}>{{ model_name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div>
+                            <label for="id_ai_guide_images" class="block text-xs font-medium text-gray-700 mb-1">Reference Images (optional)</label>
+                            <input type="file" id="id_ai_guide_images" multiple accept="image/*"
+                                   class="block w-full text-sm text-gray-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-purple-50 file:text-purple-700 hover:file:bg-purple-100">
+                        </div>
+                    </div>
+
+                    {% if pages_with_content %}
+                    <div class="mb-4">
+                        <label class="block text-xs font-medium text-gray-700 mb-2">Analyze Existing Pages (optional)</label>
+                        <div class="flex flex-wrap gap-2 max-h-24 overflow-y-auto p-2 bg-white border border-gray-200 rounded-lg">
+                            {% for page in pages_with_content %}
+                            <label class="inline-flex items-center gap-1.5 px-2.5 py-1 bg-gray-50 border border-gray-200 rounded-md cursor-pointer hover:bg-purple-50 hover:border-purple-300 transition-colors">
+                                <input type="checkbox" class="ai-guide-page-cb h-3.5 w-3.5 text-purple-600 border-gray-300 rounded" value="{{ page.id }}">
+                                <span class="text-xs text-gray-700">{{ page.default_title|default:page.default_slug }}</span>
+                            </label>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    <div class="flex items-center gap-3">
+                        <button type="button" onclick="aiGenerateDesignGuide()" id="btn_ai_generate_guide"
+                                class="px-4 py-2 text-sm bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors font-medium">
+                            AI Generate Design Guide
+                        </button>
+                        <button type="button" onclick="generateDesignGuide()" id="btn_generate_guide"
+                                class="px-4 py-2 text-sm bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors border border-gray-300">
+                            Quick Generate (no AI)
+                        </button>
+                        <span id="ai-guide-status" class="text-xs text-gray-500"></span>
+                    </div>
+                </div>
+
+                <div>
+                    <label for="id_design_guide" class="block text-sm font-medium text-gray-700 mb-2">Design Guide (Markdown)</label>
+                    <textarea name="design_guide" id="id_design_guide" rows="16"
+                              class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-mono text-sm"
+                              placeholder="# Design Guide&#10;&#10;Describe your design patterns, component conventions, and visual rules here.&#10;This is injected into all AI generation and refinement prompts.">{{ settings.design_guide }}</textarea>
+                </div>
+            </div>
+        </div>
+
+        <!-- COLORS -->
+        <div class="bg-white rounded-lg shadow overflow-hidden mb-6">
+            <div class="p-6 border-b border-gray-200">
+                <h3 class="text-lg font-semibold text-gray-900">Colors</h3>
+            </div>
+            <div class="p-6">
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {% for color in color_fields %}
+                    <div>
+                        <label for="id_{{ color.name }}" class="block text-sm font-medium text-gray-700 mb-2">{{ color.label }}</label>
+                        <div class="flex items-center space-x-3">
+                            <input type="color" name="{{ color.name }}" id="id_{{ color.name }}" value="{{ color.value }}"
+                                   class="h-10 w-20 border border-gray-300 rounded cursor-pointer">
+                            <input type="text" value="{{ color.value }}" readonly
+                                   class="flex-1 px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 font-mono text-sm">
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+
+        <!-- TYPOGRAPHY -->
+        <div class="bg-white rounded-lg shadow overflow-hidden mb-6">
+            <div class="p-6 border-b border-gray-200">
+                <h3 class="text-lg font-semibold text-gray-900">Typography</h3>
+            </div>
+            <div class="p-6 space-y-6">
+                <div class="mb-3 p-3 bg-blue-50 border-l-4 border-blue-500 rounded">
+                    <p class="text-sm text-blue-800">
+                        <strong>Google Fonts:</strong> Select from our curated list of professional Google Fonts.
+                        The selected fonts will be automatically loaded on your website.
+                    </p>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                    <div>
+                        <label for="id_body_font" class="block text-sm font-medium text-gray-700 mb-2">Body Font</label>
+                        <select name="body_font" id="id_body_font"
+                                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            {% for font_value, font_label in google_fonts %}
+                            <option value="{{ font_value }}" {% if settings.body_font == font_value %}selected{% endif %}>{{ font_label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div>
+                        <label for="id_heading_font" class="block text-sm font-medium text-gray-700 mb-2">General Heading Font</label>
+                        <select name="heading_font" id="id_heading_font"
+                                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            {% for font_value, font_label in google_fonts %}
+                            <option value="{{ font_value }}" {% if settings.heading_font == font_value %}selected{% endif %}>{{ font_label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+
+                <p class="text-sm text-gray-600 mb-3">Individual Heading Settings (H1-H6)</p>
+                <div class="space-y-4">
+                    {% for h in heading_levels %}
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label for="id_{{ h.prefix }}_font" class="block text-xs font-medium text-gray-600 mb-1">{{ h.label }} Font Family</label>
+                            <select name="{{ h.prefix }}_font" id="id_{{ h.prefix }}_font"
+                                    class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                {% for font_value, font_label in google_fonts %}
+                                <option value="{{ font_value }}" {% if h.font_value == font_value %}selected{% endif %}>{{ font_label }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div>
+                            <label for="id_{{ h.prefix }}_size" class="block text-xs font-medium text-gray-600 mb-1">{{ h.label }} Size (Tailwind class)</label>
+                            <select name="{{ h.prefix }}_size" id="id_{{ h.prefix }}_size"
+                                    class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                {% for size in tailwind_sizes %}
+                                <option value="{{ size }}" {% if h.size_value == size %}selected{% endif %}>{{ size }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+
+        <!-- LAYOUT -->
+        <div class="bg-white rounded-lg shadow overflow-hidden mb-6">
+            <div class="p-6 border-b border-gray-200">
+                <h3 class="text-lg font-semibold text-gray-900">Layout</h3>
+            </div>
+            <div class="p-6">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        <label for="id_container_width" class="block text-sm font-medium text-gray-700 mb-2">Container Width</label>
+                        <select name="container_width" id="id_container_width"
+                                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            {% for value, label in container_width_choices %}
+                            <option value="{{ value }}" {% if settings.container_width == value %}selected{% endif %}>{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div>
+                        <label for="id_border_radius_preset" class="block text-sm font-medium text-gray-700 mb-2">Border Radius</label>
+                        <select name="border_radius_preset" id="id_border_radius_preset"
+                                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            {% for value, label in border_radius_choices %}
+                            <option value="{{ value }}" {% if settings.border_radius_preset == value %}selected{% endif %}>{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div>
+                        <label for="id_spacing_scale" class="block text-sm font-medium text-gray-700 mb-2">Spacing Scale</label>
+                        <select name="spacing_scale" id="id_spacing_scale"
+                                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            {% for value, label in spacing_scale_choices %}
+                            <option value="{{ value }}" {% if settings.spacing_scale == value %}selected{% endif %}>{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div>
+                        <label for="id_shadow_preset" class="block text-sm font-medium text-gray-700 mb-2">Shadow Preset</label>
+                        <select name="shadow_preset" id="id_shadow_preset"
+                                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            {% for value, label in shadow_preset_choices %}
+                            <option value="{{ value }}" {% if settings.shadow_preset == value %}selected{% endif %}>{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- BUTTONS -->
+        <div class="bg-white rounded-lg shadow overflow-hidden mb-6">
+            <div class="p-6 border-b border-gray-200">
+                <h3 class="text-lg font-semibold text-gray-900">Buttons</h3>
+            </div>
+            <div class="p-6 space-y-6">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div>
+                        <label for="id_button_style" class="block text-sm font-medium text-gray-700 mb-2">Button Style</label>
+                        <select name="button_style" id="id_button_style"
+                                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            {% for value, label in button_style_choices %}
+                            <option value="{{ value }}" {% if settings.button_style == value %}selected{% endif %}>{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div>
+                        <label for="id_button_size" class="block text-sm font-medium text-gray-700 mb-2">Button Size</label>
+                        <select name="button_size" id="id_button_size"
+                                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            {% for value, label in button_size_choices %}
+                            <option value="{{ value }}" {% if settings.button_size == value %}selected{% endif %}>{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div>
+                        <label for="id_button_border_width" class="block text-sm font-medium text-gray-700 mb-2">Border Width</label>
+                        <select name="button_border_width" id="id_button_border_width"
+                                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            {% for value, label in button_border_width_choices %}
+                            <option value="{{ value }}" {% if settings.button_border_width == value %}selected{% endif %}>{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+
+                <div>
+                    <h4 class="text-sm font-semibold text-gray-800 mb-3">Primary Button</h4>
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                        {% for btn in primary_button_colors %}
+                        <div>
+                            <label for="id_{{ btn.name }}" class="block text-xs font-medium text-gray-600 mb-2">{{ btn.label }}</label>
+                            <div class="flex items-center space-x-3">
+                                <input type="color" name="{{ btn.name }}" id="id_{{ btn.name }}" value="{{ btn.value }}"
+                                       class="h-10 w-16 border border-gray-300 rounded cursor-pointer">
+                                <input type="text" value="{{ btn.value }}" readonly
+                                       class="flex-1 px-2 py-2 border border-gray-300 rounded-lg bg-gray-50 font-mono text-xs">
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                <div>
+                    <h4 class="text-sm font-semibold text-gray-800 mb-3">Secondary Button</h4>
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                        {% for btn in secondary_button_colors %}
+                        <div>
+                            <label for="id_{{ btn.name }}" class="block text-xs font-medium text-gray-600 mb-2">{{ btn.label }}</label>
+                            <div class="flex items-center space-x-3">
+                                <input type="color" name="{{ btn.name }}" id="id_{{ btn.name }}" value="{{ btn.value }}"
+                                       class="h-10 w-16 border border-gray-300 rounded cursor-pointer">
+                                <input type="text" value="{{ btn.value }}" readonly
+                                       class="flex-1 px-2 py-2 border border-gray-300 rounded-lg bg-gray-50 font-mono text-xs">
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Form Actions -->
+        <div class="flex items-center justify-end space-x-4">
+            <a href="{% url 'backoffice:settings' %}" class="px-6 py-2 text-sm font-medium text-gray-700 hover:text-gray-900">Cancel</a>
+            <button type="submit" class="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">Save Design</button>
+        </div>
+    </form>
+</div>
+
+<script>
+document.querySelectorAll('input[type="color"]').forEach(colorInput => {
+    const textInput = colorInput.nextElementSibling;
+    if (textInput && textInput.tagName === 'INPUT') {
+        colorInput.addEventListener('change', function() {
+            textInput.value = this.value;
+        });
+    }
+});
+
+function generateDesignGuide() {
+    const btn = document.getElementById('btn_generate_guide');
+    const textarea = document.getElementById('id_design_guide');
+    const originalText = btn.textContent;
+
+    btn.textContent = 'Generating...';
+    btn.disabled = true;
+
+    fetch('{% url "backoffice:api_generate_design_guide" %}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': '{{ csrf_token }}'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            textarea.value = data.design_guide;
+        } else {
+            alert('Error generating design guide: ' + (data.error || 'Unknown error'));
+        }
+    })
+    .catch(error => {
+        alert('Error: ' + error.message);
+    })
+    .finally(() => {
+        btn.textContent = originalText;
+        btn.disabled = false;
+    });
+}
+
+function aiGenerateDesignGuide() {
+    const btn = document.getElementById('btn_ai_generate_guide');
+    const textarea = document.getElementById('id_design_guide');
+    const statusSpan = document.getElementById('ai-guide-status');
+    const originalText = btn.textContent;
+
+    const pageCheckboxes = document.querySelectorAll('.ai-guide-page-cb:checked');
+    const pageIds = Array.from(pageCheckboxes).map(cb => cb.value);
+
+    const imageInput = document.getElementById('id_ai_guide_images');
+    const imageFiles = imageInput ? imageInput.files : [];
+
+    const modelSelect = document.getElementById('id_ai_guide_model');
+    const model = modelSelect ? modelSelect.value : 'gemini-pro';
+
+    const existingGuide = textarea.value.trim();
+
+    const formData = new FormData();
+    formData.append('model', model);
+    if (existingGuide) {
+        formData.append('existing_guide', existingGuide);
+    }
+    pageIds.forEach(pid => formData.append('page_ids', pid));
+    for (let i = 0; i < imageFiles.length; i++) {
+        formData.append('reference_images', imageFiles[i]);
+    }
+
+    btn.textContent = 'Generating with AI...';
+    btn.disabled = true;
+    statusSpan.textContent = 'This may take 30-60 seconds...';
+    statusSpan.className = 'text-xs text-purple-600';
+
+    fetch('/ai/api/generate-design-guide/', {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': '{{ csrf_token }}'
+        },
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            textarea.value = data.design_guide;
+            statusSpan.textContent = 'Generated successfully. Save to persist.';
+            statusSpan.className = 'text-xs text-green-600';
+        } else {
+            statusSpan.textContent = 'Error: ' + (data.error || 'Unknown error');
+            statusSpan.className = 'text-xs text-red-600';
+        }
+    })
+    .catch(error => {
+        statusSpan.textContent = 'Error: ' + error.message;
+        statusSpan.className = 'text-xs text-red-600';
+    })
+    .finally(() => {
+        btn.textContent = originalText;
+        btn.disabled = false;
+    });
+}
+</script>
+{% endblock %}

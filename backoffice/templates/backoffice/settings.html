@@ -6,1224 +6,134 @@
 <div class="space-y-6">
     <!-- Header -->
     <div>
-        <h2 class="text-3xl font-bold text-gray-900">Site Settings</h2>
-        <p class="text-gray-600 mt-1">Configure your site's general settings and preferences</p>
+        <h2 class="text-3xl font-bold text-gray-900">Settings</h2>
+        <p class="text-gray-600 mt-1">Configure your site's settings and preferences</p>
     </div>
 
-    <!-- Settings Form -->
-    <form method="post" enctype="multipart/form-data">
-        {% csrf_token %}
+    <!-- Settings Cards Grid -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
 
-        <!-- General Settings -->
-        <div class="bg-white rounded-lg shadow overflow-hidden mb-6">
-            <div class="p-6 border-b border-gray-200">
-                <h3 class="text-lg font-semibold text-gray-900">General Information</h3>
+        <!-- General -->
+        <a href="{% url 'backoffice:settings_general' %}"
+           class="bg-white rounded-lg shadow hover:shadow-md transition-shadow p-6 group">
+            <div class="flex items-start gap-4">
+                <div class="p-3 bg-blue-50 rounded-lg group-hover:bg-blue-100 transition-colors">
+                    <svg class="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                </div>
+                <div class="flex-1 min-w-0">
+                    <h3 class="text-lg font-semibold text-gray-900 group-hover:text-blue-600 transition-colors">General</h3>
+                    <p class="text-sm text-gray-500 mt-1">Site name, description, logos, domain, maintenance</p>
+                    {% if settings.maintenance_mode %}
+                    <p class="text-xs text-amber-600 mt-2 font-medium">Maintenance mode ON</p>
+                    {% elif settings.site_name %}
+                    <p class="text-xs text-gray-400 mt-2 truncate">{{ settings.site_name }}</p>
+                    {% endif %}
+                </div>
             </div>
-            <div class="p-6 space-y-6">
-                <!-- Site Name (i18n) -->
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-2">
-                        Site Name *
-                    </label>
-                    <input type="hidden" name="site_name_i18n" id="id_site_name_i18n">
-                    <div class="space-y-2">
-                        {% for lang in settings.enabled_languages %}
-                        <div class="flex items-center gap-2">
-                            <span class="text-xs font-medium text-gray-500 uppercase w-8">{{ lang.code }}</span>
-                            <input type="text"
-                                   data-i18n-field="site_name" data-lang="{{ lang.code }}"
-                                   value="{{ settings.site_name_i18n|default_if_none:"{}"|dictsort:lang.code }}"
-                                   required
-                                   class="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                   placeholder="Site name ({{ lang.name }})">
-                        </div>
-                        {% endfor %}
-                    </div>
-                    <p class="mt-1 text-xs text-gray-500">Brand name is typically the same in all languages</p>
-                </div>
+        </a>
 
-                <!-- Site Description (i18n) -->
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-2">
-                        Site Description
-                    </label>
-                    <input type="hidden" name="site_description_i18n" id="id_site_description_i18n">
-                    <div class="space-y-2">
-                        {% for lang in settings.enabled_languages %}
-                        <div class="flex items-center gap-2">
-                            <span class="text-xs font-medium text-gray-500 uppercase w-8">{{ lang.code }}</span>
-                            <input type="text"
-                                   data-i18n-field="site_description" data-lang="{{ lang.code }}"
-                                   class="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                   placeholder="Site description ({{ lang.name }})">
-                        </div>
-                        {% endfor %}
-                    </div>
+        <!-- Languages -->
+        <a href="{% url 'backoffice:settings_languages' %}"
+           class="bg-white rounded-lg shadow hover:shadow-md transition-shadow p-6 group">
+            <div class="flex items-start gap-4">
+                <div class="p-3 bg-green-50 rounded-lg group-hover:bg-green-100 transition-colors">
+                    <svg class="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129"/>
+                    </svg>
                 </div>
-
-                <!-- Project Briefing -->
-                <div>
-                    <label for="id_project_briefing" class="block text-sm font-medium text-gray-700 mb-2">
-                        Project Briefing
-                        <span class="text-blue-600 ml-1" title="This helps AI generate better content">ℹ️</span>
-                    </label>
-                    <textarea name="project_briefing"
-                              id="id_project_briefing"
-                              rows="8"
-                              class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-mono text-sm"
-                              placeholder="Detailed description of your project/business for AI context.&#10;&#10;Include:&#10;• Business type and what you do&#10;• Target audience&#10;• Brand values&#10;• Tone of voice (professional, casual, friendly, etc.)&#10;• Key messaging&#10;&#10;This helps AI generate more relevant and on-brand content.">{{ settings.project_briefing }}</textarea>
-                    <p class="mt-2 text-xs text-gray-500">
-                        💡 <strong>AI Context:</strong> This information is used by AI to generate content that matches your brand voice and messaging.
-                        Be as detailed as possible for better results.
+                <div class="flex-1 min-w-0">
+                    <h3 class="text-lg font-semibold text-gray-900 group-hover:text-green-600 transition-colors">Languages</h3>
+                    <p class="text-sm text-gray-500 mt-1">Default language, enabled languages</p>
+                    {% if settings.enabled_languages %}
+                    <p class="text-xs text-gray-400 mt-2">
+                        {{ settings.enabled_languages|length }} language{{ settings.enabled_languages|length|pluralize }}
+                        {% for lang in settings.enabled_languages %}{% if forloop.counter <= 3 %}{% if not forloop.first %}, {% endif %}{{ lang.code|upper }}{% endif %}{% endfor %}{% if settings.enabled_languages|length > 3 %}...{% endif %}
                     </p>
+                    {% endif %}
                 </div>
+            </div>
+        </a>
 
-                <!-- Logos -->
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <!-- Main Logo (Light Backgrounds) -->
-                    <div>
-                        <label for="id_logo" class="block text-sm font-medium text-gray-700 mb-2">
-                            Logo (Light Backgrounds)
-                        </label>
-                        {% if settings.logo %}
-                        <div class="mb-3 p-4 bg-white border border-gray-200 rounded-lg">
-                            <img src="{{ settings.logo.url }}" alt="Current logo" class="h-16 object-contain">
-                            <p class="text-xs text-gray-500 mt-2">Current main logo</p>
-                        </div>
-                        {% endif %}
-                        <input type="file"
-                               name="logo"
-                               id="id_logo"
-                               accept="image/*"
-                               class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
-                        <p class="mt-1 text-xs text-gray-500">Main logo for light/white backgrounds</p>
-                    </div>
-
-                    <!-- Secondary Logo (Dark Backgrounds) -->
-                    <div>
-                        <label for="id_logo_dark_bg" class="block text-sm font-medium text-gray-700 mb-2">
-                            Logo (Dark Backgrounds)
-                        </label>
-                        {% if settings.logo_dark_bg %}
-                        <div class="mb-3 p-4 bg-gray-800 border border-gray-700 rounded-lg">
-                            <img src="{{ settings.logo_dark_bg.url }}" alt="Current dark logo" class="h-16 object-contain">
-                            <p class="text-xs text-gray-400 mt-2">Current dark logo</p>
-                        </div>
-                        {% endif %}
-                        <input type="file"
-                               name="logo_dark_bg"
-                               id="id_logo_dark_bg"
-                               accept="image/*"
-                               class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
-                        <p class="mt-1 text-xs text-gray-500">Alternative logo for dark backgrounds (typically white/light version)</p>
-                    </div>
+        <!-- Contact & Social -->
+        <a href="{% url 'backoffice:settings_contact' %}"
+           class="bg-white rounded-lg shadow hover:shadow-md transition-shadow p-6 group">
+            <div class="flex items-start gap-4">
+                <div class="p-3 bg-purple-50 rounded-lg group-hover:bg-purple-100 transition-colors">
+                    <svg class="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+                    </svg>
                 </div>
+                <div class="flex-1 min-w-0">
+                    <h3 class="text-lg font-semibold text-gray-900 group-hover:text-purple-600 transition-colors">Contact & Social</h3>
+                    <p class="text-sm text-gray-500 mt-1">Email, phone, address, social media URLs</p>
+                    {% if settings.contact_email %}
+                    <p class="text-xs text-gray-400 mt-2 truncate">{{ settings.contact_email }}</p>
+                    {% endif %}
+                </div>
+            </div>
+        </a>
 
-                <!-- Favicon -->
-                <div>
-                    <label for="id_favicon" class="block text-sm font-medium text-gray-700 mb-2">
-                        Favicon
-                    </label>
-                    {% if settings.favicon %}
-                    <div class="mb-3 p-3 bg-gray-50 border border-gray-200 rounded-lg inline-block">
-                        <img src="{{ settings.favicon.url }}" alt="Current favicon" class="h-8 w-8 object-contain">
-                        <p class="text-xs text-gray-500 mt-1">Current favicon</p>
+        <!-- SEO & Analytics -->
+        <a href="{% url 'backoffice:settings_seo' %}"
+           class="bg-white rounded-lg shadow hover:shadow-md transition-shadow p-6 group">
+            <div class="flex items-start gap-4">
+                <div class="p-3 bg-orange-50 rounded-lg group-hover:bg-orange-100 transition-colors">
+                    <svg class="w-6 h-6 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                    </svg>
+                </div>
+                <div class="flex-1 min-w-0">
+                    <h3 class="text-lg font-semibold text-gray-900 group-hover:text-orange-600 transition-colors">SEO & Analytics</h3>
+                    <p class="text-sm text-gray-500 mt-1">Meta keywords, analytics tracking</p>
+                    {% if settings.google_analytics_id %}
+                    <p class="text-xs text-gray-400 mt-2">Analytics: {{ settings.google_analytics_id }}</p>
+                    {% endif %}
+                </div>
+            </div>
+        </a>
+
+        <!-- Design -->
+        <a href="{% url 'backoffice:settings_design' %}"
+           class="bg-white rounded-lg shadow hover:shadow-md transition-shadow p-6 group">
+            <div class="flex items-start gap-4">
+                <div class="p-3 bg-pink-50 rounded-lg group-hover:bg-pink-100 transition-colors">
+                    <svg class="w-6 h-6 text-pink-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01"/>
+                    </svg>
+                </div>
+                <div class="flex-1 min-w-0">
+                    <h3 class="text-lg font-semibold text-gray-900 group-hover:text-pink-600 transition-colors">Design</h3>
+                    <p class="text-sm text-gray-500 mt-1">Design guide, colors, typography, layout, buttons</p>
+                    {% if settings.primary_color %}
+                    <div class="flex items-center gap-1.5 mt-2">
+                        <span class="h-4 w-4 rounded-full border border-gray-200" style="background:{{ settings.primary_color }}"></span>
+                        <span class="h-4 w-4 rounded-full border border-gray-200" style="background:{{ settings.secondary_color }}"></span>
+                        <span class="h-4 w-4 rounded-full border border-gray-200" style="background:{{ settings.accent_color }}"></span>
+                        <span class="text-xs text-gray-400 ml-1">{{ settings.body_font }}</span>
                     </div>
                     {% endif %}
-                    <input type="file"
-                           name="favicon"
-                           id="id_favicon"
-                           accept="image/png,image/x-icon,image/svg+xml"
-                           class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
-                    <p class="mt-1 text-xs text-gray-500">Browser tab icon. Recommended: 32x32 or 48x48 PNG.</p>
                 </div>
             </div>
-        </div>
+        </a>
 
-        <!-- Language Settings -->
-        <div class="bg-white rounded-lg shadow overflow-hidden mb-6">
-            <div class="p-6 border-b border-gray-200">
-                <h3 class="text-lg font-semibold text-gray-900">Language Settings</h3>
-                <p class="text-sm text-gray-600 mt-1">Configure which languages are available on your site</p>
-            </div>
-            <div class="p-6 space-y-6">
-                <!-- Default Language -->
-                <div>
-                    <label for="id_default_language" class="block text-sm font-medium text-gray-700 mb-2">
-                        Default Language *
-                    </label>
-                    <select name="default_language"
-                            id="id_default_language"
-                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                        {% for lang in settings.enabled_languages %}
-                            <option value="{{ lang.code }}" {% if lang.code == settings.default_language %}selected{% endif %}>
-                                {{ lang.name }} ({{ lang.code }})
-                            </option>
-                        {% endfor %}
-                    </select>
-                    <p class="mt-1 text-xs text-gray-500">The default language for new content and URL prefixes</p>
+        <!-- Integrations -->
+        <a href="{% url 'backoffice:settings_integrations' %}"
+           class="bg-white rounded-lg shadow hover:shadow-md transition-shadow p-6 group">
+            <div class="flex items-start gap-4">
+                <div class="p-3 bg-gray-100 rounded-lg group-hover:bg-gray-200 transition-colors">
+                    <svg class="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/>
+                    </svg>
                 </div>
-
-                <!-- Enabled Languages -->
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-3">
-                        Enabled Languages *
-                    </label>
-
-                    <!-- Language chips -->
-                    <div id="languages-chips" class="flex flex-wrap gap-2 mb-4">
-                        {% for lang in settings.enabled_languages %}
-                        <span class="language-chip inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-100 text-blue-800 text-sm font-medium rounded-full border border-blue-200"
-                              data-code="{{ lang.code }}" data-name="{{ lang.name }}">
-                            {{ lang.name }} ({{ lang.code }})
-                            <button type="button" onclick="removeLanguage(this)"
-                                    class="ml-1 text-blue-600 hover:text-blue-900 font-bold text-lg leading-none">&times;</button>
-                        </span>
-                        {% endfor %}
-                    </div>
-
-                    <!-- Add language picker -->
-                    <div class="flex items-center gap-3">
-                        <select id="language-picker"
-                                class="flex-1 max-w-md px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm">
-                            <option value="">-- Select a language --</option>
-                            {% for code, name in available_languages %}
-                            <option value="{{ code }}" data-name="{{ name }}">{{ name }} ({{ code }})</option>
-                            {% endfor %}
-                        </select>
-                        <button type="button"
-                                onclick="addSelectedLanguage()"
-                                class="px-4 py-2 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 transition-colors">
-                            + Add
-                        </button>
-                    </div>
-
-                    <p class="mt-3 text-xs text-gray-500">
-                        Select a language from the dropdown and click "+ Add". Remove languages by clicking the &times; on each chip.
-                    </p>
-                </div>
-
-                <!-- Save Languages Button (AJAX) -->
-                <div class="pt-4 border-t border-gray-200">
-                    <button type="button"
-                            onclick="saveLanguages()"
-                            class="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
-                        Save Language Settings
-                    </button>
-                    <span id="language-save-status" class="ml-3 text-sm"></span>
+                <div class="flex-1 min-w-0">
+                    <h3 class="text-lg font-semibold text-gray-900 group-hover:text-gray-700 transition-colors">Integrations</h3>
+                    <p class="text-sm text-gray-500 mt-1">External service connections (read-only)</p>
+                    <p class="text-xs text-gray-400 mt-2">{{ integrations_configured }} of {{ integrations_total }} configured</p>
                 </div>
             </div>
-        </div>
-
-        <!-- Contact Information -->
-        <div class="bg-white rounded-lg shadow overflow-hidden mb-6">
-            <div class="p-6 border-b border-gray-200">
-                <h3 class="text-lg font-semibold text-gray-900">Contact Information</h3>
-            </div>
-            <div class="p-6 space-y-6">
-                <!-- Site Domain -->
-                <div>
-                    <label for="id_domain" class="block text-sm font-medium text-gray-700 mb-2">
-                        Site Domain
-                    </label>
-                    <input type="text"
-                           name="domain"
-                           id="id_domain"
-                           value="{{ settings.domain }}"
-                           class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                           placeholder="get-algarve-com">
-                    <p class="mt-1 text-xs text-gray-500">Used as the storage folder name in Google Cloud Storage (e.g. get-algarve-com)</p>
-                </div>
-
-                <!-- Contact Email -->
-                <div>
-                    <label for="id_contact_email" class="block text-sm font-medium text-gray-700 mb-2">
-                        Contact Email *
-                    </label>
-                    <input type="email"
-                           name="contact_email"
-                           id="id_contact_email"
-                           value="{{ settings.contact_email }}"
-                           required
-                           class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                </div>
-
-                <!-- Contact Phone -->
-                <div>
-                    <label for="id_contact_phone" class="block text-sm font-medium text-gray-700 mb-2">
-                        Contact Phone
-                    </label>
-                    <input type="text"
-                           name="contact_phone"
-                           id="id_contact_phone"
-                           value="{{ settings.contact_phone }}"
-                           class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                           placeholder="+351 123 456 789">
-                </div>
-
-                <!-- Contact Address (i18n) -->
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-2">
-                        Contact Address
-                    </label>
-                    <input type="hidden" name="contact_address_i18n" id="id_contact_address_i18n">
-                    <div class="space-y-2">
-                        {% for lang in settings.enabled_languages %}
-                        <div class="flex items-start gap-2">
-                            <span class="text-xs font-medium text-gray-500 uppercase w-8 pt-2">{{ lang.code }}</span>
-                            <textarea data-i18n-field="contact_address" data-lang="{{ lang.code }}"
-                                      rows="2"
-                                      class="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                      placeholder="Address ({{ lang.name }})"></textarea>
-                        </div>
-                        {% endfor %}
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Social Media Links -->
-        <div class="bg-white rounded-lg shadow overflow-hidden mb-6">
-            <div class="p-6 border-b border-gray-200">
-                <h3 class="text-lg font-semibold text-gray-900">Social Media</h3>
-            </div>
-            <div class="p-6 space-y-6">
-                <!-- Facebook -->
-                <div>
-                    <label for="id_facebook_url" class="block text-sm font-medium text-gray-700 mb-2">
-                        Facebook URL
-                    </label>
-                    <input type="url"
-                           name="facebook_url"
-                           id="id_facebook_url"
-                           value="{{ settings.facebook_url }}"
-                           class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                           placeholder="https://facebook.com/yourpage">
-                </div>
-
-                <!-- Instagram -->
-                <div>
-                    <label for="id_instagram_url" class="block text-sm font-medium text-gray-700 mb-2">
-                        Instagram URL
-                    </label>
-                    <input type="url"
-                           name="instagram_url"
-                           id="id_instagram_url"
-                           value="{{ settings.instagram_url }}"
-                           class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                           placeholder="https://instagram.com/yourprofile">
-                </div>
-
-                <!-- LinkedIn -->
-                <div>
-                    <label for="id_linkedin_url" class="block text-sm font-medium text-gray-700 mb-2">
-                        LinkedIn URL
-                    </label>
-                    <input type="url"
-                           name="linkedin_url"
-                           id="id_linkedin_url"
-                           value="{{ settings.linkedin_url }}"
-                           class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                           placeholder="https://linkedin.com/company/yourcompany">
-                </div>
-
-                <!-- Twitter -->
-                <div>
-                    <label for="id_twitter_url" class="block text-sm font-medium text-gray-700 mb-2">
-                        Twitter/X URL
-                    </label>
-                    <input type="url"
-                           name="twitter_url"
-                           id="id_twitter_url"
-                           value="{{ settings.twitter_url }}"
-                           class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                           placeholder="https://twitter.com/yourhandle">
-                </div>
-            </div>
-        </div>
-
-        <!-- SEO Settings -->
-        <div class="bg-white rounded-lg shadow overflow-hidden mb-6">
-            <div class="p-6 border-b border-gray-200">
-                <h3 class="text-lg font-semibold text-gray-900">SEO & Analytics</h3>
-            </div>
-            <div class="p-6 space-y-6">
-                <!-- Meta Keywords -->
-                <div>
-                    <label for="id_meta_keywords" class="block text-sm font-medium text-gray-700 mb-2">
-                        Meta Keywords
-                    </label>
-                    <input type="text"
-                           name="meta_keywords"
-                           id="id_meta_keywords"
-                           value="{{ settings.meta_keywords }}"
-                           class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                           placeholder="keyword1, keyword2, keyword3">
-                    <p class="mt-1 text-xs text-gray-500">Comma-separated list of keywords</p>
-                </div>
-
-                <!-- Google Analytics ID -->
-                <div>
-                    <label for="id_google_analytics_id" class="block text-sm font-medium text-gray-700 mb-2">
-                        Google Analytics ID
-                    </label>
-                    <input type="text"
-                           name="google_analytics_id"
-                           id="id_google_analytics_id"
-                           value="{{ settings.google_analytics_id }}"
-                           class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                           placeholder="G-XXXXXXXXXX or UA-XXXXXXXXX-X">
-                </div>
-            </div>
-        </div>
-
-        <!-- Design Guide (AI Context) -->
-        <div class="bg-white rounded-lg shadow overflow-hidden mb-6">
-            <div class="p-6 border-b border-gray-200">
-                <h3 class="text-lg font-semibold text-gray-900">Design Guide (AI Context)</h3>
-                <p class="text-sm text-gray-600 mt-1">Design rules and component patterns injected into all AI generation and refinement prompts</p>
-            </div>
-            <div class="p-6 space-y-6">
-                <!-- AI Generation Panel -->
-                <div class="p-4 bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-200 rounded-lg">
-                    <h4 class="text-sm font-semibold text-purple-900 mb-3">AI-Powered Generation</h4>
-                    <p class="text-xs text-purple-700 mb-4">
-                        Use AI to generate or update the design guide by analyzing your settings, existing pages, and reference design images.
-                    </p>
-
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                        <!-- Model Selection -->
-                        <div>
-                            <label for="id_ai_guide_model" class="block text-xs font-medium text-gray-700 mb-1">AI Model</label>
-                            <select id="id_ai_guide_model"
-                                    class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500">
-                                {% for model_id, model_name in ai_models %}
-                                <option value="{{ model_id }}" {% if model_id == default_model %}selected{% endif %}>{{ model_name }}</option>
-                                {% endfor %}
-                            </select>
-                        </div>
-
-                        <!-- Reference Images -->
-                        <div>
-                            <label for="id_ai_guide_images" class="block text-xs font-medium text-gray-700 mb-1">
-                                Reference Images (optional)
-                            </label>
-                            <input type="file"
-                                   id="id_ai_guide_images"
-                                   multiple
-                                   accept="image/*"
-                                   class="block w-full text-sm text-gray-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-purple-50 file:text-purple-700 hover:file:bg-purple-100">
-                            <p class="mt-1 text-xs text-gray-500">Upload screenshots or mockups as design references</p>
-                        </div>
-                    </div>
-
-                    <!-- Page Selection -->
-                    {% if pages_with_content %}
-                    <div class="mb-4">
-                        <label class="block text-xs font-medium text-gray-700 mb-2">
-                            Analyze Existing Pages (optional)
-                        </label>
-                        <div class="flex flex-wrap gap-2 max-h-24 overflow-y-auto p-2 bg-white border border-gray-200 rounded-lg">
-                            {% for page in pages_with_content %}
-                            <label class="inline-flex items-center gap-1.5 px-2.5 py-1 bg-gray-50 border border-gray-200 rounded-md cursor-pointer hover:bg-purple-50 hover:border-purple-300 transition-colors">
-                                <input type="checkbox" class="ai-guide-page-cb h-3.5 w-3.5 text-purple-600 border-gray-300 rounded" value="{{ page.id }}">
-                                <span class="text-xs text-gray-700">{{ page.default_title|default:page.default_slug }}</span>
-                            </label>
-                            {% endfor %}
-                        </div>
-                        <p class="mt-1 text-xs text-gray-500">The AI will analyze HTML patterns from selected pages</p>
-                    </div>
-                    {% endif %}
-
-                    <!-- Action Buttons -->
-                    <div class="flex items-center gap-3">
-                        <button type="button"
-                                onclick="aiGenerateDesignGuide()"
-                                id="btn_ai_generate_guide"
-                                class="px-4 py-2 text-sm bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors font-medium">
-                            AI Generate Design Guide
-                        </button>
-                        <button type="button"
-                                onclick="generateDesignGuide()"
-                                id="btn_generate_guide"
-                                class="px-4 py-2 text-sm bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors border border-gray-300">
-                            Quick Generate (no AI)
-                        </button>
-                        <span id="ai-guide-status" class="text-xs text-gray-500"></span>
-                    </div>
-                </div>
-
-                <!-- Design Guide Textarea -->
-                <div>
-                    <label for="id_design_guide" class="block text-sm font-medium text-gray-700 mb-2">
-                        Design Guide (Markdown)
-                    </label>
-                    <textarea name="design_guide"
-                              id="id_design_guide"
-                              rows="20"
-                              class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-mono text-sm"
-                              placeholder="# Design Guide&#10;&#10;Describe your design patterns, component conventions, and visual rules here.&#10;This is injected into all AI generation and refinement prompts.&#10;&#10;Use the buttons above to auto-generate.">{{ settings.design_guide }}</textarea>
-                    <p class="mt-2 text-xs text-gray-500">
-                        This markdown is sent to the AI when generating or refining pages. Save the form to persist changes.
-                    </p>
-                </div>
-            </div>
-        </div>
-
-        <!-- Design System Settings (if exists) -->
-        {% if settings.primary_color %}
-        <div class="bg-white rounded-lg shadow overflow-hidden mb-6">
-            <div class="p-6 border-b border-gray-200">
-                <h3 class="text-lg font-semibold text-gray-900">Design System</h3>
-                <p class="text-sm text-gray-600 mt-1">Customize colors and typography</p>
-            </div>
-            <div class="p-6 space-y-8">
-                <!-- COLORS SECTION -->
-                <div>
-                    <h4 class="text-md font-semibold text-gray-800 mb-4 pb-2 border-b">Colors</h4>
-                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                        <div>
-                            <label for="id_primary_color" class="block text-sm font-medium text-gray-700 mb-2">
-                                Primary Color
-                            </label>
-                            <div class="flex items-center space-x-3">
-                                <input type="color"
-                                       name="primary_color"
-                                       id="id_primary_color"
-                                       value="{{ settings.primary_color }}"
-                                       class="h-10 w-20 border border-gray-300 rounded cursor-pointer">
-                                <input type="text"
-                                       value="{{ settings.primary_color }}"
-                                       readonly
-                                       class="flex-1 px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 font-mono text-sm">
-                            </div>
-                        </div>
-
-                        <div>
-                            <label for="id_primary_color_hover" class="block text-sm font-medium text-gray-700 mb-2">
-                                Primary Hover
-                            </label>
-                            <div class="flex items-center space-x-3">
-                                <input type="color"
-                                       name="primary_color_hover"
-                                       id="id_primary_color_hover"
-                                       value="{{ settings.primary_color_hover }}"
-                                       class="h-10 w-20 border border-gray-300 rounded cursor-pointer">
-                                <input type="text"
-                                       value="{{ settings.primary_color_hover }}"
-                                       readonly
-                                       class="flex-1 px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 font-mono text-sm">
-                            </div>
-                        </div>
-
-                        <div>
-                            <label for="id_secondary_color" class="block text-sm font-medium text-gray-700 mb-2">
-                                Secondary Color
-                            </label>
-                            <div class="flex items-center space-x-3">
-                                <input type="color"
-                                       name="secondary_color"
-                                       id="id_secondary_color"
-                                       value="{{ settings.secondary_color }}"
-                                       class="h-10 w-20 border border-gray-300 rounded cursor-pointer">
-                                <input type="text"
-                                       value="{{ settings.secondary_color }}"
-                                       readonly
-                                       class="flex-1 px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 font-mono text-sm">
-                            </div>
-                        </div>
-
-                        <div>
-                            <label for="id_accent_color" class="block text-sm font-medium text-gray-700 mb-2">
-                                Accent Color
-                            </label>
-                            <div class="flex items-center space-x-3">
-                                <input type="color"
-                                       name="accent_color"
-                                       id="id_accent_color"
-                                       value="{{ settings.accent_color }}"
-                                       class="h-10 w-20 border border-gray-300 rounded cursor-pointer">
-                                <input type="text"
-                                       value="{{ settings.accent_color }}"
-                                       readonly
-                                       class="flex-1 px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 font-mono text-sm">
-                            </div>
-                        </div>
-
-                        <div>
-                            <label for="id_background_color" class="block text-sm font-medium text-gray-700 mb-2">
-                                Background Color
-                            </label>
-                            <div class="flex items-center space-x-3">
-                                <input type="color"
-                                       name="background_color"
-                                       id="id_background_color"
-                                       value="{{ settings.background_color }}"
-                                       class="h-10 w-20 border border-gray-300 rounded cursor-pointer">
-                                <input type="text"
-                                       value="{{ settings.background_color }}"
-                                       readonly
-                                       class="flex-1 px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 font-mono text-sm">
-                            </div>
-                        </div>
-
-                        <div>
-                            <label for="id_text_color" class="block text-sm font-medium text-gray-700 mb-2">
-                                Text Color
-                            </label>
-                            <div class="flex items-center space-x-3">
-                                <input type="color"
-                                       name="text_color"
-                                       id="id_text_color"
-                                       value="{{ settings.text_color }}"
-                                       class="h-10 w-20 border border-gray-300 rounded cursor-pointer">
-                                <input type="text"
-                                       value="{{ settings.text_color }}"
-                                       readonly
-                                       class="flex-1 px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 font-mono text-sm">
-                            </div>
-                        </div>
-
-                        <div>
-                            <label for="id_heading_color" class="block text-sm font-medium text-gray-700 mb-2">
-                                Heading Color
-                            </label>
-                            <div class="flex items-center space-x-3">
-                                <input type="color"
-                                       name="heading_color"
-                                       id="id_heading_color"
-                                       value="{{ settings.heading_color }}"
-                                       class="h-10 w-20 border border-gray-300 rounded cursor-pointer">
-                                <input type="text"
-                                       value="{{ settings.heading_color }}"
-                                       readonly
-                                       class="flex-1 px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 font-mono text-sm">
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- TYPOGRAPHY SECTION -->
-                <div>
-                    <h4 class="text-md font-semibold text-gray-800 mb-4 pb-2 border-b">Typography</h4>
-
-                    <!-- General Fonts -->
-                    <div class="mb-3 p-3 bg-blue-50 border-l-4 border-blue-500 rounded">
-                        <p class="text-sm text-blue-800">
-                            <strong>📝 Google Fonts:</strong> Select from our curated list of professional Google Fonts.
-                            The selected fonts will be automatically loaded on your website.
-                        </p>
-                    </div>
-
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                        <div>
-                            <label for="id_body_font" class="block text-sm font-medium text-gray-700 mb-2">
-                                Body Font
-                            </label>
-                            <select name="body_font"
-                                    id="id_body_font"
-                                    class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                                {% for font_value, font_label in google_fonts %}
-                                    <option value="{{ font_value }}" {% if settings.body_font == font_value %}selected{% endif %}>
-                                        {{ font_label }}
-                                    </option>
-                                {% endfor %}
-                            </select>
-                        </div>
-
-                        <div>
-                            <label for="id_heading_font" class="block text-sm font-medium text-gray-700 mb-2">
-                                General Heading Font
-                            </label>
-                            <select name="heading_font"
-                                    id="id_heading_font"
-                                    class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                                {% for font_value, font_label in google_fonts %}
-                                    <option value="{{ font_value }}" {% if settings.heading_font == font_value %}selected{% endif %}>
-                                        {{ font_label }}
-                                    </option>
-                                {% endfor %}
-                            </select>
-                        </div>
-                    </div>
-
-                    <!-- Individual Heading Fonts & Sizes -->
-                    <p class="text-sm text-gray-600 mb-3">Individual Heading Settings (H1-H6)</p>
-                    <div class="space-y-4">
-                        <!-- H1 -->
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div>
-                                <label for="id_h1_font" class="block text-xs font-medium text-gray-600 mb-1">
-                                    H1 Font Family
-                                </label>
-                                <select name="h1_font" id="id_h1_font"
-                                        class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                                    {% for font_value, font_label in google_fonts %}
-                                        <option value="{{ font_value }}" {% if settings.h1_font == font_value %}selected{% endif %}>
-                                            {{ font_label }}
-                                        </option>
-                                    {% endfor %}
-                                </select>
-                            </div>
-                            <div>
-                                <label for="id_h1_size" class="block text-xs font-medium text-gray-600 mb-1">
-                                    H1 Size (Tailwind class)
-                                </label>
-                                <select name="h1_size" id="id_h1_size"
-                                        class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                                    <option value="text-xs" {% if settings.h1_size == "text-xs" %}selected{% endif %}>text-xs</option>
-                                    <option value="text-sm" {% if settings.h1_size == "text-sm" %}selected{% endif %}>text-sm</option>
-                                    <option value="text-base" {% if settings.h1_size == "text-base" %}selected{% endif %}>text-base</option>
-                                    <option value="text-lg" {% if settings.h1_size == "text-lg" %}selected{% endif %}>text-lg</option>
-                                    <option value="text-xl" {% if settings.h1_size == "text-xl" %}selected{% endif %}>text-xl</option>
-                                    <option value="text-2xl" {% if settings.h1_size == "text-2xl" %}selected{% endif %}>text-2xl</option>
-                                    <option value="text-3xl" {% if settings.h1_size == "text-3xl" %}selected{% endif %}>text-3xl</option>
-                                    <option value="text-4xl" {% if settings.h1_size == "text-4xl" %}selected{% endif %}>text-4xl</option>
-                                    <option value="text-5xl" {% if settings.h1_size == "text-5xl" %}selected{% endif %}>text-5xl</option>
-                                    <option value="text-6xl" {% if settings.h1_size == "text-6xl" %}selected{% endif %}>text-6xl</option>
-                                    <option value="text-7xl" {% if settings.h1_size == "text-7xl" %}selected{% endif %}>text-7xl</option>
-                                    <option value="text-8xl" {% if settings.h1_size == "text-8xl" %}selected{% endif %}>text-8xl</option>
-                                    <option value="text-9xl" {% if settings.h1_size == "text-9xl" %}selected{% endif %}>text-9xl</option>
-                                </select>
-                            </div>
-                        </div>
-
-                        <!-- H2 -->
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div>
-                                <label for="id_h2_font" class="block text-xs font-medium text-gray-600 mb-1">
-                                    H2 Font Family
-                                </label>
-                                <select name="h2_font" id="id_h2_font"
-                                        class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                                    {% for font_value, font_label in google_fonts %}
-                                        <option value="{{ font_value }}" {% if settings.h2_font == font_value %}selected{% endif %}>
-                                            {{ font_label }}
-                                        </option>
-                                    {% endfor %}
-                                </select>
-                            </div>
-                            <div>
-                                <label for="id_h2_size" class="block text-xs font-medium text-gray-600 mb-1">
-                                    H2 Size (Tailwind class)
-                                </label>
-                                <select name="h2_size" id="id_h2_size"
-                                        class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                                    <option value="text-xs" {% if settings.h2_size == "text-xs" %}selected{% endif %}>text-xs</option>
-                                    <option value="text-sm" {% if settings.h2_size == "text-sm" %}selected{% endif %}>text-sm</option>
-                                    <option value="text-base" {% if settings.h2_size == "text-base" %}selected{% endif %}>text-base</option>
-                                    <option value="text-lg" {% if settings.h2_size == "text-lg" %}selected{% endif %}>text-lg</option>
-                                    <option value="text-xl" {% if settings.h2_size == "text-xl" %}selected{% endif %}>text-xl</option>
-                                    <option value="text-2xl" {% if settings.h2_size == "text-2xl" %}selected{% endif %}>text-2xl</option>
-                                    <option value="text-3xl" {% if settings.h2_size == "text-3xl" %}selected{% endif %}>text-3xl</option>
-                                    <option value="text-4xl" {% if settings.h2_size == "text-4xl" %}selected{% endif %}>text-4xl</option>
-                                    <option value="text-5xl" {% if settings.h2_size == "text-5xl" %}selected{% endif %}>text-5xl</option>
-                                    <option value="text-6xl" {% if settings.h2_size == "text-6xl" %}selected{% endif %}>text-6xl</option>
-                                    <option value="text-7xl" {% if settings.h2_size == "text-7xl" %}selected{% endif %}>text-7xl</option>
-                                    <option value="text-8xl" {% if settings.h2_size == "text-8xl" %}selected{% endif %}>text-8xl</option>
-                                    <option value="text-9xl" {% if settings.h2_size == "text-9xl" %}selected{% endif %}>text-9xl</option>
-                                </select>
-                            </div>
-                        </div>
-
-                        <!-- H3 -->
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div>
-                                <label for="id_h3_font" class="block text-xs font-medium text-gray-600 mb-1">
-                                    H3 Font Family
-                                </label>
-                                <select name="h3_font" id="id_h3_font"
-                                        class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                                    {% for font_value, font_label in google_fonts %}
-                                        <option value="{{ font_value }}" {% if settings.h3_font == font_value %}selected{% endif %}>
-                                            {{ font_label }}
-                                        </option>
-                                    {% endfor %}
-                                </select>
-                            </div>
-                            <div>
-                                <label for="id_h3_size" class="block text-xs font-medium text-gray-600 mb-1">
-                                    H3 Size (Tailwind class)
-                                </label>
-                                <select name="h3_size" id="id_h3_size"
-                                        class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                                    <option value="text-xs" {% if settings.h3_size == "text-xs" %}selected{% endif %}>text-xs</option>
-                                    <option value="text-sm" {% if settings.h3_size == "text-sm" %}selected{% endif %}>text-sm</option>
-                                    <option value="text-base" {% if settings.h3_size == "text-base" %}selected{% endif %}>text-base</option>
-                                    <option value="text-lg" {% if settings.h3_size == "text-lg" %}selected{% endif %}>text-lg</option>
-                                    <option value="text-xl" {% if settings.h3_size == "text-xl" %}selected{% endif %}>text-xl</option>
-                                    <option value="text-2xl" {% if settings.h3_size == "text-2xl" %}selected{% endif %}>text-2xl</option>
-                                    <option value="text-3xl" {% if settings.h3_size == "text-3xl" %}selected{% endif %}>text-3xl</option>
-                                    <option value="text-4xl" {% if settings.h3_size == "text-4xl" %}selected{% endif %}>text-4xl</option>
-                                    <option value="text-5xl" {% if settings.h3_size == "text-5xl" %}selected{% endif %}>text-5xl</option>
-                                    <option value="text-6xl" {% if settings.h3_size == "text-6xl" %}selected{% endif %}>text-6xl</option>
-                                    <option value="text-7xl" {% if settings.h3_size == "text-7xl" %}selected{% endif %}>text-7xl</option>
-                                    <option value="text-8xl" {% if settings.h3_size == "text-8xl" %}selected{% endif %}>text-8xl</option>
-                                    <option value="text-9xl" {% if settings.h3_size == "text-9xl" %}selected{% endif %}>text-9xl</option>
-                                </select>
-                            </div>
-                        </div>
-
-                        <!-- H4 -->
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div>
-                                <label for="id_h4_font" class="block text-xs font-medium text-gray-600 mb-1">
-                                    H4 Font Family
-                                </label>
-                                <select name="h4_font" id="id_h4_font"
-                                        class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                                    {% for font_value, font_label in google_fonts %}
-                                        <option value="{{ font_value }}" {% if settings.h4_font == font_value %}selected{% endif %}>
-                                            {{ font_label }}
-                                        </option>
-                                    {% endfor %}
-                                </select>
-                            </div>
-                            <div>
-                                <label for="id_h4_size" class="block text-xs font-medium text-gray-600 mb-1">
-                                    H4 Size (Tailwind class)
-                                </label>
-                                <select name="h4_size" id="id_h4_size"
-                                        class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                                    <option value="text-xs" {% if settings.h4_size == "text-xs" %}selected{% endif %}>text-xs</option>
-                                    <option value="text-sm" {% if settings.h4_size == "text-sm" %}selected{% endif %}>text-sm</option>
-                                    <option value="text-base" {% if settings.h4_size == "text-base" %}selected{% endif %}>text-base</option>
-                                    <option value="text-lg" {% if settings.h4_size == "text-lg" %}selected{% endif %}>text-lg</option>
-                                    <option value="text-xl" {% if settings.h4_size == "text-xl" %}selected{% endif %}>text-xl</option>
-                                    <option value="text-2xl" {% if settings.h4_size == "text-2xl" %}selected{% endif %}>text-2xl</option>
-                                    <option value="text-3xl" {% if settings.h4_size == "text-3xl" %}selected{% endif %}>text-3xl</option>
-                                    <option value="text-4xl" {% if settings.h4_size == "text-4xl" %}selected{% endif %}>text-4xl</option>
-                                    <option value="text-5xl" {% if settings.h4_size == "text-5xl" %}selected{% endif %}>text-5xl</option>
-                                    <option value="text-6xl" {% if settings.h4_size == "text-6xl" %}selected{% endif %}>text-6xl</option>
-                                    <option value="text-7xl" {% if settings.h4_size == "text-7xl" %}selected{% endif %}>text-7xl</option>
-                                    <option value="text-8xl" {% if settings.h4_size == "text-8xl" %}selected{% endif %}>text-8xl</option>
-                                    <option value="text-9xl" {% if settings.h4_size == "text-9xl" %}selected{% endif %}>text-9xl</option>
-                                </select>
-                            </div>
-                        </div>
-
-                        <!-- H5 -->
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div>
-                                <label for="id_h5_font" class="block text-xs font-medium text-gray-600 mb-1">
-                                    H5 Font Family
-                                </label>
-                                <select name="h5_font" id="id_h5_font"
-                                        class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                                    {% for font_value, font_label in google_fonts %}
-                                        <option value="{{ font_value }}" {% if settings.h5_font == font_value %}selected{% endif %}>
-                                            {{ font_label }}
-                                        </option>
-                                    {% endfor %}
-                                </select>
-                            </div>
-                            <div>
-                                <label for="id_h5_size" class="block text-xs font-medium text-gray-600 mb-1">
-                                    H5 Size (Tailwind class)
-                                </label>
-                                <select name="h5_size" id="id_h5_size"
-                                        class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                                    <option value="text-xs" {% if settings.h5_size == "text-xs" %}selected{% endif %}>text-xs</option>
-                                    <option value="text-sm" {% if settings.h5_size == "text-sm" %}selected{% endif %}>text-sm</option>
-                                    <option value="text-base" {% if settings.h5_size == "text-base" %}selected{% endif %}>text-base</option>
-                                    <option value="text-lg" {% if settings.h5_size == "text-lg" %}selected{% endif %}>text-lg</option>
-                                    <option value="text-xl" {% if settings.h5_size == "text-xl" %}selected{% endif %}>text-xl</option>
-                                    <option value="text-2xl" {% if settings.h5_size == "text-2xl" %}selected{% endif %}>text-2xl</option>
-                                    <option value="text-3xl" {% if settings.h5_size == "text-3xl" %}selected{% endif %}>text-3xl</option>
-                                    <option value="text-4xl" {% if settings.h5_size == "text-4xl" %}selected{% endif %}>text-4xl</option>
-                                    <option value="text-5xl" {% if settings.h5_size == "text-5xl" %}selected{% endif %}>text-5xl</option>
-                                    <option value="text-6xl" {% if settings.h5_size == "text-6xl" %}selected{% endif %}>text-6xl</option>
-                                    <option value="text-7xl" {% if settings.h5_size == "text-7xl" %}selected{% endif %}>text-7xl</option>
-                                    <option value="text-8xl" {% if settings.h5_size == "text-8xl" %}selected{% endif %}>text-8xl</option>
-                                    <option value="text-9xl" {% if settings.h5_size == "text-9xl" %}selected{% endif %}>text-9xl</option>
-                                </select>
-                            </div>
-                        </div>
-
-                        <!-- H6 -->
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div>
-                                <label for="id_h6_font" class="block text-xs font-medium text-gray-600 mb-1">
-                                    H6 Font Family
-                                </label>
-                                <select name="h6_font" id="id_h6_font"
-                                        class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                                    {% for font_value, font_label in google_fonts %}
-                                        <option value="{{ font_value }}" {% if settings.h6_font == font_value %}selected{% endif %}>
-                                            {{ font_label }}
-                                        </option>
-                                    {% endfor %}
-                                </select>
-                            </div>
-                            <div>
-                                <label for="id_h6_size" class="block text-xs font-medium text-gray-600 mb-1">
-                                    H6 Size (Tailwind class)
-                                </label>
-                                <select name="h6_size" id="id_h6_size"
-                                        class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                                    <option value="text-xs" {% if settings.h6_size == "text-xs" %}selected{% endif %}>text-xs</option>
-                                    <option value="text-sm" {% if settings.h6_size == "text-sm" %}selected{% endif %}>text-sm</option>
-                                    <option value="text-base" {% if settings.h6_size == "text-base" %}selected{% endif %}>text-base</option>
-                                    <option value="text-lg" {% if settings.h6_size == "text-lg" %}selected{% endif %}>text-lg</option>
-                                    <option value="text-xl" {% if settings.h6_size == "text-xl" %}selected{% endif %}>text-xl</option>
-                                    <option value="text-2xl" {% if settings.h6_size == "text-2xl" %}selected{% endif %}>text-2xl</option>
-                                    <option value="text-3xl" {% if settings.h6_size == "text-3xl" %}selected{% endif %}>text-3xl</option>
-                                    <option value="text-4xl" {% if settings.h6_size == "text-4xl" %}selected{% endif %}>text-4xl</option>
-                                    <option value="text-5xl" {% if settings.h6_size == "text-5xl" %}selected{% endif %}>text-5xl</option>
-                                    <option value="text-6xl" {% if settings.h6_size == "text-6xl" %}selected{% endif %}>text-6xl</option>
-                                    <option value="text-7xl" {% if settings.h6_size == "text-7xl" %}selected{% endif %}>text-7xl</option>
-                                    <option value="text-8xl" {% if settings.h6_size == "text-8xl" %}selected{% endif %}>text-8xl</option>
-                                    <option value="text-9xl" {% if settings.h6_size == "text-9xl" %}selected{% endif %}>text-9xl</option>
-                                </select>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-            </div>
-        </div>
-        {% endif %}
-
-        <!-- Integrations Status -->
-        <div class="bg-white rounded-lg shadow overflow-hidden mb-6">
-            <div class="p-6 border-b border-gray-200">
-                <h3 class="text-lg font-semibold text-gray-900">Integrations</h3>
-                <p class="text-sm text-gray-600 mt-1">Status of external service connections</p>
-            </div>
-            <div class="p-6">
-                <div class="divide-y divide-gray-100">
-                    {% for integration in integrations %}
-                    <div class="flex items-center justify-between py-3 {% if forloop.first %}pt-0{% endif %} {% if forloop.last %}pb-0{% endif %}">
-                        <div>
-                            <p class="text-sm font-medium text-gray-900">{{ integration.name }}</p>
-                            <p class="text-xs text-gray-500">{{ integration.description }}</p>
-                        </div>
-                        {% if integration.configured %}
-                        <span class="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-green-700 bg-green-50 rounded-full">
-                            <span class="h-1.5 w-1.5 rounded-full bg-green-600"></span>
-                            Configured
-                        </span>
-                        {% else %}
-                        <span class="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-gray-500 bg-gray-50 rounded-full">
-                            <span class="h-1.5 w-1.5 rounded-full bg-gray-400"></span>
-                            Not configured
-                        </span>
-                        {% endif %}
-                    </div>
-                    {% endfor %}
-                </div>
-                <p class="mt-4 text-xs text-gray-400">API keys are managed via the .env file on the server.</p>
-            </div>
-        </div>
-
-        <!-- Maintenance Mode -->
-        <div class="bg-white rounded-lg shadow overflow-hidden mb-6">
-            <div class="p-6 border-b border-gray-200">
-                <h3 class="text-lg font-semibold text-gray-900">Maintenance</h3>
-            </div>
-            <div class="p-6">
-                <div class="flex items-center">
-                    <input type="checkbox"
-                           name="maintenance_mode"
-                           id="id_maintenance_mode"
-                           {% if settings.maintenance_mode %}checked{% endif %}
-                           class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
-                    <label for="id_maintenance_mode" class="ml-2 block text-sm text-gray-700">
-                        Enable Maintenance Mode
-                    </label>
-                </div>
-                <p class="mt-2 text-xs text-gray-500">When enabled, your site will show a maintenance page to visitors</p>
-            </div>
-        </div>
-
-        <!-- Form Actions -->
-        <div class="flex items-center justify-end space-x-4">
-            <a href="{% url 'backoffice:dashboard' %}"
-               class="px-6 py-2 text-sm font-medium text-gray-700 hover:text-gray-900">
-                Cancel
-            </a>
-            <button type="submit"
-                    class="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
-                Save Settings
-            </button>
-        </div>
-    </form>
+        </a>
+    </div>
 </div>
-
-<script>
-// Quick Generate Design Guide from current settings (no AI)
-function generateDesignGuide() {
-    const btn = document.getElementById('btn_generate_guide');
-    const textarea = document.getElementById('id_design_guide');
-    const originalText = btn.textContent;
-
-    btn.textContent = 'Generating...';
-    btn.disabled = true;
-
-    fetch('{% url "backoffice:api_generate_design_guide" %}', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-CSRFToken': '{{ csrf_token }}'
-        }
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            textarea.value = data.design_guide;
-        } else {
-            alert('Error generating design guide: ' + (data.error || 'Unknown error'));
-        }
-    })
-    .catch(error => {
-        alert('Error: ' + error.message);
-    })
-    .finally(() => {
-        btn.textContent = originalText;
-        btn.disabled = false;
-    });
-}
-
-// AI-powered Design Guide generation
-function aiGenerateDesignGuide() {
-    const btn = document.getElementById('btn_ai_generate_guide');
-    const textarea = document.getElementById('id_design_guide');
-    const statusSpan = document.getElementById('ai-guide-status');
-    const originalText = btn.textContent;
-
-    // Collect selected page IDs
-    const pageCheckboxes = document.querySelectorAll('.ai-guide-page-cb:checked');
-    const pageIds = Array.from(pageCheckboxes).map(cb => cb.value);
-
-    // Collect reference images
-    const imageInput = document.getElementById('id_ai_guide_images');
-    const imageFiles = imageInput ? imageInput.files : [];
-
-    // Get selected model
-    const modelSelect = document.getElementById('id_ai_guide_model');
-    const model = modelSelect ? modelSelect.value : 'gemini-pro';
-
-    // Get existing guide
-    const existingGuide = textarea.value.trim();
-
-    // Build FormData (needed for file uploads)
-    const formData = new FormData();
-    formData.append('model', model);
-    if (existingGuide) {
-        formData.append('existing_guide', existingGuide);
-    }
-    pageIds.forEach(pid => formData.append('page_ids', pid));
-    for (let i = 0; i < imageFiles.length; i++) {
-        formData.append('reference_images', imageFiles[i]);
-    }
-
-    // UI feedback
-    btn.textContent = 'Generating with AI...';
-    btn.disabled = true;
-    statusSpan.textContent = 'This may take 30-60 seconds...';
-    statusSpan.className = 'text-xs text-purple-600';
-
-    fetch('/ai/api/generate-design-guide/', {
-        method: 'POST',
-        headers: {
-            'X-CSRFToken': '{{ csrf_token }}'
-        },
-        body: formData
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            textarea.value = data.design_guide;
-            statusSpan.textContent = 'Generated successfully. Save the form to persist.';
-            statusSpan.className = 'text-xs text-green-600';
-        } else {
-            statusSpan.textContent = 'Error: ' + (data.error || 'Unknown error');
-            statusSpan.className = 'text-xs text-red-600';
-        }
-    })
-    .catch(error => {
-        statusSpan.textContent = 'Error: ' + error.message;
-        statusSpan.className = 'text-xs text-red-600';
-    })
-    .finally(() => {
-        btn.textContent = originalText;
-        btn.disabled = false;
-    });
-}
-
-// Sync color picker with text input
-document.querySelectorAll('input[type="color"]').forEach(colorInput => {
-    const textInput = colorInput.nextElementSibling.nextElementSibling;
-
-    colorInput.addEventListener('change', function() {
-        textInput.value = this.value;
-    });
-});
-
-// Language Management Functions
-
-function getEnabledLanguages() {
-    const chips = document.querySelectorAll('#languages-chips .language-chip');
-    return Array.from(chips).map(chip => ({
-        code: chip.dataset.code,
-        name: chip.dataset.name
-    }));
-}
-
-function addSelectedLanguage() {
-    const picker = document.getElementById('language-picker');
-    const selected = picker.options[picker.selectedIndex];
-    if (!picker.value) return;
-
-    const code = picker.value;
-    const name = selected.dataset.name;
-
-    // Check if already added
-    const existing = getEnabledLanguages();
-    if (existing.some(l => l.code === code)) return;
-
-    // Create chip
-    const container = document.getElementById('languages-chips');
-    const chip = document.createElement('span');
-    chip.className = 'language-chip inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-100 text-blue-800 text-sm font-medium rounded-full border border-blue-200';
-    chip.dataset.code = code;
-    chip.dataset.name = name;
-    chip.innerHTML = `${name} (${code}) <button type="button" onclick="removeLanguage(this)" class="ml-1 text-blue-600 hover:text-blue-900 font-bold text-lg leading-none">&times;</button>`;
-    container.appendChild(chip);
-
-    // Reset picker and update state
-    picker.value = '';
-    updatePickerDisabledOptions();
-    updateDefaultLanguageDropdown();
-}
-
-function removeLanguage(button) {
-    const chips = document.querySelectorAll('#languages-chips .language-chip');
-    if (chips.length <= 1) {
-        alert('You must have at least one language enabled.');
-        return;
-    }
-
-    button.closest('.language-chip').remove();
-    updatePickerDisabledOptions();
-    updateDefaultLanguageDropdown();
-}
-
-function updatePickerDisabledOptions() {
-    const enabled = getEnabledLanguages().map(l => l.code);
-    const picker = document.getElementById('language-picker');
-    Array.from(picker.options).forEach(opt => {
-        opt.disabled = opt.value && enabled.includes(opt.value);
-    });
-}
-
-function updateDefaultLanguageDropdown() {
-    const languages = getEnabledLanguages();
-    const defaultSelect = document.getElementById('id_default_language');
-    const currentValue = defaultSelect.value;
-
-    defaultSelect.innerHTML = '';
-    languages.forEach(lang => {
-        const option = document.createElement('option');
-        option.value = lang.code;
-        option.textContent = `${lang.name} (${lang.code})`;
-        if (lang.code === currentValue) option.selected = true;
-        defaultSelect.appendChild(option);
-    });
-
-    if (!defaultSelect.querySelector(`option[value="${currentValue}"]`) && defaultSelect.options.length > 0) {
-        defaultSelect.options[0].selected = true;
-    }
-}
-
-function saveLanguages() {
-    const enabledLanguages = getEnabledLanguages();
-    const defaultLanguage = document.getElementById('id_default_language').value;
-    const statusSpan = document.getElementById('language-save-status');
-
-    if (enabledLanguages.length === 0) {
-        statusSpan.textContent = 'At least one language is required';
-        statusSpan.className = 'ml-3 text-sm text-red-600';
-        return;
-    }
-
-    if (!enabledLanguages.some(l => l.code === defaultLanguage)) {
-        statusSpan.textContent = 'Default language must be in enabled languages';
-        statusSpan.className = 'ml-3 text-sm text-red-600';
-        return;
-    }
-
-    statusSpan.textContent = 'Saving...';
-    statusSpan.className = 'ml-3 text-sm text-gray-600';
-
-    fetch('{% url "backoffice:api_update_languages" %}', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-CSRFToken': '{{ csrf_token }}'
-        },
-        body: JSON.stringify({
-            default_language: defaultLanguage,
-            enabled_languages: enabledLanguages
-        })
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            statusSpan.textContent = 'Saved successfully! Reload page to see changes.';
-            statusSpan.className = 'ml-3 text-sm text-green-600';
-            updateDefaultLanguageDropdown();
-        } else {
-            statusSpan.textContent = `Error: ${data.error}`;
-            statusSpan.className = 'ml-3 text-sm text-red-600';
-        }
-    })
-    .catch(error => {
-        statusSpan.textContent = `Error: ${error.message}`;
-        statusSpan.className = 'ml-3 text-sm text-red-600';
-    });
-}
-
-// Initialize: disable already-enabled languages in the picker
-document.addEventListener('DOMContentLoaded', function() {
-    updatePickerDisabledOptions();
-});
-
-// ======== i18n JSON Field Management ========
-
-// Pre-loaded i18n data from the database
-const I18N_DATA = {
-    site_name: {{ site_name_i18n_json|safe }},
-    site_description: {{ site_description_i18n_json|safe }},
-    contact_address: {{ contact_address_i18n_json|safe }},
-};
-
-// Populate per-language inputs from JSON data on load
-document.addEventListener('DOMContentLoaded', function() {
-    document.querySelectorAll('[data-i18n-field]').forEach(input => {
-        const field = input.dataset.i18nField;
-        const lang = input.dataset.lang;
-        const data = I18N_DATA[field];
-        if (data && data[lang]) {
-            input.value = data[lang];
-        }
-    });
-});
-
-// Before form submit: serialize per-language inputs into hidden JSON fields
-document.querySelector('form').addEventListener('submit', function() {
-    const fields = ['site_name', 'site_description', 'contact_address'];
-    fields.forEach(field => {
-        const inputs = document.querySelectorAll(`[data-i18n-field="${field}"]`);
-        const jsonData = {};
-        inputs.forEach(input => {
-            const lang = input.dataset.lang;
-            const val = input.value.trim();
-            if (val) jsonData[lang] = val;
-        });
-        const hidden = document.getElementById(`id_${field}_i18n`);
-        if (hidden) hidden.value = JSON.stringify(jsonData);
-    });
-});
-</script>
 {% endblock %}

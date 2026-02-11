@@ -61,6 +61,7 @@ ENVIRONMENT=development
 GEMINI_API_KEY=<your-gemini-key>        # Required for AI features
 OPENAI_API_KEY=<optional>
 ANTHROPIC_API_KEY=<optional>
+UNSPLASH_ACCESS_KEY=<optional>          # Stock photos in Process Images
 ```
 
 If you have an existing djangopress project, copy the AI provider keys, GCS credentials, and Mailgun config from its `.env`. The `SECRET_KEY` must be unique per project.
@@ -100,7 +101,7 @@ Go to `/backoffice/settings/header/` and `/backoffice/settings/footer/` → use 
 
 ### 8. Process images
 
-After generating pages with image placeholders, go to `/backoffice/page/<id>/images/` (or click "Process Images" from the page edit view). Use "AI Suggest Prompts" to auto-fill generation prompts and find matching library images, then "Process Selected" to replace placeholders with real images.
+After generating pages with image placeholders, go to `/backoffice/page/<id>/images/` (or click "Process Images" from the page edit view). Use "AI Suggest Prompts" to auto-fill generation prompts and find matching library images, then "Process Selected" to replace placeholders with real images. Three sources available: AI-generated, media library, and Unsplash stock photos (if `UNSPLASH_ACCESS_KEY` is set in `.env`).
 
 ### 9. What NOT to modify for a standard site
 
@@ -308,7 +309,8 @@ Configured in `ai/utils/llm_config.py`. Supports OpenAI, Anthropic, and Google (
 | `/ai/api/refine-page-with-html/` | POST | Refine existing page via form |
 | `/ai/api/chat-refine-page/` | POST | Chat-based iterative refinement (with session history) |
 | `/ai/api/analyze-page-images/` | POST | AI suggests generation prompts, aspect ratios, and library matches per image |
-| `/ai/api/process-page-images/` | POST | Replace image placeholders with library or AI-generated images |
+| `/ai/api/process-page-images/` | POST | Replace image placeholders with library, AI-generated, or Unsplash images |
+| `/ai/api/search-unsplash/` | POST | Search Unsplash photos (proxied, staff-only) |
 | `/ai/api/save-page/` | POST | Save generated page to DB |
 | `/ai/api/refine-header/` | POST | Refine header GlobalSection |
 | `/ai/api/refine-footer/` | POST | Refine footer GlobalSection |
@@ -340,12 +342,24 @@ When "Add image placeholders" is enabled during refinement:
 
 **Process Images** (`/backoffice/page/<id>/images/`) is a dedicated full page for managing all images on a page:
 - Auto-scans all `<img>` tags on page load (not just placeholder images)
-- Each image card has: thumbnail preview, prompt textarea, aspect ratio selector (1:1, 16:9, 4:3, 3:2, 9:16), Generate/Library radio, library dropdown
+- Each image card has: thumbnail preview, prompt textarea, aspect ratio selector (1:1, 16:9, 4:3, 3:2, 9:16), Generate/Library/Unsplash radio, library dropdown
 - **AI Suggest Prompts** button calls `/ai/api/analyze-page-images/` which analyzes page context, project briefing, and media library to auto-fill prompts, aspect ratios, and show up to 3 matching library thumbnails per image
 - Clicking a library suggestion thumbnail auto-selects "From Library" mode
 - **Process Selected** calls `/ai/api/process-page-images/` to replace images with:
   - An existing image from the media library, OR
-  - A newly AI-generated image (via Gemini image generation) at the selected aspect ratio
+  - A newly AI-generated image (via Gemini image generation) at the selected aspect ratio, OR
+  - An **Unsplash** stock photo (searched inline, downloaded and saved as a local SiteImage)
+
+### Unsplash Integration
+
+When `UNSPLASH_ACCESS_KEY` is set in `.env`, a third "Unsplash" radio option appears per image in Process Images. The flow:
+1. Select "Unsplash" radio → search panel appears with a query pre-filled from the image prompt/alt/name
+2. Click "Search" → thumbnails from Unsplash appear (9 results, photographer name on hover)
+3. Click a thumbnail to select it
+4. "Process Selected" downloads the full image, optimizes it, and saves it as a `SiteImage` with tags `unsplash, Photo by {photographer}`
+5. Download tracking is triggered per Unsplash API guidelines
+
+The API key is never exposed to the frontend — searches are proxied via `/ai/api/search-unsplash/`. The client lives in `ai/utils/unsplash.py` and uses `urllib` (no extra dependencies).
 
 ## Adding a New Decoupled App
 
@@ -383,6 +397,7 @@ When "Add image placeholders" is enabled during refinement:
 - `ai/services.py` — `ContentGenerationService`: generate, refine, process images, analyze page images
 - `ai/utils/prompts.py` — `PromptTemplates`: all LLM prompt builders
 - `ai/utils/llm_config.py` — `LLMBase`: unified LLM client (OpenAI, Anthropic, Google), image generation, `optimize_generated_image()`
+- `ai/utils/unsplash.py` — Unsplash API client: `search_photos()`, `download_photo()`, `is_configured()`
 - `ai/views.py` — all AI API endpoints
 - `ai/models.py` — `RefinementSession`
 

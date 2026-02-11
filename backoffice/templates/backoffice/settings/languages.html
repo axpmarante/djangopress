@@ -1,0 +1,208 @@
+{% extends 'backoffice/base.html' %}
+
+{% block title %}Language Settings{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <!-- Breadcrumb + Header -->
+    <div>
+        <nav class="text-sm text-gray-500 mb-2">
+            <a href="{% url 'backoffice:settings' %}" class="hover:text-blue-600">Settings</a>
+            <span class="mx-1">/</span>
+            <span class="text-gray-900">Languages</span>
+        </nav>
+        <h2 class="text-3xl font-bold text-gray-900">Language Settings</h2>
+        <p class="text-gray-600 mt-1">Configure which languages are available on your site</p>
+    </div>
+
+    <div class="bg-white rounded-lg shadow overflow-hidden mb-6">
+        <div class="p-6 space-y-6">
+            <!-- Default Language -->
+            <div>
+                <label for="id_default_language" class="block text-sm font-medium text-gray-700 mb-2">Default Language *</label>
+                <select name="default_language" id="id_default_language"
+                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                    {% for lang in settings.enabled_languages %}
+                    <option value="{{ lang.code }}" {% if lang.code == settings.default_language %}selected{% endif %}>
+                        {{ lang.name }} ({{ lang.code }})
+                    </option>
+                    {% endfor %}
+                </select>
+                <p class="mt-1 text-xs text-gray-500">The default language for new content and URL prefixes</p>
+            </div>
+
+            <!-- Enabled Languages -->
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-3">Enabled Languages *</label>
+
+                <!-- Language chips -->
+                <div id="languages-chips" class="flex flex-wrap gap-2 mb-4">
+                    {% for lang in settings.enabled_languages %}
+                    <span class="language-chip inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-100 text-blue-800 text-sm font-medium rounded-full border border-blue-200"
+                          data-code="{{ lang.code }}" data-name="{{ lang.name }}">
+                        {{ lang.name }} ({{ lang.code }})
+                        <button type="button" onclick="removeLanguage(this)"
+                                class="ml-1 text-blue-600 hover:text-blue-900 font-bold text-lg leading-none">&times;</button>
+                    </span>
+                    {% endfor %}
+                </div>
+
+                <!-- Add language picker -->
+                <div class="flex items-center gap-3">
+                    <select id="language-picker"
+                            class="flex-1 max-w-md px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm">
+                        <option value="">-- Select a language --</option>
+                        {% for code, name in available_languages %}
+                        <option value="{{ code }}" data-name="{{ name }}">{{ name }} ({{ code }})</option>
+                        {% endfor %}
+                    </select>
+                    <button type="button" onclick="addSelectedLanguage()"
+                            class="px-4 py-2 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 transition-colors">
+                        + Add
+                    </button>
+                </div>
+
+                <p class="mt-3 text-xs text-gray-500">
+                    Select a language from the dropdown and click "+ Add". Remove languages by clicking the &times; on each chip.
+                </p>
+            </div>
+
+            <!-- Save Languages Button (AJAX) -->
+            <div class="pt-4 border-t border-gray-200">
+                <div class="flex items-center gap-3">
+                    <button type="button" onclick="saveLanguages()"
+                            class="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+                        Save Language Settings
+                    </button>
+                    <span id="language-save-status" class="text-sm"></span>
+                    <a href="{% url 'backoffice:settings' %}" class="ml-auto px-6 py-2 text-sm font-medium text-gray-700 hover:text-gray-900">Back to Settings</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function getEnabledLanguages() {
+    const chips = document.querySelectorAll('#languages-chips .language-chip');
+    return Array.from(chips).map(chip => ({
+        code: chip.dataset.code,
+        name: chip.dataset.name
+    }));
+}
+
+function addSelectedLanguage() {
+    const picker = document.getElementById('language-picker');
+    const selected = picker.options[picker.selectedIndex];
+    if (!picker.value) return;
+
+    const code = picker.value;
+    const name = selected.dataset.name;
+
+    const existing = getEnabledLanguages();
+    if (existing.some(l => l.code === code)) return;
+
+    const container = document.getElementById('languages-chips');
+    const chip = document.createElement('span');
+    chip.className = 'language-chip inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-100 text-blue-800 text-sm font-medium rounded-full border border-blue-200';
+    chip.dataset.code = code;
+    chip.dataset.name = name;
+    chip.innerHTML = `${name} (${code}) <button type="button" onclick="removeLanguage(this)" class="ml-1 text-blue-600 hover:text-blue-900 font-bold text-lg leading-none">&times;</button>`;
+    container.appendChild(chip);
+
+    picker.value = '';
+    updatePickerDisabledOptions();
+    updateDefaultLanguageDropdown();
+}
+
+function removeLanguage(button) {
+    const chips = document.querySelectorAll('#languages-chips .language-chip');
+    if (chips.length <= 1) {
+        alert('You must have at least one language enabled.');
+        return;
+    }
+    button.closest('.language-chip').remove();
+    updatePickerDisabledOptions();
+    updateDefaultLanguageDropdown();
+}
+
+function updatePickerDisabledOptions() {
+    const enabled = getEnabledLanguages().map(l => l.code);
+    const picker = document.getElementById('language-picker');
+    Array.from(picker.options).forEach(opt => {
+        opt.disabled = opt.value && enabled.includes(opt.value);
+    });
+}
+
+function updateDefaultLanguageDropdown() {
+    const languages = getEnabledLanguages();
+    const defaultSelect = document.getElementById('id_default_language');
+    const currentValue = defaultSelect.value;
+
+    defaultSelect.innerHTML = '';
+    languages.forEach(lang => {
+        const option = document.createElement('option');
+        option.value = lang.code;
+        option.textContent = `${lang.name} (${lang.code})`;
+        if (lang.code === currentValue) option.selected = true;
+        defaultSelect.appendChild(option);
+    });
+
+    if (!defaultSelect.querySelector(`option[value="${currentValue}"]`) && defaultSelect.options.length > 0) {
+        defaultSelect.options[0].selected = true;
+    }
+}
+
+function saveLanguages() {
+    const enabledLanguages = getEnabledLanguages();
+    const defaultLanguage = document.getElementById('id_default_language').value;
+    const statusSpan = document.getElementById('language-save-status');
+
+    if (enabledLanguages.length === 0) {
+        statusSpan.textContent = 'At least one language is required';
+        statusSpan.className = 'text-sm text-red-600';
+        return;
+    }
+
+    if (!enabledLanguages.some(l => l.code === defaultLanguage)) {
+        statusSpan.textContent = 'Default language must be in enabled languages';
+        statusSpan.className = 'text-sm text-red-600';
+        return;
+    }
+
+    statusSpan.textContent = 'Saving...';
+    statusSpan.className = 'text-sm text-gray-600';
+
+    fetch('{% url "backoffice:api_update_languages" %}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': '{{ csrf_token }}'
+        },
+        body: JSON.stringify({
+            default_language: defaultLanguage,
+            enabled_languages: enabledLanguages
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            statusSpan.textContent = 'Saved successfully! Reload page to see changes.';
+            statusSpan.className = 'text-sm text-green-600';
+            updateDefaultLanguageDropdown();
+        } else {
+            statusSpan.textContent = `Error: ${data.error}`;
+            statusSpan.className = 'text-sm text-red-600';
+        }
+    })
+    .catch(error => {
+        statusSpan.textContent = `Error: ${error.message}`;
+        statusSpan.className = 'text-sm text-red-600';
+    });
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    updatePickerDisabledOptions();
+});
+</script>
+{% endblock %}
