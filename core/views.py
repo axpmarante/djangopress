@@ -8,6 +8,8 @@ from django.utils import translation
 from django.utils.translation import get_language
 from django.views.decorators.http import require_POST
 
+from django.core.cache import cache
+
 from .models import Page, DynamicForm, FormSubmission
 
 
@@ -100,12 +102,38 @@ def form_submit(request, slug):
             return JsonResponse({'success': False, 'error': 'Form not found.'}, status=404)
         raise Http404("Form not found.")
 
+    # Get IP early (needed for rate limiting)
+    x_forwarded = request.META.get('HTTP_X_FORWARDED_FOR')
+    ip = x_forwarded.split(',')[0].strip() if x_forwarded else request.META.get('REMOTE_ADDR')
+
     # Collect POST fields, excluding Django internals
     data = {}
     for key, value in request.POST.items():
         if key in ('csrfmiddlewaretoken',):
             continue
         data[key] = True if value == 'on' else value
+
+    # Honeypot check — bots fill hidden fields, humans don't
+    HONEYPOT_FIELD = 'website_url'
+    if data.pop(HONEYPOT_FIELD, ''):
+        # Silently return fake success (don't tip off the bot)
+        lang = get_language() or 'en'
+        if _is_ajax(request):
+            return JsonResponse({'success': True, 'message': form_def.get_success_message(lang)})
+        messages.success(request, form_def.get_success_message(lang))
+        return HttpResponseRedirect(request.META.get('HTTP_REFERER', '/'))
+    else:
+        data.pop(HONEYPOT_FIELD, None)
+
+    # Rate limit: max 5 submissions per IP per form per hour
+    rate_key = f'form_rate_{slug}_{ip}'
+    submission_count = cache.get(rate_key, 0)
+    if submission_count >= 5:
+        msg = 'Too many submissions. Please try again later.'
+        if _is_ajax(request):
+            return JsonResponse({'success': False, 'message': msg}, status=429)
+        messages.error(request, msg)
+        return HttpResponseRedirect(request.META.get('HTTP_REFERER', '/'))
 
     # Validate
     errors = form_def.validate_submission(data)
@@ -130,10 +158,6 @@ def form_submit(request, slug):
             lang = get_language() or 'en'
             source_page = Page.get_by_slug(page_slug, lang)
 
-    # Get IP
-    x_forwarded = request.META.get('HTTP_X_FORWARDED_FOR')
-    ip = x_forwarded.split(',')[0].strip() if x_forwarded else request.META.get('REMOTE_ADDR')
-
     submission = FormSubmission.objects.create(
         form=form_def,
         data=data,
@@ -142,6 +166,9 @@ def form_submit(request, slug):
         ip_address=ip,
         user_agent=request.META.get('HTTP_USER_AGENT', ''),
     )
+
+    # Increment rate limit counter
+    cache.set(rate_key, submission_count + 1, 3600)
 
     # Send emails
     send_form_notification(form_def, submission)

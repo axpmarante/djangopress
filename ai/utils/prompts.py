@@ -121,6 +121,10 @@ Forms are handled by the DynamicForm system. Each form has a **slug** and a subm
 ```html
 <form action="/forms/contact/submit/" method="post" class="space-y-6">
   {{% csrf_token %}}
+  <!-- Honeypot - do NOT remove -->
+  <div style="position:absolute;left:-9999px;" aria-hidden="true">
+    <input type="text" name="website_url" tabindex="-1" autocomplete="off">
+  </div>
   <input type="text" name="name" required placeholder="..." class="w-full px-4 py-3 border rounded-lg">
   <input type="email" name="email" required placeholder="..." class="w-full px-4 py-3 border rounded-lg">
   <textarea name="message" rows="5" required placeholder="..." class="w-full px-4 py-3 border rounded-lg"></textarea>
@@ -134,6 +138,7 @@ Forms are handled by the DynamicForm system. Each form has a **slug** and a subm
 - Input `name` attributes are fixed identifiers (not translated) — they become the JSON keys in the submission
 - Use `{{{{ trans.xxx }}}}` for visible text: labels, placeholders, and button text
 - For checkbox fields use `<input type="checkbox" name="consent">`
+- Always include the honeypot field exactly as shown (the hidden `website_url` input). Do not change the field name `website_url`
 - The form slug MUST correspond to an existing DynamicForm record — if no form exists for that slug, submissions will fail
 
 **Rules:**
