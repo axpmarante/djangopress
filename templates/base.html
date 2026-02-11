@@ -8,6 +8,7 @@
     {% block extra_head %}
     <meta name="description" content="{{ SITE_DESCRIPTION_I18N|get_translation:LANGUAGE_CODE }}">
     {% endblock %}
+    {% hreflang_tags %}
     {% if META_KEYWORDS %}<meta name="keywords" content="{{ META_KEYWORDS }}">{% endif %}
 
     <!-- Tailwind CSS CDN -->

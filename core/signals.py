@@ -1,4 +1,4 @@
-from django.db.models.signals import post_save
+from django.db.models.signals import post_save, post_delete
 from django.dispatch import receiver
 
 from .models import Page, PageVersion
@@ -25,3 +25,15 @@ def create_page_version(sender, instance: Page, created, **kwargs):
     except Exception:
         # Avoid breaking saves due to versioning issues
         pass
+
+
+@receiver(post_save, sender=Page)
+def invalidate_slug_index_on_save(sender, **kwargs):
+    """Invalidate slug lookup index when a page is saved."""
+    Page.invalidate_slug_index()
+
+
+@receiver(post_delete, sender=Page)
+def invalidate_slug_index_on_delete(sender, **kwargs):
+    """Invalidate slug lookup index when a page is deleted."""
+    Page.invalidate_slug_index()

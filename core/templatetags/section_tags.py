@@ -251,6 +251,41 @@ def get_menu_url(menu_item, lang=None):
     return menu_item.get_url(lang)
 
 
+@register.simple_tag(takes_context=True)
+def hreflang_tags(context):
+    """
+    Output <link rel="alternate" hreflang="xx"> tags for all enabled languages,
+    plus an x-default pointing to the default language URL.
+
+    Usage in <head>: {% hreflang_tags %}
+    """
+    page_obj = context.get('page_obj')
+    if not page_obj:
+        return ''
+
+    request = context.get('request')
+    language_codes = context.get('LANGUAGE_CODES', [])
+    default_language = context.get('DEFAULT_LANGUAGE', 'pt')
+
+    if not language_codes or len(language_codes) < 2:
+        return ''
+
+    links = []
+    for lang in language_codes:
+        url = page_obj.get_absolute_url(lang)
+        if request:
+            url = request.build_absolute_uri(url)
+        links.append(f'<link rel="alternate" hreflang="{lang}" href="{url}">')
+
+    # x-default points to the default language URL
+    default_url = page_obj.get_absolute_url(default_language)
+    if request:
+        default_url = request.build_absolute_uri(default_url)
+    links.append(f'<link rel="alternate" hreflang="x-default" href="{default_url}">')
+
+    return mark_safe('\n    '.join(links))
+
+
 @register.simple_tag
 def clear_global_section_cache(key):
     """

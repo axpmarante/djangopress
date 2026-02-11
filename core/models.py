@@ -512,6 +512,8 @@ class SiteImage(models.Model):
 class Page(models.Model):
     """Represents a website page"""
 
+    SLUG_CACHE_KEY = 'page_slug_index'
+
     # OLD FIELD (for backward compatibility, will be removed later)
     slug = models.SlugField('Slug (OLD)', max_length=50, null=True, blank=True)
 
@@ -639,6 +641,68 @@ class Page(models.Model):
         if self.slug_i18n and isinstance(self.slug_i18n, dict):
             return self.slug_i18n.get(lang, self.slug_i18n.get('pt', self.slug))
         return self.slug or ''
+
+    @classmethod
+    def get_by_slug(cls, slug, lang, include_inactive=False):
+        """
+        Look up a page by its language-specific slug using a cached index.
+        Falls back to rebuilding the index on cache miss.
+
+        Args:
+            slug: The URL slug to look up
+            lang: Language code (e.g. 'en', 'pt')
+            include_inactive: If True, also search inactive pages
+
+        Returns:
+            Page instance or None
+        """
+        index = cache.get(cls.SLUG_CACHE_KEY)
+        if index is None:
+            index = cls._build_slug_index()
+
+        key = f'{lang}:{slug}'
+        page_id = index.get(key)
+
+        if page_id is not None:
+            try:
+                page = cls.objects.get(pk=page_id)
+                if page.is_active or include_inactive:
+                    return page
+            except cls.DoesNotExist:
+                pass
+
+        # If include_inactive, also check inactive pages not in the index
+        if include_inactive:
+            for page in cls.objects.filter(is_active=False):
+                if page.get_slug(lang) == slug:
+                    return page
+
+        return None
+
+    @classmethod
+    def _build_slug_index(cls):
+        """
+        Build a {lang:slug -> page_id} index from all pages and cache it.
+
+        Returns:
+            Dict mapping 'lang:slug' strings to page IDs
+        """
+        index = {}
+        for page in cls.objects.all():
+            slug_i18n = page.slug_i18n or {}
+            for lang, slug in slug_i18n.items():
+                if slug:
+                    index[f'{lang}:{slug}'] = page.pk
+            # Also index the legacy slug field
+            if page.slug:
+                index[f'_legacy:{page.slug}'] = page.pk
+        cache.set(cls.SLUG_CACHE_KEY, index, 3600)  # Cache for 1 hour
+        return index
+
+    @classmethod
+    def invalidate_slug_index(cls):
+        """Clear the slug lookup index from cache."""
+        cache.delete(cls.SLUG_CACHE_KEY)
 
     def get_meta_title(self, lang='pt'):
         """Get meta title in specified language, falls back to page title"""

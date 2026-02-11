@@ -1226,6 +1226,178 @@ Return the complete, corrected JSON now:"""
             'report': f"Processed {len(processed)} image(s), {len(failed)} failed"
         }
 
+    def translate_content_to_language(
+        self,
+        target_lang: str,
+        source_lang: str = None,
+    ) -> Dict:
+        """
+        Bulk-translate all existing Pages and GlobalSections to a new language.
+
+        Translates the content['translations'] values using gemini-flash.
+        Does NOT re-templatize — the HTML already has {{ trans.xxx }} variables.
+
+        Args:
+            target_lang: Language code to translate into (e.g. 'es')
+            source_lang: Source language code (defaults to SiteSettings default)
+
+        Returns:
+            Dict with 'translated_pages', 'translated_sections', 'errors'
+        """
+        from core.models import Page, GlobalSection, SiteSettings
+        from django.utils.text import slugify
+
+        site_settings = SiteSettings.objects.first()
+        if not source_lang:
+            source_lang = site_settings.get_default_language() if site_settings else 'pt'
+
+        # Get language names for prompt
+        lang_names = {code: name for code, name in (site_settings.get_enabled_languages() if site_settings else [])}
+        source_name = lang_names.get(source_lang, source_lang)
+        target_name = lang_names.get(target_lang, target_lang)
+
+        translated_pages = 0
+        translated_sections = 0
+        errors = []
+
+        # Translate Pages
+        for page in Page.objects.filter(is_active=True):
+            try:
+                translations = (page.content or {}).get('translations', {})
+                source_trans = translations.get(source_lang, {})
+
+                if not source_trans:
+                    continue
+
+                # Skip if target translations already exist with same number of keys
+                existing_target = translations.get(target_lang, {})
+                if existing_target and len(existing_target) >= len(source_trans):
+                    continue
+
+                # Translate content translations
+                translated = self._translate_key_value_pairs(
+                    source_trans, source_name, target_name
+                )
+                if translated:
+                    if not page.content:
+                        page.content = {}
+                    if 'translations' not in page.content:
+                        page.content['translations'] = {}
+                    page.content['translations'][target_lang] = translated
+
+                # Translate title
+                source_title = (page.title_i18n or {}).get(source_lang, '')
+                if source_title and not (page.title_i18n or {}).get(target_lang):
+                    title_result = self._translate_key_value_pairs(
+                        {'title': source_title}, source_name, target_name
+                    )
+                    if title_result and 'title' in title_result:
+                        if not page.title_i18n:
+                            page.title_i18n = {}
+                        page.title_i18n[target_lang] = title_result['title']
+
+                # Generate slug from translated title
+                if not (page.slug_i18n or {}).get(target_lang):
+                    source_slug = (page.slug_i18n or {}).get(source_lang, '')
+                    if not page.slug_i18n:
+                        page.slug_i18n = {}
+                    if source_slug == 'home':
+                        page.slug_i18n[target_lang] = 'home'
+                    elif page.title_i18n.get(target_lang):
+                        page.slug_i18n[target_lang] = slugify(page.title_i18n[target_lang])
+                    else:
+                        page.slug_i18n[target_lang] = source_slug
+
+                page.save()
+                translated_pages += 1
+
+            except Exception as e:
+                page_title = page.default_title or f'Page {page.id}'
+                errors.append(f'Page "{page_title}": {str(e)}')
+
+        # Translate GlobalSections
+        for section in GlobalSection.objects.filter(is_active=True):
+            try:
+                translations = (section.content or {}).get('translations', {})
+                source_trans = translations.get(source_lang, {})
+
+                if not source_trans:
+                    continue
+
+                existing_target = translations.get(target_lang, {})
+                if existing_target and len(existing_target) >= len(source_trans):
+                    continue
+
+                translated = self._translate_key_value_pairs(
+                    source_trans, source_name, target_name
+                )
+                if translated:
+                    if not section.content:
+                        section.content = {}
+                    if 'translations' not in section.content:
+                        section.content['translations'] = {}
+                    section.content['translations'][target_lang] = translated
+                    section.save()
+                    translated_sections += 1
+
+            except Exception as e:
+                errors.append(f'Section "{section.key}": {str(e)}')
+
+        return {
+            'translated_pages': translated_pages,
+            'translated_sections': translated_sections,
+            'errors': errors,
+        }
+
+    def _translate_key_value_pairs(
+        self,
+        source_dict: Dict[str, str],
+        source_name: str,
+        target_name: str,
+    ) -> Optional[Dict[str, str]]:
+        """
+        Translate a dict of key-value pairs from one language to another using gemini-flash.
+
+        Args:
+            source_dict: Dict like {"hero_title": "Welcome", ...}
+            source_name: Human-readable source language name
+            target_name: Human-readable target language name
+
+        Returns:
+            Translated dict with same keys, or None on failure
+        """
+        prompt = f"""Translate these UI text strings from {source_name} to {target_name}.
+Return ONLY a JSON object with the exact same keys and translated values.
+Keep the translations natural and fluent — these are website UI strings.
+
+{json.dumps(source_dict, ensure_ascii=False, indent=2)}"""
+
+        messages = [{'role': 'user', 'content': prompt}]
+
+        actual_model, provider = self._get_model_info('gemini-flash')
+        t0 = time.time()
+        try:
+            response = self.llm.get_completion(messages, tool_name='gemini-flash')
+            usage = self._extract_usage(response)
+            content = response.choices[0].message.content
+            log_ai_call(
+                action='bulk_translate', model_name=actual_model, provider=provider,
+                user_prompt=prompt, response_text=content,
+                duration_ms=int((time.time() - t0) * 1000), **usage,
+            )
+            result = self._extract_json_from_response(content)
+            if isinstance(result, dict):
+                return result
+            return None
+        except Exception as e:
+            log_ai_call(
+                action='bulk_translate', model_name=actual_model, provider=provider,
+                user_prompt=prompt,
+                duration_ms=int((time.time() - t0) * 1000),
+                success=False, error_message=str(e),
+            )
+            raise
+
     def analyze_page_images(
         self,
         page_id: int,

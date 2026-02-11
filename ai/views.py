@@ -1081,6 +1081,58 @@ def process_page_images_api(request):
         }, status=500)
 
 
+@staff_member_required
+@require_http_methods(["POST"])
+def translate_to_language_api(request):
+    """
+    Bulk-translate all pages and GlobalSections to a new language.
+
+    POST /ai/api/translate-to-language/
+    Body: {
+        "target_language": "es",
+        "source_language": "pt"  // optional, defaults to site default
+    }
+
+    Returns: {
+        "success": true,
+        "translated_pages": 12,
+        "translated_sections": 2,
+        "errors": []
+    }
+    """
+    try:
+        data = json.loads(request.body)
+        target_language = data.get('target_language')
+        source_language = data.get('source_language')
+
+        if not target_language:
+            return JsonResponse({
+                'success': False,
+                'error': 'target_language is required'
+            }, status=400)
+
+        service = ContentGenerationService()
+        result = service.translate_content_to_language(
+            target_lang=target_language,
+            source_lang=source_language,
+        )
+
+        return JsonResponse({
+            'success': True,
+            'translated_pages': result['translated_pages'],
+            'translated_sections': result['translated_sections'],
+            'errors': result['errors'],
+        })
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+
+
 # === Blueprint AI Endpoints ===
 
 @staff_member_required

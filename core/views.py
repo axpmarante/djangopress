@@ -32,19 +32,9 @@ class PageView(TemplateView):
             self.request.user.is_staff and self.request.GET.get('preview') == 'true'
         )
 
-        # Get the page object - search by language-specific slug
-        page_obj = None
-        try:
-            queryset = Page.objects.all() if preview_mode else Page.objects.filter(is_active=True)
-            for page in queryset:
-                if page.get_slug(current_lang) == page_slug:
-                    page_obj = page
-                    break
-
-            if not page_obj:
-                raise Page.DoesNotExist
-
-        except Page.DoesNotExist:
+        # Get the page object via cached slug index
+        page_obj = Page.get_by_slug(page_slug, current_lang, include_inactive=preview_mode)
+        if not page_obj:
             raise Http404(f"Page '{page_slug}' not found for language '{current_lang}'")
 
         context['page_obj'] = page_obj
@@ -152,12 +142,10 @@ def set_language(request):
     # equivalent slug in the target language
     target_slug = slug
     if slug:
-        for page in Page.objects.filter(is_active=True):
-            # Check if this page matches the slug in any language
-            check_lang = source_lang or translation.get_language()
-            if page.get_slug(check_lang) == slug:
-                target_slug = page.get_slug(target_lang) or slug
-                break
+        check_lang = source_lang or translation.get_language()
+        page = Page.get_by_slug(slug, check_lang)
+        if page:
+            target_slug = page.get_slug(target_lang) or slug
 
     # Activate the target language and set cookie
     translation.activate(target_lang)
