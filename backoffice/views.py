@@ -624,6 +624,11 @@ class SettingsContactView(LoginRequiredMixin, TemplateView):
         settings.instagram_url = request.POST.get('instagram_url', '')
         settings.linkedin_url = request.POST.get('linkedin_url', '')
         settings.twitter_url = request.POST.get('twitter_url', '')
+        settings.youtube_url = request.POST.get('youtube_url', '')
+        settings.google_maps_embed_url = request.POST.get('google_maps_embed_url', '')
+        settings.whatsapp_number = request.POST.get('whatsapp_number', '')
+        settings.tiktok_url = request.POST.get('tiktok_url', '')
+        settings.pinterest_url = request.POST.get('pinterest_url', '')
 
         settings.save()
         messages.success(request, 'Contact & social settings updated successfully!')
@@ -631,13 +636,14 @@ class SettingsContactView(LoginRequiredMixin, TemplateView):
 
 
 class SettingsSEOView(LoginRequiredMixin, TemplateView):
-    """SEO and analytics"""
+    """SEO, analytics, code injection, and Open Graph defaults"""
     template_name = 'backoffice/settings/seo.html'
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         site_settings, _ = SiteSettings.objects.get_or_create(pk=1)
         context['settings'] = site_settings
+        context['default_og_description_i18n_json'] = json.dumps(site_settings.default_og_description_i18n or {})
         return context
 
     def post(self, request, *args, **kwargs):
@@ -646,8 +652,25 @@ class SettingsSEOView(LoginRequiredMixin, TemplateView):
         settings.meta_keywords = request.POST.get('meta_keywords', '')
         settings.google_analytics_id = request.POST.get('google_analytics_id', '')
 
+        # Code injection
+        settings.custom_head_code = request.POST.get('custom_head_code', '')
+        settings.custom_body_code = request.POST.get('custom_body_code', '')
+
+        # Open Graph defaults
+        if 'og_image' in request.FILES:
+            settings.og_image = request.FILES['og_image']
+        if request.POST.get('og_image_clear') == '1':
+            settings.og_image = None
+
+        raw = request.POST.get('default_og_description_i18n', '')
+        if raw:
+            try:
+                settings.default_og_description_i18n = json.loads(raw)
+            except (ValueError, TypeError):
+                pass
+
         settings.save()
-        messages.success(request, 'SEO settings updated successfully!')
+        messages.success(request, 'SEO & Code settings updated successfully!')
         return redirect('backoffice:settings_seo')
 
 

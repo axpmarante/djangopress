@@ -15,10 +15,31 @@ GOOGLE_FONTS_CHOICES = [
     ('Inter', 'Inter (UI Sans-serif)'),
     ('Raleway', 'Raleway (Elegant Sans-serif)'),
     ('Nunito', 'Nunito (Rounded Sans-serif)'),
+    ('Nunito Sans', 'Nunito Sans (Clean Rounded Sans-serif)'),
     ('Work Sans', 'Work Sans (Contemporary Sans-serif)'),
     ('Rubik', 'Rubik (Friendly Sans-serif)'),
     ('Oswald', 'Oswald (Bold Sans-serif)'),
     ('Source Sans 3', 'Source Sans 3 (Professional Sans-serif)'),
+    ('DM Sans', 'DM Sans (Geometric Sans-serif)'),
+    ('Manrope', 'Manrope (Modern Geometric Sans-serif)'),
+    ('Plus Jakarta Sans', 'Plus Jakarta Sans (Contemporary Sans-serif)'),
+    ('Space Grotesk', 'Space Grotesk (Proportional Sans-serif)'),
+    ('Outfit', 'Outfit (Minimal Sans-serif)'),
+    ('Figtree', 'Figtree (Friendly Sans-serif)'),
+    ('Lexend', 'Lexend (Readability Sans-serif)'),
+    ('Barlow', 'Barlow (Slightly Condensed Sans-serif)'),
+    ('Barlow Condensed', 'Barlow Condensed (Condensed Sans-serif)'),
+    ('Mukta', 'Mukta (Clean Sans-serif)'),
+    ('Quicksand', 'Quicksand (Rounded Sans-serif)'),
+    ('Cabin', 'Cabin (Humanist Sans-serif)'),
+    ('Karla', 'Karla (Grotesque Sans-serif)'),
+    ('Exo 2', 'Exo 2 (Futuristic Sans-serif)'),
+    ('Mulish', 'Mulish (Minimalist Sans-serif)'),
+    ('Josefin Sans', 'Josefin Sans (Elegant Sans-serif)'),
+    ('Titillium Web', 'Titillium Web (Technical Sans-serif)'),
+    ('Archivo', 'Archivo (Strong Sans-serif)'),
+    ('Sora', 'Sora (Modern Sans-serif)'),
+    ('Red Hat Display', 'Red Hat Display (Bold Sans-serif)'),
 
     # Serif fonts
     ('Playfair Display', 'Playfair Display (Elegant Serif)'),
@@ -28,17 +49,43 @@ GOOGLE_FONTS_CHOICES = [
     ('EB Garamond', 'EB Garamond (Traditional Serif)'),
     ('Cormorant Garamond', 'Cormorant Garamond (Refined Serif)'),
     ('Libre Baskerville', 'Libre Baskerville (Classic Serif)'),
+    ('DM Serif Display', 'DM Serif Display (Bold Serif)'),
+    ('DM Serif Text', 'DM Serif Text (Readable Serif)'),
+    ('Bitter', 'Bitter (Slab Serif)'),
+    ('Roboto Slab', 'Roboto Slab (Modern Slab Serif)'),
+    ('Noto Serif', 'Noto Serif (Universal Serif)'),
+    ('PT Serif', 'PT Serif (Professional Serif)'),
+    ('Vollkorn', 'Vollkorn (Traditional Serif)'),
+    ('Spectral', 'Spectral (Reading Serif)'),
+    ('Cardo', 'Cardo (Scholarly Serif)'),
+    ('Fraunces', 'Fraunces (Old-style Soft Serif)'),
+    ('Instrument Serif', 'Instrument Serif (Editorial Serif)'),
 
     # Display/Decorative fonts
     ('Bebas Neue', 'Bebas Neue (Display/Headers)'),
     ('Pacifico', 'Pacifico (Handwritten)'),
     ('Dancing Script', 'Dancing Script (Script/Cursive)'),
     ('Righteous', 'Righteous (Bold Display)'),
+    ('Abril Fatface', 'Abril Fatface (Display Serif)'),
+    ('Alfa Slab One', 'Alfa Slab One (Heavy Display)'),
+    ('Permanent Marker', 'Permanent Marker (Marker/Handwritten)'),
+    ('Satisfy', 'Satisfy (Cursive Script)'),
+    ('Lobster', 'Lobster (Bold Script)'),
+    ('Caveat', 'Caveat (Casual Handwritten)'),
+    ('Great Vibes', 'Great Vibes (Calligraphy)'),
+    ('Cormorant', 'Cormorant (Light Display Serif)'),
+    ('Staatliches', 'Staatliches (Condensed Display)'),
+    ('Big Shoulders Display', 'Big Shoulders Display (Bold Condensed)'),
+    ('Fascinate', 'Fascinate (Decorative Display)'),
+    ('Monoton', 'Monoton (Retro Outline)'),
 
     # Monospace fonts
     ('Roboto Mono', 'Roboto Mono (Monospace)'),
     ('Source Code Pro', 'Source Code Pro (Code Font)'),
     ('JetBrains Mono', 'JetBrains Mono (Modern Monospace)'),
+    ('Fira Code', 'Fira Code (Ligature Monospace)'),
+    ('IBM Plex Mono', 'IBM Plex Mono (Corporate Monospace)'),
+    ('Space Mono', 'Space Mono (Retro Monospace)'),
 
     # System fonts fallback
     ('system-ui', 'System Default (No Google Font)'),
@@ -100,10 +147,26 @@ class SiteSettings(models.Model):
     linkedin_url = models.URLField("LinkedIn URL", blank=True, default="")
     youtube_url = models.URLField("YouTube URL", blank=True, default="")
     twitter_url = models.URLField("Twitter URL", blank=True, default="")
+    whatsapp_number = models.CharField("WhatsApp Number", max_length=20, blank=True, default="", help_text="International format, e.g. +351912345678")
+    tiktok_url = models.URLField("TikTok URL", blank=True, default="")
+    pinterest_url = models.URLField("Pinterest URL", blank=True, default="")
 
     # SEO Fields
     meta_keywords = models.CharField("Meta Keywords", max_length=255, blank=True)
     google_analytics_id = models.CharField("Google Analytics ID", max_length=50, blank=True)
+
+    # Custom Code Injection
+    custom_head_code = models.TextField("Custom Head Code", blank=True, default="", help_text="Code injected before </head> (e.g. Facebook Pixel, Hotjar, custom CSS)")
+    custom_body_code = models.TextField("Custom Body Code", blank=True, default="", help_text="Code injected before </body> (e.g. chat widgets, cookie consent)")
+
+    # Open Graph Defaults
+    og_image = models.ImageField("Default OG Image", upload_to='site_images/', blank=True, null=True, help_text="Fallback image for social media sharing when a page has no OG image")
+    default_og_description_i18n = models.JSONField(
+        'Default OG Description (All Languages)',
+        default=dict,
+        blank=True,
+        help_text='Fallback OG description: {"pt": "Descrição PT", "en": "Description EN"}'
+    )
 
     # Design System Settings
     # Colors

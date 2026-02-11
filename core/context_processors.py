@@ -10,6 +10,9 @@ def site_settings(request):
         'instagram': settings.instagram_url,
         'linkedin': settings.linkedin_url,
         'twitter': settings.twitter_url,
+        'whatsapp': settings.whatsapp_number,
+        'tiktok': settings.tiktok_url,
+        'pinterest': settings.pinterest_url,
     }
 
     # Button classes based on settings
@@ -94,6 +97,17 @@ def site_settings(request):
         'LINKEDIN_URL': settings.linkedin_url,
         'YOUTUBE_URL': settings.youtube_url,
         'TWITTER_URL': settings.twitter_url,
+        'WHATSAPP_NUMBER': settings.whatsapp_number,
+        'TIKTOK_URL': settings.tiktok_url,
+        'PINTEREST_URL': settings.pinterest_url,
+
+        # Custom Code Injection
+        'CUSTOM_HEAD_CODE': settings.custom_head_code,
+        'CUSTOM_BODY_CODE': settings.custom_body_code,
+
+        # Open Graph Defaults
+        'OG_IMAGE': settings.og_image if settings.og_image else None,
+        'DEFAULT_OG_DESCRIPTION_I18N': settings.default_og_description_i18n,
 
         # Design System
         'THEME': {

@@ -1,6 +1,6 @@
 {% extends 'backoffice/base.html' %}
 
-{% block title %}SEO Settings{% endblock %}
+{% block title %}SEO & Code Settings{% endblock %}
 
 {% block content %}
 <div class="space-y-6">
@@ -9,16 +9,20 @@
         <nav class="text-sm text-gray-500 mb-2">
             <a href="{% url 'backoffice:settings' %}" class="hover:text-blue-600">Settings</a>
             <span class="mx-1">/</span>
-            <span class="text-gray-900">SEO</span>
+            <span class="text-gray-900">SEO & Code</span>
         </nav>
-        <h2 class="text-3xl font-bold text-gray-900">SEO & Analytics</h2>
-        <p class="text-gray-600 mt-1">Search engine optimization and analytics tracking</p>
+        <h2 class="text-3xl font-bold text-gray-900">SEO & Code</h2>
+        <p class="text-gray-600 mt-1">Search engine optimization, analytics, code injection, and social sharing defaults</p>
     </div>
 
-    <form method="post">
+    <form method="post" enctype="multipart/form-data">
         {% csrf_token %}
 
+        <!-- SEO & Analytics -->
         <div class="bg-white rounded-lg shadow overflow-hidden mb-6">
+            <div class="p-6 border-b border-gray-200">
+                <h3 class="text-lg font-semibold text-gray-900">SEO & Analytics</h3>
+            </div>
             <div class="p-6 space-y-6">
                 <div>
                     <label for="id_meta_keywords" class="block text-sm font-medium text-gray-700 mb-2">Meta Keywords</label>
@@ -37,11 +41,106 @@
             </div>
         </div>
 
+        <!-- Open Graph Defaults -->
+        <div class="bg-white rounded-lg shadow overflow-hidden mb-6">
+            <div class="p-6 border-b border-gray-200">
+                <h3 class="text-lg font-semibold text-gray-900">Social Sharing (Open Graph)</h3>
+                <p class="text-sm text-gray-500 mt-1">Fallback image and description used when a page doesn't have its own</p>
+            </div>
+            <div class="p-6 space-y-6">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Default OG Image</label>
+                    {% if settings.og_image %}
+                    <div class="mb-3 flex items-center gap-4">
+                        <img src="{{ settings.og_image.url }}" alt="Current OG image" class="h-20 rounded border border-gray-200">
+                        <label class="flex items-center gap-2 text-sm text-gray-600">
+                            <input type="checkbox" name="og_image_clear" value="1" class="rounded border-gray-300">
+                            Remove current image
+                        </label>
+                    </div>
+                    {% endif %}
+                    <input type="file" name="og_image" accept="image/*"
+                           class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                    <p class="mt-1 text-xs text-gray-500">Recommended: 1200x630px. Used when sharing links on Facebook, LinkedIn, etc.</p>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Default OG Description</label>
+                    <input type="hidden" name="default_og_description_i18n" id="id_default_og_description_i18n">
+                    <div class="space-y-2">
+                        {% for lang in settings.enabled_languages %}
+                        <div class="flex items-start gap-2">
+                            <span class="text-xs font-medium text-gray-500 uppercase w-8 pt-2">{{ lang.code }}</span>
+                            <textarea data-i18n-field="default_og_description" data-lang="{{ lang.code }}"
+                                      rows="2"
+                                      class="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                      placeholder="Default sharing description ({{ lang.name }})"></textarea>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Custom Code Injection -->
+        <div class="bg-white rounded-lg shadow overflow-hidden mb-6">
+            <div class="p-6 border-b border-gray-200">
+                <h3 class="text-lg font-semibold text-gray-900">Custom Code Injection</h3>
+                <p class="text-sm text-gray-500 mt-1">Add tracking scripts, chat widgets, cookie consent, or custom CSS/JS</p>
+            </div>
+            <div class="p-6 space-y-6">
+                <div>
+                    <label for="id_custom_head_code" class="block text-sm font-medium text-gray-700 mb-2">Head Code <span class="text-gray-400 font-normal">(before &lt;/head&gt;)</span></label>
+                    <textarea name="custom_head_code" id="id_custom_head_code" rows="6"
+                              class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-mono text-sm"
+                              placeholder="<!-- Facebook Pixel, Hotjar, custom CSS, etc. -->">{{ settings.custom_head_code }}</textarea>
+                </div>
+
+                <div>
+                    <label for="id_custom_body_code" class="block text-sm font-medium text-gray-700 mb-2">Body Code <span class="text-gray-400 font-normal">(before &lt;/body&gt;)</span></label>
+                    <textarea name="custom_body_code" id="id_custom_body_code" rows="6"
+                              class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-mono text-sm"
+                              placeholder="<!-- Chat widgets, cookie consent, etc. -->">{{ settings.custom_body_code }}</textarea>
+                </div>
+            </div>
+        </div>
+
         <!-- Form Actions -->
         <div class="flex items-center justify-end space-x-4">
             <a href="{% url 'backoffice:settings' %}" class="px-6 py-2 text-sm font-medium text-gray-700 hover:text-gray-900">Cancel</a>
-            <button type="submit" class="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">Save SEO Settings</button>
+            <button type="submit" class="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">Save SEO & Code</button>
         </div>
     </form>
 </div>
+
+<script>
+const I18N_DATA = {
+    default_og_description: {{ default_og_description_i18n_json|safe }},
+};
+
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('[data-i18n-field]').forEach(input => {
+        const field = input.dataset.i18nField;
+        const lang = input.dataset.lang;
+        const data = I18N_DATA[field];
+        if (data && data[lang]) {
+            input.value = data[lang];
+        }
+    });
+});
+
+document.querySelector('form').addEventListener('submit', function() {
+    ['default_og_description'].forEach(field => {
+        const inputs = document.querySelectorAll(`[data-i18n-field="${field}"]`);
+        const jsonData = {};
+        inputs.forEach(input => {
+            const lang = input.dataset.lang;
+            const val = input.value.trim();
+            if (val) jsonData[lang] = val;
+        });
+        const hidden = document.getElementById(`id_${field}_i18n`);
+        if (hidden) hidden.value = JSON.stringify(jsonData);
+    });
+});
+</script>
 {% endblock %}
