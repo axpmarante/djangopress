@@ -1172,6 +1172,52 @@ Return the complete, corrected JSON now:"""
                     new_url = site_image.image.url
                     print(f"Saved generated image: {key} -> {new_url}")
 
+                elif action == 'unsplash':
+                    from .utils.unsplash import download_photo
+
+                    unsplash_photo_id = decision.get('unsplash_photo_id', '')
+                    unsplash_url = decision.get('unsplash_url', '')
+                    photographer = decision.get('photographer', '')
+
+                    if not unsplash_photo_id or not unsplash_url:
+                        failed.append({'image_name': image_name, 'error': 'Missing Unsplash photo data'})
+                        continue
+
+                    print(f"Downloading Unsplash photo '{unsplash_photo_id}' by {photographer}...")
+                    image_bytes = download_photo(unsplash_photo_id, unsplash_url)
+
+                    if not image_bytes:
+                        failed.append({'image_name': image_name, 'error': 'Failed to download Unsplash photo'})
+                        continue
+
+                    # Optimize the downloaded image
+                    optimized_bytes = optimize_generated_image(image_bytes, max_width=1200, quality=85)
+
+                    # Save as SiteImage
+                    file_slug = slugify(image_name or image_src.split('/')[-1]) or 'unsplash-image'
+                    base_key = f"unsplash-{file_slug}"
+                    key = base_key
+                    counter = 1
+                    while SiteImage.objects.filter(key=key).exists():
+                        key = f"{base_key}-{counter}"
+                        counter += 1
+
+                    title_text = (image_name or file_slug).replace('-', ' ').replace('_', ' ').title()
+                    photographer_tag = f'Photo by {photographer}' if photographer else ''
+                    tags = ', '.join(filter(None, ['unsplash', photographer_tag]))
+
+                    site_image = SiteImage(
+                        key=key,
+                        title_i18n={lang: title_text for lang in languages},
+                        alt_text_i18n={lang: title_text for lang in languages},
+                        tags=tags,
+                        is_active=True,
+                    )
+                    filename = f"{file_slug}.jpg"
+                    site_image.image.save(filename, ContentFile(optimized_bytes), save=True)
+                    new_url = site_image.image.url
+                    print(f"Saved Unsplash image: {key} -> {new_url}")
+
                 else:
                     failed.append({'image_name': image_name, 'error': f'Unknown action: {action}'})
                     continue

@@ -1323,6 +1323,50 @@ def fill_section_content_api(request):
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
 
 
+@staff_member_required
+@require_http_methods(["POST"])
+def search_unsplash_api(request):
+    """
+    Search Unsplash photos (proxied to avoid exposing the API key).
+
+    POST /ai/api/search-unsplash/
+    Body: {"query": "modern office interior", "per_page": 9}
+
+    Returns: {"success": true, "results": [...]}
+    """
+    from .utils.unsplash import search_photos, is_configured
+
+    if not is_configured():
+        return JsonResponse({
+            'success': False,
+            'error': 'Unsplash API key not configured'
+        }, status=400)
+
+    try:
+        data = json.loads(request.body)
+        query = data.get('query', '').strip()
+        per_page = data.get('per_page', 9)
+
+        if not query:
+            return JsonResponse({
+                'success': False,
+                'error': 'query is required'
+            }, status=400)
+
+        results = search_photos(query=query, per_page=per_page)
+
+        return JsonResponse({
+            'success': True,
+            'results': results,
+        })
+
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+
+
 def _extract_json_from_response(content):
     """Extract JSON array or object from LLM response text."""
     import re as _re

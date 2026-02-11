@@ -1051,6 +1051,8 @@ class ProcessImagesView(LoginRequiredMixin, TemplateView):
     template_name = 'backoffice/process_images.html'
 
     def get_context_data(self, **kwargs):
+        from django.conf import settings as django_settings
+
         context = super().get_context_data(**kwargs)
         page_id = kwargs.get('page_id')
 
@@ -1068,10 +1070,14 @@ class ProcessImagesView(LoginRequiredMixin, TemplateView):
                 context['ai_models'] = []
                 context['default_model'] = None
 
+            # Unsplash availability
+            context['unsplash_configured'] = bool(getattr(django_settings, 'UNSPLASH_ACCESS_KEY', ''))
+
         except Page.DoesNotExist:
             context['page'] = None
             context['ai_models'] = []
             context['default_model'] = None
+            context['unsplash_configured'] = False
 
         return context
 

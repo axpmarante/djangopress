@@ -225,6 +225,9 @@ else:
     }
 
 DEFAULT_FROM_EMAIL = env('DEFAULT_FROM_EMAIL', default='noreply@sendermail.io')
+
+# Unsplash API (for stock photos in Process Images)
+UNSPLASH_ACCESS_KEY = env('UNSPLASH_ACCESS_KEY', default='')
 SERVER_EMAIL = DEFAULT_FROM_EMAIL
 
 # Default primary key field type

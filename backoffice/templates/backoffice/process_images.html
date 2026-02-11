@@ -94,6 +94,7 @@
 
 <script>
 const PAGE_ID = {{ page.id }};
+const UNSPLASH_CONFIGURED = {{ unsplash_configured|yesno:"true,false" }};
 let detectedImages = [];
 let mediaLibraryCache = null;
 
@@ -135,7 +136,10 @@ async function scanImages() {
                 action: 'generate',
                 aspect_ratio: '16:9',
                 library_image_id: null,
-                library_suggestions: []
+                library_suggestions: [],
+                unsplash_photo_id: null,
+                unsplash_url: null,
+                photographer: null,
             });
         }
 
@@ -224,6 +228,12 @@ function renderCards() {
                                        class="text-purple-600 focus:ring-purple-500">
                                 <span class="text-gray-700">From Library</span>
                             </label>
+                            ${UNSPLASH_CONFIGURED ? `
+                            <label class="flex items-center gap-1.5 cursor-pointer">
+                                <input type="radio" name="action${i}" value="unsplash" ${img.action === 'unsplash' ? 'checked' : ''} onchange="setAction(${i},'unsplash')"
+                                       class="text-purple-600 focus:ring-purple-500">
+                                <span class="text-gray-700">Unsplash</span>
+                            </label>` : ''}
                         </div>
                     </div>
 
@@ -234,6 +244,20 @@ function renderCards() {
                             <option value="">-- Select image --</option>
                             ${libraryOptions}
                         </select>
+                    </div>
+
+                    <!-- Unsplash Search Panel -->
+                    <div id="unsplashPanel${i}" class="hidden">
+                        <div class="flex gap-2 mb-2">
+                            <input type="text" id="unsplashQuery${i}" placeholder="Search Unsplash..."
+                                   value="${escapeHtml(img.prompt || img.alt || img.name)}"
+                                   onkeydown="if(event.key==='Enter'){event.preventDefault();searchUnsplash(${i})}"
+                                   class="flex-1 border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500">
+                            <button onclick="searchUnsplash(${i})" class="px-3 py-1.5 bg-gray-800 text-white rounded-md text-sm hover:bg-gray-700">
+                                Search
+                            </button>
+                        </div>
+                        <div id="unsplashResults${i}" class="flex gap-2 flex-wrap"></div>
                     </div>
 
                     <!-- Library Suggestions (populated by AI) -->
@@ -259,6 +283,8 @@ function setAction(index, action) {
     detectedImages[index].action = action;
     const libSelect = document.getElementById(`libSelect${index}`);
     if (libSelect) libSelect.classList.toggle('hidden', action !== 'library');
+    const unsplashPanel = document.getElementById(`unsplashPanel${index}`);
+    if (unsplashPanel) unsplashPanel.classList.toggle('hidden', action !== 'unsplash');
 }
 
 function selectLibrarySuggestion(index, imageId) {
@@ -414,6 +440,10 @@ async function processSelected() {
             alert(`Please enter a generation prompt for "${label}".`);
             return;
         }
+        if (img.action === 'unsplash' && !img.unsplash_photo_id) {
+            alert(`Please search and select an Unsplash photo for "${label}".`);
+            return;
+        }
     }
 
     const btn = document.getElementById('processSelectedBtn');
@@ -425,6 +455,10 @@ async function processSelected() {
         const entry = { image_name: img.name, image_src: img.src, action: img.action };
         if (img.action === 'library') {
             entry.library_image_id = img.library_image_id;
+        } else if (img.action === 'unsplash') {
+            entry.unsplash_photo_id = img.unsplash_photo_id;
+            entry.unsplash_url = img.unsplash_url;
+            entry.photographer = img.photographer;
         } else {
             entry.prompt = img.prompt;
             entry.aspect_ratio = img.aspect_ratio;
@@ -497,6 +531,71 @@ async function processSelected() {
         btn.disabled = false;
         btn.innerHTML = origHTML;
         alert('Error: ' + e.message);
+    }
+}
+
+// ============ Unsplash ============
+async function searchUnsplash(index) {
+    const queryInput = document.getElementById(`unsplashQuery${index}`);
+    const query = queryInput ? queryInput.value.trim() : '';
+    if (!query) { alert('Please enter a search query.'); return; }
+
+    const resultsDiv = document.getElementById(`unsplashResults${index}`);
+    resultsDiv.innerHTML = '<p class="text-sm text-gray-500">Searching...</p>';
+
+    try {
+        const response = await fetch('/ai/api/search-unsplash/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCSRFToken()
+            },
+            body: JSON.stringify({ query, per_page: 9 })
+        });
+        const result = await response.json();
+
+        if (result.success && result.results) {
+            if (result.results.length === 0) {
+                resultsDiv.innerHTML = '<p class="text-sm text-gray-500">No results found.</p>';
+                return;
+            }
+            let html = '';
+            result.results.forEach(photo => {
+                const selected = detectedImages[index].unsplash_photo_id === photo.id;
+                html += `
+                    <div class="unsplash-thumb w-24 h-24 rounded-lg border-2 ${selected ? 'border-purple-500 ring-2 ring-purple-500' : 'border-gray-200'} overflow-hidden cursor-pointer hover:border-purple-400 transition-colors flex-shrink-0 relative group"
+                         data-photo-id="${escapeHtml(photo.id)}"
+                         onclick="selectUnsplashPhoto(${index}, '${escapeHtml(photo.id)}', '${escapeHtml(photo.regular_url)}', '${escapeHtml(photo.photographer)}')">
+                        <img src="${escapeHtml(photo.thumb_url)}" class="w-full h-full object-cover" alt="${escapeHtml(photo.alt_description)}">
+                        <div class="absolute bottom-0 left-0 right-0 bg-black/60 text-white text-[10px] px-1 py-0.5 truncate opacity-0 group-hover:opacity-100 transition-opacity">
+                            ${escapeHtml(photo.photographer)}
+                        </div>
+                    </div>`;
+            });
+            resultsDiv.innerHTML = html;
+        } else {
+            resultsDiv.innerHTML = `<p class="text-sm text-red-600">${escapeHtml(result.error || 'Search failed')}</p>`;
+        }
+    } catch (e) {
+        resultsDiv.innerHTML = `<p class="text-sm text-red-600">Error: ${escapeHtml(e.message)}</p>`;
+    }
+}
+
+function selectUnsplashPhoto(index, photoId, regularUrl, photographer) {
+    detectedImages[index].unsplash_photo_id = photoId;
+    detectedImages[index].unsplash_url = regularUrl;
+    detectedImages[index].photographer = photographer;
+
+    // Highlight selected thumbnail
+    const resultsDiv = document.getElementById(`unsplashResults${index}`);
+    if (resultsDiv) {
+        resultsDiv.querySelectorAll('.unsplash-thumb').forEach(t => {
+            const isSelected = t.dataset.photoId === photoId;
+            t.classList.toggle('border-purple-500', isSelected);
+            t.classList.toggle('ring-2', isSelected);
+            t.classList.toggle('ring-purple-500', isSelected);
+            t.classList.toggle('border-gray-200', !isSelected);
+        });
     }
 }
 </script>
