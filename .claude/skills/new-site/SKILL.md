@@ -44,6 +44,32 @@ If `.env` doesn't exist:
 4. Ask if they have an existing DjangoPress project to copy keys from
 5. Write the `.env` file with the provided values
 
+### GCS Storage Setup (Recommended)
+
+**IMPORTANT:** Configure Google Cloud Storage now so that images generated during content creation are stored in GCS from the start. This avoids needing to manually upload local media files when deploying to Railway (where the filesystem is ephemeral).
+
+If the user has an existing DjangoPress project with GCS configured:
+
+```bash
+# Copy GCS config from existing project
+grep "^GS_BUCKET_NAME=" ../djangopress/.env >> .env
+grep "^GS_PROJECT_ID=" ../djangopress/.env >> .env
+grep "^GCS_CREDENTIALS_JSON=" ../djangopress/.env >> .env
+```
+
+Verify GCS is working:
+```python
+python manage.py shell -c "
+from django.core.files.storage import default_storage
+print(f'Storage backend: {default_storage.__class__.__name__}')
+print(f'Using GCS: {\"DomainBased\" in default_storage.__class__.__name__}')
+"
+```
+
+If it prints `DomainBasedStorage` / `Using GCS: True`, all images will go directly to GCS. If not, images will be stored locally and will need to be uploaded to GCS before deployment.
+
+**CRITICAL:** The `SiteSettings.domain` field determines the GCS folder name (e.g. `my-project/`). If the domain is not set, files go to `default/`. Make sure the domain is configured in Step 5 **before** any media uploads (logos, images).
+
 **IMPORTANT:** Never commit `.env` to git. It's already in `.gitignore`.
 
 ## Step 3: Install Dependencies & Migrate

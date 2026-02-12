@@ -249,6 +249,62 @@ Capture the `*.railway.app` URL from the output. This is the live site URL.
 
 ---
 
+## Phase 7b: Upload Local Media to GCS (if needed)
+
+If GCS is configured (`GS_BUCKET_NAME` is set), check whether media files exist locally but not in GCS. This happens when images were generated during development without GCS configured.
+
+```bash
+# Check if local media files exist
+ls media/site_images/ 2>/dev/null | head -5
+```
+
+If local media files exist, check the GCS storage status:
+
+```python
+python manage.py shell -c "
+from django.core.files.storage import default_storage
+backend = default_storage.__class__.__name__
+print(f'Storage: {backend}')
+print(f'GCS active: {\"DomainBased\" in backend}')
+"
+```
+
+If GCS is active but images are local (generated before GCS was configured), upload them:
+
+```bash
+# Get the domain folder name from SiteSettings
+DOMAIN=$(python manage.py shell -c "from core.models import SiteSettings; s=SiteSettings.objects.first(); print(s.domain if s else 'default')")
+
+# Upload all local media to GCS
+gsutil -m cp -r media/site_images "gs://<GS_BUCKET_NAME>/${DOMAIN}/"
+```
+
+Read `GS_BUCKET_NAME` from `.env` to fill in the bucket name. If `gsutil` is not available, use Python:
+
+```python
+python manage.py shell -c "
+from django.core.files.storage import default_storage
+from pathlib import Path
+import os
+
+media_dir = Path('media/site_images')
+if not media_dir.exists():
+    print('No local media files to upload')
+else:
+    files = list(media_dir.glob('*'))
+    print(f'Uploading {len(files)} files to GCS...')
+    for f in files:
+        with open(f, 'rb') as fh:
+            saved_name = default_storage.save(f'site_images/{f.name}', fh)
+            print(f'  Uploaded: {saved_name}')
+    print('Done!')
+"
+```
+
+If GCS is NOT configured and there are local media files, warn the user that images will 404 on the live site (same warning as Phase 5).
+
+---
+
 ## Phase 8: Migrate Data (SQLite → Postgres)
 
 ### Get the public DATABASE_URL

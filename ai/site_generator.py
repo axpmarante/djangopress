@@ -1,0 +1,1112 @@
+"""
+SiteGenerator — Full site generation pipeline from a briefing document.
+
+Used by both the /generate-site Claude Code skill and the generate_site management command.
+Parses a markdown briefing, configures SiteSettings, generates pages, header/footer,
+processes images, and creates menu items.
+"""
+
+import json
+import logging
+import re
+import time
+from pathlib import Path
+from typing import Dict, List, Optional, Tuple
+
+from bs4 import BeautifulSoup
+
+logger = logging.getLogger(__name__)
+
+
+class BriefingParser:
+    """Parse a markdown site briefing into structured data."""
+
+    SECTION_PATTERN = re.compile(r'^##\s+(.+)$', re.MULTILINE)
+
+    @classmethod
+    def parse(cls, text: str) -> Dict:
+        """Parse briefing markdown into a dict of sections."""
+        sections = {}
+        parts = cls.SECTION_PATTERN.split(text)
+
+        # parts[0] is everything before the first ## (the title line)
+        title_block = parts[0].strip()
+        # Extract business name from # Title line
+        title_match = re.match(r'^#\s+(.+?)(?:\s*[-—]\s*Site Briefing)?$', title_block, re.MULTILINE)
+        business_name = title_match.group(1).strip() if title_match else ''
+
+        # Pair up section headers and content
+        for i in range(1, len(parts), 2):
+            header = parts[i].strip()
+            content = parts[i + 1].strip() if i + 1 < len(parts) else ''
+            sections[header.lower()] = content
+
+        return {
+            'business_name': business_name,
+            'sections': sections,
+            'raw_text': text,
+        }
+
+    @classmethod
+    def extract_languages(cls, section_text: str) -> Tuple[str, str, List[dict]]:
+        """Extract language configuration.
+
+        Returns:
+            (default_code, default_name, enabled_languages_list)
+        """
+        languages = []
+        default_code = 'pt'
+        default_name = 'Portuguese'
+
+        for line in section_text.split('\n'):
+            line = line.strip().lstrip('- ')
+            if not line:
+                continue
+
+            # Match "Default: pt (Portuguese)" or "Additional: en (English), fr (French)"
+            default_match = re.match(r'Default:\s*(\w+)\s*\(([^)]+)\)', line, re.IGNORECASE)
+            additional_match = re.match(r'Additional:\s*(.+)', line, re.IGNORECASE)
+
+            if default_match:
+                default_code = default_match.group(1).strip()
+                default_name = default_match.group(2).strip()
+                languages.insert(0, {'code': default_code, 'name': default_name})
+            elif additional_match:
+                # Parse comma-separated: "en (English), fr (French)"
+                for part in additional_match.group(1).split(','):
+                    lang_match = re.match(r'\s*(\w+)\s*\(([^)]+)\)', part.strip())
+                    if lang_match:
+                        languages.append({
+                            'code': lang_match.group(1).strip(),
+                            'name': lang_match.group(2).strip(),
+                        })
+
+        if not languages:
+            languages = [{'code': 'pt', 'name': 'Portuguese'}, {'code': 'en', 'name': 'English'}]
+
+        return default_code, default_name, languages
+
+    @classmethod
+    def extract_contact(cls, section_text: str) -> Dict:
+        """Extract contact info from the Contact section."""
+        contact = {}
+        current_key = None
+        address_lines = []
+
+        for line in section_text.split('\n'):
+            line = line.strip().lstrip('- ')
+            if not line:
+                continue
+
+            if line.lower().startswith('email:'):
+                contact['email'] = line.split(':', 1)[1].strip()
+                current_key = 'email'
+            elif line.lower().startswith('phone:'):
+                contact['phone'] = line.split(':', 1)[1].strip()
+                current_key = 'phone'
+            elif line.lower().startswith('address:'):
+                rest = line.split(':', 1)[1].strip()
+                current_key = 'address'
+                if rest:
+                    address_lines.append(rest)
+            elif line.lower().startswith('google maps:'):
+                contact['google_maps'] = line.split(':', 1)[1].strip()
+                # Handle URLs that got split on the colon
+                if contact['google_maps'] and not contact['google_maps'].startswith('http'):
+                    contact['google_maps'] = line.split('Google Maps:', 1)[1].strip() if 'Google Maps:' in line else line.split('google maps:', 1)[1].strip()
+                current_key = 'google_maps'
+            elif current_key == 'address':
+                # Multi-line address or per-language addresses
+                address_lines.append(line)
+
+        # Parse address — could be per-language "pt: Rua..." or single
+        if address_lines:
+            address_i18n = {}
+            for addr_line in address_lines:
+                lang_match = re.match(r'(\w{2}):\s*(.+)', addr_line)
+                if lang_match:
+                    address_i18n[lang_match.group(1)] = lang_match.group(2).strip()
+                else:
+                    # Single address for all languages
+                    address_i18n['_default'] = addr_line
+            contact['address_i18n'] = address_i18n
+
+        return contact
+
+    @classmethod
+    def extract_social_media(cls, section_text: str) -> Dict:
+        """Extract social media URLs."""
+        social = {}
+        for line in section_text.split('\n'):
+            line = line.strip().lstrip('- ')
+            if not line:
+                continue
+
+            for platform in ['instagram', 'facebook', 'linkedin', 'youtube',
+                             'twitter', 'tiktok', 'pinterest', 'whatsapp']:
+                if line.lower().startswith(platform + ':'):
+                    value = line.split(':', 1)[1].strip()
+                    # Handle URLs with colons (https://...)
+                    if not value.startswith('http') and ':' in line:
+                        # Re-split to get the full URL
+                        full_value = ':'.join(line.split(':')[1:]).strip()
+                        if full_value:
+                            value = full_value
+                    if value:
+                        social[platform] = value
+                    break
+
+        return social
+
+    @classmethod
+    def extract_pages(cls, section_text: str) -> List[Dict]:
+        """Extract page descriptions from the Pages section.
+
+        Returns list of dicts with 'name' and 'description'.
+        """
+        pages = []
+        # Match "- **Name**: description" or "- **Name** — description"
+        pattern = re.compile(
+            r'-\s+\*\*([^*]+)\*\*\s*[:—-]\s*(.+?)(?=\n-\s+\*\*|\Z)',
+            re.DOTALL
+        )
+
+        for match in pattern.finditer(section_text):
+            name = match.group(1).strip()
+            description = match.group(2).strip()
+            # Clean up multi-line descriptions
+            description = re.sub(r'\n\s*', ' ', description)
+            pages.append({'name': name, 'description': description})
+
+        return pages
+
+    @classmethod
+    def extract_domain(cls, section_text: str) -> str:
+        """Extract domain identifier."""
+        return section_text.strip().split('\n')[0].strip()
+
+    @classmethod
+    def extract_image_strategy(cls, section_text: str) -> str:
+        """Determine image strategy from the Images section."""
+        text = section_text.lower()
+        if 'skip' in text:
+            return 'skip'
+        elif 'unsplash' in text and ('ai' in text or 'mix' in text or 'both' in text):
+            return 'mixed'
+        elif 'unsplash' in text:
+            return 'unsplash_preferred'
+        else:
+            return 'ai_generated'
+
+
+class SiteGenerator:
+    """Full site generation pipeline from a briefing document."""
+
+    def __init__(self, briefing_path: str, stdout=None, **options):
+        self.briefing_path = Path(briefing_path)
+        if not self.briefing_path.exists():
+            raise FileNotFoundError(f"Briefing file not found: {briefing_path}")
+
+        self.briefing_text = self.briefing_path.read_text()
+        self.briefing = BriefingParser.parse(self.briefing_text)
+        self.sections = self.briefing['sections']
+        self.stdout = stdout
+        self.dry_run = options.get('dry_run', False)
+        self.skip_images = options.get('skip_images', False)
+        self.skip_design_guide = options.get('skip_design_guide', False)
+        self.model = options.get('model', 'gemini-pro')
+        self.image_strategy = options.get('image_strategy', None)
+        self.delay = options.get('delay', 2)
+        self.generated_pages = []
+        self.errors = []
+
+    def log(self, message: str):
+        if self.stdout:
+            self.stdout.write(message)
+        else:
+            print(message)
+
+    def run(self):
+        """Execute the full pipeline."""
+        self.log(f"\n{'='*60}")
+        self.log(f"Site Generator: {self.briefing['business_name']}")
+        self.log(f"{'='*60}\n")
+
+        plan = self.plan()
+
+        if self.dry_run:
+            self._print_plan(plan)
+            return plan
+
+        self.configure_settings(plan)
+        self.generate_pages(plan)
+
+        if not self.skip_design_guide and len(self.generated_pages) > 0:
+            self.generate_design_guide()
+
+        self.create_menu_items()
+        self.generate_header(plan)
+        self.generate_footer(plan)
+
+        if not self.skip_images:
+            self.process_all_images()
+
+        self.ensure_contact_form()
+        return self.print_summary()
+
+    def plan(self) -> Dict:
+        """Parse the briefing and build a generation plan."""
+        sections = self.sections
+
+        # Languages
+        lang_text = sections.get('languages', '')
+        default_code, default_name, enabled_languages = BriefingParser.extract_languages(lang_text)
+
+        # Contact
+        contact = BriefingParser.extract_contact(sections.get('contact', ''))
+
+        # Social media
+        social = BriefingParser.extract_social_media(sections.get('social media', ''))
+
+        # Pages
+        pages = BriefingParser.extract_pages(sections.get('pages', ''))
+
+        # Domain
+        domain = BriefingParser.extract_domain(sections.get('domain', ''))
+
+        # Image strategy
+        if self.image_strategy:
+            image_strategy = self.image_strategy
+        elif 'images' in sections:
+            image_strategy = BriefingParser.extract_image_strategy(sections['images'])
+        else:
+            image_strategy = 'ai_generated'
+
+        # Language codes
+        language_codes = [lang['code'] for lang in enabled_languages]
+
+        return {
+            'business_name': self.briefing['business_name'],
+            'default_language': default_code,
+            'default_language_name': default_name,
+            'enabled_languages': enabled_languages,
+            'language_codes': language_codes,
+            'contact': contact,
+            'social_media': social,
+            'pages': pages,
+            'header_instructions': sections.get('header', ''),
+            'footer_instructions': sections.get('footer', ''),
+            'design_preferences': sections.get('design preferences', ''),
+            'domain': domain,
+            'image_strategy': image_strategy,
+            'business_description': sections.get('business', ''),
+            'additional_notes': sections.get('additional notes', ''),
+        }
+
+    def _print_plan(self, plan: Dict):
+        """Print the parsed plan for dry-run mode."""
+        self.log(f"\n--- DRY RUN: Parsed Plan ---\n")
+        self.log(f"Business: {plan['business_name']}")
+        self.log(f"Domain: {plan['domain']}")
+        self.log(f"Default language: {plan['default_language']}")
+        self.log(f"Languages: {', '.join(l['code'] + ' (' + l['name'] + ')' for l in plan['enabled_languages'])}")
+        self.log(f"Image strategy: {plan['image_strategy']}")
+
+        self.log(f"\nContact:")
+        for key, val in plan['contact'].items():
+            self.log(f"  {key}: {val}")
+
+        self.log(f"\nSocial media:")
+        for key, val in plan['social_media'].items():
+            self.log(f"  {key}: {val}")
+
+        self.log(f"\nPages to generate ({len(plan['pages'])}):")
+        for i, page in enumerate(plan['pages'], 1):
+            self.log(f"  {i}. {page['name']}: {page['description'][:100]}...")
+
+        if plan['header_instructions']:
+            self.log(f"\nHeader: {plan['header_instructions'][:100]}...")
+        if plan['footer_instructions']:
+            self.log(f"\nFooter: {plan['footer_instructions'][:100]}...")
+        if plan['design_preferences']:
+            self.log(f"\nDesign: {plan['design_preferences'][:100]}...")
+
+    def configure_settings(self, plan: Dict):
+        """Configure SiteSettings from the parsed plan."""
+        import django
+        django.setup()
+        from core.models import SiteSettings
+
+        self.log("\n--- Configuring SiteSettings ---")
+
+        settings, _ = SiteSettings.objects.get_or_create(pk=1)
+
+        # Domain (must be set first, before media uploads)
+        if plan['domain']:
+            settings.domain = plan['domain']
+
+        # Languages
+        settings.enabled_languages = plan['enabled_languages']
+        settings.default_language = plan['default_language']
+
+        # Site name — brand name, same in all languages
+        name_i18n = {lang: plan['business_name'] for lang in plan['language_codes']}
+        settings.site_name_i18n = name_i18n
+
+        # Site description — use business description first paragraph as description
+        desc_text = plan['business_description'].split('\n\n')[0] if plan['business_description'] else ''
+        if desc_text:
+            desc_i18n = {plan['default_language']: desc_text}
+            settings.site_description_i18n = desc_i18n
+
+        # Project briefing — the full business section + additional notes
+        briefing_parts = [plan['business_description']]
+        if plan['additional_notes']:
+            briefing_parts.append(f"\nAdditional notes:\n{plan['additional_notes']}")
+        settings.project_briefing = '\n'.join(briefing_parts)
+
+        # Contact info
+        contact = plan['contact']
+        if contact.get('email'):
+            settings.contact_email = contact['email']
+        if contact.get('phone'):
+            settings.contact_phone = contact['phone']
+        if contact.get('google_maps'):
+            settings.google_maps_embed_url = contact['google_maps']
+
+        # Address
+        if contact.get('address_i18n'):
+            addr = contact['address_i18n']
+            if '_default' in addr:
+                # Same address for all languages
+                settings.contact_address_i18n = {
+                    lang: addr['_default'] for lang in plan['language_codes']
+                }
+            else:
+                settings.contact_address_i18n = addr
+
+        # Social media
+        social = plan['social_media']
+        social_field_map = {
+            'facebook': 'facebook_url',
+            'instagram': 'instagram_url',
+            'linkedin': 'linkedin_url',
+            'youtube': 'youtube_url',
+            'twitter': 'twitter_url',
+            'tiktok': 'tiktok_url',
+            'pinterest': 'pinterest_url',
+            'whatsapp': 'whatsapp_number',
+        }
+        for platform, field in social_field_map.items():
+            if social.get(platform):
+                setattr(settings, field, social[platform])
+
+        # Design system — let the LLM choose fonts, colors, layout from the briefing
+        try:
+            self.configure_design_system(plan, settings)
+        except Exception as e:
+            self.log(f"  Design system configuration failed (using defaults): {e}")
+            self.errors.append({'page': 'design_system', 'error': str(e)})
+
+        settings.save()
+        self.log(f"SiteSettings configured: {plan['business_name']}")
+        self.log(f"  Domain: {settings.domain}")
+        self.log(f"  Languages: {settings.get_language_codes()}")
+        self.log(f"  Default: {settings.get_default_language()}")
+
+    def configure_design_system(self, plan: Dict, settings):
+        """Use an LLM to choose design system values based on the briefing."""
+        from ai.utils.llm_config import LLMBase
+        from core.models import GOOGLE_FONTS_CHOICES
+
+        self.log("  Configuring design system via LLM...")
+
+        font_list = self._format_font_list(GOOGLE_FONTS_CHOICES)
+        valid_fonts = {name for name, _ in GOOGLE_FONTS_CHOICES}
+
+        # Valid choices for enum fields
+        valid_choices = {
+            'container_width': ['full', 'xs', 'sm', 'md', 'lg', 'xl', '2xl', '3xl', '4xl', '5xl', '6xl', '7xl'],
+            'border_radius_preset': ['none', 'sm', 'md', 'lg', 'xl', '2xl', '3xl', 'full'],
+            'spacing_scale': ['tight', 'normal', 'relaxed', 'loose'],
+            'shadow_preset': ['none', 'sm', 'md', 'lg', 'xl', '2xl'],
+            'button_style': ['rounded', 'square', 'pill'],
+            'button_size': ['small', 'medium', 'large'],
+            'button_border_width': ['0', '1', '2', '4'],
+        }
+
+        valid_text_sizes = [
+            'text-xs', 'text-sm', 'text-base', 'text-lg', 'text-xl',
+            'text-2xl', 'text-3xl', 'text-4xl', 'text-5xl', 'text-6xl',
+            'text-7xl', 'text-8xl', 'text-9xl',
+        ]
+
+        hex_re = re.compile(r'^#[0-9a-fA-F]{6}$')
+
+        system_prompt = (
+            "You are a senior web designer choosing a design system for a website. "
+            "Return ONLY a JSON object with the design system values. No explanation, no markdown fences."
+        )
+
+        user_prompt = f"""Choose a complete design system for this website:
+
+Business: {plan['business_name']}
+Description: {plan.get('business_description', '')[:500]}
+Design preferences: {plan.get('design_preferences', 'modern and professional')}
+
+Return a JSON object with ALL of these keys:
+
+COLORS (hex codes like "#1e3a8a"):
+- primary_color: main brand color
+- primary_color_hover: slightly darker/lighter variant
+- secondary_color: complementary color
+- accent_color: highlight/CTA color
+- background_color: page background (usually "#ffffff" or near-white)
+- text_color: body text (usually dark gray)
+- heading_color: heading text (usually darker than body)
+
+FONTS (pick from this list):
+{font_list}
+
+- heading_font: for all headings (h1-h6)
+- body_font: for body text
+
+HEADING SIZES (Tailwind classes: text-xs, text-sm, text-base, text-lg, text-xl, text-2xl, text-3xl, text-4xl, text-5xl, text-6xl, text-7xl, text-8xl, text-9xl):
+- h1_size, h2_size, h3_size, h4_size, h5_size, h6_size
+
+LAYOUT:
+- container_width: one of {valid_choices['container_width']}
+- border_radius_preset: one of {valid_choices['border_radius_preset']}
+- spacing_scale: one of {valid_choices['spacing_scale']}
+- shadow_preset: one of {valid_choices['shadow_preset']}
+
+BUTTONS:
+- button_style: one of {valid_choices['button_style']}
+- button_size: one of {valid_choices['button_size']}
+- button_border_width: one of {valid_choices['button_border_width']}
+- primary_button_bg: hex color
+- primary_button_text: hex color
+- primary_button_border: hex color
+- primary_button_hover: hex color
+- secondary_button_bg: hex color
+- secondary_button_text: hex color
+- secondary_button_border: hex color
+- secondary_button_hover: hex color"""
+
+        llm = LLMBase()
+        messages = [
+            {'role': 'system', 'content': system_prompt},
+            {'role': 'user', 'content': user_prompt},
+        ]
+        response = llm.get_completion(messages, tool_name='gemini-flash')
+        content = response.choices[0].message.content
+        data = self._extract_design_json(content)
+
+        if not data:
+            self.log("    Could not parse LLM response as JSON, skipping design system")
+            return False
+
+        # Define field categories for validation
+        color_fields = [
+            'primary_color', 'primary_color_hover', 'secondary_color', 'accent_color',
+            'background_color', 'text_color', 'heading_color',
+            'primary_button_bg', 'primary_button_text', 'primary_button_border',
+            'primary_button_hover', 'secondary_button_bg', 'secondary_button_text',
+            'secondary_button_border', 'secondary_button_hover',
+        ]
+        font_fields = ['heading_font', 'body_font']
+        size_fields = ['h1_size', 'h2_size', 'h3_size', 'h4_size', 'h5_size', 'h6_size']
+
+        applied = 0
+        skipped = 0
+
+        for key, value in data.items():
+            if not isinstance(value, str):
+                value = str(value)
+            value = value.strip()
+
+            if key in color_fields:
+                if hex_re.match(value):
+                    setattr(settings, key, value)
+                    applied += 1
+                else:
+                    logger.debug(f"Design system: invalid hex for {key}: {value}")
+                    skipped += 1
+
+            elif key in font_fields:
+                if value in valid_fonts:
+                    setattr(settings, key, value)
+                    # Also apply heading_font to all h1-h6 individual font fields
+                    if key == 'heading_font':
+                        for hf in ['h1_font', 'h2_font', 'h3_font', 'h4_font', 'h5_font', 'h6_font']:
+                            setattr(settings, hf, value)
+                    applied += 1
+                else:
+                    logger.debug(f"Design system: invalid font for {key}: {value}")
+                    skipped += 1
+
+            elif key in size_fields:
+                if value in valid_text_sizes:
+                    setattr(settings, key, value)
+                    applied += 1
+                else:
+                    logger.debug(f"Design system: invalid size for {key}: {value}")
+                    skipped += 1
+
+            elif key in valid_choices:
+                if value in valid_choices[key]:
+                    setattr(settings, key, value)
+                    applied += 1
+                else:
+                    logger.debug(f"Design system: invalid choice for {key}: {value}")
+                    skipped += 1
+
+        self.log(f"    Design system: {applied} fields applied, {skipped} skipped")
+        return True
+
+    @staticmethod
+    def _format_font_list(choices) -> str:
+        """Format GOOGLE_FONTS_CHOICES into a categorized string for the LLM prompt."""
+        categories = {}
+        for name, label in choices:
+            # Extract category from label: "Roboto (Modern Sans-serif)" → "Sans-serif"
+            paren = label.rsplit('(', 1)
+            if len(paren) == 2:
+                cat = paren[1].rstrip(')')
+                # Normalize: keep the last word as category
+                words = cat.split()
+                category = words[-1] if words else 'Other'
+            else:
+                category = 'Other'
+            categories.setdefault(category, []).append(name)
+
+        lines = []
+        for cat, fonts in categories.items():
+            lines.append(f"  {cat}: {', '.join(fonts)}")
+        return '\n'.join(lines)
+
+    @staticmethod
+    def _extract_design_json(content: str) -> Optional[Dict]:
+        """Extract JSON from LLM response (handles ```json blocks and raw JSON)."""
+        # Try to extract from code fences first
+        fence_match = re.search(r'```(?:json)?\s*\n?(.*?)\n?```', content, re.DOTALL)
+        if fence_match:
+            try:
+                return json.loads(fence_match.group(1).strip())
+            except json.JSONDecodeError:
+                pass
+
+        # Try the whole content as JSON
+        try:
+            return json.loads(content.strip())
+        except json.JSONDecodeError:
+            pass
+
+        # Try to find a JSON object in the content
+        brace_match = re.search(r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}', content, re.DOTALL)
+        if brace_match:
+            try:
+                return json.loads(brace_match.group(0))
+            except json.JSONDecodeError:
+                pass
+
+        return None
+
+    def generate_pages(self, plan: Dict):
+        """Generate all pages from the plan."""
+        from ai.services import ContentGenerationService
+        from core.models import Page, SiteSettings
+
+        service = ContentGenerationService(model_name=self.model)
+        settings = SiteSettings.objects.first()
+        default_lang = settings.get_default_language()
+        language_codes = settings.get_language_codes()
+
+        self.log(f"\n--- Generating {len(plan['pages'])} pages ---")
+
+        # Ensure home page is generated first
+        pages = list(plan['pages'])
+        home_idx = next(
+            (i for i, p in enumerate(pages) if p['name'].lower() == 'home'),
+            None
+        )
+        if home_idx is not None and home_idx != 0:
+            pages.insert(0, pages.pop(home_idx))
+
+        for i, page_spec in enumerate(pages):
+            page_name = page_spec['name']
+            page_desc = page_spec['description']
+
+            self.log(f"\n  [{i+1}/{len(pages)}] Generating: {page_name}")
+
+            # Build an enriched brief
+            brief = self._build_page_brief(page_spec, plan)
+
+            try:
+                result = service.generate_page(
+                    brief=brief,
+                    language=default_lang,
+                )
+
+                # Build slug — home page must be 'home' in all languages
+                if page_name.lower() in ('home', 'homepage', 'home page', 'inicio'):
+                    slug_i18n = {lang: 'home' for lang in language_codes}
+                else:
+                    slug_i18n = result.get('slug_i18n', {})
+
+                title_i18n = result.get('title_i18n', {})
+
+                page = Page.objects.create(
+                    title_i18n=title_i18n,
+                    slug_i18n=slug_i18n,
+                    html_content=result['html_content'],
+                    content=result['content'],
+                    is_active=True,
+                    sort_order=i * 10,
+                )
+
+                self.generated_pages.append(page)
+                self.log(f"    Saved: {page.default_title} (/{page.default_slug}/)")
+                self.log(f"    HTML: {len(result['html_content'])} chars")
+
+            except Exception as e:
+                self.log(f"    ERROR: {e}")
+                self.errors.append({'page': page_name, 'error': str(e)})
+
+                # Retry once with simplified brief
+                try:
+                    self.log(f"    Retrying with simplified brief...")
+                    simple_brief = f"Create a {page_name} page. {page_desc}"
+                    result = service.generate_page(
+                        brief=simple_brief,
+                        language=default_lang,
+                    )
+
+                    if page_name.lower() in ('home', 'homepage', 'home page', 'inicio'):
+                        slug_i18n = {lang: 'home' for lang in language_codes}
+                    else:
+                        slug_i18n = result.get('slug_i18n', {})
+
+                    page = Page.objects.create(
+                        title_i18n=result.get('title_i18n', {}),
+                        slug_i18n=slug_i18n,
+                        html_content=result['html_content'],
+                        content=result['content'],
+                        is_active=True,
+                        sort_order=i * 10,
+                    )
+                    self.generated_pages.append(page)
+                    self.errors.pop()  # Remove the error since retry succeeded
+                    self.log(f"    Retry succeeded: {page.default_title}")
+                except Exception as retry_e:
+                    self.log(f"    Retry also failed: {retry_e}")
+                    self.errors.append({'page': f'{page_name} (retry)', 'error': str(retry_e)})
+
+            # Delay between LLM calls to avoid rate limits
+            if i < len(pages) - 1 and self.delay > 0:
+                time.sleep(self.delay)
+
+    def _build_page_brief(self, page_spec: Dict, plan: Dict) -> str:
+        """Build an enriched generation brief for a page."""
+        name = page_spec['name']
+        desc = page_spec['description']
+
+        # Start with the page description
+        brief_parts = [
+            f"Create a {name} page for {plan['business_name']}.",
+            "",
+            f"Page description: {desc}",
+        ]
+
+        # Add design context if available
+        if plan['design_preferences']:
+            brief_parts.extend([
+                "",
+                f"Design direction: {plan['design_preferences']}",
+            ])
+
+        # Add notes if relevant
+        if plan['additional_notes']:
+            brief_parts.extend([
+                "",
+                f"Additional context: {plan['additional_notes']}",
+            ])
+
+        # Add image placeholder instruction
+        brief_parts.extend([
+            "",
+            "Include image placeholders with data-image-prompt and data-image-name attributes on <img> tags.",
+            "Use https://placehold.co/WxH?text=Label as placeholder src.",
+        ])
+
+        return '\n'.join(brief_parts)
+
+    def generate_design_guide(self):
+        """Generate a design guide from the home page (first generated page)."""
+        from ai.services import ContentGenerationService
+        from core.models import SiteSettings
+
+        if not self.generated_pages:
+            return
+
+        self.log("\n--- Generating Design Guide ---")
+
+        try:
+            settings = SiteSettings.objects.first()
+            if not settings:
+                return
+
+            # Use the home page + any other generated pages for analysis
+            service = ContentGenerationService(model_name=self.model)
+            default_lang = settings.get_default_language()
+            site_name = settings.get_site_name(default_lang)
+            project_briefing = settings.get_project_briefing()
+
+            # Build settings summary
+            settings_summary = self._build_settings_summary(settings)
+
+            # Collect page HTML samples
+            page_samples = []
+            for page in self.generated_pages[:3]:  # First 3 pages
+                title = page.default_title or page.default_slug
+                html = page.html_content or ''
+                if len(html) > 8000:
+                    html = html[:8000] + '\n<!-- truncated -->'
+                page_samples.append(f"### {title}\n```html\n{html}\n```")
+
+            from ai.utils.llm_config import LLMBase
+
+            system_prompt = (
+                "You are a senior UI/UX designer creating a design guide for a website. "
+                "Analyze the existing pages and design system settings, then write a comprehensive "
+                "design guide in markdown format that captures all visual patterns, component styles, "
+                "and conventions used across the site."
+            )
+
+            user_prompt = f"""Site: {site_name}
+Briefing: {project_briefing}
+
+Design System Settings:
+{settings_summary}
+
+Page Samples:
+{''.join(page_samples)}
+
+Write a design guide that documents the visual patterns and component conventions.
+Focus on: color usage, typography hierarchy, spacing patterns, button styles,
+card layouts, section structure, image treatment, and responsive behavior.
+Keep it concise and actionable — this guide will be injected into AI prompts
+for generating additional pages to ensure consistency."""
+
+            llm = LLMBase()
+            messages = [
+                {'role': 'system', 'content': system_prompt},
+                {'role': 'user', 'content': user_prompt},
+            ]
+            response = llm.get_completion(messages, tool_name=self.model)
+            guide = response.choices[0].message.content
+
+            # Strip markdown code fences
+            guide = re.sub(r'^```(?:markdown)?\n?', '', guide)
+            guide = re.sub(r'\n?```$', '', guide)
+
+            settings.design_guide = guide
+            settings.save()
+            self.log(f"  Design guide generated ({len(guide)} chars)")
+
+        except Exception as e:
+            self.log(f"  Design guide generation failed: {e}")
+            self.errors.append({'page': 'design_guide', 'error': str(e)})
+
+    def _build_settings_summary(self, settings) -> str:
+        """Build a text summary of current design system settings."""
+        lines = []
+        for field in ['primary_color', 'secondary_color', 'accent_color',
+                       'background_color', 'text_color', 'heading_color',
+                       'heading_font', 'body_font', 'h1_font', 'h1_size',
+                       'container_width', 'border_radius_preset',
+                       'spacing_scale', 'shadow_preset',
+                       'button_style', 'button_size']:
+            value = getattr(settings, field, None)
+            if value:
+                lines.append(f"  {field}: {value}")
+        return '\n'.join(lines) if lines else '  (defaults)'
+
+    def create_menu_items(self):
+        """Create MenuItem records for all generated pages."""
+        from core.models import MenuItem
+
+        if not self.generated_pages:
+            return
+
+        self.log("\n--- Creating Menu Items ---")
+
+        # Clear existing top-level menu items
+        MenuItem.objects.filter(parent__isnull=True).delete()
+
+        for i, page in enumerate(self.generated_pages):
+            item = MenuItem.objects.create(
+                label_i18n=page.title_i18n,
+                page=page,
+                sort_order=i * 10,
+                is_active=True,
+            )
+            self.log(f"  Menu item: {page.default_title}")
+
+    def generate_header(self, plan: Dict):
+        """Generate the site header GlobalSection."""
+        from ai.services import ContentGenerationService
+        from core.models import GlobalSection
+
+        self.log("\n--- Generating Header ---")
+
+        instructions = plan.get('header_instructions', '')
+        if not instructions:
+            instructions = (
+                f"Create a modern, responsive header for {plan['business_name']}. "
+                "Include logo, navigation links to all pages, and a mobile hamburger menu. "
+                "Add a language switcher."
+            )
+
+        try:
+            # Ensure the GlobalSection exists
+            section, created = GlobalSection.objects.get_or_create(
+                key='main-header',
+                defaults={
+                    'name': 'Main Header',
+                    'section_type': 'header',
+                    'html_template': '',
+                    'content': {'translations': {}},
+                    'is_active': True,
+                }
+            )
+
+            service = ContentGenerationService(model_name=self.model)
+            result = service.refine_global_section(
+                section_key='main-header',
+                refinement_instructions=instructions,
+            )
+
+            section.html_template = result.get('html_template', '')
+            section.content = result.get('content', {'translations': {}})
+            section.save()
+            self.log(f"  Header generated ({len(section.html_template)} chars)")
+
+        except Exception as e:
+            self.log(f"  Header generation failed: {e}")
+            self.errors.append({'page': 'header', 'error': str(e)})
+
+    def generate_footer(self, plan: Dict):
+        """Generate the site footer GlobalSection."""
+        from ai.services import ContentGenerationService
+        from core.models import GlobalSection
+
+        self.log("\n--- Generating Footer ---")
+
+        instructions = plan.get('footer_instructions', '')
+        if not instructions:
+            instructions = (
+                f"Create a footer for {plan['business_name']}. "
+                "Include quick links, contact info, social media icons, and copyright."
+            )
+
+        try:
+            section, created = GlobalSection.objects.get_or_create(
+                key='main-footer',
+                defaults={
+                    'name': 'Main Footer',
+                    'section_type': 'footer',
+                    'html_template': '',
+                    'content': {'translations': {}},
+                    'is_active': True,
+                }
+            )
+
+            service = ContentGenerationService(model_name=self.model)
+            result = service.refine_global_section(
+                section_key='main-footer',
+                refinement_instructions=instructions,
+            )
+
+            section.html_template = result.get('html_template', '')
+            section.content = result.get('content', {'translations': {}})
+            section.save()
+            self.log(f"  Footer generated ({len(section.html_template)} chars)")
+
+        except Exception as e:
+            self.log(f"  Footer generation failed: {e}")
+            self.errors.append({'page': 'footer', 'error': str(e)})
+
+    def process_all_images(self):
+        """Process images on all generated pages."""
+        from ai.services import ContentGenerationService
+        from core.models import SiteSettings
+
+        if not self.generated_pages:
+            return
+
+        self.log("\n--- Processing Images ---")
+
+        service = ContentGenerationService(model_name=self.model)
+        settings = SiteSettings.objects.first()
+        languages = settings.get_language_codes() if settings else ['pt', 'en']
+
+        # Determine image strategy
+        image_strategy = self.image_strategy or 'ai_generated'
+        if image_strategy == 'skip':
+            self.log("  Skipping images (strategy: skip)")
+            return
+
+        total_processed = 0
+        total_failed = 0
+
+        for page in self.generated_pages:
+            html = page.html_content or ''
+            soup = BeautifulSoup(html, 'html.parser')
+
+            # Find all images with data-image-prompt or placeholder sources
+            images = []
+            for idx, img in enumerate(soup.find_all('img')):
+                src = img.get('src', '')
+                name = img.get('data-image-name', '')
+                prompt = img.get('data-image-prompt', '')
+                alt = img.get('alt', '')
+
+                if prompt or name or 'placehold.co' in src:
+                    images.append({
+                        'index': idx,
+                        'src': src,
+                        'alt': alt,
+                        'name': name,
+                        'prompt': prompt,
+                    })
+
+            if not images:
+                continue
+
+            self.log(f"\n  Page: {page.default_title} ({len(images)} images)")
+
+            try:
+                # Step 1: AI analyze/suggest prompts
+                suggestions = service.analyze_page_images(
+                    page_id=page.id,
+                    images=images,
+                )
+
+                # Step 2: Build decisions based on strategy
+                decisions = []
+                for img_data in images:
+                    name = img_data.get('name', '')
+                    src = img_data.get('src', '')
+
+                    # Find matching suggestion
+                    suggestion = next(
+                        (s for s in suggestions if s.get('index') == img_data['index']),
+                        {}
+                    )
+
+                    prompt = suggestion.get('prompt', img_data.get('prompt', ''))
+                    aspect_ratio = suggestion.get('aspect_ratio', '16:9')
+                    library_matches = suggestion.get('library_matches', [])
+
+                    if image_strategy == 'unsplash_preferred':
+                        decisions.append({
+                            'image_name': name,
+                            'image_src': src,
+                            'action': 'unsplash',
+                            'prompt': prompt,
+                            'aspect_ratio': aspect_ratio,
+                        })
+                    elif library_matches:
+                        decisions.append({
+                            'image_name': name,
+                            'image_src': src,
+                            'action': 'library',
+                            'library_image_id': library_matches[0],
+                        })
+                    else:
+                        decisions.append({
+                            'image_name': name,
+                            'image_src': src,
+                            'action': 'generate',
+                            'prompt': prompt,
+                            'aspect_ratio': aspect_ratio,
+                        })
+
+                # Step 3: Process
+                result = service.process_page_images(
+                    page_id=page.id,
+                    image_decisions=decisions,
+                    languages=languages,
+                )
+
+                n_ok = len(result.get('processed', []))
+                n_fail = len(result.get('failed', []))
+                total_processed += n_ok
+                total_failed += n_fail
+                self.log(f"    Processed: {n_ok}, Failed: {n_fail}")
+
+                # Delay between pages
+                if self.delay > 0:
+                    time.sleep(self.delay)
+
+            except Exception as e:
+                self.log(f"    Image processing failed: {e}")
+                self.errors.append({'page': f'{page.default_title} images', 'error': str(e)})
+
+        self.log(f"\n  Total images: {total_processed} processed, {total_failed} failed")
+
+    def ensure_contact_form(self):
+        """Verify the default contact form exists."""
+        from core.models import DynamicForm
+
+        form = DynamicForm.objects.filter(slug='contact').first()
+        if form:
+            self.log("\n--- Contact form: exists ---")
+        else:
+            self.log("\n--- Contact form: creating ---")
+            DynamicForm.objects.create(
+                name='Contact',
+                slug='contact',
+                fields_schema=[
+                    {'name': 'name', 'type': 'text', 'label': 'Name', 'required': True},
+                    {'name': 'email', 'type': 'email', 'label': 'Email', 'required': True},
+                    {'name': 'message', 'type': 'textarea', 'label': 'Message', 'required': True},
+                ],
+                is_active=True,
+            )
+            self.log("  Contact form created")
+
+    def print_summary(self) -> Dict:
+        """Print a summary of what was generated."""
+        from core.models import GlobalSection
+
+        self.log(f"\n{'='*60}")
+        self.log(f"Generation Complete: {self.briefing['business_name']}")
+        self.log(f"{'='*60}")
+
+        self.log(f"\nPages generated: {len(self.generated_pages)}")
+        for page in self.generated_pages:
+            self.log(f"  - {page.default_title} (/{page.default_slug}/)")
+
+        header = GlobalSection.objects.filter(key='main-header').first()
+        footer = GlobalSection.objects.filter(key='main-footer').first()
+        self.log(f"\nHeader: {'generated' if header and header.html_template else 'missing'}")
+        self.log(f"Footer: {'generated' if footer and footer.html_template else 'missing'}")
+
+        if self.errors:
+            self.log(f"\nErrors ({len(self.errors)}):")
+            for err in self.errors:
+                self.log(f"  - {err['page']}: {err['error'][:100]}")
+
+        self.log(f"\nNext steps:")
+        self.log(f"  1. python manage.py runserver 8000")
+        self.log(f"  2. Visit http://localhost:8000/ to review the site")
+        self.log(f"  3. Use /backoffice/ to refine pages, upload logos, adjust design system")
+
+        return {
+            'pages': len(self.generated_pages),
+            'header': bool(header and header.html_template),
+            'footer': bool(footer and footer.html_template),
+            'errors': self.errors,
+        }
