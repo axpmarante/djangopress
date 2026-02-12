@@ -133,6 +133,9 @@ DjangoPress ships with Claude Code skills (`.claude/skills/`) that automate comm
 | `/new-site` | `/new-site my-project` | Interactive setup wizard for a freshly cloned project. Walks through `.env`, dependencies, migrations, SiteSettings configuration, and validates everything is ready for content generation. **Start here for every new site.** |
 | `/add-app` | `/add-app properties` | Scaffolds a new decoupled feature app with i18n models, views, templates, and URL registration. Handles the `i18n_patterns` registration before the `core.urls` catch-all. |
 | `/generate-content` | `/generate-content` | Guides through the full content pipeline: pre-flight check, page planning, bulk/individual generation, chat refinement, header/footer, image processing, design system polish. |
+| `/create-briefing` | `/create-briefing O Moinho` | **Interactive briefing generator.** Researches the client online (website, social media, reviews), asks targeted questions to fill gaps, and writes a complete `briefings/<slug>.md` file ready for `/generate-site`. Accepts a client name or URL as argument. |
+| `/generate-site` | `/generate-site briefings/my-site.md` | **Full site generation from a markdown briefing.** Reads the briefing, configures SiteSettings, generates all pages, header/footer, menu items, processes images. Claude Code reviews quality and fixes issues. Also available as `python manage.py generate_site` for batch use. |
+| `/deploy-site` | `/deploy-site my-project` | **Deploy to Railway.** Creates Railway project + Postgres, sets env vars, deploys code, migrates data from local SQLite to remote Postgres, generates domain. Handles redeployments (code, data, or both). |
 
 ### Auto-Loaded Skills (Claude uses automatically)
 
@@ -143,10 +146,22 @@ DjangoPress ships with Claude Code skills (`.claude/skills/`) that automate comm
 ### Typical New Site Flow
 
 ```
+# Option A: Interactive setup + interactive generation (highest quality)
 1. Clone template → cd into project
 2. /new-site my-project          ← configures everything interactively
 3. /generate-content             ← generates pages, header, footer, images
 4. /add-app blog                 ← if the site needs extra features
+
+# Option B: Briefing-driven (fastest for new sites)
+1. /create-briefing My Client     ← researches client, writes briefing interactively
+2. /generate-site briefings/my-client.md  ← everything in one go
+3. /deploy-site my-client         ← deploy to Railway
+
+# Option C: New project from scratch
+1. ./scripts/new_site.sh my-project briefings/my-site.md
+2. cd ../my-project && source venv/bin/activate
+3. /generate-site briefings/my-site.md
+4. /deploy-site my-project        ← deploy to Railway
 ```
 
 ---
@@ -395,6 +410,8 @@ The API key is never exposed to the frontend — searches are proxied via `/ai/a
 
 ### AI
 - `ai/services.py` — `ContentGenerationService`: generate, refine, process images, analyze page images
+- `ai/site_generator.py` — `SiteGenerator` + `BriefingParser`: full site generation pipeline from markdown briefing
+- `ai/management/commands/generate_site.py` — `generate_site` management command (non-interactive batch generation)
 - `ai/utils/prompts.py` — `PromptTemplates`: all LLM prompt builders
 - `ai/utils/llm_config.py` — `LLMBase`: unified LLM client (OpenAI, Anthropic, Google), image generation, `optimize_generated_image()`
 - `ai/utils/unsplash.py` — Unsplash API client: `search_photos()`, `download_photo()`, `is_configured()`
@@ -447,4 +464,12 @@ python manage.py shell                                 # Django shell
 python manage.py migrate_storage_folder                # Copy GCS files from default/ to current domain
 python manage.py migrate_storage_folder --from old-dom # Copy from specific folder
 python manage.py migrate_storage_folder --dry-run      # Preview without copying
+python manage.py generate_site briefings/my-site.md    # Generate full site from briefing
+python manage.py generate_site briefings/my-site.md --dry-run      # Preview plan
+python manage.py generate_site briefings/my-site.md --skip-images  # Skip image processing
+./scripts/new_site.sh my-project                       # Create new project from template
+./scripts/new_site.sh my-project briefings/my-site.md  # Create + copy briefing
+railway up -d                                          # Redeploy code to Railway
+railway logs -f                                        # Stream Railway deployment logs
+railway run python manage.py shell                     # Django shell on Railway Postgres
 ```
