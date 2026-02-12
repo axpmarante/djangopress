@@ -6,7 +6,7 @@ import time
 from django.shortcuts import render
 from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
-from django.contrib.admin.views.decorators import staff_member_required
+from core.decorators import superuser_required
 from django.views.decorators.csrf import csrf_exempt
 from core.models import Page
 from .services import ContentGenerationService
@@ -34,7 +34,7 @@ def _extract_usage(response):
     }
 
 
-@staff_member_required
+@superuser_required
 @require_http_methods(["POST"])
 def generate_page_api(request):
     """
@@ -111,7 +111,7 @@ def generate_page_api(request):
         }, status=500)
 
 
-@staff_member_required
+@superuser_required
 @require_http_methods(["POST"])
 def refine_header_api(request):
     """
@@ -166,7 +166,7 @@ def refine_header_api(request):
         }, status=500)
 
 
-@staff_member_required
+@superuser_required
 @require_http_methods(["POST"])
 def refine_footer_api(request):
     """
@@ -221,7 +221,7 @@ def refine_footer_api(request):
         }, status=500)
 
 
-@staff_member_required
+@superuser_required
 @require_http_methods(["POST"])
 def save_generated_page_api(request):
     """
@@ -330,7 +330,7 @@ def save_generated_page_api(request):
         }, status=500)
 
 
-@staff_member_required
+@superuser_required
 @require_http_methods(["POST"])
 def analyze_bulk_pages_api(request):
     """
@@ -482,7 +482,7 @@ def analyze_bulk_pages_api(request):
         }, status=500)
 
 
-@staff_member_required
+@superuser_required
 @require_http_methods(["POST"])
 def refine_page_with_html_api(request):
     """
@@ -581,7 +581,7 @@ def refine_page_with_html_api(request):
         }, status=500)
 
 
-@staff_member_required
+@superuser_required
 @require_http_methods(["POST"])
 def chat_refine_page_api(request):
     """
@@ -710,7 +710,7 @@ def chat_refine_page_api(request):
         }, status=500)
 
 
-@staff_member_required
+@superuser_required
 @require_http_methods(["GET"])
 def get_refinement_session_api(request, session_id):
     """Return full session with messages."""
@@ -735,7 +735,7 @@ def get_refinement_session_api(request, session_id):
     })
 
 
-@staff_member_required
+@superuser_required
 @require_http_methods(["GET"])
 def list_refinement_sessions_api(request, page_id):
     """Return list of sessions for a given page."""
@@ -754,7 +754,7 @@ def list_refinement_sessions_api(request, page_id):
     return JsonResponse({'success': True, 'sessions': data})
 
 
-@staff_member_required
+@superuser_required
 @require_http_methods(["POST"])
 def generate_design_guide_ai_api(request):
     """
@@ -959,7 +959,7 @@ Aim for 80-150 lines of concise, actionable markdown."""
         }, status=500)
 
 
-@staff_member_required
+@superuser_required
 @require_http_methods(["POST"])
 def analyze_page_images_api(request):
     """
@@ -1011,7 +1011,7 @@ def analyze_page_images_api(request):
         }, status=500)
 
 
-@staff_member_required
+@superuser_required
 @require_http_methods(["POST"])
 def process_page_images_api(request):
     """
@@ -1081,7 +1081,7 @@ def process_page_images_api(request):
         }, status=500)
 
 
-@staff_member_required
+@superuser_required
 @require_http_methods(["POST"])
 def translate_to_language_api(request):
     """
@@ -1135,7 +1135,7 @@ def translate_to_language_api(request):
 
 # === Blueprint AI Endpoints ===
 
-@staff_member_required
+@superuser_required
 @require_http_methods(["POST"])
 def suggest_page_sections_api(request):
     """
@@ -1226,7 +1226,7 @@ def suggest_page_sections_api(request):
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
 
 
-@staff_member_required
+@superuser_required
 @require_http_methods(["POST"])
 def fill_section_content_api(request):
     """
@@ -1323,7 +1323,7 @@ def fill_section_content_api(request):
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
 
 
-@staff_member_required
+@superuser_required
 @require_http_methods(["POST"])
 def search_unsplash_api(request):
     """

@@ -318,8 +318,8 @@
       }
     });
 
-    // AI Refine Section — only if inside a <section>
-    if (data.sectionName) {
+    // AI Refine Section — only if inside a <section> and AI is enabled (superuser)
+    if (data.sectionName && window.EDITOR_AI_ENABLED) {
       items.push({ separator: true });
       items.push({
         label: 'AI Refine Section',

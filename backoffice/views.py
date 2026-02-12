@@ -3,6 +3,7 @@ import json
 from django.views.generic import TemplateView, ListView, CreateView
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth.decorators import login_required
+from core.decorators import SuperuserRequiredMixin
 from django.views.decorators.http import require_http_methods
 from django.contrib import messages
 from django.shortcuts import redirect
@@ -942,7 +943,7 @@ class MenuView(LoginRequiredMixin, TemplateView):
             section.clear_cache()
 
 
-class AIManagementView(LoginRequiredMixin, TemplateView):
+class AIManagementView(SuperuserRequiredMixin, TemplateView):
     """AI Content Studio - Main dashboard"""
     template_name = 'backoffice/ai_management.html'
 
@@ -966,7 +967,7 @@ class AIManagementView(LoginRequiredMixin, TemplateView):
         return context
 
 
-class AIGeneratePageView(LoginRequiredMixin, TemplateView):
+class AIGeneratePageView(SuperuserRequiredMixin, TemplateView):
     """AI Content Studio - Generate Page"""
     template_name = 'backoffice/ai_generate_page.html'
 
@@ -1016,7 +1017,7 @@ class AIGeneratePageView(LoginRequiredMixin, TemplateView):
         return context
 
 
-class AIBulkPagesView(LoginRequiredMixin, TemplateView):
+class AIBulkPagesView(SuperuserRequiredMixin, TemplateView):
     """AI Content Studio - Bulk Create Pages"""
     template_name = 'backoffice/ai_bulk_pages.html'
 
@@ -1038,7 +1039,7 @@ class AIBulkPagesView(LoginRequiredMixin, TemplateView):
         return context
 
 
-class AIRefinePageView(LoginRequiredMixin, TemplateView):
+class AIRefinePageView(SuperuserRequiredMixin, TemplateView):
     """AI Content Studio - Refine Page"""
     template_name = 'backoffice/ai_refine_page.html'
 
@@ -1100,7 +1101,7 @@ class AIRefinePageView(LoginRequiredMixin, TemplateView):
         return context
 
 
-class AIChatRefineView(LoginRequiredMixin, TemplateView):
+class AIChatRefineView(SuperuserRequiredMixin, TemplateView):
     """AI Content Studio - Chat-based Page Refinement"""
     template_name = 'backoffice/ai_chat_refine.html'
 
@@ -1190,7 +1191,7 @@ def restore_page_version(request, version_id):
 # Users should edit the Project Briefing in Django Admin > Site Settings.
 
 
-class ProcessImagesView(LoginRequiredMixin, TemplateView):
+class ProcessImagesView(SuperuserRequiredMixin, TemplateView):
     """Full page for processing images on a page"""
     template_name = 'backoffice/process_images.html'
 
@@ -1340,7 +1341,7 @@ class FooterEditView(LoginRequiredMixin, TemplateView):
         return redirect('backoffice:footer_edit')
 
 
-class BlueprintView(LoginRequiredMixin, TemplateView):
+class BlueprintView(SuperuserRequiredMixin, TemplateView):
     """Blueprint — site-level content plan"""
     template_name = 'backoffice/blueprint.html'
 
@@ -1377,7 +1378,7 @@ class BlueprintView(LoginRequiredMixin, TemplateView):
         return context
 
 
-class AICallLogsView(LoginRequiredMixin, TemplateView):
+class AICallLogsView(SuperuserRequiredMixin, TemplateView):
     """AI Call Logs — browse all LLM API calls."""
     template_name = 'backoffice/ai_call_logs.html'
 

@@ -12,6 +12,7 @@
             <p class="text-gray-600 mt-1">Manage website pages</p>
         </div>
         <div class="flex space-x-3">
+            {% if user.is_superuser %}
             {% if languages|length >= 2 %}
             <button onclick="openTranslateModal()"
                     class="bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-50 flex items-center">
@@ -28,6 +29,7 @@
                 </svg>
                 Generate with AI
             </a>
+            {% endif %}
             <button onclick="openCreateModal()"
                     class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 flex items-center">
                 <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">

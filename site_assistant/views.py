@@ -1,9 +1,8 @@
 import json
 
-from django.contrib.admin.views.decorators import staff_member_required
+from core.decorators import superuser_required, SuperuserRequiredMixin
 from django.http import JsonResponse
 from django.shortcuts import render, get_object_or_404
-from django.utils.decorators import method_decorator
 from django.views import View
 from django.views.decorators.http import require_http_methods
 
@@ -14,8 +13,7 @@ from .models import AssistantSession
 from .services import AssistantService, DESTRUCTIVE_TOOLS
 
 
-@method_decorator(staff_member_required, name='dispatch')
-class AssistantPageView(View):
+class AssistantPageView(SuperuserRequiredMixin, View):
     """Render the Site Assistant chat UI."""
 
     def get(self, request):
@@ -40,7 +38,7 @@ class AssistantPageView(View):
         })
 
 
-@staff_member_required
+@superuser_required
 @require_http_methods(["POST"])
 def chat_api(request):
     """Handle a chat message: LLM call + tool execution."""
@@ -99,7 +97,7 @@ def chat_api(request):
     })
 
 
-@staff_member_required
+@superuser_required
 @require_http_methods(["POST"])
 def confirm_api(request):
     """Execute a previously confirmed destructive action."""
@@ -134,7 +132,7 @@ def confirm_api(request):
     })
 
 
-@staff_member_required
+@superuser_required
 @require_http_methods(["GET"])
 def sessions_api(request):
     """List user's sessions."""
@@ -152,7 +150,7 @@ def sessions_api(request):
     return JsonResponse({'success': True, 'sessions': data})
 
 
-@staff_member_required
+@superuser_required
 @require_http_methods(["GET"])
 def session_detail_api(request, session_id):
     """Get full session data including messages."""

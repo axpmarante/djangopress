@@ -129,10 +129,10 @@
     // Populate structure tab
     populateStructureTab();
 
-    // Show AI tab when element is inside a section (has sectionName)
+    // Show AI tab only for superusers when element is inside a section
     const hasSection = !!currentData.sectionName;
     if (aiTabButton) {
-      aiTabButton.style.display = hasSection ? 'flex' : 'none';
+      aiTabButton.style.display = (hasSection && window.EDITOR_AI_ENABLED) ? 'flex' : 'none';
     }
 
     // Populate AI tab if inside a section

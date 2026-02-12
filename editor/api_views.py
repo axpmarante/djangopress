@@ -7,6 +7,7 @@ import json
 from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
 from django.contrib.admin.views.decorators import staff_member_required
+from core.decorators import superuser_required
 from django.views.decorators.csrf import csrf_exempt
 from core.models import Page, SiteImage
 from ai.models import RefinementSession
@@ -341,7 +342,7 @@ def get_images(request):
     return JsonResponse({'success': True, 'images': image_list})
 
 
-@staff_member_required
+@superuser_required
 @require_http_methods(["POST"])
 def refine_section(request):
     """
@@ -442,7 +443,7 @@ def refine_section(request):
         }, status=500)
 
 
-@staff_member_required
+@superuser_required
 @require_http_methods(["POST"])
 def save_ai_section(request):
     """

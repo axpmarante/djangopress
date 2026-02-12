@@ -99,7 +99,8 @@
     <script src="{% static 'js/lightbox.js' %}"></script>
     {% if edit_mode %}
     <!-- Simple Editor System -->
-    <script src="{% static 'editor/js/simple-selector.js' %}?v=19"></script>
+    <script>window.EDITOR_AI_ENABLED = {{ user.is_superuser|yesno:"true,false" }};</script>
+    <script src="{% static 'editor/js/simple-selector.js' %}?v=20"></script>
     <script src="{% static 'editor/js/simple-sidebar.js' %}?v=19"></script>
     <script src="{% static 'editor/js/simple-tracker.js' %}?v=19"></script>
     <script src="{% static 'editor/js/image-modal.js' %}?v=19"></script>
