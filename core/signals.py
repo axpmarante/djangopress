@@ -5,8 +5,10 @@ from .models import Page, PageVersion
 
 
 @receiver(post_save, sender=Page)
-def create_page_version(sender, instance: Page, created, **kwargs):
+def create_page_version(sender, instance: Page, created, raw=False, **kwargs):
     """Create a new PageVersion snapshot on every save."""
+    if raw:
+        return
     try:
         user = getattr(instance, '_snapshot_user', None)
         change_summary = getattr(instance, '_change_summary', '')

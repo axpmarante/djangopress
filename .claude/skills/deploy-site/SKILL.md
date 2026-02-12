@@ -15,6 +15,33 @@ The argument provided is: `$ARGUMENTS`
 
 ## Phase 1: Pre-flight Check
 
+### Confirm the correct project directory
+
+**CRITICAL:** Before doing anything, verify you are in the right project folder. The user may ask to deploy a child project (e.g. `centianes-boattrip`) while your working directory is the `djangopress` template itself. Deploying the wrong folder is a serious mistake.
+
+1. Check the current working directory:
+
+```bash
+pwd
+```
+
+2. Check if the folder name matches `$ARGUMENTS` (if provided). Also check git status to confirm this is a proper project:
+
+```bash
+basename "$(pwd)"
+git remote -v
+```
+
+3. **If the current directory does NOT match the project the user wants to deploy** (e.g. you're in `djangopress` but they asked to deploy `centianes-boattrip`):
+   - Look for the target project as a sibling folder: `ls ../` to find it
+   - Tell the user: "You're currently in `<current-folder>`, but the project `<target>` is at `../<target>/`. I need to work from that directory."
+   - Use `AskUserQuestion` to confirm: "Should I deploy from `../<target>/`?"
+   - Once confirmed, `cd` into the correct project directory before continuing
+
+4. **If the current directory IS the `djangopress` template repo** (check: `git remote -v` shows `axpmarante/djangopress`), **STOP and warn the user.** You should almost never deploy the template itself — only child projects cloned from it.
+
+### Check deployment status
+
 Determine if this is a first deployment or redeployment:
 
 ```bash
@@ -23,6 +50,8 @@ railway status
 
 - **If linked to a project:** This is a redeployment. Jump to the **Redeployment Flow** section.
 - **If not linked / command fails:** This is a first-time deployment. Continue with Phase 2.
+
+### Check content
 
 Check the project has content worth deploying:
 
@@ -36,7 +65,7 @@ if s:
     print(f'Languages: {s.get_language_codes()}')
     print(f'Pages: {Page.objects.filter(is_active=True).count()}')
     print(f'Header: {\"YES\" if GlobalSection.objects.filter(key=\"main-header\", is_active=True).exists() else \"NO\"}')
-    print(f'Footer: {\"YES\" if GlobalSection.objects.filter(key=\"main-footer\", is_active=True).exists() else \"NO\"}')
+    print(f'Footer: {\"YES\" if GlobalSection.objects.filter(key=\"main-footer\").exists() else \"NO\"}')
 else:
     print('NO_SETTINGS')
 "
@@ -44,10 +73,12 @@ else:
 
 If `NO_SETTINGS` or 0 pages, warn the user that there's no content to deploy and suggest running `/generate-site` first.
 
-Derive the project name:
+### Derive project name
+
 1. From `$ARGUMENTS` if provided
 2. Otherwise from `SiteSettings.domain`
-3. Otherwise ask the user
+3. Otherwise from the current folder name
+4. Otherwise ask the user
 
 ---
 
@@ -101,7 +132,7 @@ railway status
 Create and link the web service:
 
 ```bash
-railway service create web
+railway add -s "web"
 railway service link web
 ```
 
@@ -196,7 +227,7 @@ The `-d` flag detaches. Then monitor deployment:
 sleep 10
 
 # Check deployment status
-railway logs --num 50
+railway logs --lines 50
 ```
 
 If you see errors in logs, diagnose and fix them. Common issues:
@@ -220,27 +251,46 @@ Capture the `*.railway.app` URL from the output. This is the live site URL.
 
 ## Phase 8: Migrate Data (SQLite → Postgres)
 
-Export data from local SQLite:
+### Get the public DATABASE_URL
+
+Railway's `DATABASE_URL` uses internal hostnames (`postgres.railway.internal`) not accessible from outside Railway's network. We need the public URL:
+
+```bash
+railway variables -s Postgres
+```
+
+Find the `DATABASE_PUBLIC_URL` value from the output. It looks like `postgresql://postgres:xxx@xxx.railway.app:port/railway`.
+
+Store it in a shell variable for the subsequent commands:
+
+```bash
+export REMOTE_DB="<DATABASE_PUBLIC_URL value>"
+```
+
+### Export data from local SQLite
 
 ```bash
 python manage.py dumpdata core ai.RefinementSession \
   --natural-foreign --natural-primary \
+  --exclude core.PageVersion \
   --indent 2 -o data_export.json
 ```
 
 This exports:
-- All `core` models: Pages, SiteSettings, GlobalSections, SiteImages, PageVersions, DynamicForms, FormSubmissions, MenuItems
+- All `core` models: Pages, SiteSettings, GlobalSections, SiteImages, DynamicForms, FormSubmissions, MenuItems
 - AI refinement sessions
 
-**Excluded automatically:** `auth`, `contenttypes`, `sessions`, `admin` (these are created by migrations on Railway).
+**Excluded:**
+- `core.PageVersion` — the `post_save` signal auto-creates these when Pages are loaded, so including them causes duplicate key errors
+- `auth`, `contenttypes`, `sessions`, `admin` — these are created by migrations on Railway
 
-Load into Railway Postgres:
+### Load into Railway Postgres
 
 ```bash
-railway run python manage.py loaddata data_export.json
+DATABASE_URL="$REMOTE_DB" ENVIRONMENT=production python manage.py loaddata data_export.json
 ```
 
-`railway run` injects Railway's environment variables (including `DATABASE_URL`) into the local command, so `loaddata` connects to the remote Postgres database.
+This runs loaddata locally but points Django at the remote Postgres via the public DATABASE_URL.
 
 Clean up:
 
@@ -248,10 +298,10 @@ Clean up:
 rm data_export.json
 ```
 
-Verify data migrated:
+### Verify data migrated
 
 ```bash
-railway run python manage.py shell -c "
+DATABASE_URL="$REMOTE_DB" ENVIRONMENT=production python manage.py shell -c "
 from core.models import SiteSettings, Page, GlobalSection
 print(f'Settings: {\"YES\" if SiteSettings.objects.exists() else \"NO\"}')
 print(f'Pages: {Page.objects.filter(is_active=True).count()}')
@@ -281,7 +331,7 @@ If "Create new", ask for username, email, and password.
 Then create:
 
 ```bash
-railway run python manage.py shell -c "
+DATABASE_URL="$REMOTE_DB" ENVIRONMENT=production python manage.py shell -c "
 from django.contrib.auth import get_user_model
 User = get_user_model()
 if not User.objects.filter(is_superuser=True).exists():
@@ -356,22 +406,37 @@ Migrations run automatically via the Procfile command chain.
 Monitor deployment:
 ```bash
 sleep 10
-railway logs --num 30
+railway logs --lines 30
 ```
 
 ### Data redeployment
+
+First, get the public DATABASE_URL:
+
+```bash
+railway variables -s Postgres
+```
+
+Extract `DATABASE_PUBLIC_URL` and store it:
+
+```bash
+export REMOTE_DB="<DATABASE_PUBLIC_URL value>"
+```
+
+Then export, flush, and reload:
 
 ```bash
 # Export from local
 python manage.py dumpdata core ai.RefinementSession \
   --natural-foreign --natural-primary \
+  --exclude core.PageVersion \
   --indent 2 -o data_export.json
 
 # Flush remote database (preserves schema, clears data)
-railway run python manage.py flush --no-input
+DATABASE_URL="$REMOTE_DB" ENVIRONMENT=production python manage.py flush --no-input
 
 # Load fresh data
-railway run python manage.py loaddata data_export.json
+DATABASE_URL="$REMOTE_DB" ENVIRONMENT=production python manage.py loaddata data_export.json
 
 # Clean up
 rm data_export.json
@@ -380,7 +445,7 @@ rm data_export.json
 **Important:** `flush` deletes all data including the superuser. Recreate it after loading data:
 
 ```bash
-railway run python manage.py shell -c "
+DATABASE_URL="$REMOTE_DB" ENVIRONMENT=production python manage.py shell -c "
 from django.contrib.auth import get_user_model
 User = get_user_model()
 if not User.objects.filter(is_superuser=True).exists():
@@ -397,11 +462,16 @@ Run both sequences above: deploy code first, then sync data after the deployment
 
 ## Error Handling
 
+- **Wrong project directory:** If `git remote -v` shows `axpmarante/djangopress`, you're in the template repo — NOT a child project. `cd` to the correct child project folder before deploying. Always verify with `pwd` and `basename` before proceeding.
 - **`railway` command not found:** Tell the user to install Railway CLI: `npm install -g @railway/cli` then `railway login`
 - **Not logged in:** Run `railway login` and retry
 - **Project creation fails:** Check workspace name, suggest `railway whoami` to verify auth
 - **Database not ready:** Wait and retry — Postgres can take 10-30 seconds to provision
 - **`dumpdata` fails:** Check for circular references, try excluding problematic models one at a time
-- **`loaddata` fails:** Check for duplicate keys or constraint violations. Try `railway run python manage.py flush --no-input` first
+- **`loaddata` fails with unique constraint on PageVersion:** PageVersion is excluded from dumpdata by default. If using an old export, re-run dumpdata with `--exclude core.PageVersion`
+- **`loaddata` fails with other constraint violations:** Try flushing the remote DB first: `DATABASE_URL="$REMOTE_DB" ENVIRONMENT=production python manage.py flush --no-input`
+- **`railway run` DNS errors / can't connect to Postgres:** Railway's internal hostnames (`postgres.railway.internal`) aren't accessible from outside Railway's network. Use `DATABASE_PUBLIC_URL` instead — get it with `railway variables -s Postgres`
 - **Deploy fails:** Read logs carefully. Fix the issue locally, commit, and `railway up -d` again
 - **502 after deploy:** Check logs — usually a crashed gunicorn worker. Look for import errors or missing env vars
+- **CSRF verification failed (403):** Ensure `CSRF_TRUSTED_ORIGINS` includes `https://*.up.railway.app` in settings.py (Railway domains are `xxx.up.railway.app`)
+- **DisallowedHost error:** Ensure `ALLOWED_HOSTS` includes `.railway.app` (dot prefix) — this matches multi-level subdomains like `*.up.railway.app`
