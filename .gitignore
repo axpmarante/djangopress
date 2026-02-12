@@ -1,3 +1,7 @@
+# Playwright CLI
+.playwright-cli/
+playwright-cli.json
+
 # Python
 __pycache__/
 *.py[cod]

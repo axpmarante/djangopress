@@ -33,6 +33,52 @@ class PromptTemplates:
         return "\n".join(lines) + "\n"
 
     @staticmethod
+    def _get_design_quality_guidelines():
+        """Return design quality principles injected into every generation/refinement prompt."""
+        return """
+
+## Design Quality Standards
+
+You are a senior frontend designer, not a generic page builder. Every page you create should feel intentionally designed, not auto-generated. Follow these principles:
+
+### Visual Hierarchy
+- Every section needs a clear focal point — one element that draws the eye first
+- Use size contrast aggressively: hero headings should be dramatically larger than body text
+- Guide the reader's eye with deliberate size, weight, and color progression
+
+### Layout & Spacing
+- Vary section layouts — never use the same structure twice in a row (e.g. don't follow a 3-column grid with another 3-column grid)
+- Use asymmetric layouts where appropriate (60/40 splits, offset grids, overlapping elements)
+- Whitespace is a design element — use generous padding between sections (py-20 minimum, py-32 for heroes)
+- Alternate between full-width backgrounds and contained content for visual rhythm
+
+### Typography
+- Create strong contrast between heading weight/size and body text
+- Use font-size jumps between hierarchy levels (don't make h2 and h3 look similar)
+- Keep body text readable: max-w-prose or max-w-2xl for long paragraphs
+- Use text-balance or max-width on headings to avoid awkward line breaks
+
+### Color & Contrast
+- Use accent colors sparingly — they lose impact when overused
+- Never make adjacent sections the same background color — alternate between light, white, subtle tint, and dark/primary backgrounds
+- Dark background sections create visual anchors — use 1-2 per page for rhythm
+- Ensure sufficient contrast for readability (light text on dark, dark text on light)
+
+### Visual Polish
+- Add subtle hover transitions on interactive elements (transition-all duration-300)
+- Use shadow and border-radius consistently throughout the page
+- Icons and decorative elements should support the content, not fill space
+- Avoid perfect symmetry everywhere — slight asymmetry feels more natural and designed
+
+### Anti-Patterns to Avoid
+- No walls of cards with identical layouts — vary card sizes or highlight a featured item
+- No centered-everything layouts — mix text alignment (left-aligned content reads better for long text)
+- No generic stock-photo grids — if using image placeholders, vary sizes and aspect ratios
+- No same-height sections stacked — vary section padding for visual rhythm
+- No monochrome sameness — each section should feel distinct while maintaining brand cohesion
+"""
+
+    @staticmethod
     def _get_components_reference():
         """Return HTML patterns doc for interactive components pre-loaded in base.html."""
         return """
@@ -148,243 +194,6 @@ Forms are handled by the DynamicForm system. Each form has a **slug** and a subm
 - Alpine.js components use `x-data`, `x-show`, `x-transition`, `x-collapse`, `@click`
 - All components are responsive — use Tailwind breakpoint classes and Splide `breakpoints` option
 """
-
-    @staticmethod
-    def get_page_generation_prompt(
-        site_name: str,
-        site_description: str,
-        project_briefing: str,
-        languages: list,
-        brief: str,
-    ) -> tuple:
-        """
-        Generate prompt for creating a new page as a single HTML document with translations
-
-        Args:
-            site_name: Name of the website
-            site_description: Brief description of the site
-            project_briefing: Detailed project context
-            languages: List of language codes (e.g., ['pt', 'en'])
-            brief: User's description of the desired page
-
-        Returns:
-            Tuple of (system_prompt, user_prompt)
-        """
-        langs_display = ' and '.join([lang.upper() for lang in languages])
-        langs_json = ', '.join([f'"{lang}"' for lang in languages])
-
-        # Build language examples
-        lang_examples = {}
-        for lang in languages:
-            if lang == 'pt':
-                lang_examples[lang] = {"hero_title": "Título Principal", "hero_subtitle": "Subtítulo descritivo"}
-            elif lang == 'en':
-                lang_examples[lang] = {"hero_title": "Main Title", "hero_subtitle": "Descriptive subtitle"}
-            else:
-                lang_examples[lang] = {"hero_title": f"Main Title ({lang.upper()})", "hero_subtitle": f"Subtitle ({lang.upper()})"}
-
-        system_prompt = f"""You are a web designer creating complete web pages using Tailwind CSS and Django template syntax.
-
-## Task
-Generate a complete page as a single HTML document with multiple sections. Use `{{{{trans.field}}}}` for translatable text content, and provide translations in a separate JSON object.
-
-## Technical Requirements
-- Use Tailwind CSS classes inline for all styling
-- Make responsive with breakpoint prefixes: `md:`, `lg:`, `sm:`
-- Use Django template syntax `{{{{trans.field}}}}` for all translatable text
-- Mark each major section with `data-section="name"` attribute on the `<section>` tag
-- Use `data-element-id="unique_id"` on editable elements for inline editing support
-
-## HTML Structure
-- Compose the page from multiple `<section data-section="name">` blocks
-- Each section should be a self-contained visual block
-- Start with a hero section, add content sections, end with a CTA
-- All URLs hardcoded: `href="/about/"`, `src="/media/image.jpg"`
-- All styling inline via Tailwind classes
-
-## Images
-When adding images, NEVER use external URLs (Unsplash, Pexels, etc.). Use placeholder images:
-- `<img>` tags: use `src="https://placehold.co/WIDTHxHEIGHT?text=Short+Label"` with `data-image-prompt="detailed description for AI image generation"` and `data-image-name="slug_name"`
-- Background images: use a CSS background-color as fallback and add a child `<img>` with `class="absolute inset-0 w-full h-full object-cover"` using the same placeholder pattern
-- Choose appropriate dimensions: hero 1200x600, cards 600x400, avatars 400x400, etc.
-- Write rich, specific prompts in data-image-prompt (style, subject, mood, setting)
-
-## Content Structure
-- Provide translations in ALL languages: {langs_display}
-- Format: `{{"translations": {{{langs_json}: {{...}}}}}}`
-- Only text content in translations (no URLs, no HTML)
-{PromptTemplates._get_components_reference()}"""
-
-        user_prompt = f"""# PROJECT CONTEXT
-
-**Site Name:** {site_name}
-**Description:** {site_description}
-**Project Briefing:** {project_briefing}
-**Languages:** {langs_display}
-
----
-
-# PAGE REQUEST
-
-**Brief:** {brief}
-
----
-
-# OUTPUT FORMAT
-
-Return a JSON **object** with two fields:
-
-```json
-{{
-  "html_content": "<section data-section=\\"hero\\" class=\\"py-32 bg-blue-600 text-white\\">\\n  <div class=\\"container mx-auto px-6 text-center\\">\\n    <h1 class=\\"text-5xl md:text-6xl font-bold mb-6\\" data-element-id=\\"hero_title\\">{{{{trans.hero_title}}}}</h1>\\n    <p class=\\"text-xl mb-8\\" data-element-id=\\"hero_subtitle\\">{{{{trans.hero_subtitle}}}}</p>\\n  </div>\\n</section>\\n\\n<section data-section=\\"features\\" class=\\"py-20 bg-white\\">\\n  ...\\n</section>",
-  "content": {{
-    "translations": {{
-      {json.dumps(lang_examples, indent=6, ensure_ascii=False)[1:-1]}
-    }}
-  }}
-}}
-```
-
-**Important:**
-- Return ONLY the JSON object, no markdown, no explanations
-- `html_content` is a single string containing ALL sections of the page
-- Each section uses `<section data-section="name">` for identification
-- Use `{{{{trans.field_name}}}}` for all translatable text in html_content
-- Provide every translation key used in html_content in ALL languages: {langs_display}
-- All styling via Tailwind CSS classes
-- Generate 4-8 sections for a complete, professional page
-- All URLs hardcoded in HTML (not in translations)"""
-
-        return (system_prompt, user_prompt)
-
-    @staticmethod
-    def get_page_refinement_prompt(
-        site_name: str,
-        site_description: str,
-        project_briefing: str,
-        languages: list,
-        page_html: str,
-        page_content: dict,
-        user_request: str,
-        page_title: str = '',
-        page_slug: str = '',
-        design_guide: str = ''
-    ) -> tuple:
-        """
-        Generate prompt for refining an existing page's HTML and translations
-
-        Args:
-            site_name: Name of the website
-            site_description: Brief description of the site
-            project_briefing: Detailed project context
-            languages: List of language codes
-            page_html: Current page HTML content
-            page_content: Current page content/translations JSON
-            user_request: User's instructions for changes
-            page_title: Title of the page being edited
-            page_slug: Slug/URL of the page being edited
-            design_guide: Freeform markdown design guide for AI context
-
-        Returns:
-            Tuple of (system_prompt, user_prompt)
-        """
-        langs_display = ' and '.join([lang.upper() for lang in languages])
-        langs_json = ', '.join([f'"{lang}"' for lang in languages])
-
-        # Build design guidelines
-        design_guidelines = ""
-        if design_guide:
-            design_guidelines = "\n\n## Design Guide\nFollow these design patterns and conventions:\n" + design_guide
-
-        system_prompt = f"""You are a web designer specializing in Tailwind CSS and Django templates. Your goal is to edit a webpage based on user instructions.
-
-## Your Task
-Edit the provided page HTML by modifying its sections according to user requests. Return the complete updated page as a JSON object with `html_content` and `content` (translations).
-
-## Technical Requirements
-
-**HTML Structure:**
-- Use Tailwind CSS classes inline for all styling
-- Make responsive: `md:text-6xl`, `lg:grid-cols-3`, `sm:flex-row`
-- Use Django template syntax: `{{{{trans.field}}}}` for translatable content
-- Mark sections with `data-section="name"` on `<section>` tags
-- Use `data-element-id="unique_id"` on editable elements
-
-**Content Structure:**
-- Translations in ALL languages: {langs_display}
-- Format: `{{"translations": {{{langs_json}: {{...}}}}}}`
-- Only text content in translations (no URLs, no HTML)
-
-**What Goes Where:**
-- In `html_content`: ALL classes, ALL URLs, ALL SVG icons, ALL styling, ALL structure
-- In `content.translations`: ONLY translatable text (titles, descriptions, button labels){design_guidelines}"""
-
-        # Format current translations for display
-        content_json = json.dumps(page_content, indent=2, ensure_ascii=False) if page_content else '{}'
-
-        user_prompt = f"""# PROJECT CONTEXT
-
-**Site Name:** {site_name}
-**Description:** {site_description}
-
-**Project Briefing:**
-{project_briefing}
-
-**Languages:** {langs_display}
-
----
-
-# CURRENT PAGE
-
-**Page:** {page_title if page_title else 'Untitled'}
-**Slug:** {page_slug if page_slug else 'unknown'}
-
-**Current HTML:**
-```html
-{page_html if page_html.strip() else "<!-- EMPTY PAGE -->"}
-```
-
-**Current Translations:**
-```json
-{content_json}
-```
-
----
-
-# USER REQUEST
-
-{user_request}
-
----
-
-# OUTPUT FORMAT
-
-Return a JSON **object** with the complete updated page:
-
-```json
-{{
-  "html_content": "<section data-section=\\"hero\\" class=\\"py-32 bg-blue-600\\">...{{{{trans.hero_title}}}}...</section>\\n\\n<section data-section=\\"features\\" class=\\"py-20\\">...</section>",
-  "content": {{
-    "translations": {{
-      "pt": {{"hero_title": "Título", "hero_subtitle": "Subtítulo"}},
-      "en": {{"hero_title": "Title", "hero_subtitle": "Subtitle"}}
-    }}
-  }}
-}}
-```
-
-**Important:**
-- Return ONLY the JSON object, no markdown, no explanations
-- `html_content` contains the COMPLETE page HTML (all sections)
-- Each section marked with `data-section="name"`
-- Apply ALL requested changes from the user request
-- Update translations in ALL languages consistently: {langs_display}
-- All URLs hardcoded in html_content
-- All styling via Tailwind classes in html_content
-- Only translatable text in content.translations
-- Every `{{{{trans.xxx}}}}` in html_content MUST have a matching key in all language translations"""
-
-        return (system_prompt, user_prompt)
 
     @staticmethod
     def get_global_section_refinement_prompt(
@@ -568,11 +377,11 @@ Do NOT hardcode page links. Use this loop pattern:
 Follow these design patterns and conventions:
 {design_guide}"""
 
-        system_prompt = f"""You are a web designer specializing in Tailwind CSS and Django templates. Your goal is to refine a site-wide {section_type}.
+        system_prompt = f"""You are a senior frontend designer specializing in Tailwind CSS and Django templates. Your goal is to refine a site-wide {section_type}.
 
 ## Your Task
 Improve the provided {section_type} by applying the requested changes. Return a JSON object with the refined {section_type}.
-
+{PromptTemplates._get_design_quality_guidelines()}
 ## Technical Requirements
 - Use Tailwind CSS classes inline
 - Make responsive
@@ -888,11 +697,11 @@ Return a JSON object:
         """
         lang_name = {'pt': 'Portuguese', 'en': 'English', 'es': 'Spanish', 'fr': 'French', 'de': 'German', 'it': 'Italian'}.get(default_language, default_language.upper())
 
-        system_prompt = f"""You are a web designer creating complete web pages using Tailwind CSS.
+        system_prompt = f"""You are a senior frontend designer creating complete web pages using Tailwind CSS.
 
 ## Task
 Generate a complete, professional web page as clean HTML with real text content written in {lang_name}.
-
+{PromptTemplates._get_design_quality_guidelines()}
 ## Technical Requirements
 - Use Tailwind CSS classes inline for all styling
 - Make responsive with breakpoint prefixes: `sm:`, `md:`, `lg:`
@@ -1003,11 +812,11 @@ Return ONLY the raw HTML for this page. All text must be real content in {lang_n
         if design_guide:
             design_guidelines = "\n\n## Design Guide\nFollow these design patterns and conventions:\n" + design_guide
 
-        system_prompt = f"""You are a web designer specializing in Tailwind CSS. Your goal is to edit a webpage based on user instructions.
+        system_prompt = f"""You are a senior frontend designer specializing in Tailwind CSS. Your goal is to edit a webpage based on user instructions.
 
 ## Your Task
 Edit the provided HTML page by applying the requested changes. Return the complete updated HTML.
-
+{PromptTemplates._get_design_quality_guidelines()}
 ## Technical Requirements
 - Use Tailwind CSS classes inline for all styling
 - Make responsive: `md:text-6xl`, `lg:grid-cols-3`, `sm:flex-row`
@@ -1171,11 +980,11 @@ Do NOT undo any of these previous changes unless specifically asked to.
         if design_guide:
             design_guidelines = "\n\n## Design Guide\nFollow these design patterns and conventions:\n" + design_guide
 
-        system_prompt = f"""You are a web designer specializing in Tailwind CSS. Your goal is to edit ONE specific section of a webpage.
+        system_prompt = f"""You are a senior frontend designer specializing in Tailwind CSS. Your goal is to edit ONE specific section of a webpage.
 
 ## Your Task
 Edit ONLY the `<section data-section="{section_name}">` section based on the user's instructions. Return ONLY that single section — nothing else.
-
+{PromptTemplates._get_design_quality_guidelines()}
 ## Technical Requirements
 - Use Tailwind CSS classes inline for all styling
 - Make responsive: `md:text-6xl`, `lg:grid-cols-3`, `sm:flex-row`
