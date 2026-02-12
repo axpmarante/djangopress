@@ -123,31 +123,37 @@
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
                     <div>
                         <label for="id_body_font" class="block text-sm font-medium text-gray-700 mb-2">Body Font</label>
-                        <select name="body_font" id="id_body_font"
+                        <select name="body_font" id="id_body_font" data-font-preview="preview_body_font"
                                 class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
                             {% for font_value, font_label in google_fonts %}
                             <option value="{{ font_value }}" {% if settings.body_font == font_value %}selected{% endif %}>{{ font_label }}</option>
                             {% endfor %}
                         </select>
+                        <div id="preview_body_font" class="mt-2 p-3 bg-gray-50 border border-gray-200 rounded-lg">
+                            <span class="text-base text-gray-800 font-preview-text">The quick brown fox jumps over the lazy dog</span>
+                        </div>
                     </div>
                     <div>
                         <label for="id_heading_font" class="block text-sm font-medium text-gray-700 mb-2">General Heading Font</label>
-                        <select name="heading_font" id="id_heading_font"
+                        <select name="heading_font" id="id_heading_font" data-font-preview="preview_heading_font"
                                 class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
                             {% for font_value, font_label in google_fonts %}
                             <option value="{{ font_value }}" {% if settings.heading_font == font_value %}selected{% endif %}>{{ font_label }}</option>
                             {% endfor %}
                         </select>
+                        <div id="preview_heading_font" class="mt-2 p-3 bg-gray-50 border border-gray-200 rounded-lg">
+                            <span class="text-xl font-bold text-gray-800 font-preview-text">The quick brown fox jumps</span>
+                        </div>
                     </div>
                 </div>
 
                 <p class="text-sm text-gray-600 mb-3">Individual Heading Settings (H1-H6)</p>
                 <div class="space-y-4">
                     {% for h in heading_levels %}
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 items-start">
                         <div>
                             <label for="id_{{ h.prefix }}_font" class="block text-xs font-medium text-gray-600 mb-1">{{ h.label }} Font Family</label>
-                            <select name="{{ h.prefix }}_font" id="id_{{ h.prefix }}_font"
+                            <select name="{{ h.prefix }}_font" id="id_{{ h.prefix }}_font" data-font-preview="preview_{{ h.prefix }}_font"
                                     class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
                                 {% for font_value, font_label in google_fonts %}
                                 <option value="{{ font_value }}" {% if h.font_value == font_value %}selected{% endif %}>{{ font_label }}</option>
@@ -162,6 +168,9 @@
                                 <option value="{{ size }}" {% if h.size_value == size %}selected{% endif %}>{{ size }}</option>
                                 {% endfor %}
                             </select>
+                        </div>
+                        <div id="preview_{{ h.prefix }}_font" class="p-3 bg-gray-50 border border-gray-200 rounded-lg mt-4 md:mt-0">
+                            <span class="text-lg font-bold text-gray-800 font-preview-text">{{ h.label }} Preview</span>
                         </div>
                     </div>
                     {% endfor %}
@@ -297,6 +306,7 @@
 </div>
 
 <script>
+// Color picker sync
 document.querySelectorAll('input[type="color"]').forEach(colorInput => {
     const textInput = colorInput.nextElementSibling;
     if (textInput && textInput.tagName === 'INPUT') {
@@ -304,6 +314,35 @@ document.querySelectorAll('input[type="color"]').forEach(colorInput => {
             textInput.value = this.value;
         });
     }
+});
+
+// Font preview
+const loadedFonts = new Set();
+function loadFontPreview(fontName) {
+    if (!fontName || fontName === 'system-ui' || loadedFonts.has(fontName)) return;
+    loadedFonts.add(fontName);
+    const link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = `https://fonts.googleapis.com/css2?family=${fontName.replace(/ /g, '+')}:wght@400;700&display=swap`;
+    document.head.appendChild(link);
+}
+
+function updateFontPreview(select) {
+    const previewId = select.dataset.fontPreview;
+    if (!previewId) return;
+    const preview = document.getElementById(previewId);
+    if (!preview) return;
+    const font = select.value;
+    loadFontPreview(font);
+    const textEl = preview.querySelector('.font-preview-text');
+    if (textEl) {
+        textEl.style.fontFamily = font === 'system-ui' ? 'system-ui, sans-serif' : `"${font}", sans-serif`;
+    }
+}
+
+document.querySelectorAll('[data-font-preview]').forEach(select => {
+    updateFontPreview(select);
+    select.addEventListener('change', () => updateFontPreview(select));
 });
 
 function generateDesignGuide() {
