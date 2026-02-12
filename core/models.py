@@ -1045,24 +1045,6 @@ class GlobalSection(models.Model):
     def __str__(self):
         return f"{self.name} ({self.key})"
 
-    def get_cache_key(self, language='pt'):
-        """Generate cache key for this section"""
-        return f'global_section_{self.key}_{language}'
-
-    def clear_cache(self):
-        """Clear cache for this section in all languages"""
-        from django.core.cache import cache
-        from django.conf import settings as django_settings
-
-        # Clear for all languages
-        for lang_code, lang_name in django_settings.LANGUAGES:
-            cache_key = self.get_cache_key(lang_code)
-            cache.delete(cache_key)
-
-    def save(self, *args, **kwargs):
-        """Override save to clear cache"""
-        super().save(*args, **kwargs)
-        self.clear_cache()
 
 
 class PageVersion(models.Model):

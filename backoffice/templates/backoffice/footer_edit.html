@@ -42,13 +42,6 @@
                     Quick AI Edit
                 </button>
                 {% endif %}
-                <button onclick="clearCache()"
-                        class="px-4 py-2 bg-yellow-600 text-white rounded-md hover:bg-yellow-700 flex items-center">
-                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
-                    </svg>
-                    Clear Cache
-                </button>
             </div>
             <div class="text-sm text-gray-600">
                 <strong>Key:</strong> {{ footer.key }}
@@ -353,26 +346,6 @@ function showTab(tabName) {
 function getCSRFToken() {
     return document.querySelector('[name=csrfmiddlewaretoken]')?.value ||
            document.cookie.split('; ').find(row => row.startsWith('csrftoken='))?.split('=')[1];
-}
-
-// Cache
-function clearCache() {
-    if (confirm('Clear the footer cache? This will force the footer to regenerate on next page load.')) {
-        fetch('{% url "backoffice:api_update_site_settings" %}', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': getCSRFToken()
-            },
-            body: JSON.stringify({ action: 'clear_footer_cache' })
-        })
-        .then(response => response.json())
-        .then(data => alert('Cache cleared successfully!'))
-        .catch(error => {
-            console.error('Error:', error);
-            alert('Error clearing cache. Check console for details.');
-        });
-    }
 }
 
 // AI Modal

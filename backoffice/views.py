@@ -891,7 +891,7 @@ class MenuView(LoginRequiredMixin, TemplateView):
                 open_in_new_tab=open_in_new_tab,
                 css_class=css_class,
             )
-            self._clear_global_section_cache()
+
             messages.success(request, 'Menu item created.')
 
         elif action == 'update':
@@ -919,7 +919,7 @@ class MenuView(LoginRequiredMixin, TemplateView):
                 item.open_in_new_tab = 'open_in_new_tab' in request.POST
                 item.css_class = request.POST.get('css_class', '').strip()
                 item.save()
-                self._clear_global_section_cache()
+    
                 messages.success(request, 'Menu item updated.')
             except MenuItem.DoesNotExist:
                 messages.error(request, 'Menu item not found.')
@@ -929,18 +929,13 @@ class MenuView(LoginRequiredMixin, TemplateView):
             try:
                 item = MenuItem.objects.get(pk=item_id)
                 item.delete()
-                self._clear_global_section_cache()
+    
                 messages.success(request, 'Menu item deleted.')
             except MenuItem.DoesNotExist:
                 messages.error(request, 'Menu item not found.')
 
         return redirect('backoffice:menu')
 
-    @staticmethod
-    def _clear_global_section_cache():
-        """Clear header/footer cache so menu changes are visible immediately."""
-        for section in GlobalSection.objects.filter(key__in=['main-header', 'main-footer']):
-            section.clear_cache()
 
 
 class AIManagementView(SuperuserRequiredMixin, TemplateView):

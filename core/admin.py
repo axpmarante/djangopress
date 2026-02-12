@@ -511,15 +511,6 @@ class GlobalSectionAdmin(admin.ModelAdmin):
     
     readonly_fields = ["created_at", "updated_at"]
     
-    actions = ["clear_cache_action"]
-    
-    def clear_cache_action(self, request, queryset):
-        """Clear cache for selected global sections"""
-        for section in queryset:
-            section.clear_cache()
-        self.message_user(request, f"Cache cleared for {queryset.count()} section(s)")
-    clear_cache_action.short_description = "Clear cache for selected sections"
-    
     class Media:
         css = {
             "all": ("admin/css/custom_admin.css",)

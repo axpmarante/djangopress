@@ -453,11 +453,6 @@ def update_menu_order(request):
                 sort_order=item_data['sort_order']
             )
 
-        # Clear header/footer cache so menu order changes are visible
-        from core.models import GlobalSection
-        for section in GlobalSection.objects.filter(key__in=['main-header', 'main-footer']):
-            section.clear_cache()
-
         return JsonResponse({
             'success': True,
             'message': f'Updated order for {len(items_data)} item(s)'
@@ -532,11 +527,6 @@ def update_menu_parent(request):
             item.parent = None
 
         item.save()
-
-        # Clear header/footer cache
-        from core.models import GlobalSection
-        for section in GlobalSection.objects.filter(key__in=['main-header', 'main-footer']):
-            section.clear_cache()
 
         return JsonResponse({
             'success': True,

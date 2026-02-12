@@ -164,28 +164,19 @@ def get_translation_or_fallback(json_field, lang=None):
 @register.simple_tag(takes_context=True)
 def load_global_section(context, key, fallback_template=None):
     """
-    Load and render a global section (header, footer, etc) with caching.
+    Load and render a global section (header, footer, etc) from the database.
 
     Usage:
         {% load_global_section 'main-header' fallback_template='partials/header.html' %}
 
-    The section is cached per language for performance.
     If section doesn't exist and fallback_template is provided, uses fallback.
     """
     from core.models import GlobalSection
-    from django.core.cache import cache
     from django.template.loader import render_to_string
     from django.template import Template, Context
 
     # Get current language
     language = context.get('LANGUAGE_CODE', 'pt')
-
-    # Try to get from cache first
-    cache_key = f'global_section_{key}_{language}'
-    cached_html = cache.get(cache_key)
-
-    if cached_html is not None:
-        return mark_safe(cached_html)
 
     # Try to load from database
     try:
@@ -210,9 +201,6 @@ def load_global_section(context, key, fallback_template=None):
             rendered_html = template.render(Context(section_context))
         else:
             return mark_safe(f'<!-- Global section has no content: {key} -->')
-
-        # Cache the rendered HTML
-        cache.set(cache_key, rendered_html, section.cache_duration)
 
         return mark_safe(rendered_html)
 
@@ -283,19 +271,3 @@ def hreflang_tags(context):
     links.append(f'<link rel="alternate" hreflang="x-default" href="{default_url}">')
 
     return mark_safe('\n    '.join(links))
-
-
-@register.simple_tag
-def clear_global_section_cache(key):
-    """
-    Clear cache for a specific global section.
-    Usage: {% clear_global_section_cache 'main-header' %}
-    """
-    from core.models import GlobalSection
-
-    try:
-        section = GlobalSection.objects.get(key=key)
-        section.clear_cache()
-        return ''
-    except GlobalSection.DoesNotExist:
-        return ''
