@@ -1,3 +1,5 @@
+from django.utils.translation import get_language
+
 from .models import SiteSettings, SiteImage, MenuItem, FormSubmission
 
 
@@ -64,13 +66,13 @@ def site_settings(request):
         'FAVICON': settings.favicon if settings.favicon else None,
         'MENU_ITEMS': menu_items,
 
-        # OLD: Backward compatible (using modeltranslation, will be removed later)
-        'SITE_NAME': settings.site_name,
-        'SITE_DESCRIPTION': settings.site_description,
-        'CONTACT_ADDRESS': settings.contact_address,
+        # Translatable fields — resolve to current language
+        'SITE_NAME': settings.get_site_name(get_language()),
+        'SITE_DESCRIPTION': settings.get_site_description(get_language()),
+        'CONTACT_ADDRESS': settings.get_contact_address(get_language()),
         'PROJECT_BRIEFING': settings.project_briefing,
 
-        # NEW: JSON translation fields (use with get_translation filter)
+        # JSON translation fields (use with get_translation filter for manual control)
         'SITE_NAME_I18N': settings.site_name_i18n,
         'SITE_DESCRIPTION_I18N': settings.site_description_i18n,
         'CONTACT_ADDRESS_I18N': settings.contact_address_i18n,
