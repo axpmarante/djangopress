@@ -28,7 +28,7 @@ SECRET_KEY = env('SECRET_KEY', default='django-insecure-372d0ca8799a3029769a1bc4
 # Enable DEBUG if in development OR if DEBUG_MODE is explicitly enabled
 DEBUG = ENVIRONMENT == 'development' or DEBUG_MODE
 
-ALLOWED_HOSTS = ['localhost', '127.0.0.1', '*.railway.app']
+ALLOWED_HOSTS = ['localhost', '127.0.0.1', '.railway.app']
 
 # Site Configuration
 SITE_NAME = "DjangoPress"
@@ -205,6 +205,7 @@ CSRF_TRUSTED_ORIGINS = [
     'http://localhost',
     'http://127.0.0.1',
     'https://*.railway.app',
+    'https://*.up.railway.app',
 ]
 
 # Authentication URLs
