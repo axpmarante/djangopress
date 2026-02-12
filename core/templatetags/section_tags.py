@@ -259,7 +259,7 @@ def hreflang_tags(context):
     Usage in <head>: {% hreflang_tags %}
     """
     page_obj = context.get('page_obj')
-    if not page_obj:
+    if not page_obj or not hasattr(page_obj, 'get_absolute_url'):
         return ''
 
     request = context.get('request')
