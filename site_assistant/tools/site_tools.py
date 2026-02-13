@@ -306,6 +306,31 @@ def get_settings(params, context):
         'domain': settings.domain,
         'default_language': settings.get_default_language(),
         'enabled_languages': settings.get_language_codes(),
+        # Design system
+        'primary_color': settings.primary_color,
+        'primary_color_hover': settings.primary_color_hover,
+        'secondary_color': settings.secondary_color,
+        'accent_color': settings.accent_color,
+        'background_color': settings.background_color,
+        'text_color': settings.text_color,
+        'heading_color': settings.heading_color,
+        'heading_font': settings.heading_font,
+        'body_font': settings.body_font,
+        'container_width': settings.container_width,
+        'border_radius_preset': settings.border_radius_preset,
+        'button_style': settings.button_style,
+        'button_size': settings.button_size,
+        'primary_button_bg': settings.primary_button_bg,
+        'primary_button_text': settings.primary_button_text,
+        'primary_button_border': settings.primary_button_border,
+        'primary_button_hover': settings.primary_button_hover,
+        'secondary_button_bg': settings.secondary_button_bg,
+        'secondary_button_text': settings.secondary_button_text,
+        'secondary_button_border': settings.secondary_button_border,
+        'secondary_button_hover': settings.secondary_button_hover,
+        # Content
+        'design_guide': settings.design_guide,
+        'project_briefing': settings.project_briefing,
     }
 
     if fields:
@@ -318,6 +343,16 @@ SETTINGS_ALLOWLIST = {
     'contact_email', 'contact_phone', 'site_name_i18n', 'site_description_i18n',
     'contact_address_i18n', 'facebook_url', 'instagram_url', 'linkedin_url',
     'twitter_url', 'youtube_url', 'google_maps_embed_url', 'maintenance_mode',
+    # Design system
+    'primary_color', 'primary_color_hover', 'secondary_color', 'accent_color',
+    'background_color', 'text_color', 'heading_color',
+    'heading_font', 'body_font',
+    'container_width', 'border_radius_preset',
+    'button_style', 'button_size',
+    'primary_button_bg', 'primary_button_text', 'primary_button_border', 'primary_button_hover',
+    'secondary_button_bg', 'secondary_button_text', 'secondary_button_border', 'secondary_button_hover',
+    # Content
+    'design_guide', 'project_briefing',
 }
 
 

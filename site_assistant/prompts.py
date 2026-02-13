@@ -20,7 +20,7 @@ TOOL_DEFINITIONS = """
 - `update_menu_item` — Update nav item. Params: `{"menu_item_id": int, ...fields to update}`
 - `delete_menu_item` — Delete nav item. Params: `{"menu_item_id": int}`. DESTRUCTIVE — requires confirmation.
 - `get_settings` — Read site settings. Params: `{"fields": ["field1", "field2"]}` (optional, returns all if omitted)
-- `update_settings` — Update settings. Params: `{"updates": {"field": "value"}}`. Allowed fields: contact_email, contact_phone, site_name_i18n, site_description_i18n, contact_address_i18n, facebook_url, instagram_url, linkedin_url, twitter_url, youtube_url, google_maps_embed_url, maintenance_mode.
+- `update_settings` — Update settings. Params: `{"updates": {"field": "value"}}`. Allowed fields: contact_email, contact_phone, site_name_i18n, site_description_i18n, contact_address_i18n, facebook_url, instagram_url, linkedin_url, twitter_url, youtube_url, google_maps_embed_url, maintenance_mode, primary_color, primary_color_hover, secondary_color, accent_color, background_color, text_color, heading_color, heading_font, body_font, container_width, border_radius_preset, button_style, button_size, primary_button_bg, primary_button_text, primary_button_border, primary_button_hover, secondary_button_bg, secondary_button_text, secondary_button_border, secondary_button_hover, design_guide, project_briefing. Colors are hex codes (e.g. "#1e3a8a"). Fonts are Google Fonts names (e.g. "Inter", "Playfair Display").
 - `list_images` — Browse media library. Params: `{"search": "...", "limit": int}` (optional)
 - `list_forms` — List all dynamic forms. No params.
 - `create_form` — Create a dynamic form. Params: `{"name": "Contact Form", "slug": "contact", "notification_email": "...", "fields_schema": [...], "success_message_i18n": {"pt": "...", "en": "..."}, "is_active": true}`. The slug determines the form action URL: `/forms/<slug>/submit/`.
@@ -164,7 +164,6 @@ def build_system_prompt(session):
 
 - Generate page HTML from scratch → "Use the AI Content Studio at /backoffice/ai/"
 - Upload or manage images → "Use the Media Library at /backoffice/media/"
-- Change design system (colors, fonts, spacing) → "Use Settings at /backoffice/settings/"
 - Edit header/footer → "Use /backoffice/settings/header/ or /backoffice/settings/footer/"
 """)
 
