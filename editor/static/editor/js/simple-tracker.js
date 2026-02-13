@@ -78,9 +78,13 @@
     historyIndex++;
 
     // Find if this element already has a pending change of this type
+    // Compare DOM element reference too — when elementId is null (e.g. images
+    // without data-element-id), multiple different elements would otherwise
+    // match and overwrite each other.
     const existingIndex = pendingChanges.findIndex(c =>
       c.pageId === change.pageId &&
       c.elementId === change.elementId &&
+      c.element === change.element &&
       c.type === change.type &&
       (c.type !== 'attribute' || c.value.name === change.value.name)
     );
@@ -175,33 +179,26 @@
         }
       }
 
-      // Save regular changes
+      // Save regular changes sequentially to avoid race conditions.
+      // Concurrent saves to the same page's html_content would each read
+      // a stale snapshot — the last write wins, silently dropping earlier changes.
       if (pendingChanges.length > 0) {
         // Group changes by type
         const contentChanges = pendingChanges.filter(c => c.type === 'content');
         const classChanges = pendingChanges.filter(c => c.type === 'classes');
         const attributeChanges = pendingChanges.filter(c => c.type === 'attribute');
 
-        let savePromises = [];
-
-        // Save content changes
         for (let change of contentChanges) {
-          savePromises.push(saveContentChange(change));
+          allResults.push(await saveContentChange(change));
         }
 
-        // Save class changes
         for (let change of classChanges) {
-          savePromises.push(saveClassChange(change));
+          allResults.push(await saveClassChange(change));
         }
 
-        // Save attribute changes
         for (let change of attributeChanges) {
-          savePromises.push(saveAttributeChange(change));
+          allResults.push(await saveAttributeChange(change));
         }
-
-        // Wait for all saves
-        const results = await Promise.all(savePromises);
-        allResults = allResults.concat(results);
       }
 
       // Check if all succeeded
@@ -504,6 +501,7 @@
     const pendingIndex = pendingChanges.findIndex(c =>
       c.pageId === change.pageId &&
       c.elementId === change.elementId &&
+      c.element === change.element &&
       c.type === change.type &&
       (c.type !== 'attribute' || c.value.name === change.value.name)
     );
