@@ -233,7 +233,13 @@
 
   // Save content change
   async function saveContentChange(change) {
-    const fieldKey = change.jsonPath || change.elementId;
+    // Prefer jsonPath (data-json-path attr), fall back to elementId (data-element-id).
+    // Convert hyphens to underscores: data-element-id uses hyphens (CSS convention)
+    // but translation keys use underscores ({{ trans.hero_title }}).
+    let fieldKey = change.jsonPath || change.elementId;
+    if (fieldKey) {
+      fieldKey = fieldKey.replace(/-/g, '_');
+    }
     if (!change.pageId || !fieldKey) {
       console.warn('⚠️ Skipping content save: missing pageId or field_key', change);
       return { success: true }; // Don't block other saves
@@ -249,6 +255,7 @@
         body: JSON.stringify({
           page_id: change.pageId,
           field_key: fieldKey,
+          element_id: change.elementId || null,
           value: change.value,
           language: getCurrentLanguage()
         })

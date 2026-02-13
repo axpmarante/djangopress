@@ -100,10 +100,10 @@
     {% if edit_mode %}
     <!-- Simple Editor System -->
     <script>window.EDITOR_AI_ENABLED = {{ user.is_superuser|yesno:"true,false" }};</script>
-    <script src="{% static 'editor/js/simple-selector.js' %}?v=20"></script>
-    <script src="{% static 'editor/js/simple-sidebar.js' %}?v=20"></script>
-    <script src="{% static 'editor/js/simple-tracker.js' %}?v=20"></script>
-    <script src="{% static 'editor/js/image-modal.js' %}?v=20"></script>
+    <script src="{% static 'editor/js/simple-selector.js' %}?v=22"></script>
+    <script src="{% static 'editor/js/simple-sidebar.js' %}?v=22"></script>
+    <script src="{% static 'editor/js/simple-tracker.js' %}?v=22"></script>
+    <script src="{% static 'editor/js/image-modal.js' %}?v=22"></script>
     <script>
       // Initialize simple editor when page loads
       document.addEventListener('DOMContentLoaded', function() {

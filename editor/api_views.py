@@ -58,6 +58,27 @@ def update_page_content(request):
 
         content['translations'][language][field_key] = value
         page.content = content
+
+        # Also ensure the HTML template uses {{ trans.field_key }} instead of
+        # hardcoded text. Elements generated before templatization (or where it
+        # was missed) have raw text that ignores the JSON translations.
+        element_id = data.get('element_id') or field_key.replace('_', '-')
+        if page.html_content:
+            soup = BeautifulSoup(page.html_content, 'html.parser')
+            element = soup.find(attrs={'data-element-id': element_id})
+            if element:
+                trans_var = '{{ trans.' + field_key + ' }}'
+                # Check if the element already uses this template variable
+                element_html = str(element)
+                if trans_var not in element_html:
+                    # Replace hardcoded text with template variable
+                    element.clear()
+                    element.append(trans_var)
+                    new_html = str(soup)
+                    if new_html.startswith('<html><body>'):
+                        new_html = new_html[12:-14]
+                    page.html_content = new_html
+
         page.save()
 
         return JsonResponse({
