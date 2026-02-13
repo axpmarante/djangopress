@@ -713,6 +713,7 @@ Generate a complete, professional web page as clean HTML with real text content 
 - Each `<section>` MUST have `data-section="name"` and `id="name"` attributes
 - Use `data-element-id="unique_id"` on editable text elements (headings, paragraphs, buttons, links)
 - Sections with `data-overlay="rgba(r,g,b,a)"` have a semi-transparent overlay applied via `background-image: linear-gradient(rgba, rgba)` in the style attribute. Preserve both the `data-overlay` attribute and the corresponding gradient. To darken: increase the alpha. To remove: delete both `data-overlay` and the gradient from style.
+- Sections may contain `<iframe data-bg-video="youtube">` as a direct child for background video. Preserve these elements exactly — do not remove or modify them unless explicitly asked.
 - Start with a hero section, add content sections, end with a CTA
 - All URLs hardcoded: `href="/about/"`, `src="/media/image.jpg"`
 - Generate 4-8 sections for a complete, professional page
@@ -824,6 +825,7 @@ Edit the provided HTML page by applying the requested changes. Return the comple
 - Each `<section>` MUST have `data-section="name"` and `id="name"` attributes
 - Use `data-element-id="unique_id"` on editable text elements
 - Sections with `data-overlay="rgba(r,g,b,a)"` have a semi-transparent overlay applied via `background-image: linear-gradient(rgba, rgba)` in the style attribute. Preserve both the `data-overlay` attribute and the corresponding gradient unless asked to change it.
+- Sections may contain `<iframe data-bg-video="youtube">` as a direct child for background video. Preserve these elements exactly — do not remove or modify them unless explicitly asked.
 - All text is in {lang_name} — keep it that way, do NOT use template variables
 
 ## CRITICAL: Page Content Only
@@ -993,6 +995,7 @@ Edit ONLY the `<section data-section="{section_name}">` section based on the use
 - The `<section>` MUST keep `data-section="{section_name}"` and `id="{section_name}"` attributes
 - Use `data-element-id="unique_id"` on editable text elements
 - Sections with `data-overlay="rgba(r,g,b,a)"` have a semi-transparent overlay applied via `background-image: linear-gradient(rgba, rgba)` in the style attribute. Preserve both the `data-overlay` attribute and the corresponding gradient unless asked to change it.
+- Sections may contain `<iframe data-bg-video="youtube">` as a direct child for background video. Preserve these elements exactly — do not remove or modify them unless explicitly asked.
 - All text is in {lang_name} — keep it that way, do NOT use template variables
 
 ## Images

@@ -1303,6 +1303,38 @@ body[data-edit-mode="v2"] #admin-toolbar {
   text-align: right;
 }
 
+/* Background Video Preview */
+.ev2-video-preview {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border-radius: var(--ev2-radius-lg);
+  border: 1px solid var(--ev2-border);
+  background-size: cover;
+  background-position: center;
+  margin: 8px 0;
+}
+
+.ev2-video-badge {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 4px;
+  margin-bottom: 6px;
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.ev2-video-url {
+  font-size: 11px;
+  font-family: var(--ev2-font-mono);
+  color: var(--ev2-text-muted);
+  margin-bottom: 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* Range Slider */
 .ev2-range {
   flex: 1;

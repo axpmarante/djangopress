@@ -27,7 +27,7 @@
     <!-- Custom site styles -->
     <link href="{% static 'css/lightbox.css' %}" rel="stylesheet">
     {% if edit_mode == 'v2' %}
-    <link href="{% static 'editor_v2/css/editor.css' %}?v=5" rel="stylesheet">
+    <link href="{% static 'editor_v2/css/editor.css' %}?v=6" rel="stylesheet">
     {% elif edit_mode %}
     <link href="{% static 'css/inline-editor.css' %}?v=5" rel="stylesheet">
     {% endif %}
@@ -131,7 +131,7 @@
         apiBase: '/editor-v2/api',
       };
     </script>
-    <script type="module" src="{% static 'editor_v2/js/editor.js' %}?v=8"></script>
+    <script type="module" src="{% static 'editor_v2/js/editor.js' %}?v=9"></script>
     {% elif edit_mode %}
     <!-- Simple Editor System (v1) -->
     <script>window.EDITOR_AI_ENABLED = {{ user.is_superuser|yesno:"true,false" }};</script>

@@ -1,4 +1,5 @@
 import { events } from '../lib/events.js';
+import { api } from '../lib/api.js';
 import { $, $$, getElementId, isTextElement, getTransVar, getSections, getTagLabel } from '../lib/dom.js';
 
 let activeTab = 'content';
@@ -112,6 +113,19 @@ function onContentInput(input) {
     }
 }
 
+// --- YouTube helpers ---
+
+function extractYouTubeId(url) {
+    if (!url) return null;
+    const m = url.match(/(?:youtube\.com\/watch\?.*v=|youtube\.com\/embed\/|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
+    return m ? m[1] : null;
+}
+
+function videoDisplayUrl(url) {
+    const id = extractYouTubeId(url);
+    return id ? `https://www.youtube.com/watch?v=${id}` : (url || '');
+}
+
 // --- Design tab ---
 
 function renderDesignTab() {
@@ -147,6 +161,31 @@ function renderDesignTab() {
             html += '</div>';
         } else {
             html += '<button type="button" class="ev2-btn-change-img" id="ev2-bg-img-add">Add Background Image</button>';
+        }
+        html += '</div>';
+
+        // Background Video
+        const bgIframe = selectedEl.querySelector(':scope > iframe[data-bg-video]');
+        const bgVideoEl = selectedEl.querySelector(':scope > video');
+        const hasVideo = !!(bgIframe || bgVideoEl);
+        const videoType = bgIframe ? 'youtube' : (bgVideoEl ? 'video' : '');
+        const videoSrc = bgIframe ? bgIframe.getAttribute('src') : (bgVideoEl?.querySelector('source')?.getAttribute('src') || '');
+
+        html += '<div class="ev2-design-section">';
+        html += '<label class="ev2-label">Background Video</label>';
+        if (hasVideo) {
+            const ytId = extractYouTubeId(videoSrc);
+            if (ytId) {
+                html += `<div class="ev2-video-preview" style="background-image:url('https://img.youtube.com/vi/${esc(ytId)}/hqdefault.jpg')"></div>`;
+            }
+            html += `<span class="ev2-video-badge">${esc(videoType === 'youtube' ? 'YouTube' : 'Video')}</span>`;
+            html += `<p class="ev2-video-url">${esc(videoDisplayUrl(videoSrc))}</p>`;
+            html += '<button type="button" class="ev2-btn-sm ev2-btn-sm-danger" id="ev2-video-remove">Remove Video</button>';
+        } else {
+            html += '<div class="ev2-video-input-row">';
+            html += '<input type="text" class="ev2-input" id="ev2-video-url" placeholder="Paste a YouTube URL" />';
+            html += '</div>';
+            html += '<button type="button" class="ev2-btn-sm ev2-btn-sm-primary" id="ev2-video-set" style="margin-top:6px">Set Video</button>';
         }
         html += '</div>';
 
@@ -284,6 +323,48 @@ function renderDesignTab() {
             emitStyleChange(elId, () => { selectedEl.style.backgroundColor = ''; });
             renderDesignTab();
         });
+
+        // Background video controls
+        const videoSetBtn = container.querySelector('#ev2-video-set');
+        const videoRemoveBtn = container.querySelector('#ev2-video-remove');
+        const videoUrlInput = container.querySelector('#ev2-video-url');
+        const pageId = window.EDITOR_CONFIG?.pageId;
+        const sectionId = selectedEl.getAttribute('data-section') || selectedEl.id;
+
+        if (videoSetBtn && videoUrlInput) {
+            videoSetBtn.addEventListener('click', async () => {
+                const url = videoUrlInput.value.trim();
+                if (!url || !pageId || !sectionId) return;
+                videoSetBtn.disabled = true;
+                videoSetBtn.textContent = 'Setting...';
+                try {
+                    await api.post('/update-section-video/', {
+                        page_id: pageId, section_id: sectionId, video_url: url
+                    });
+                    window.location.reload();
+                } catch (err) {
+                    videoSetBtn.disabled = false;
+                    videoSetBtn.textContent = 'Set Video';
+                    alert('Error: ' + err.message);
+                }
+            });
+        }
+        if (videoRemoveBtn) {
+            videoRemoveBtn.addEventListener('click', async () => {
+                if (!pageId || !sectionId) return;
+                videoRemoveBtn.disabled = true;
+                videoRemoveBtn.textContent = 'Removing...';
+                try {
+                    await api.post('/update-section-video/', {
+                        page_id: pageId, section_id: sectionId, video_url: ''
+                    });
+                    window.location.reload();
+                } catch (err) {
+                    videoRemoveBtn.disabled = false;
+                    videoRemoveBtn.textContent = 'Remove Video';
+                }
+            });
+        }
     }
 }
 
