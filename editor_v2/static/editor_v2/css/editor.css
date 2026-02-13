@@ -1368,3 +1368,33 @@ body[data-edit-mode="v2"] #admin-toolbar {
   box-shadow: var(--ev2-shadow-sm);
   cursor: pointer;
 }
+
+/* --------------------------------------------------------------------------
+   Style Prompt Tools (AI Panel)
+   -------------------------------------------------------------------------- */
+.ev2-style-tools { padding: 6px 0 0; }
+.ev2-style-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px; }
+.ev2-style-tag {
+  padding: 1px 8px;
+  font-size: 10px;
+  border-radius: 99px;
+  border: 1px solid var(--ev2-border);
+  color: var(--ev2-text-faint);
+  background: transparent;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.ev2-style-tag:hover { border-color: var(--ev2-accent); color: var(--ev2-accent); }
+.ev2-style-tag.active { border-color: var(--ev2-accent); color: var(--ev2-accent); background: rgba(99,102,241,0.1); }
+.ev2-style-actions { display: flex; gap: 10px; }
+.ev2-style-action {
+  font-size: 11px;
+  color: var(--ev2-accent);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  font-weight: 500;
+}
+.ev2-style-action:hover { text-decoration: underline; }
+.ev2-style-action:disabled { opacity: 0.5; cursor: default; text-decoration: none; }

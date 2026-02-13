@@ -8,6 +8,7 @@ import { api } from '../lib/api.js';
 function esc(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
 const config = () => window.EDITOR_CONFIG || {};
+const STYLE_TAGS = ['minimal','bold','corporate','playful','dark theme','spacious','compact','flat','rounded','sharp','gradients','card-heavy','asymmetric','centered','image-rich','monochrome','vibrant'];
 let unsubs = [];
 let currentSection = null;
 let currentElementId = null;
@@ -81,6 +82,8 @@ function render() {
         ? `element: <strong style="color:var(--ev2-text);">${esc(currentElementId)}</strong> <span style="color:var(--ev2-text-faint)">in ${esc(currentSection)}</span>`
         : `section: <strong style="color:var(--ev2-text);">${esc(currentSection)}</strong>`;
 
+    const tagChips = STYLE_TAGS.map(t => `<button class="ev2-style-tag" data-tag="${esc(t)}">${esc(t)}</button>`).join('');
+
     container.innerHTML = `
         <div style="padding:8px 0;font-size:12px;color:var(--ev2-text-faint);">
             Refining ${targetLabel}
@@ -89,6 +92,13 @@ function render() {
         <div class="ev2-ai-input-row">
             <input class="ev2-ai-input" id="ev2-ai-input" type="text" placeholder="Describe changes..." />
             <button class="ev2-ai-send" id="ev2-ai-send">Send</button>
+        </div>
+        <div class="ev2-style-tools">
+            <div class="ev2-style-tags">${tagChips}</div>
+            <div class="ev2-style-actions">
+                <button class="ev2-style-action" id="ev2-enhance-btn">Enhance</button>
+                <button class="ev2-style-action" id="ev2-suggest-btn">Suggest</button>
+            </div>
         </div>`;
 
     renderMessages();
@@ -96,7 +106,68 @@ function render() {
     const btn = $('#ev2-ai-send');
     input?.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } });
     btn?.addEventListener('click', send);
+    bindStyleTools();
     input?.focus();
+}
+
+async function fetchEnhance(payload) {
+    const res = await fetch('/ai/api/enhance-prompt/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': config().csrfToken },
+        body: JSON.stringify(payload),
+    });
+    return res.json();
+}
+
+function bindStyleTools() {
+    const input = $('#ev2-ai-input');
+    if (!input) return;
+
+    // Tag chips
+    document.querySelectorAll('.ev2-style-tag').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const tag = btn.dataset.tag;
+            const current = input.value.trim();
+            const escaped = tag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const regex = new RegExp('(^|[,;.\\s])' + escaped + '([,;.\\s]|$)', 'i');
+            if (regex.test(current)) {
+                input.value = current.replace(regex, '$1').replace(/\s{2,}/g, ' ').replace(/^[,;.\s]+|[,;.\s]+$/g, '').trim();
+                btn.classList.remove('active');
+            } else {
+                input.value = current ? current + ', ' + tag : tag;
+                btn.classList.add('active');
+            }
+            input.focus();
+        });
+    });
+
+    // Enhance button
+    $('#ev2-enhance-btn')?.addEventListener('click', async () => {
+        const text = input.value.trim();
+        if (!text) return;
+        const btn = $('#ev2-enhance-btn');
+        btn.textContent = 'Enhancing...'; btn.disabled = true;
+        try {
+            const res = await fetchEnhance({ text, mode: 'enhance' });
+            if (res.success && res.text) input.value = res.text;
+        } catch (err) { console.error('Enhance failed:', err); }
+        btn.textContent = 'Enhance'; btn.disabled = false;
+        input.focus();
+    });
+
+    // Suggest button
+    $('#ev2-suggest-btn')?.addEventListener('click', async () => {
+        const secEl = currentSection ? document.querySelector(`[data-section="${currentSection}"]`) : null;
+        if (!secEl) return;
+        const btn = $('#ev2-suggest-btn');
+        btn.textContent = 'Suggesting...'; btn.disabled = true;
+        try {
+            const res = await fetchEnhance({ text: input.value.trim() || '', section_html: secEl.outerHTML, mode: 'suggest' });
+            if (res.success && res.text) input.value = res.text;
+        } catch (err) { console.error('Suggest failed:', err); }
+        btn.textContent = 'Suggest'; btn.disabled = false;
+        input.focus();
+    });
 }
 
 function renderMessages() {
