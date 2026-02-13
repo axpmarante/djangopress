@@ -26,4 +26,11 @@ urlpatterns = [
     # AI element refinement endpoints
     path('api/refine-element/', api_views.refine_element, name='api_refine_element'),
     path('api/save-ai-element/', api_views.save_ai_element, name='api_save_ai_element'),
+
+    # AI full-page refinement endpoints
+    path('api/refine-page/', api_views.refine_page, name='api_refine_page'),
+    path('api/save-ai-page/', api_views.save_ai_page, name='api_save_ai_page'),
+
+    # Session history endpoint
+    path('api/session/<int:page_id>/', api_views.get_editor_session, name='api_get_session'),
 ]

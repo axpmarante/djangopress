@@ -1372,21 +1372,7 @@ body[data-edit-mode="v2"] #admin-toolbar {
 /* --------------------------------------------------------------------------
    Style Prompt Tools (AI Panel)
    -------------------------------------------------------------------------- */
-.ev2-style-tools { padding: 6px 0 0; }
-.ev2-style-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px; }
-.ev2-style-tag {
-  padding: 1px 8px;
-  font-size: 10px;
-  border-radius: 99px;
-  border: 1px solid var(--ev2-border);
-  color: var(--ev2-text-faint);
-  background: transparent;
-  cursor: pointer;
-  transition: all 0.15s;
-}
-.ev2-style-tag:hover { border-color: var(--ev2-accent); color: var(--ev2-accent); }
-.ev2-style-tag.active { border-color: var(--ev2-accent); color: var(--ev2-accent); background: rgba(99,102,241,0.1); }
-.ev2-style-actions { display: flex; gap: 10px; }
+.ev2-style-actions { display: flex; gap: 10px; padding: 4px 0 0; }
 .ev2-style-action {
   font-size: 11px;
   color: var(--ev2-accent);
@@ -1398,3 +1384,111 @@ body[data-edit-mode="v2"] #admin-toolbar {
 }
 .ev2-style-action:hover { text-decoration: underline; }
 .ev2-style-action:disabled { opacity: 0.5; cursor: default; text-decoration: none; }
+
+/* ── Session bar ── */
+.ev2-session-bar {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    padding: 8px 0 6px;
+}
+
+.ev2-session-select {
+    flex: 1;
+    min-width: 0;
+    padding: 5px 8px;
+    font-size: 11px;
+    font-family: inherit;
+    border: 1px solid var(--ev2-border);
+    border-radius: 6px;
+    background: var(--ev2-bg);
+    color: var(--ev2-text);
+    cursor: pointer;
+    appearance: auto;
+}
+
+.ev2-session-select:focus {
+    outline: none;
+    border-color: var(--ev2-accent);
+}
+
+.ev2-new-chat {
+    flex-shrink: 0;
+    padding: 5px 10px;
+    font-size: 11px;
+    font-family: inherit;
+    font-weight: 500;
+    border: 1px solid var(--ev2-accent);
+    border-radius: 6px;
+    background: transparent;
+    color: var(--ev2-accent);
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.15s;
+}
+
+.ev2-new-chat:hover {
+    background: var(--ev2-accent);
+    color: #fff;
+}
+
+/* ── Scope row ── */
+.ev2-scope-row {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    padding: 0 0 8px;
+    border-bottom: 1px solid var(--ev2-border);
+    margin-bottom: 4px;
+}
+
+.ev2-scope-label {
+    font-size: 11px;
+    color: var(--ev2-text-faint);
+    flex-shrink: 0;
+}
+
+.ev2-scope-select {
+    flex: 1;
+    min-width: 0;
+    padding: 4px 8px;
+    font-size: 11px;
+    font-family: inherit;
+    border: 1px solid var(--ev2-border);
+    border-radius: 6px;
+    background: var(--ev2-bg);
+    color: var(--ev2-text);
+    cursor: pointer;
+    appearance: auto;
+}
+
+.ev2-scope-select:focus {
+    outline: none;
+    border-color: var(--ev2-accent);
+}
+
+/* ── Scope badge in messages ── */
+.ev2-scope-badge {
+    display: inline-block;
+    font-size: 9px;
+    padding: 1px 5px;
+    border-radius: 8px;
+    background: var(--ev2-bg-alt);
+    color: var(--ev2-text-faint);
+    margin-right: 4px;
+    vertical-align: middle;
+    font-weight: 600;
+    text-transform: lowercase;
+}
+
+/* ── Apply/Discard bar ── */
+.ev2-ai-actions {
+    display: flex;
+    gap: 8px;
+    padding: 8px 0;
+}
+
+/* ── Textarea input ── */
+.ev2-ai-input {
+    resize: none;
+}

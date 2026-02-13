@@ -968,3 +968,196 @@ def upload_image(request):
         })
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
+@superuser_required
+@require_http_methods(["POST"])
+def refine_page(request):
+    """
+    Refine the full page using AI without saving to DB.
+    Returns html_template and content for client-side preview.
+
+    POST /editor-v2/api/refine-page/
+    {
+        "page_id": 1,
+        "instructions": "Make the hero section more impactful",
+        "conversation_history": [{"role": "user", "content": "..."}, ...],
+        "session_id": null
+    }
+    """
+    try:
+        data = json.loads(request.body)
+        page_id = data.get('page_id')
+        instructions = data.get('instructions', '').strip()
+        conversation_history = data.get('conversation_history', [])
+        session_id = data.get('session_id')
+
+        if not page_id:
+            return JsonResponse({'success': False, 'error': 'Missing page_id'}, status=400)
+        if not instructions:
+            return JsonResponse({'success': False, 'error': 'Missing instructions'}, status=400)
+
+        try:
+            page = Page.objects.get(id=page_id)
+        except Page.DoesNotExist:
+            return JsonResponse({'success': False, 'error': f'Page {page_id} not found'}, status=404)
+
+        # Load or create session
+        if session_id:
+            try:
+                session = RefinementSession.objects.get(id=session_id, page=page)
+            except RefinementSession.DoesNotExist:
+                session = None
+        else:
+            session = None
+
+        if not session:
+            session = RefinementSession(
+                page=page,
+                title=instructions[:80],
+                model_used='gemini-pro',
+                created_by=request.user if request.user.is_authenticated else None,
+            )
+            session.save()
+
+        session.add_user_message(instructions)
+        history = session.get_history_for_prompt()
+
+        # Create version for rollback
+        page.create_version(
+            user=request.user,
+            change_summary=f'Before editor refine-page: {instructions[:100]}'
+        )
+
+        # Call AI — full page refinement (gemini-pro)
+        from ai.services import ContentGenerationService
+        service = ContentGenerationService()
+        result = service.refine_page_with_html(
+            page_id=page_id,
+            instructions=instructions,
+            model_override='gemini-pro',
+            conversation_history=history or None,
+        )
+
+        assistant_msg = "I've refined the page based on your instructions."
+        session.add_assistant_message(assistant_msg, ['full-page'])
+        session.save()
+
+        return JsonResponse({
+            'success': True,
+            'page': {
+                'html_template': result.get('html_content', ''),
+                'content': result.get('content', {}),
+            },
+            'assistant_message': assistant_msg,
+            'session_id': session.id,
+        })
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
+@superuser_required
+@require_http_methods(["POST"])
+def save_ai_page(request):
+    """
+    Save full-page AI refinement result.
+
+    POST /editor-v2/api/save-ai-page/
+    {
+        "page_id": 1,
+        "html_template": "<section ...>...</section>...",
+        "content": {"translations": {"pt": {...}, "en": {...}}}
+    }
+    """
+    try:
+        data = json.loads(request.body)
+        page_id = data.get('page_id')
+        html_template = data.get('html_template', '').strip()
+        content = data.get('content', {})
+
+        if not page_id or not html_template:
+            return JsonResponse({'success': False, 'error': 'Missing page_id or html_template'}, status=400)
+
+        try:
+            page = Page.objects.get(id=page_id)
+        except Page.DoesNotExist:
+            return JsonResponse({'success': False, 'error': f'Page {page_id} not found'}, status=404)
+
+        page.create_version(
+            user=request.user,
+            change_summary='Before save-ai-page (full page replacement)'
+        )
+
+        page.html_content = html_template
+        if content:
+            page.content = content
+        page.save()
+
+        return JsonResponse({
+            'success': True,
+            'message': 'Page saved successfully',
+            'page_id': page.id,
+        })
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
+@superuser_required
+@require_http_methods(["GET"])
+def get_editor_session(request, page_id):
+    """
+    Load sessions for the editor chat panel.
+
+    GET /editor-v2/api/session/<page_id>/
+    GET /editor-v2/api/session/<page_id>/?session_id=123
+
+    Returns the requested (or most recent) session's messages,
+    plus a list of all sessions for the session switcher dropdown.
+    """
+    try:
+        # All sessions for this page (newest first), limited to recent 20
+        all_sessions = RefinementSession.objects.filter(
+            page_id=page_id
+        ).order_by('-updated_at')[:20]
+
+        sessions_list = [{
+            'id': s.id,
+            'title': s.title or f'Session {s.id}',
+            'updated_at': s.updated_at.isoformat(),
+        } for s in all_sessions]
+
+        # Load specific session or most recent
+        target_id = request.GET.get('session_id')
+        if target_id:
+            try:
+                session = RefinementSession.objects.get(id=int(target_id), page_id=page_id)
+            except RefinementSession.DoesNotExist:
+                session = all_sessions.first() if all_sessions else None
+        else:
+            session = all_sessions.first() if all_sessions else None
+
+        if not session:
+            return JsonResponse({
+                'success': True,
+                'session_id': None,
+                'messages': [],
+                'sessions': sessions_list,
+            })
+
+        return JsonResponse({
+            'success': True,
+            'session_id': session.id,
+            'messages': session.messages or [],
+            'sessions': sessions_list,
+        })
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
