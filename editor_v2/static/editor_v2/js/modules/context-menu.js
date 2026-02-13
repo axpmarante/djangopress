@@ -2,7 +2,7 @@
  * Context Menu Module — right-click context menu with context-aware actions.
  */
 import { events } from '../lib/events.js';
-import { $, getContentWrapper, isTextElement } from '../lib/dom.js';
+import { $, getContentWrapper, isTextElement, hasStoredElementId } from '../lib/dom.js';
 
 function esc(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
@@ -28,7 +28,7 @@ function buildItems(el) {
   items.push(null); // separator
   if (section) {
     const name = section.getAttribute('data-section');
-    const elId = el.getAttribute('data-element-id');
+    const elId = hasStoredElementId(el) ? el.getAttribute('data-element-id') : null;
     if (elId && !el.hasAttribute('data-section')) {
       items.push({ label: 'AI Refine Element', icon: '✦', action: () => events.emit('context:ai-refine', { section: name, elementId: elId }) });
     }

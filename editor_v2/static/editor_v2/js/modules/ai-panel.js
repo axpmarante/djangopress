@@ -2,7 +2,7 @@
  * AI Panel — Section refinement chat in the sidebar AI tab.
  */
 import { events } from '../lib/events.js';
-import { $ } from '../lib/dom.js';
+import { $, hasStoredElementId } from '../lib/dom.js';
 import { api } from '../lib/api.js';
 
 function esc(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
@@ -33,7 +33,7 @@ export function init() {
         const sec = el?.closest?.('[data-section]');
         const sectionName = sec?.getAttribute('data-section') || null;
         const isSection = el?.hasAttribute?.('data-section');
-        const elId = (!isSection && el?.getAttribute?.('data-element-id')) || null;
+        const elId = (!isSection && el && hasStoredElementId(el)) ? el.getAttribute('data-element-id') : null;
 
         const newMode = isSection ? 'section' : (elId ? 'element' : null);
         const newSection = sectionName;
