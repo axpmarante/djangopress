@@ -1,0 +1,30 @@
+{% comment %}
+Style prompt tools: tag chips + enhance button.
+Include below any instruction textarea. Pass target_id as the textarea's DOM id.
+Usage: {% include 'backoffice/partials/style_tags.html' with target_id='brief' %}
+{% endcomment %}
+<div class="style-prompt-tools mt-2" data-target="{{ target_id }}">
+    <div class="flex flex-wrap gap-1.5 mb-2">
+        <button type="button" class="style-tag px-2 py-0.5 text-xs rounded-full border border-gray-300 text-gray-600 hover:border-purple-400 hover:text-purple-600 transition-colors cursor-pointer" data-tag="minimal">minimal</button>
+        <button type="button" class="style-tag px-2 py-0.5 text-xs rounded-full border border-gray-300 text-gray-600 hover:border-purple-400 hover:text-purple-600 transition-colors cursor-pointer" data-tag="bold">bold</button>
+        <button type="button" class="style-tag px-2 py-0.5 text-xs rounded-full border border-gray-300 text-gray-600 hover:border-purple-400 hover:text-purple-600 transition-colors cursor-pointer" data-tag="corporate">corporate</button>
+        <button type="button" class="style-tag px-2 py-0.5 text-xs rounded-full border border-gray-300 text-gray-600 hover:border-purple-400 hover:text-purple-600 transition-colors cursor-pointer" data-tag="playful">playful</button>
+        <button type="button" class="style-tag px-2 py-0.5 text-xs rounded-full border border-gray-300 text-gray-600 hover:border-purple-400 hover:text-purple-600 transition-colors cursor-pointer" data-tag="dark theme">dark theme</button>
+        <button type="button" class="style-tag px-2 py-0.5 text-xs rounded-full border border-gray-300 text-gray-600 hover:border-purple-400 hover:text-purple-600 transition-colors cursor-pointer" data-tag="spacious">spacious</button>
+        <button type="button" class="style-tag px-2 py-0.5 text-xs rounded-full border border-gray-300 text-gray-600 hover:border-purple-400 hover:text-purple-600 transition-colors cursor-pointer" data-tag="compact">compact</button>
+        <button type="button" class="style-tag px-2 py-0.5 text-xs rounded-full border border-gray-300 text-gray-600 hover:border-purple-400 hover:text-purple-600 transition-colors cursor-pointer" data-tag="flat">flat</button>
+        <button type="button" class="style-tag px-2 py-0.5 text-xs rounded-full border border-gray-300 text-gray-600 hover:border-purple-400 hover:text-purple-600 transition-colors cursor-pointer" data-tag="rounded">rounded</button>
+        <button type="button" class="style-tag px-2 py-0.5 text-xs rounded-full border border-gray-300 text-gray-600 hover:border-purple-400 hover:text-purple-600 transition-colors cursor-pointer" data-tag="sharp">sharp</button>
+        <button type="button" class="style-tag px-2 py-0.5 text-xs rounded-full border border-gray-300 text-gray-600 hover:border-purple-400 hover:text-purple-600 transition-colors cursor-pointer" data-tag="gradients">gradients</button>
+        <button type="button" class="style-tag px-2 py-0.5 text-xs rounded-full border border-gray-300 text-gray-600 hover:border-purple-400 hover:text-purple-600 transition-colors cursor-pointer" data-tag="card-heavy">card-heavy</button>
+        <button type="button" class="style-tag px-2 py-0.5 text-xs rounded-full border border-gray-300 text-gray-600 hover:border-purple-400 hover:text-purple-600 transition-colors cursor-pointer" data-tag="asymmetric">asymmetric</button>
+        <button type="button" class="style-tag px-2 py-0.5 text-xs rounded-full border border-gray-300 text-gray-600 hover:border-purple-400 hover:text-purple-600 transition-colors cursor-pointer" data-tag="centered">centered</button>
+        <button type="button" class="style-tag px-2 py-0.5 text-xs rounded-full border border-gray-300 text-gray-600 hover:border-purple-400 hover:text-purple-600 transition-colors cursor-pointer" data-tag="image-rich">image-rich</button>
+        <button type="button" class="style-tag px-2 py-0.5 text-xs rounded-full border border-gray-300 text-gray-600 hover:border-purple-400 hover:text-purple-600 transition-colors cursor-pointer" data-tag="monochrome">monochrome</button>
+        <button type="button" class="style-tag px-2 py-0.5 text-xs rounded-full border border-gray-300 text-gray-600 hover:border-purple-400 hover:text-purple-600 transition-colors cursor-pointer" data-tag="vibrant">vibrant</button>
+    </div>
+    <button type="button" class="style-enhance-btn inline-flex items-center gap-1 text-xs text-purple-600 hover:text-purple-800 font-medium transition-colors">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+        Enhance with AI
+    </button>
+</div>
