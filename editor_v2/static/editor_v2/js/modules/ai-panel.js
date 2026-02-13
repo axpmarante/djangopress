@@ -15,7 +15,14 @@ let refinementMode = null; // 'section' or 'element'
 let sessionId = null;
 let messages = [];
 let pendingResult = null;
+let originalElementHtml = null; // stored for live preview restore
 let activeTab = null;
+
+// Replace {{ trans.xxx }} with real text from translations for live preview
+function detemplatize(html, translations, lang) {
+    const trans = translations?.[lang] || {};
+    return html.replace(/\{\{\s*trans\.(\w+)\s*\}\}/g, (_, key) => trans[key] || key);
+}
 
 export function init() {
     unsubs.push(events.on('sidebar:tab-changed', (tab) => {
@@ -33,7 +40,8 @@ export function init() {
         const newElementId = elId;
 
         if (newMode !== refinementMode || newSection !== currentSection || newElementId !== currentElementId) {
-            sessionId = null; messages = []; pendingResult = null;
+            restoreElement();
+            sessionId = null; messages = []; pendingResult = null; originalElementHtml = null;
         }
         currentSection = newSection;
         currentElementId = newElementId;
@@ -52,7 +60,8 @@ export function init() {
 export function destroy() {
     unsubs.forEach(u => u());
     unsubs = [];
-    currentSection = null; currentElementId = null; refinementMode = null; sessionId = null; messages = []; pendingResult = null; activeTab = null;
+    restoreElement();
+    currentSection = null; currentElementId = null; refinementMode = null; sessionId = null; messages = []; pendingResult = null; originalElementHtml = null; activeTab = null;
 }
 
 function render() {
@@ -146,6 +155,10 @@ async function send() {
             sessionId = res.session_id || sessionId;
             messages.push({ role: 'assistant', content: res.assistant_message || 'Changes ready to apply.' });
             pendingResult = res.element || res.section;
+            // Live DOM preview for element refinement
+            if (refinementMode === 'element' && pendingResult && currentElementId) {
+                previewElement();
+            }
         } else {
             messages.push({ role: 'assistant', content: 'Error: ' + (res.error || 'Unknown error') });
         }
@@ -204,7 +217,29 @@ async function applyResult() {
 }
 
 function discardResult() {
+    restoreElement();
     pendingResult = null;
     renderMessages();
     $('#ev2-ai-input')?.focus();
+}
+
+// Live DOM preview: swap element with AI result
+function previewElement() {
+    if (!pendingResult || !currentElementId) return;
+    const el = document.querySelector(`[data-element-id="${currentElementId}"]`);
+    if (!el) return;
+    // Store original for restore
+    if (!originalElementHtml) originalElementHtml = el.outerHTML;
+    const lang = config().language || 'pt';
+    const translations = pendingResult.content?.translations || {};
+    const previewHtml = detemplatize(pendingResult.html_template, translations, lang);
+    el.outerHTML = previewHtml;
+}
+
+// Restore original element HTML after discard
+function restoreElement() {
+    if (!originalElementHtml || !currentElementId) return;
+    const el = document.querySelector(`[data-element-id="${currentElementId}"]`);
+    if (el) el.outerHTML = originalElementHtml;
+    originalElementHtml = null;
 }
