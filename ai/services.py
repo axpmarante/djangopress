@@ -1620,7 +1620,7 @@ Keep the translations natural and fluent — these are website UI strings.
 
         site_settings = SiteSettings.objects.first()
         if not languages:
-            languages = [lang['code'] for lang in (site_settings.get_enabled_languages() if site_settings else [{'code': 'en'}])]
+            languages = [lang[0] for lang in (site_settings.get_enabled_languages() if site_settings else [('en', 'English')])]
 
         default_language = site_settings.get_default_language() if site_settings else 'en'
         site_context = ''
