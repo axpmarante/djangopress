@@ -131,7 +131,7 @@
         apiBase: '/editor-v2/api',
       };
     </script>
-    <script type="module" src="{% static 'editor_v2/js/editor.js' %}?v=11"></script>
+    <script type="module" src="{% static 'editor_v2/js/editor.js' %}?v=12"></script>
     {% elif edit_mode %}
     <!-- Simple Editor System (v1) -->
     <script>window.EDITOR_AI_ENABLED = {{ user.is_superuser|yesno:"true,false" }};</script>

@@ -15,7 +15,7 @@ let refinementMode = null; // 'section' or 'element'
 let sessionId = null;
 let messages = [];
 let pendingResult = null;
-let originalElementHtml = null; // stored for live preview restore
+let originalHtml = null; // stored for live preview restore (element or section)
 let activeTab = null;
 
 // Replace {{ trans.xxx }} with real text from translations for live preview
@@ -40,8 +40,8 @@ export function init() {
         const newElementId = elId;
 
         if (newMode !== refinementMode || newSection !== currentSection || newElementId !== currentElementId) {
-            restoreElement();
-            sessionId = null; messages = []; pendingResult = null; originalElementHtml = null;
+            restorePreview();
+            sessionId = null; messages = []; pendingResult = null; originalHtml = null;
         }
         currentSection = newSection;
         currentElementId = newElementId;
@@ -60,8 +60,8 @@ export function init() {
 export function destroy() {
     unsubs.forEach(u => u());
     unsubs = [];
-    restoreElement();
-    currentSection = null; currentElementId = null; refinementMode = null; sessionId = null; messages = []; pendingResult = null; originalElementHtml = null; activeTab = null;
+    restorePreview();
+    currentSection = null; currentElementId = null; refinementMode = null; sessionId = null; messages = []; pendingResult = null; originalHtml = null; activeTab = null;
 }
 
 function render() {
@@ -155,10 +155,8 @@ async function send() {
             sessionId = res.session_id || sessionId;
             messages.push({ role: 'assistant', content: res.assistant_message || 'Changes ready to apply.' });
             pendingResult = res.element || res.section;
-            // Live DOM preview for element refinement
-            if (refinementMode === 'element' && pendingResult && currentElementId) {
-                previewElement();
-            }
+            // Live DOM preview
+            if (pendingResult) showPreview();
         } else {
             messages.push({ role: 'assistant', content: 'Error: ' + (res.error || 'Unknown error') });
         }
@@ -217,29 +215,41 @@ async function applyResult() {
 }
 
 function discardResult() {
-    restoreElement();
+    restorePreview();
     pendingResult = null;
     renderMessages();
     $('#ev2-ai-input')?.focus();
 }
 
-// Live DOM preview: swap element with AI result
-function previewElement() {
-    if (!pendingResult || !currentElementId) return;
-    const el = document.querySelector(`[data-element-id="${currentElementId}"]`);
-    if (!el) return;
-    // Store original for restore
-    if (!originalElementHtml) originalElementHtml = el.outerHTML;
+// Live DOM preview: swap element or section with AI result
+function showPreview() {
+    if (!pendingResult) return;
     const lang = config().language || 'pt';
     const translations = pendingResult.content?.translations || {};
     const previewHtml = detemplatize(pendingResult.html_template, translations, lang);
-    el.outerHTML = previewHtml;
+
+    if (refinementMode === 'element' && currentElementId) {
+        const el = document.querySelector(`[data-element-id="${currentElementId}"]`);
+        if (!el) return;
+        if (!originalHtml) originalHtml = el.outerHTML;
+        el.outerHTML = previewHtml;
+    } else if (refinementMode === 'section' && currentSection) {
+        const sec = document.querySelector(`[data-section="${currentSection}"]`);
+        if (!sec) return;
+        if (!originalHtml) originalHtml = sec.outerHTML;
+        sec.outerHTML = previewHtml;
+    }
 }
 
-// Restore original element HTML after discard
-function restoreElement() {
-    if (!originalElementHtml || !currentElementId) return;
-    const el = document.querySelector(`[data-element-id="${currentElementId}"]`);
-    if (el) el.outerHTML = originalElementHtml;
-    originalElementHtml = null;
+// Restore original HTML after discard
+function restorePreview() {
+    if (!originalHtml) return;
+    if (refinementMode === 'element' && currentElementId) {
+        const el = document.querySelector(`[data-element-id="${currentElementId}"]`);
+        if (el) el.outerHTML = originalHtml;
+    } else if (refinementMode === 'section' && currentSection) {
+        const sec = document.querySelector(`[data-section="${currentSection}"]`);
+        if (sec) sec.outerHTML = originalHtml;
+    }
+    originalHtml = null;
 }
