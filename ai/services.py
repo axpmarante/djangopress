@@ -1169,8 +1169,35 @@ Return the complete, corrected JSON now:"""
                 if action == 'library':
                     library_image_id = decision.get('library_image_id')
                     if not library_image_id:
-                        failed.append({'image_name': image_name, 'error': 'Missing library_image_id'})
-                        continue
+                        # Auto-match: use AI to pick the best library image
+                        print(f"Auto-matching library image for '{image_name or image_src}'...")
+                        site_settings_obj = SiteSettings.objects.first()
+                        default_lang = site_settings_obj.get_default_language() if site_settings_obj else 'pt'
+                        library_catalog = self._build_library_catalog(default_lang)
+                        if not library_catalog:
+                            failed.append({'image_name': image_name, 'error': 'Library is empty — cannot auto-match'})
+                            continue
+                        # De-templatize page HTML for context
+                        page_translations = (page.content or {}).get('translations', {})
+                        if page_translations.get(default_lang):
+                            page_context = self._detemplatize_html(html, page_translations, default_lang)
+                        else:
+                            page_context = html
+                        image_context = {
+                            'name': image_name,
+                            'alt': decision.get('alt', ''),
+                            'src': image_src,
+                            'prompt': decision.get('prompt', ''),
+                        }
+                        library_image_id = self._auto_match_library_image(
+                            image_context=image_context,
+                            library_catalog=library_catalog,
+                            page_html=page_context,
+                        )
+                        if not library_image_id:
+                            failed.append({'image_name': image_name, 'error': 'Auto-match found no suitable library image'})
+                            continue
+                        print(f"Auto-matched to library image ID {library_image_id}")
                     site_image = SiteImage.objects.get(id=library_image_id)
                     new_url = site_image.image.url
 
@@ -1487,6 +1514,84 @@ Keep the translations natural and fluent — these are website UI strings.
             )
             raise
 
+    @staticmethod
+    def _build_library_catalog(default_language: str = 'pt') -> List[Dict]:
+        """Build a metadata-only catalog of all active library images."""
+        from core.models import SiteImage
+
+        catalog = []
+        for img in SiteImage.objects.filter(is_active=True).order_by('-id'):
+            title = img.title if isinstance(img.title, str) else (img.title_i18n or {}).get(default_language, img.title_i18n.get(list(img.title_i18n.keys())[0], '')) if img.title_i18n else ''
+            alt_text = img.alt_text if isinstance(img.alt_text, str) else (img.alt_text_i18n or {}).get(default_language, '') if hasattr(img, 'alt_text_i18n') and img.alt_text_i18n else ''
+            catalog.append({
+                'id': img.id,
+                'title': title,
+                'alt_text': alt_text,
+                'key': img.key or '',
+                'tags': img.tags or '',
+                'description': img.description or '',
+            })
+        return catalog
+
+    def _auto_match_library_image(
+        self,
+        image_context: Dict,
+        library_catalog: List[Dict],
+        page_html: str = '',
+    ) -> Optional[int]:
+        """
+        Use Gemini Flash to pick the best library image for a given image slot.
+
+        Args:
+            image_context: Dict with name, alt, src, prompt
+            library_catalog: Library catalog from _build_library_catalog()
+            page_html: De-templatized page HTML for context
+
+        Returns:
+            SiteImage ID of the best match, or None if no match
+        """
+        if not library_catalog:
+            return None
+
+        system_prompt, user_prompt = PromptTemplates.get_library_auto_match_prompt(
+            image_context=image_context,
+            library_catalog=library_catalog,
+            page_context=page_html,
+        )
+
+        messages = [
+            {'role': 'system', 'content': system_prompt},
+            {'role': 'user', 'content': user_prompt},
+        ]
+
+        actual_model, provider = self._get_model_info('gemini-flash')
+        t0 = time.time()
+        try:
+            response = self.llm.get_completion(messages, tool_name='gemini-flash')
+            usage = self._extract_usage(response)
+            content = response.choices[0].message.content
+            log_ai_call(
+                action='auto_match_library', model_name=actual_model, provider=provider,
+                system_prompt=system_prompt, user_prompt=user_prompt,
+                response_text=content,
+                duration_ms=int((time.time() - t0) * 1000), **usage,
+            )
+            result = self._extract_json_from_response(content)
+            if isinstance(result, dict):
+                image_id = result.get('image_id')
+                if image_id is not None:
+                    return int(image_id)
+            return None
+        except Exception as e:
+            log_ai_call(
+                action='auto_match_library', model_name=actual_model, provider=provider,
+                system_prompt=system_prompt, user_prompt=user_prompt,
+                duration_ms=int((time.time() - t0) * 1000),
+                success=False, error_message=str(e),
+            )
+            print(f"Auto-match failed: {e}")
+            return None
+
     def analyze_page_images(
         self,
         page_id: int,
@@ -1530,18 +1635,7 @@ Keep the translations natural and fluent — these are website UI strings.
             clean_html = current_html
 
         # Build library catalog (metadata only, no URLs)
-        library_catalog = []
-        for img in SiteImage.objects.filter(is_active=True).order_by('-id'):
-            title = img.title if isinstance(img.title, str) else (img.title_i18n or {}).get(default_language, img.title_i18n.get(list(img.title_i18n.keys())[0], '')) if img.title_i18n else ''
-            alt_text = img.alt_text if isinstance(img.alt_text, str) else (img.alt_text_i18n or {}).get(default_language, '') if hasattr(img, 'alt_text_i18n') and img.alt_text_i18n else ''
-            library_catalog.append({
-                'id': img.id,
-                'title': title,
-                'alt_text': alt_text,
-                'key': img.key or '',
-                'tags': img.tags or '',
-                'description': img.description or '',
-            })
+        library_catalog = self._build_library_catalog(default_language)
 
         page_title = page.default_title or page.default_slug or 'Untitled'
 

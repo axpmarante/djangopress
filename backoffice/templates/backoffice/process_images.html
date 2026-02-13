@@ -241,9 +241,10 @@ function renderCards() {
                     <div id="libSelect${i}" class="${img.action === 'library' ? '' : 'hidden'}">
                         <select id="libDropdown${i}" onchange="detectedImages[${i}].library_image_id=parseInt(this.value)||null"
                                 class="w-full border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:ring-2 focus:ring-purple-500">
-                            <option value="">-- Select image --</option>
+                            <option value="">(Auto-match)</option>
                             ${libraryOptions}
                         </select>
+                        <p class="text-xs text-gray-400 mt-1">Leave on auto-match to let AI choose the best image</p>
                     </div>
 
                     <!-- Unsplash Search Panel -->
@@ -432,10 +433,7 @@ async function processSelected() {
     // Validate
     for (const img of selected) {
         const label = img.name || img.src.split('/').pop() || 'image';
-        if (img.action === 'library' && !img.library_image_id) {
-            alert(`Please select a library image for "${label}".`);
-            return;
-        }
+        // library: if no specific image selected, backend will auto-match
         if (img.action === 'generate' && !img.prompt) {
             alert(`Please enter a generation prompt for "${label}".`);
             return;

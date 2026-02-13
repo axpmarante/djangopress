@@ -1158,6 +1158,71 @@ Rules:
         return (system_prompt, user_prompt)
 
     @staticmethod
+    def get_library_auto_match_prompt(
+        image_context: dict,
+        library_catalog: list,
+        page_context: str = '',
+    ) -> tuple:
+        """
+        Generate prompt for auto-matching a single image to the best library image.
+
+        Args:
+            image_context: Dict with name, alt, src, prompt (description of what's needed)
+            library_catalog: List of dicts with id, title, alt_text, key, tags, description
+            page_context: Optional surrounding HTML for context
+
+        Returns:
+            Tuple of (system_prompt, user_prompt)
+        """
+        system_prompt = """You are an image matching specialist. Given context about an image slot on a webpage and a catalog of available library images, pick the single best matching image.
+
+Return ONLY a JSON object with the chosen image ID:
+{"image_id": 42}
+
+If no image in the catalog is even remotely suitable, return:
+{"image_id": null}
+
+Pick based on semantic relevance: subject matter, context, mood, and purpose. A good match doesn't need to be perfect — it needs to fit the section's intent."""
+
+        catalog_json = json.dumps(library_catalog, indent=2, ensure_ascii=False)
+
+        context_parts = []
+        if image_context.get('name'):
+            context_parts.append(f"**Image name:** {image_context['name']}")
+        if image_context.get('alt'):
+            context_parts.append(f"**Alt text:** {image_context['alt']}")
+        if image_context.get('prompt'):
+            context_parts.append(f"**Description/prompt:** {image_context['prompt']}")
+        if image_context.get('src'):
+            context_parts.append(f"**Current src:** {image_context['src']}")
+
+        image_info = '\n'.join(context_parts) if context_parts else 'No metadata available'
+
+        page_section = ''
+        if page_context:
+            page_section = f"""
+## Page Context (surrounding HTML)
+
+```html
+{page_context[:2000]}
+```
+"""
+
+        user_prompt = f"""## Image to Match
+
+{image_info}
+{page_section}
+## Library Catalog
+
+```json
+{catalog_json}
+```
+
+Pick the single best matching image from the catalog. Return ONLY the JSON object with the image ID."""
+
+        return (system_prompt, user_prompt)
+
+    @staticmethod
     def get_templatize_and_translate_prompt(
         html: str,
         languages: list,
