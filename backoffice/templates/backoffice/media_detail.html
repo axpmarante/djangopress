@@ -3,7 +3,7 @@
 {% block title %}Image Detail{% endblock %}
 
 {% block content %}
-<div class="max-w-7xl mx-auto space-y-6">
+<div class="max-w-7xl mx-auto space-y-6" x-data="imageDetail()">
     <!-- Header -->
     <div class="flex items-center justify-between">
         <div>
@@ -61,7 +61,7 @@
                 {% else %}
                 <div class="text-gray-400">
                     <svg class="w-24 h-24 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
                     </svg>
                     <p class="mt-2 text-sm">No image file</p>
                 </div>
@@ -133,14 +133,14 @@
                 <p class="text-sm font-semibold text-blue-700">{{ name }} ({{ code }})</p>
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">Title</label>
-                    <input type="text" name="title_{{ code }}"
+                    <input type="text" name="title_{{ code }}" id="title_{{ code }}"
                            value="{% if image.title_i18n %}{% for k, v in image.title_i18n.items %}{% if k == code %}{{ v }}{% endif %}{% endfor %}{% endif %}"
                            class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                            placeholder="Image title in {{ name }}">
                 </div>
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">Alt Text</label>
-                    <input type="text" name="alt_text_{{ code }}"
+                    <input type="text" name="alt_text_{{ code }}" id="alt_text_{{ code }}"
                            value="{% if image.alt_text_i18n %}{% for k, v in image.alt_text_i18n.items %}{% if k == code %}{{ v }}{% endif %}{% endfor %}{% endif %}"
                            class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                            placeholder="Alt text in {{ name }}">
@@ -165,6 +165,26 @@
                 <p class="text-xs text-gray-500 mt-1">Comma-separated tags for filtering.</p>
             </div>
 
+            <!-- AI Description -->
+            <div>
+                <div class="flex items-center justify-between mb-1">
+                    <label class="block text-sm font-medium text-gray-700">AI Description</label>
+                    <button type="button" @click="describeImage()"
+                            :disabled="describing"
+                            :class="describing && 'opacity-50 cursor-wait'"
+                            class="text-xs px-3 py-1.5 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors flex items-center">
+                        <svg class="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
+                        </svg>
+                        <span x-text="describing ? 'Analyzing...' : 'Describe with AI'"></span>
+                    </button>
+                </div>
+                <textarea name="description" rows="3" id="description-field"
+                          class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          placeholder="AI-generated description for image matching">{{ image.description }}</textarea>
+                <p class="text-xs text-gray-500 mt-1">Semantic description used for AI image-to-section matching. Click "Describe with AI" to auto-generate.</p>
+            </div>
+
             <div class="flex items-center">
                 <input type="checkbox" name="is_active" id="is_active" {% if image.is_active %}checked{% endif %}
                        class="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500">
@@ -185,7 +205,7 @@
             <div>
                 <a href="{% url 'backoffice:media' %}" class="text-sm text-gray-600 hover:text-gray-900">Cancel</a>
             </div>
-            <div class="flex items-center space-x-3" x-data="{ showDeleteModal: false }">
+            <div class="flex items-center space-x-3">
                 <button type="button" @click="showDeleteModal = true"
                         class="px-4 py-2 bg-red-600 text-white text-sm rounded-lg hover:bg-red-700 transition-colors">
                     Delete
@@ -194,35 +214,57 @@
                         class="px-6 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors">
                     Save Changes
                 </button>
-
-                <!-- Delete Confirmation Modal -->
-                <div x-show="showDeleteModal" x-cloak
-                     class="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
-                     @keydown.escape.window="showDeleteModal = false">
-                    <div class="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 p-6" @click.outside="showDeleteModal = false">
-                        <h3 class="text-lg font-semibold text-gray-900 mb-2">Delete Image</h3>
-                        <p class="text-sm text-gray-600 mb-4">
-                            Are you sure you want to delete <strong>{{ image }}</strong>? This action cannot be undone.
-                        </p>
-                        <div class="flex justify-end space-x-3">
-                            <button type="button" @click="showDeleteModal = false"
-                                    class="px-4 py-2 text-sm text-gray-700 hover:text-gray-900">
-                                Cancel
-                            </button>
-                            <form method="post" class="inline">
-                                {% csrf_token %}
-                                <input type="hidden" name="action" value="delete">
-                                <button type="submit"
-                                        class="px-4 py-2 bg-red-600 text-white text-sm rounded-lg hover:bg-red-700">
-                                    Delete
-                                </button>
-                            </form>
-                        </div>
-                    </div>
-                </div>
             </div>
         </div>
     </form>
+
+    <!-- Delete Confirmation Modal -->
+    <div x-show="showDeleteModal" x-cloak
+         class="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+         @keydown.escape.window="showDeleteModal = false">
+        <div class="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 p-6" @click.outside="showDeleteModal = false">
+            <h3 class="text-lg font-semibold text-gray-900 mb-2">Delete Image</h3>
+            <p class="text-sm text-gray-600 mb-4">
+                Are you sure you want to delete <strong>{{ image }}</strong>? This action cannot be undone.
+            </p>
+            <div class="flex justify-end space-x-3">
+                <button type="button" @click="showDeleteModal = false"
+                        class="px-4 py-2 text-sm text-gray-700 hover:text-gray-900">
+                    Cancel
+                </button>
+                <form method="post" class="inline">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="delete">
+                    <button type="submit"
+                            class="px-4 py-2 bg-red-600 text-white text-sm rounded-lg hover:bg-red-700">
+                        Delete
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Processing Modal -->
+    <div x-show="describing" x-cloak
+         class="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+         x-transition:enter="transition ease-out duration-200"
+         x-transition:enter-start="opacity-0"
+         x-transition:enter-end="opacity-100">
+        <div class="bg-white rounded-xl shadow-2xl max-w-sm w-full mx-4 overflow-hidden">
+            <div class="bg-purple-600 px-6 py-4">
+                <h3 class="text-lg font-semibold text-white flex items-center">
+                    <svg class="w-5 h-5 mr-2 animate-spin" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                    </svg>
+                    Analyzing Image
+                </h3>
+            </div>
+            <div class="p-6 text-center">
+                <p class="text-sm text-gray-600">AI is analyzing this image to generate a description, title, and alt text. This usually takes a few seconds...</p>
+            </div>
+        </div>
+    </div>
 
     {% endif %}
 </div>
@@ -236,6 +278,62 @@ function copyUrl() {
         btn.textContent = 'Copied!';
         setTimeout(() => btn.textContent = original, 2000);
     });
+}
+
+function imageDetail() {
+    return {
+        describing: false,
+        showDeleteModal: false,
+
+        async describeImage() {
+            this.describing = true;
+            try {
+                const resp = await fetch('/ai/api/describe-images/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]')?.value
+                            || document.cookie.match(/csrftoken=([^;]+)/)?.[1] || ''
+                    },
+                    body: JSON.stringify({ image_ids: [{{ image.pk }}] })
+                });
+                const data = await resp.json();
+
+                if (data.success && data.results?.[0]?.status === 'ok') {
+                    const result = data.results[0];
+
+                    // Update description field
+                    document.getElementById('description-field').value = result.description || '';
+
+                    // Update title fields if they were filled
+                    if (result.title_i18n) {
+                        for (const [lang, title] of Object.entries(result.title_i18n)) {
+                            const field = document.getElementById('title_' + lang);
+                            if (field && !field.value.trim()) {
+                                field.value = title;
+                            }
+                        }
+                    }
+
+                    // Update alt text fields if they were filled
+                    if (result.alt_text_i18n) {
+                        for (const [lang, alt] of Object.entries(result.alt_text_i18n)) {
+                            const field = document.getElementById('alt_text_' + lang);
+                            if (field && !field.value.trim()) {
+                                field.value = alt;
+                            }
+                        }
+                    }
+                } else {
+                    alert('Failed to describe image: ' + (data.error || 'Unknown error'));
+                }
+            } catch (e) {
+                alert('Error: ' + e.message);
+            } finally {
+                this.describing = false;
+            }
+        }
+    };
 }
 </script>
 {% endblock %}

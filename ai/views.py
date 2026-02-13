@@ -1379,3 +1379,33 @@ def _extract_json_from_response(content):
     if json_match:
         return json.loads(json_match.group(1))
     return json.loads(content)
+
+
+@superuser_required
+@require_http_methods(["POST"])
+def describe_images_api(request):
+    """
+    API endpoint to generate AI descriptions for media library images.
+
+    POST /ai/api/describe-images/
+    Body: { "image_ids": [1, 2, 3] }
+
+    Returns: { "results": [...], "success": true }
+    """
+    try:
+        data = json.loads(request.body)
+        image_ids = data.get('image_ids', [])
+
+        if not image_ids:
+            return JsonResponse({'success': False, 'error': 'No image IDs provided'}, status=400)
+
+        service = ContentGenerationService(model_name='gemini-flash')
+        results = service.describe_images(image_ids=image_ids)
+
+        return JsonResponse({
+            'success': True,
+            'results': results,
+        })
+
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)

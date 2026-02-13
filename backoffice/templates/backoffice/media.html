@@ -3,7 +3,7 @@
 {% block title %}Media Library{% endblock %}
 
 {% block content %}
-<div class="space-y-6">
+<div class="space-y-6" x-data="describeImages()">
     <!-- Header with Upload Buttons -->
     <div class="flex items-center justify-between">
         <div>
@@ -11,6 +11,17 @@
             <p class="text-gray-600 mt-1">Manage all your site images</p>
         </div>
         <div class="flex space-x-3">
+            {% if images %}
+            <button type="button" @click="startDescribe()"
+                    :disabled="processing"
+                    :class="processing && 'opacity-50 cursor-not-allowed'"
+                    class="px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors flex items-center">
+                <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
+                </svg>
+                Describe with AI
+            </button>
+            {% endif %}
             <a href="{% url 'backoffice:media_upload' %}"
                class="px-6 py-3 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors flex items-center">
                 <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -47,6 +58,11 @@
                 {% if not image.is_active %}
                 <div class="absolute top-2 right-2">
                     <span class="px-2 py-1 text-xs font-semibold text-white bg-red-600 rounded">Inactive</span>
+                </div>
+                {% endif %}
+                {% if image.description %}
+                <div class="absolute bottom-2 left-2">
+                    <span class="px-2 py-1 text-xs font-semibold text-white bg-purple-600 rounded">AI</span>
                 </div>
                 {% endif %}
             </div>
@@ -99,6 +115,195 @@
         </div>
     </div>
     {% endif %}
+
+    <!-- Processing Modal -->
+    <div x-show="showModal" x-cloak
+         class="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+         x-transition:enter="transition ease-out duration-200"
+         x-transition:enter-start="opacity-0"
+         x-transition:enter-end="opacity-100">
+        <div class="bg-white rounded-xl shadow-2xl max-w-lg w-full mx-4 overflow-hidden">
+            <!-- Header -->
+            <div class="bg-purple-600 px-6 py-4">
+                <h3 class="text-lg font-semibold text-white flex items-center">
+                    <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
+                    </svg>
+                    Analyzing Images with AI
+                </h3>
+            </div>
+
+            <div class="p-6 space-y-4">
+                <!-- Progress bar -->
+                <div>
+                    <div class="flex justify-between text-sm text-gray-600 mb-1">
+                        <span x-text="done ? 'Complete' : 'Processing...'"></span>
+                        <span x-text="current + ' / ' + total"></span>
+                    </div>
+                    <div class="w-full bg-gray-200 rounded-full h-2.5">
+                        <div class="bg-purple-600 h-2.5 rounded-full transition-all duration-300"
+                             :style="'width: ' + (total > 0 ? (current / total * 100) : 0) + '%'"></div>
+                    </div>
+                </div>
+
+                <!-- Current image being processed -->
+                <div x-show="currentImage && !done" class="flex items-center space-x-3 bg-gray-50 rounded-lg p-3">
+                    <img :src="currentImage?.thumb" class="w-12 h-12 object-cover rounded" alt="">
+                    <div class="flex-1 min-w-0">
+                        <p class="text-sm font-medium text-gray-900 truncate" x-text="currentImage?.title"></p>
+                        <p class="text-xs text-purple-600 flex items-center">
+                            <svg class="w-3 h-3 mr-1 animate-spin" fill="none" viewBox="0 0 24 24">
+                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                            </svg>
+                            Analyzing...
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Log of completed images -->
+                <div x-show="log.length > 0" class="max-h-48 overflow-y-auto space-y-1">
+                    <template x-for="entry in log" :key="entry.id">
+                        <div class="flex items-center space-x-2 text-sm py-1">
+                            <template x-if="entry.status === 'ok'">
+                                <svg class="w-4 h-4 text-green-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                                </svg>
+                            </template>
+                            <template x-if="entry.status === 'error'">
+                                <svg class="w-4 h-4 text-red-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                                </svg>
+                            </template>
+                            <span class="truncate" :class="entry.status === 'error' ? 'text-red-600' : 'text-gray-700'" x-text="entry.title"></span>
+                        </div>
+                    </template>
+                </div>
+
+                <!-- Summary when done -->
+                <div x-show="done" class="bg-green-50 border border-green-200 rounded-lg p-4 text-center">
+                    <svg class="w-8 h-8 text-green-500 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                    <p class="text-sm font-medium text-green-800">
+                        <span x-text="successCount"></span> image<span x-show="successCount !== 1">s</span> described
+                        <template x-if="errorCount > 0">
+                            <span class="text-red-600">, <span x-text="errorCount"></span> error<span x-show="errorCount !== 1">s</span></span>
+                        </template>
+                    </p>
+                </div>
+
+                <!-- No images needing description -->
+                <div x-show="noWork" class="bg-blue-50 border border-blue-200 rounded-lg p-4 text-center">
+                    <svg class="w-8 h-8 text-blue-500 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                    <p class="text-sm font-medium text-blue-800">All images already have AI descriptions.</p>
+                </div>
+            </div>
+
+            <!-- Footer -->
+            <div class="px-6 py-4 bg-gray-50 border-t flex justify-end">
+                <button x-show="done || noWork" @click="closeModal()" type="button"
+                        class="px-6 py-2 bg-purple-600 text-white text-sm rounded-lg hover:bg-purple-700 transition-colors">
+                    Done
+                </button>
+                <p x-show="!done && !noWork" class="text-xs text-gray-500 italic">
+                    Please wait while images are being analyzed...
+                </p>
+            </div>
+        </div>
+    </div>
 </div>
 
+<!-- Image data for Alpine -->
+<script>
+window.__imageData = [
+    {% for image in images %}
+    {
+        id: {{ image.pk }},
+        title: "{{ image|escapejs }}",
+        hasDesc: {% if image.description %}true{% else %}false{% endif %},
+        thumb: "{% if image.image %}{{ image.image.url|escapejs }}{% endif %}"
+    }{% if not forloop.last %},{% endif %}
+    {% endfor %}
+];
+
+function describeImages() {
+    return {
+        processing: false,
+        showModal: false,
+        done: false,
+        noWork: false,
+        current: 0,
+        total: 0,
+        currentImage: null,
+        log: [],
+        successCount: 0,
+        errorCount: 0,
+
+        async startDescribe() {
+            const needsDesc = window.__imageData.filter(img => !img.hasDesc);
+            if (needsDesc.length === 0) {
+                this.showModal = true;
+                this.noWork = true;
+                return;
+            }
+
+            this.processing = true;
+            this.showModal = true;
+            this.done = false;
+            this.noWork = false;
+            this.current = 0;
+            this.total = needsDesc.length;
+            this.log = [];
+            this.successCount = 0;
+            this.errorCount = 0;
+
+            for (const img of needsDesc) {
+                this.current++;
+                this.currentImage = img;
+
+                try {
+                    const resp = await fetch('/ai/api/describe-images/', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]')?.value
+                                || document.cookie.match(/csrftoken=([^;]+)/)?.[1] || ''
+                        },
+                        body: JSON.stringify({ image_ids: [img.id] })
+                    });
+                    const data = await resp.json();
+
+                    if (data.success && data.results?.[0]?.status === 'ok') {
+                        this.log.push({ id: img.id, title: img.title, status: 'ok' });
+                        this.successCount++;
+                        img.hasDesc = true;
+                    } else {
+                        this.log.push({ id: img.id, title: img.title, status: 'error' });
+                        this.errorCount++;
+                    }
+                } catch (e) {
+                    this.log.push({ id: img.id, title: img.title, status: 'error' });
+                    this.errorCount++;
+                }
+            }
+
+            this.currentImage = null;
+            this.done = true;
+            this.processing = false;
+        },
+
+        closeModal() {
+            this.showModal = false;
+            if (this.successCount > 0) {
+                window.location.reload();
+            }
+        }
+    };
+}
+</script>
+
+{% csrf_token %}
 {% endblock %}

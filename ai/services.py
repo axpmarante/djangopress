@@ -1540,6 +1540,7 @@ Keep the translations natural and fluent — these are website UI strings.
                 'alt_text': alt_text,
                 'key': img.key or '',
                 'tags': img.tags or '',
+                'description': img.description or '',
             })
 
         page_title = page.default_title or page.default_slug or 'Untitled'
@@ -1601,3 +1602,141 @@ Keep the translations natural and fluent — these are website UI strings.
 
         print(f"Generated {len(suggestions)} image suggestions")
         return suggestions
+
+    def describe_images(self, image_ids: List[int], languages: List[str] = None) -> List[Dict]:
+        """
+        Use Gemini Flash vision to generate descriptions for media library images.
+        Also suggests title and alt_text if they're empty.
+
+        Args:
+            image_ids: List of SiteImage IDs to describe
+            languages: List of language codes for title/alt_text suggestions
+
+        Returns:
+            List of result dicts with id, description, title_i18n, alt_text_i18n, status
+        """
+        from core.models import SiteImage, SiteSettings
+        import mimetypes
+
+        site_settings = SiteSettings.objects.first()
+        if not languages:
+            languages = [lang['code'] for lang in (site_settings.get_enabled_languages() if site_settings else [{'code': 'en'}])]
+
+        default_language = site_settings.get_default_language() if site_settings else 'en'
+        site_context = ''
+        if site_settings:
+            site_name = site_settings.get_site_name(default_language)
+            briefing = site_settings.get_project_briefing() or ''
+            if site_name:
+                site_context = f"This image belongs to the website: {site_name}."
+            if briefing:
+                site_context += f"\nSite context: {briefing[:500]}"
+
+        images = SiteImage.objects.filter(id__in=image_ids)
+        results = []
+
+        for img in images:
+            try:
+                # Read image bytes
+                img.image.open('rb')
+                image_bytes = img.image.read()
+                img.image.close()
+
+                # Determine MIME type
+                mime_type = mimetypes.guess_type(img.image.name)[0] or 'image/jpeg'
+
+                # Check which fields need filling
+                has_title = bool(img.title_i18n and any(v for v in img.title_i18n.values()))
+                has_alt = bool(img.alt_text_i18n and any(v for v in img.alt_text_i18n.values()))
+
+                lang_list = ', '.join(languages)
+                prompt_parts = [
+                    "Analyze this image and provide:",
+                    "",
+                    "1. **description**: A rich semantic description (2-3 sentences) covering: subject matter, visual style, mood/atmosphere, colors, and what type of website section it would suit (hero, about, team, services, gallery, testimonial, contact, etc.).",
+                ]
+                if not has_title:
+                    prompt_parts.append(f"2. **titles**: A short, descriptive title (3-6 words) for each language: {lang_list}")
+                if not has_alt:
+                    prompt_parts.append(f"3. **alt_texts**: Accessible alt text (1 sentence) for each language: {lang_list}")
+
+                if site_context:
+                    prompt_parts.append(f"\nContext: {site_context}")
+
+                prompt_parts.append("\nRespond in valid JSON only, no markdown fences:")
+
+                json_example = '{"description": "..."'
+                if not has_title:
+                    json_example += ', "titles": {"' + '": "...", "'.join(languages) + '": "..."}'
+                if not has_alt:
+                    json_example += ', "alt_texts": {"' + '": "...", "'.join(languages) + '": "..."}'
+                json_example += '}'
+                prompt_parts.append(json_example)
+
+                prompt = '\n'.join(prompt_parts)
+
+                # Call Gemini Flash vision
+                actual_model, provider_str = self._get_model_info('gemini-flash')
+                t0 = time.time()
+                response = self.llm.get_vision_completion(
+                    prompt=prompt,
+                    file_bytes=image_bytes,
+                    file_mime_type=mime_type,
+                    tool_name='gemini-flash',
+                )
+
+                # Parse response
+                content = response.content if hasattr(response, 'content') else response.choices[0].message.content
+                log_ai_call(
+                    action='describe_image', model_name=actual_model, provider=provider_str,
+                    system_prompt='', user_prompt=prompt,
+                    response_text=content,
+                    duration_ms=int((time.time() - t0) * 1000),
+                    prompt_tokens=getattr(getattr(response, 'usage', None), 'prompt_tokens', 0) or 0,
+                    completion_tokens=getattr(getattr(response, 'usage', None), 'completion_tokens', 0) or 0,
+                    total_tokens=getattr(getattr(response, 'usage', None), 'total_tokens', 0) or 0,
+                )
+                data = self._extract_json_from_response(content)
+
+                description = data.get('description', '') if isinstance(data, dict) else ''
+
+                # Save description
+                img.description = description
+
+                # Fill empty titles
+                if not has_title and isinstance(data.get('titles'), dict):
+                    title_i18n = img.title_i18n if isinstance(img.title_i18n, dict) else {}
+                    for lang_code in languages:
+                        if lang_code not in title_i18n or not title_i18n[lang_code]:
+                            title_i18n[lang_code] = data['titles'].get(lang_code, '')
+                    img.title_i18n = title_i18n
+
+                # Fill empty alt texts
+                if not has_alt and isinstance(data.get('alt_texts'), dict):
+                    alt_i18n = img.alt_text_i18n if isinstance(img.alt_text_i18n, dict) else {}
+                    for lang_code in languages:
+                        if lang_code not in alt_i18n or not alt_i18n[lang_code]:
+                            alt_i18n[lang_code] = data['alt_texts'].get(lang_code, '')
+                    img.alt_text_i18n = alt_i18n
+
+                img.save()
+
+                result = {
+                    'id': img.id,
+                    'description': description,
+                    'title_i18n': img.title_i18n,
+                    'alt_text_i18n': img.alt_text_i18n,
+                    'status': 'ok',
+                }
+                results.append(result)
+                print(f"  Described image #{img.id}: {description[:80]}...")
+
+            except Exception as e:
+                print(f"  Error describing image #{img.id}: {e}")
+                results.append({
+                    'id': img.id,
+                    'status': 'error',
+                    'error': str(e),
+                })
+
+        return results

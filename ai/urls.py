@@ -34,6 +34,9 @@ urlpatterns = [
     # Bulk translation
     path('api/translate-to-language/', views.translate_to_language_api, name='translate_to_language'),
 
+    # Image descriptions
+    path('api/describe-images/', views.describe_images_api, name='describe_images'),
+
     # Unsplash
     path('api/search-unsplash/', views.search_unsplash_api, name='search_unsplash'),
 

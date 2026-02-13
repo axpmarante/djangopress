@@ -113,6 +113,7 @@ class MediaDetailView(LoginRequiredMixin, TemplateView):
         image.alt_text_i18n = alt_text_i18n
         image.key = request.POST.get('key', '').strip()
         image.tags = request.POST.get('tags', '').strip()
+        image.description = request.POST.get('description', '').strip()
         image.is_active = 'is_active' in request.POST
 
         # Replace image file

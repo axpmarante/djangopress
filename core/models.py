@@ -630,6 +630,7 @@ class SiteImage(models.Model):
     key = models.SlugField('Key', unique=True, blank=True, help_text='Optional unique identifier to reference this image in templates')
     image = models.ImageField('Image', upload_to='site_images/')
     tags = models.CharField('Tags', max_length=200, blank=True, default='', help_text='Comma-separated tags for filtering (e.g., construction, villa, pool)')
+    description = models.TextField('AI Description', blank=True, default='', help_text='AI-generated semantic description for intelligent image matching')
     is_active = models.BooleanField('Active', default=True)
     uploaded_at = models.DateTimeField('Uploaded At', auto_now_add=True, null=True, blank=True)
     updated_at = models.DateTimeField('Updated At', auto_now=True, null=True, blank=True)
