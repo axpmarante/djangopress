@@ -4,6 +4,7 @@ These endpoints allow staff users to edit page content directly from the fronten
 """
 
 import json
+import re
 from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
 from django.contrib.admin.views.decorators import staff_member_required
@@ -12,6 +13,17 @@ from django.views.decorators.csrf import csrf_exempt
 from core.models import Page, SiteImage
 from ai.models import RefinementSession
 from bs4 import BeautifulSoup
+
+
+def _sanitize_trans_vars(html):
+    """Fix hyphenated {{ trans.xxx-yyy }} → {{ trans.xxx_yyy }} in HTML.
+    Django templates don't allow hyphens in variable names."""
+    def _fix(m):
+        return m.group(1) + m.group(2).replace('-', '_') + m.group(3)
+    return re.sub(
+        r'(\{\{\s*trans\.)([a-z0-9_-]+)(\s*(?:\|[a-z]+)?\s*\}\})',
+        _fix, html
+    )
 
 
 @staff_member_required
@@ -68,16 +80,20 @@ def update_page_content(request):
             element = soup.find(attrs={'data-element-id': element_id})
             if element:
                 trans_var = '{{ trans.' + field_key + ' }}'
-                # Check if the element already uses this template variable
                 element_html = str(element)
+                # Check if element uses the correct template variable already
                 if trans_var not in element_html:
-                    # Replace hardcoded text with template variable
+                    # Replace hardcoded text (or a broken hyphenated var) with
+                    # the correct underscored template variable
                     element.clear()
                     element.append(trans_var)
                     new_html = str(soup)
                     if new_html.startswith('<html><body>'):
                         new_html = new_html[12:-14]
                     page.html_content = new_html
+
+            # Sanitize any remaining hyphenated trans vars in the full HTML
+            page.html_content = _sanitize_trans_vars(page.html_content)
 
         page.save()
 
@@ -169,7 +185,7 @@ def update_page_element_classes(request):
         if new_html.startswith('<html><body>'):
             new_html = new_html[12:-14]
 
-        page.html_content = new_html
+        page.html_content = _sanitize_trans_vars(new_html)
         page.save()
 
         return JsonResponse({
@@ -273,7 +289,7 @@ def update_page_element_attribute(request):
         if new_html.startswith('<html><body>'):
             new_html = new_html[12:-14]
 
-        page.html_content = new_html
+        page.html_content = _sanitize_trans_vars(new_html)
         page.save()
 
         return JsonResponse({
