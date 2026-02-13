@@ -1490,3 +1490,88 @@ def describe_images_api(request):
 
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
+@superuser_required
+@require_http_methods(["POST"])
+def enhance_prompt_api(request):
+    """
+    Enhance or suggest a style prompt using AI.
+
+    POST /ai/api/enhance-prompt/
+    Body: {
+        "text": "make it clean and add a button",
+        "section_html": "<section ...>...</section>",  // optional, for suggest mode
+        "mode": "enhance" | "suggest"
+    }
+    """
+    try:
+        data = json.loads(request.body)
+        text = data.get('text', '').strip()
+        section_html = data.get('section_html', '').strip()
+        mode = data.get('mode', 'enhance')
+
+        if mode == 'suggest' and not section_html:
+            return JsonResponse({'success': False, 'error': 'section_html required for suggest mode'}, status=400)
+
+        if mode == 'suggest':
+            system_prompt = (
+                "You are a web design consultant. Analyze the provided HTML section and suggest "
+                "3-5 specific visual and layout improvements. Write as a single instruction paragraph "
+                "that a user can send to an AI to refine the section. Be specific about layout changes, "
+                "spacing, colors, typography, and visual effects. Reference Tailwind CSS patterns. "
+                "Keep it under 150 words. Return ONLY the instruction text, no markdown formatting."
+            )
+            user_prompt = f"Current instruction draft:\n{text}\n\nHTML section to analyze:\n{section_html}" if text else f"HTML section to analyze:\n{section_html}"
+        else:
+            if not text:
+                return JsonResponse({'success': False, 'error': 'text required for enhance mode'}, status=400)
+            system_prompt = (
+                "You are a web design prompt specialist. Expand the user's rough design instruction "
+                "into a clear, detailed directive for a web designer. Be specific about layout, spacing, "
+                "typography, color usage, and visual feel. Reference Tailwind CSS patterns where relevant. "
+                "Keep it under 150 words. Return ONLY the enhanced instruction text, no markdown formatting."
+            )
+            user_prompt = text
+
+        messages = [
+            {'role': 'system', 'content': system_prompt},
+            {'role': 'user', 'content': user_prompt},
+        ]
+
+        from .utils.llm_config import LLMBase
+        llm = LLMBase()
+        model = 'gemini-flash'
+        actual_model, provider = _get_model_info(model)
+        t0 = time.time()
+
+        try:
+            response = llm.get_completion(messages, tool_name=model)
+            usage = _extract_usage(response)
+            log_ai_call(
+                action='enhance_prompt', model_name=actual_model, provider=provider,
+                system_prompt=system_prompt, user_prompt=user_prompt,
+                response_text=response.choices[0].message.content,
+                duration_ms=int((time.time() - t0) * 1000),
+                user=request.user, **usage,
+            )
+        except Exception as e:
+            log_ai_call(
+                action='enhance_prompt', model_name=actual_model, provider=provider,
+                system_prompt=system_prompt, user_prompt=user_prompt,
+                duration_ms=int((time.time() - t0) * 1000),
+                user=request.user, success=False, error_message=str(e),
+            )
+            raise
+
+        enhanced_text = response.choices[0].message.content.strip()
+
+        return JsonResponse({
+            'success': True,
+            'text': enhanced_text,
+        })
+
+    except json.JSONDecodeError:
+        return JsonResponse({'success': False, 'error': 'Invalid JSON'}, status=400)
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)

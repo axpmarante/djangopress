@@ -43,4 +43,7 @@ urlpatterns = [
     # Blueprint AI
     path('api/suggest-page-sections/', views.suggest_page_sections_api, name='suggest_page_sections'),
     path('api/fill-section-content/', views.fill_section_content_api, name='fill_section_content'),
+
+    # Prompt tools
+    path('api/enhance-prompt/', views.enhance_prompt_api, name='enhance_prompt'),
 ]
