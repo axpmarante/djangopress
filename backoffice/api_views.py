@@ -247,7 +247,7 @@ def get_page_content(request, page_id):
         return JsonResponse({
             'success': False,
             'error': f'Page with id {page_id} not found'
-        }, status=404)
+        }, status=400)
     except Exception as e:
         return JsonResponse({
             'success': False,
@@ -499,7 +499,7 @@ def update_menu_parent(request):
             return JsonResponse({
                 'success': False,
                 'error': 'Menu item not found'
-            }, status=404)
+            }, status=400)
 
         if parent_id:
             if int(parent_id) == item.id:
@@ -514,7 +514,7 @@ def update_menu_parent(request):
                 return JsonResponse({
                     'success': False,
                     'error': 'Parent item not found'
-                }, status=404)
+                }, status=400)
 
             if parent.parent_id is not None:
                 return JsonResponse({
@@ -701,9 +701,9 @@ def save_blueprint_page(request):
         })
 
     except Blueprint.DoesNotExist:
-        return JsonResponse({'success': False, 'error': 'Blueprint not found'}, status=404)
+        return JsonResponse({'success': False, 'error': 'Blueprint not found'}, status=400)
     except BlueprintPage.DoesNotExist:
-        return JsonResponse({'success': False, 'error': 'Blueprint page not found'}, status=404)
+        return JsonResponse({'success': False, 'error': 'Blueprint page not found'}, status=400)
     except json.JSONDecodeError:
         return JsonResponse({'success': False, 'error': 'Invalid JSON'}, status=400)
     except Exception as e:
@@ -725,7 +725,7 @@ def delete_blueprint_page(request):
         return JsonResponse({'success': True})
 
     except BlueprintPage.DoesNotExist:
-        return JsonResponse({'success': False, 'error': 'Blueprint page not found'}, status=404)
+        return JsonResponse({'success': False, 'error': 'Blueprint page not found'}, status=400)
     except json.JSONDecodeError:
         return JsonResponse({'success': False, 'error': 'Invalid JSON'}, status=400)
     except Exception as e:
@@ -792,7 +792,7 @@ def save_blueprint_sections(request):
         return JsonResponse({'success': True, 'sections': bp_page.sections})
 
     except BlueprintPage.DoesNotExist:
-        return JsonResponse({'success': False, 'error': 'Blueprint page not found'}, status=404)
+        return JsonResponse({'success': False, 'error': 'Blueprint page not found'}, status=400)
     except json.JSONDecodeError:
         return JsonResponse({'success': False, 'error': 'Invalid JSON'}, status=400)
     except Exception as e:
@@ -861,7 +861,7 @@ def create_pages_from_blueprint(request):
         })
 
     except Blueprint.DoesNotExist:
-        return JsonResponse({'success': False, 'error': 'Blueprint not found'}, status=404)
+        return JsonResponse({'success': False, 'error': 'Blueprint not found'}, status=400)
     except json.JSONDecodeError:
         return JsonResponse({'success': False, 'error': 'Invalid JSON'}, status=400)
     except Exception as e:

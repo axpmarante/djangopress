@@ -541,7 +541,7 @@ def refine_page_with_html_api(request):
             return JsonResponse({
                 'success': False,
                 'error': f'Page with id {page_id} not found'
-            }, status=404)
+            }, status=400)
 
         # Create a page version before making changes
         page.create_version(
@@ -631,7 +631,7 @@ def chat_refine_page_api(request):
             return JsonResponse({
                 'success': False,
                 'error': f'Page with id {page_id} not found'
-            }, status=404)
+            }, status=400)
 
         # Load or create session
         if session_id:
@@ -641,7 +641,7 @@ def chat_refine_page_api(request):
                 return JsonResponse({
                     'success': False,
                     'error': f'Session {session_id} not found'
-                }, status=404)
+                }, status=400)
         else:
             session = RefinementSession(
                 page=page,
@@ -719,7 +719,7 @@ def get_refinement_session_api(request, session_id):
     try:
         session = RefinementSession.objects.get(id=session_id)
     except RefinementSession.DoesNotExist:
-        return JsonResponse({'success': False, 'error': 'Session not found'}, status=404)
+        return JsonResponse({'success': False, 'error': 'Session not found'}, status=400)
 
     return JsonResponse({
         'success': True,
@@ -1132,7 +1132,7 @@ def process_page_images_api(request):
             return JsonResponse({
                 'success': False,
                 'error': f'Page with id {page_id} not found'
-            }, status=404)
+            }, status=400)
 
         page.create_version(
             user=request.user,
@@ -1299,7 +1299,7 @@ def suggest_page_sections_api(request):
         return JsonResponse({'success': True, 'sections': sections})
 
     except BlueprintPage.DoesNotExist:
-        return JsonResponse({'success': False, 'error': 'Blueprint page not found'}, status=404)
+        return JsonResponse({'success': False, 'error': 'Blueprint page not found'}, status=400)
     except Exception as e:
         print(f"Error in suggest_page_sections_api: {e}")
         import traceback
@@ -1396,7 +1396,7 @@ def fill_section_content_api(request):
         return JsonResponse({'success': True, 'content': content.strip()})
 
     except BlueprintPage.DoesNotExist:
-        return JsonResponse({'success': False, 'error': 'Blueprint page not found'}, status=404)
+        return JsonResponse({'success': False, 'error': 'Blueprint page not found'}, status=400)
     except Exception as e:
         print(f"Error in fill_section_content_api: {e}")
         import traceback

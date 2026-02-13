@@ -247,6 +247,11 @@
       createBackgroundImageField(currentData.backgroundImageUrl);
     }
 
+    // Background video (video or YouTube iframe inside a section)
+    if (currentData.hasBackgroundVideo) {
+      createBackgroundVideoField(currentData.backgroundVideoUrl, currentData.backgroundVideoType);
+    }
+
     // Section images — show clickable thumbnails for <img> tags inside the
     // current section so users can reach images hidden behind overlays
     if (!currentData.isImage && currentData.sectionName) {
@@ -427,9 +432,10 @@
     changeBtn.style.width = '100%';
     changeBtn.addEventListener('click', () => {
       if (window.ImageModal && typeof window.ImageModal.open === 'function') {
+        const oldStyle = currentElement.getAttribute('style') || '';
         window.ImageModal.open((imageUrl) => {
           currentElement.style.backgroundImage = `url('${imageUrl}')`;
-          trackChange('attribute', { name: 'style', value: currentElement.getAttribute('style') });
+          trackChange('attribute', { name: 'style', value: currentElement.getAttribute('style') }, oldStyle);
           populateContentTab();
         });
       } else {
@@ -449,9 +455,181 @@
     removeBtn.textContent = 'Remove Background Image';
     removeBtn.style.cssText = 'width: 100%; color: #dc2626;';
     removeBtn.addEventListener('click', () => {
+      const oldStyle = currentElement.getAttribute('style') || '';
       currentElement.style.backgroundImage = 'none';
-      trackChange('attribute', { name: 'style', value: currentElement.getAttribute('style') });
+      trackChange('attribute', { name: 'style', value: currentElement.getAttribute('style') }, oldStyle);
       populateContentTab();
+    });
+    removeField.appendChild(removeBtn);
+    contentFields.appendChild(removeField);
+  }
+
+  // Helper: extract YouTube video ID from various URL formats
+  function extractYouTubeId(url) {
+    if (!url) return null;
+    // youtube.com/watch?v=ID, youtube.com/embed/ID, youtu.be/ID
+    const patterns = [
+      /(?:youtube\.com\/watch\?.*v=|youtube\.com\/embed\/|youtu\.be\/)([a-zA-Z0-9_-]{11})/
+    ];
+    for (const p of patterns) {
+      const m = url.match(p);
+      if (m) return m[1];
+    }
+    return null;
+  }
+
+  // Helper: build YouTube embed URL for background playback
+  function youtubeEmbedUrl(videoId) {
+    return `https://www.youtube.com/embed/${videoId}?autoplay=1&mute=1&loop=1&controls=0&showinfo=0&playlist=${videoId}&playsinline=1`;
+  }
+
+  // Helper: pretty-print current video source for display
+  function videoDisplayUrl(url, type) {
+    if (type === 'youtube') {
+      const id = extractYouTubeId(url);
+      return id ? `https://www.youtube.com/watch?v=${id}` : url;
+    }
+    return url || '';
+  }
+
+  // Create background video field
+  function createBackgroundVideoField(videoUrl, videoType) {
+    // Separator
+    const separator = document.createElement('hr');
+    separator.style.cssText = 'border: none; border-top: 1px solid #e5e7eb; margin: 16px 0;';
+    contentFields.appendChild(separator);
+
+    const label = document.createElement('label');
+    label.textContent = 'Background Video';
+    label.style.cssText = 'display: block; font-size: 13px; font-weight: 600; color: #374151; margin-bottom: 6px;';
+    contentFields.appendChild(label);
+
+    // Current type badge
+    const typeBadge = document.createElement('span');
+    typeBadge.textContent = videoType === 'youtube' ? 'YouTube' : 'Video File';
+    typeBadge.style.cssText = 'display: inline-block; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 4px; margin-bottom: 10px; ' +
+      (videoType === 'youtube'
+        ? 'background: #fee2e2; color: #dc2626;'
+        : 'background: #dbeafe; color: #2563eb;');
+    contentFields.appendChild(typeBadge);
+
+    // URL input
+    const urlField = document.createElement('div');
+    urlField.className = 'editor-field';
+    urlField.style.marginBottom = '8px';
+
+    const urlInput = document.createElement('input');
+    urlInput.type = 'text';
+    urlInput.className = 'editor-input';
+    urlInput.placeholder = 'YouTube URL or direct video URL';
+    urlInput.value = videoDisplayUrl(videoUrl, videoType);
+    urlField.appendChild(urlInput);
+    contentFields.appendChild(urlField);
+
+    // Hint
+    const hint = document.createElement('p');
+    hint.textContent = 'Paste a YouTube link or a direct .mp4 URL';
+    hint.style.cssText = 'font-size: 11px; color: #9ca3af; margin: -4px 0 10px;';
+    contentFields.appendChild(hint);
+
+    // Apply button
+    const applyField = document.createElement('div');
+    applyField.className = 'editor-field';
+    applyField.style.marginBottom = '8px';
+
+    const applyBtn = document.createElement('button');
+    applyBtn.type = 'button';
+    applyBtn.className = 'editor-btn editor-btn-primary';
+    applyBtn.textContent = 'Apply Video';
+    applyBtn.style.width = '100%';
+    applyBtn.addEventListener('click', function() {
+      const newUrl = urlInput.value.trim();
+      if (!newUrl) return;
+
+      const sectionId = currentData.sectionName || currentData.id;
+      if (!sectionId || !currentData.pageId) return;
+
+      applyBtn.disabled = true;
+      applyBtn.textContent = 'Applying...';
+
+      fetch('/editor/api/update-section-video/', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRFToken': getCSRFToken()
+        },
+        body: JSON.stringify({
+          page_id: currentData.pageId,
+          section_id: sectionId,
+          video_url: newUrl
+        })
+      })
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        if (data.success) {
+          console.log('✅ Background video updated');
+          // Reload the page to show the updated video
+          window.location.reload();
+        } else {
+          console.error('❌ Video update failed:', data.error);
+          applyBtn.disabled = false;
+          applyBtn.textContent = 'Apply Video';
+          alert('Error: ' + (data.error || 'Unknown error'));
+        }
+      })
+      .catch(function(err) {
+        console.error('Video update error:', err);
+        applyBtn.disabled = false;
+        applyBtn.textContent = 'Apply Video';
+      });
+    });
+    applyField.appendChild(applyBtn);
+    contentFields.appendChild(applyField);
+
+    // Remove button
+    const removeField = document.createElement('div');
+    removeField.className = 'editor-field';
+
+    const removeBtn = document.createElement('button');
+    removeBtn.type = 'button';
+    removeBtn.className = 'editor-btn editor-btn-secondary';
+    removeBtn.textContent = 'Remove Background Video';
+    removeBtn.style.cssText = 'width: 100%; color: #dc2626;';
+    removeBtn.addEventListener('click', function() {
+      const sectionId = currentData.sectionName || currentData.id;
+      if (!sectionId || !currentData.pageId) return;
+
+      removeBtn.disabled = true;
+      removeBtn.textContent = 'Removing...';
+
+      fetch('/editor/api/update-section-video/', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRFToken': getCSRFToken()
+        },
+        body: JSON.stringify({
+          page_id: currentData.pageId,
+          section_id: sectionId,
+          video_url: ''
+        })
+      })
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        if (data.success) {
+          console.log('✅ Background video removed');
+          window.location.reload();
+        } else {
+          console.error('❌ Video remove failed:', data.error);
+          removeBtn.disabled = false;
+          removeBtn.textContent = 'Remove Background Video';
+        }
+      })
+      .catch(function(err) {
+        console.error('Video remove error:', err);
+        removeBtn.disabled = false;
+        removeBtn.textContent = 'Remove Background Video';
+      });
     });
     removeField.appendChild(removeBtn);
     contentFields.appendChild(removeField);

@@ -59,7 +59,7 @@ def update_page_content(request):
             return JsonResponse({
                 'success': False,
                 'error': 'Page not found'
-            }, status=404)
+            }, status=400)
 
         # Update content translations
         content = page.content or {}
@@ -148,7 +148,7 @@ def update_page_element_classes(request):
             return JsonResponse({
                 'success': False,
                 'error': 'Page not found'
-            }, status=404)
+            }, status=400)
 
         if not page.html_content or page.html_content.strip() == '':
             return JsonResponse({
@@ -159,14 +159,16 @@ def update_page_element_classes(request):
         # Parse HTML with BeautifulSoup
         soup = BeautifulSoup(page.html_content, 'html.parser')
 
-        # Find element by data-element-id
+        # Find element by data-element-id (or id fallback for sections)
         element = soup.find(attrs={'data-element-id': element_id})
+        if not element:
+            element = soup.find(attrs={'id': element_id})
 
         if not element:
             return JsonResponse({
                 'success': False,
                 'error': f'Element with data-element-id="{element_id}" not found'
-            }, status=404)
+            }, status=400)
 
         # Store old classes
         old_classes = ' '.join(element.get('class', []))
@@ -252,7 +254,7 @@ def update_page_element_attribute(request):
             return JsonResponse({
                 'success': False,
                 'error': 'Page not found'
-            }, status=404)
+            }, status=400)
 
         # Parse HTML
         soup = BeautifulSoup(page.html_content, 'html.parser')
@@ -261,6 +263,9 @@ def update_page_element_attribute(request):
         element = None
         if element_id:
             element = soup.find(attrs={'data-element-id': element_id})
+            # Also try matching by id attribute (sections use id but not data-element-id)
+            if not element:
+                element = soup.find(attrs={'id': element_id})
 
         # Fallback: find by old attribute value + tag name
         if not element and old_value and tag_name:
@@ -270,7 +275,7 @@ def update_page_element_attribute(request):
             return JsonResponse({
                 'success': False,
                 'error': f'Element not found (element_id={element_id}, tag={tag_name})'
-            }, status=404)
+            }, status=400)
 
         # Store old value
         old_value = element.get(attribute, '')
@@ -465,7 +470,7 @@ def refine_section(request):
         return JsonResponse({
             'success': False,
             'error': 'Page not found'
-        }, status=404)
+        }, status=400)
     except json.JSONDecodeError:
         return JsonResponse({
             'success': False,
@@ -512,7 +517,7 @@ def save_ai_section(request):
             return JsonResponse({
                 'success': False,
                 'error': 'Page not found'
-            }, status=404)
+            }, status=400)
 
         # Create version for rollback
         page.create_version(user=request.user, change_summary=f'AI refined section: {section_name}')
@@ -525,7 +530,7 @@ def save_ai_section(request):
             return JsonResponse({
                 'success': False,
                 'error': f'Section "{section_name}" not found in page HTML'
-            }, status=404)
+            }, status=400)
 
         # Parse the new section HTML
         new_section_soup = BeautifulSoup(html_template, 'html.parser')
@@ -559,6 +564,138 @@ def save_ai_section(request):
         return JsonResponse({
             'success': True,
             'message': f'Section "{section_name}" saved successfully',
+            'page_id': page.id,
+        })
+
+    except json.JSONDecodeError:
+        return JsonResponse({
+            'success': False,
+            'error': 'Invalid JSON'
+        }, status=400)
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+
+
+@staff_member_required
+@require_http_methods(["POST"])
+def update_section_video(request):
+    """
+    Update or remove the background video in a page section.
+    Handles both direct video URLs (mp4) and YouTube links.
+
+    Expected POST data:
+    {
+        "page_id": 1,
+        "section_id": "test-bg-video",
+        "video_url": "https://youtube.com/watch?v=..."  (or "" to remove)
+    }
+    """
+    try:
+        data = json.loads(request.body)
+        page_id = data.get('page_id')
+        section_id = data.get('section_id')
+        video_url = data.get('video_url', '').strip()
+
+        if not page_id or not section_id:
+            return JsonResponse({
+                'success': False,
+                'error': 'Missing page_id or section_id'
+            }, status=400)
+
+        try:
+            page = Page.objects.get(pk=page_id)
+        except Page.DoesNotExist:
+            return JsonResponse({
+                'success': False,
+                'error': 'Page not found'
+            }, status=400)
+
+        soup = BeautifulSoup(page.html_content, 'html.parser')
+        section = (
+            soup.find('section', attrs={'data-section': section_id})
+            or soup.find('section', attrs={'id': section_id})
+        )
+
+        if not section:
+            return JsonResponse({
+                'success': False,
+                'error': f'Section "{section_id}" not found'
+            }, status=400)
+
+        # Remove existing background video/iframe
+        old_video = section.find('video', recursive=False)
+        old_iframe = None
+        for iframe in section.find_all('iframe', recursive=False):
+            if iframe.get('src', '') and 'youtube' in iframe.get('src', ''):
+                old_iframe = iframe
+                break
+
+        if old_video:
+            old_video.decompose()
+        if old_iframe:
+            old_iframe.decompose()
+
+        if video_url:
+            # Detect YouTube
+            yt_match = re.search(
+                r'(?:youtube\.com/watch\?.*v=|youtube\.com/embed/|youtu\.be/)([a-zA-Z0-9_-]{11})',
+                video_url
+            )
+
+            if yt_match:
+                # YouTube: insert <iframe> as first child
+                yt_id = yt_match.group(1)
+                embed_url = (
+                    f'https://www.youtube.com/embed/{yt_id}'
+                    f'?autoplay=1&mute=1&loop=1&controls=0&showinfo=0'
+                    f'&playlist={yt_id}&playsinline=1'
+                )
+                new_el = soup.new_tag(
+                    'iframe',
+                    src=embed_url,
+                    frameborder='0',
+                    allow='autoplay; encrypted-media',
+                    allowfullscreen='',
+                    **{'class': 'absolute inset-0 w-full h-full pointer-events-none'}
+                )
+                # Scale iframe to cover section like a video
+                new_el['style'] = (
+                    'position:absolute;top:50%;left:50%;'
+                    'width:100vw;height:56.25vw;'
+                    'min-height:100%;min-width:177.77vh;'
+                    'transform:translate(-50%,-50%);'
+                )
+            else:
+                # Direct video URL: insert <video> as first child
+                new_el = soup.new_tag(
+                    'video',
+                    autoplay='',
+                    muted='',
+                    loop='',
+                    playsinline='',
+                    **{'class': 'absolute inset-0 w-full h-full object-cover'}
+                )
+                source_tag = soup.new_tag('source', src=video_url, type='video/mp4')
+                new_el.append(source_tag)
+
+            # Insert as first child of section
+            section.insert(0, new_el)
+
+        # Save
+        new_html = str(soup)
+        if new_html.startswith('<html><body>'):
+            new_html = new_html[12:-14]
+
+        page.html_content = _sanitize_trans_vars(new_html)
+        page.save()
+
+        action = 'removed' if not video_url else ('YouTube' if video_url and 'youtu' in video_url else 'video')
+        return JsonResponse({
+            'success': True,
+            'message': f'Background video {action} updated in section "{section_id}"',
             'page_id': page.id,
         })
 

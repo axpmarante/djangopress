@@ -217,6 +217,23 @@
       backgroundImageUrl = bgMatch ? bgMatch[1] : null;
     }
 
+    // Detect background video (<video> or YouTube <iframe> as first child)
+    let hasBackgroundVideo = false;
+    let backgroundVideoUrl = null;
+    let backgroundVideoType = null; // 'video' or 'youtube'
+    const bgVideo = element.querySelector(':scope > video');
+    const bgIframe = element.querySelector(':scope > iframe[src*="youtube"]');
+    if (bgVideo) {
+      hasBackgroundVideo = true;
+      backgroundVideoType = 'video';
+      const source = bgVideo.querySelector('source');
+      backgroundVideoUrl = source ? source.getAttribute('src') : bgVideo.getAttribute('src');
+    } else if (bgIframe) {
+      hasBackgroundVideo = true;
+      backgroundVideoType = 'youtube';
+      backgroundVideoUrl = bgIframe.getAttribute('src');
+    }
+
     // Build data object
     const data = {
       element: element,
@@ -247,7 +264,12 @@
 
       // Background image
       hasBackgroundImage: hasBackgroundImage,
-      backgroundImageUrl: backgroundImageUrl
+      backgroundImageUrl: backgroundImageUrl,
+
+      // Background video
+      hasBackgroundVideo: hasBackgroundVideo,
+      backgroundVideoUrl: backgroundVideoUrl,
+      backgroundVideoType: backgroundVideoType
     };
 
     return data;
