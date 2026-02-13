@@ -49,6 +49,14 @@
                         </div>
                     </div>
 
+                    <div>
+                        <label for="id_ai_style_instructions" class="block text-xs font-medium text-gray-700 mb-1">Style Instructions (optional)</label>
+                        <textarea id="id_ai_style_instructions" rows="3"
+                                  class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                                  placeholder="Describe the look and feel you want, e.g. &quot;Dark luxury aesthetic with gold accents, elegant serif fonts, lots of whitespace&quot;"></textarea>
+                        <p class="text-xs text-gray-400 mt-1">The AI will generate the design guide and suggest design system changes (colors, fonts, etc.) to match your vision</p>
+                    </div>
+
                     {% if pages_with_content %}
                     <div class="mb-4">
                         <label class="block text-xs font-medium text-gray-700 mb-2">Analyze Existing Pages (optional)</label>
@@ -73,6 +81,26 @@
                             Quick Generate (no AI)
                         </button>
                         <span id="ai-guide-status" class="text-xs text-gray-500"></span>
+                    </div>
+                </div>
+
+                <!-- Suggested Design Changes Panel (shown after AI generation) -->
+                <div id="design-suggestions-panel" class="hidden">
+                    <div class="p-4 bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-lg">
+                        <div class="flex items-center justify-between mb-3">
+                            <h4 class="text-sm font-semibold text-amber-900">Suggested Design Changes</h4>
+                            <div class="flex items-center gap-2">
+                                <button type="button" onclick="applySelectedSuggestions()"
+                                        class="px-3 py-1.5 text-xs bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-colors font-medium">
+                                    Apply Selected
+                                </button>
+                                <button type="button" onclick="dismissSuggestions()"
+                                        class="px-3 py-1.5 text-xs bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition-colors border border-gray-300">
+                                    Dismiss
+                                </button>
+                            </div>
+                        </div>
+                        <div id="design-suggestions-list" class="space-y-2"></div>
                     </div>
                 </div>
 
@@ -377,6 +405,91 @@ function generateDesignGuide() {
     });
 }
 
+// ============ Design Suggestions ============
+const DESIGN_FIELD_LABELS = {
+    primary_color: 'Primary Color', primary_color_hover: 'Primary Color Hover',
+    secondary_color: 'Secondary Color', accent_color: 'Accent Color',
+    background_color: 'Background Color', text_color: 'Text Color', heading_color: 'Heading Color',
+    heading_font: 'Heading Font', body_font: 'Body Font',
+    h1_font: 'H1 Font', h2_font: 'H2 Font', h3_font: 'H3 Font', h4_font: 'H4 Font',
+    container_width: 'Container Width', border_radius_preset: 'Border Radius',
+    spacing_scale: 'Spacing Scale', shadow_preset: 'Shadow Preset',
+    button_style: 'Button Style', button_size: 'Button Size',
+    primary_button_bg: 'Primary Button BG', primary_button_text: 'Primary Button Text',
+    primary_button_border: 'Primary Button Border', primary_button_hover: 'Primary Button Hover',
+    secondary_button_bg: 'Secondary Button BG', secondary_button_text: 'Secondary Button Text',
+    secondary_button_border: 'Secondary Button Border', secondary_button_hover: 'Secondary Button Hover',
+    button_border_width: 'Button Border Width',
+};
+
+let pendingSuggestions = {};
+
+function isColorField(field) {
+    return field.includes('color') || field.includes('button_bg') || field.includes('button_text')
+        || field.includes('button_border') || field.includes('button_hover');
+}
+
+function showDesignSuggestions(updates) {
+    pendingSuggestions = updates;
+    const panel = document.getElementById('design-suggestions-panel');
+    const list = document.getElementById('design-suggestions-list');
+
+    const entries = Object.entries(updates);
+    if (entries.length === 0) {
+        panel.classList.add('hidden');
+        return;
+    }
+
+    let html = '';
+    entries.forEach(([field, value]) => {
+        const label = DESIGN_FIELD_LABELS[field] || field;
+        const formField = document.querySelector(`[name="${field}"]`);
+        const currentVal = formField ? formField.value : '?';
+        const isColor = isColorField(field);
+        const swatch = isColor ? `<span class="inline-block w-4 h-4 rounded border border-gray-300 align-middle" style="background:${value}"></span>` : '';
+        const currentSwatch = isColor ? `<span class="inline-block w-4 h-4 rounded border border-gray-300 align-middle" style="background:${currentVal}"></span>` : '';
+
+        html += `
+        <label class="flex items-center gap-3 p-2 bg-white rounded-lg border border-amber-100 cursor-pointer hover:bg-amber-50 transition-colors">
+            <input type="checkbox" checked class="design-sug-cb h-4 w-4 text-amber-600 border-gray-300 rounded" data-field="${field}" data-value="${value.replace(/"/g, '&quot;')}">
+            <span class="text-xs font-medium text-gray-700 w-40 flex-shrink-0">${label}</span>
+            <span class="text-xs text-gray-400 flex items-center gap-1">${currentSwatch} ${currentVal}</span>
+            <svg class="w-3 h-3 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
+            <span class="text-xs font-medium text-amber-800 flex items-center gap-1">${swatch} ${value}</span>
+        </label>`;
+    });
+
+    list.innerHTML = html;
+    panel.classList.remove('hidden');
+}
+
+function applySelectedSuggestions() {
+    const checkboxes = document.querySelectorAll('.design-sug-cb:checked');
+    let applied = 0;
+    checkboxes.forEach(cb => {
+        const field = cb.dataset.field;
+        const value = cb.dataset.value;
+        const formField = document.querySelector(`[name="${field}"]`);
+        if (formField) {
+            formField.value = value;
+            // Trigger change event for color pickers and other inputs
+            formField.dispatchEvent(new Event('input', { bubbles: true }));
+            formField.dispatchEvent(new Event('change', { bubbles: true }));
+            applied++;
+        }
+    });
+    document.getElementById('design-suggestions-panel').classList.add('hidden');
+    const statusSpan = document.getElementById('ai-guide-status');
+    statusSpan.textContent = `Applied ${applied} design change${applied !== 1 ? 's' : ''}. Save to persist.`;
+    statusSpan.className = 'text-xs text-green-600';
+}
+
+function dismissSuggestions() {
+    document.getElementById('design-suggestions-panel').classList.add('hidden');
+    pendingSuggestions = {};
+}
+
+// ============ AI Generate ============
 function aiGenerateDesignGuide() {
     const btn = document.getElementById('btn_ai_generate_guide');
     const textarea = document.getElementById('id_design_guide');
@@ -393,12 +506,12 @@ function aiGenerateDesignGuide() {
     const model = modelSelect ? modelSelect.value : 'gemini-pro';
 
     const existingGuide = textarea.value.trim();
+    const styleInstructions = (document.getElementById('id_ai_style_instructions')?.value || '').trim();
 
     const formData = new FormData();
     formData.append('model', model);
-    if (existingGuide) {
-        formData.append('existing_guide', existingGuide);
-    }
+    if (existingGuide) formData.append('existing_guide', existingGuide);
+    if (styleInstructions) formData.append('style_instructions', styleInstructions);
     pageIds.forEach(pid => formData.append('page_ids', pid));
     for (let i = 0; i < imageFiles.length; i++) {
         formData.append('reference_images', imageFiles[i]);
@@ -408,6 +521,9 @@ function aiGenerateDesignGuide() {
     btn.disabled = true;
     statusSpan.textContent = 'This may take 30-60 seconds...';
     statusSpan.className = 'text-xs text-purple-600';
+
+    // Hide previous suggestions
+    document.getElementById('design-suggestions-panel').classList.add('hidden');
 
     fetch('/ai/api/generate-design-guide/', {
         method: 'POST',
@@ -422,6 +538,11 @@ function aiGenerateDesignGuide() {
             textarea.value = data.design_guide;
             statusSpan.textContent = 'Generated successfully. Save to persist.';
             statusSpan.className = 'text-xs text-green-600';
+
+            // Show design system suggestions if any
+            if (data.design_updates && Object.keys(data.design_updates).length > 0) {
+                showDesignSuggestions(data.design_updates);
+            }
         } else {
             statusSpan.textContent = 'Error: ' + (data.error || 'Unknown error');
             statusSpan.className = 'text-xs text-red-600';

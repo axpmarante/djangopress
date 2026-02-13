@@ -779,6 +779,7 @@ def generate_design_guide_ai_api(request):
             page_ids = [int(pid) for pid in page_ids_raw if pid]
             model = request.POST.get('model', 'gemini-pro')
             existing_guide = request.POST.get('existing_guide', '')
+            style_instructions = request.POST.get('style_instructions', '')
             reference_images = []
             for f in request.FILES.getlist('reference_images'):
                 reference_images.append({'bytes': f.read(), 'mime_type': f.content_type})
@@ -787,6 +788,7 @@ def generate_design_guide_ai_api(request):
             page_ids = data.get('page_ids', [])
             model = data.get('model', 'gemini-pro')
             existing_guide = data.get('existing_guide', '')
+            style_instructions = data.get('style_instructions', '')
             reference_images = []
 
         # Load site settings
@@ -845,11 +847,14 @@ def generate_design_guide_ai_api(request):
                 page_samples += f"\n### Page: {title}\n```html\n{html}\n```\n"
 
         # Build the prompt
-        system_prompt = """You are a senior UI/UX designer and design systems expert. Your job is to analyze a website's design settings, existing pages, and optional reference images to produce a comprehensive design guide in Markdown.
+        system_prompt = """You are a senior UI/UX designer and design systems expert. Your job is to analyze a website's design settings, existing pages, optional reference images, and the user's style instructions to produce:
+
+1. A comprehensive **design guide** in Markdown
+2. **Suggested design system changes** to match the desired look and feel
 
 The design guide will be injected into AI prompts that generate and refine web pages using Tailwind CSS. It must be practical, specific, and focused on producing consistent UI.
 
-## What to Include
+## Design Guide — What to Include
 
 1. **Color Usage** — When to use each color (primary for CTAs, secondary for borders, accent for highlights, etc.). Include specific Tailwind style attributes using the hex values with arbitrary value syntax, e.g. `bg-[#1e3a8a]`, `text-[#f59e0b]`.
 
@@ -869,11 +874,42 @@ The design guide will be injected into AI prompts that generate and refine web p
 
 6. **Do's and Don'ts** — Specific things to avoid and things to always do.
 
-## Format
+## Design System Updates
 
-Return ONLY the Markdown document, no code blocks wrapping it, no explanations before or after.
-Keep it practical — every rule should map to specific Tailwind classes or patterns.
-Aim for 80-150 lines of concise, actionable markdown."""
+If the user provided style instructions or reference images that suggest changes to the current design system values, include a `design_updates` object with ONLY the fields that should change. Available fields and their formats:
+
+**Colors** (hex codes like "#1e3a8a"):
+primary_color, primary_color_hover, secondary_color, accent_color, background_color, text_color, heading_color, primary_button_bg, primary_button_text, primary_button_border, primary_button_hover, secondary_button_bg, secondary_button_text, secondary_button_border, secondary_button_hover
+
+**Fonts** (Google Fonts names like "Inter", "Playfair Display", "Montserrat"):
+heading_font, body_font
+
+**Layout** (preset values):
+container_width: full|xs|sm|md|lg|xl|2xl|3xl|4xl|5xl|6xl|7xl
+border_radius_preset: none|sm|md|lg|xl|2xl|3xl|full
+spacing_scale: tight|normal|relaxed|loose
+shadow_preset: none|sm|md|lg|xl|2xl
+button_style: rounded|square|pill
+button_size: small|medium|large
+
+Only include fields that should CHANGE from their current values. If the current design system already matches the desired style, return an empty object.
+
+## Response Format
+
+Return a JSON object:
+```json
+{
+  "design_guide": "# Design Guide\\n\\n...",
+  "design_updates": {
+    "primary_color": "#1e3a8a",
+    "heading_font": "Playfair Display"
+  }
+}
+```
+
+Return ONLY the JSON. No markdown code blocks wrapping it, no explanations.
+Keep the design guide practical — every rule should map to specific Tailwind classes or patterns. Aim for 80-150 lines of concise, actionable markdown.
+The design_guide value must have newlines as \\n within the JSON string."""
 
         user_parts = [f"# Site: {site_name}\n"]
 
@@ -885,10 +921,13 @@ Aim for 80-150 lines of concise, actionable markdown."""
         if page_samples:
             user_parts.append(f"\n## Existing Pages (analyze these for patterns)\n{page_samples}")
 
+        if style_instructions:
+            user_parts.append(f"\n## Style Instructions (from the user — this is the most important input)\n{style_instructions}")
+
         if existing_guide:
             user_parts.append(f"\n## Current Design Guide (update and improve this)\n{existing_guide}")
         else:
-            user_parts.append("\n## Task\nGenerate a new design guide from scratch based on the settings, pages, and reference images above.")
+            user_parts.append("\n## Task\nGenerate a new design guide from scratch based on the settings, pages, style instructions, and reference images above.")
 
         if reference_images:
             user_parts.append(f"\n## Reference Images\n{len(reference_images)} design reference image(s) are attached. Analyze their visual style, layout patterns, color usage, typography, and component design. Incorporate these patterns into the design guide.")
@@ -933,20 +972,62 @@ Aim for 80-150 lines of concise, actionable markdown."""
             )
             raise
 
-        design_guide = response.choices[0].message.content
+        raw_content = response.choices[0].message.content
+
+        # Try to parse as JSON (new format with design_updates)
+        design_guide = ''
+        design_updates = {}
 
         # Strip markdown code block wrapping if present
-        if design_guide.startswith('```'):
-            lines = design_guide.split('\n')
+        content = raw_content.strip()
+        if content.startswith('```'):
+            lines = content.split('\n')
             if lines[0].startswith('```'):
                 lines = lines[1:]
             if lines and lines[-1].strip() == '```':
                 lines = lines[:-1]
-            design_guide = '\n'.join(lines)
+            content = '\n'.join(lines)
+
+        try:
+            parsed = json.loads(content)
+            if isinstance(parsed, dict) and 'design_guide' in parsed:
+                design_guide = parsed['design_guide']
+                design_updates = parsed.get('design_updates', {})
+                if not isinstance(design_updates, dict):
+                    design_updates = {}
+            else:
+                # JSON but not the expected format — treat as plain text
+                design_guide = content
+        except (json.JSONDecodeError, ValueError):
+            # Not JSON — treat entire response as the design guide (backward compatible)
+            design_guide = content
+
+        # Validate design_updates: only allow known fields
+        ALLOWED_UPDATE_FIELDS = {
+            'primary_color', 'primary_color_hover', 'secondary_color', 'accent_color',
+            'background_color', 'text_color', 'heading_color',
+            'heading_font', 'body_font',
+            'container_width', 'border_radius_preset', 'spacing_scale', 'shadow_preset',
+            'button_style', 'button_size',
+            'primary_button_bg', 'primary_button_text', 'primary_button_border', 'primary_button_hover',
+            'secondary_button_bg', 'secondary_button_text', 'secondary_button_border', 'secondary_button_hover',
+            'button_border_width',
+        }
+        design_updates = {k: v for k, v in design_updates.items() if k in ALLOWED_UPDATE_FIELDS}
+
+        # Filter out updates that match current values (no change needed)
+        if design_updates:
+            filtered = {}
+            for field, value in design_updates.items():
+                current = getattr(site_settings, field, None)
+                if current is not None and str(current) != str(value):
+                    filtered[field] = value
+            design_updates = filtered
 
         return JsonResponse({
             'success': True,
             'design_guide': design_guide.strip(),
+            'design_updates': design_updates,
         })
 
     except Exception as e:
