@@ -1013,6 +1013,7 @@ document.getElementById('editor-close-btn').addEventListener('click', function()
   }
   var url = new URL(window.location.href);
   url.searchParams.delete('edit');
+  url.searchParams.set('_t', Date.now());
   window.location.href = url.toString();
 });
 

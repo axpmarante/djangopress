@@ -112,6 +112,11 @@
 
   // Handle element selected
   function handleElementSelected(e) {
+    // Flush any pending debounced changes from the previous element
+    // before switching. Without this, edits to element A are lost if
+    // the user clicks element B within the 300ms debounce window.
+    flushAllDebouncers();
+
     currentData = e.detail;
     currentElement = currentData.element;
 
@@ -804,12 +809,18 @@
     return html;
   }
 
-  // Get current language from URL
+  // Get current language from page
   function getCurrentLanguage() {
+    // Primary: read from <html lang="..."> which Django always sets correctly
+    const htmlLang = document.documentElement.lang;
+    if (htmlLang) return htmlLang;
+
+    // Fallback: check URL path
     const path = window.location.pathname;
-    if (path.startsWith('/pt/')) return 'pt';
-    if (path.startsWith('/en/')) return 'en';
-    return 'pt'; // Default
+    const match = path.match(/^\/([a-z]{2})\//);
+    if (match) return match[1];
+
+    return 'pt';
   }
 
   // Show AI status message
@@ -1011,13 +1022,44 @@
     }));
   }
 
-  // Debounce helper
+  // Debounce helper — returns a debounced function with a .flush() method
+  // that fires the pending callback immediately (used when switching elements).
+  let activeDebouncers = [];
+
   function debounce(func, wait) {
     let timeout;
-    return function(...args) {
+    let pendingArgs = null;
+    let pendingThis = null;
+
+    const debounced = function(...args) {
       clearTimeout(timeout);
-      timeout = setTimeout(() => func.apply(this, args), wait);
+      pendingArgs = args;
+      pendingThis = this;
+      timeout = setTimeout(() => {
+        pendingArgs = null;
+        pendingThis = null;
+        func.apply(this, args);
+      }, wait);
     };
+
+    debounced.flush = function() {
+      if (pendingArgs !== null) {
+        clearTimeout(timeout);
+        const args = pendingArgs;
+        const ctx = pendingThis;
+        pendingArgs = null;
+        pendingThis = null;
+        func.apply(ctx, args);
+      }
+    };
+
+    activeDebouncers.push(debounced);
+    return debounced;
+  }
+
+  function flushAllDebouncers() {
+    activeDebouncers.forEach(d => d.flush());
+    activeDebouncers = [];
   }
 
   // Public API

@@ -81,10 +81,8 @@ def update_page_content(request):
             if element:
                 trans_var = '{{ trans.' + field_key + ' }}'
                 element_html = str(element)
-                # Check if element uses the correct template variable already
-                if trans_var not in element_html:
-                    # Replace hardcoded text (or a broken hyphenated var) with
-                    # the correct underscored template variable
+                has_var = trans_var in element_html
+                if not has_var:
                     element.clear()
                     element.append(trans_var)
                     new_html = str(soup)

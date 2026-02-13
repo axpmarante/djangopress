@@ -444,13 +444,16 @@
 
   // Get current language
   function getCurrentLanguage() {
-    // Try to get from URL path
-    const path = window.location.pathname;
-    if (path.startsWith('/en/')) return 'en';
-    if (path.startsWith('/pt/')) return 'pt';
+    // Primary: read from <html lang="..."> which Django always sets correctly
+    const htmlLang = document.documentElement.lang;
+    if (htmlLang) return htmlLang;
 
-    // Default to English
-    return 'en';
+    // Fallback: check URL path
+    const path = window.location.pathname;
+    const match = path.match(/^\/([a-z]{2})\//);
+    if (match) return match[1];
+
+    return 'pt';
   }
 
   // Get current value of an element for undo
