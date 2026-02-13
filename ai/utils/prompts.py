@@ -1070,6 +1070,111 @@ Return ONLY the updated `<section data-section="{section_name}">...</section>` b
         return (system_prompt, user_prompt)
 
     @staticmethod
+    def get_element_refinement_prompt(
+        site_name: str,
+        site_description: str,
+        project_briefing: str,
+        default_language: str,
+        section_html: str,
+        section_name: str,
+        element_id: str,
+        element_html: str,
+        user_request: str,
+        design_guide: str = '',
+        conversation_history: str = '',
+    ) -> tuple:
+        """
+        Generate prompt for element-level refinement.
+        Sends the parent section for design context but asks the LLM to return
+        ONLY the target element.
+
+        Returns:
+            Tuple of (system_prompt, user_prompt)
+        """
+        lang_name = {'pt': 'Portuguese', 'en': 'English', 'es': 'Spanish', 'fr': 'French', 'de': 'German', 'it': 'Italian'}.get(default_language, default_language.upper())
+
+        design_guidelines = ""
+        if design_guide:
+            design_guidelines = "\n\n## Design Guide\nFollow these design patterns and conventions:\n" + design_guide
+
+        system_prompt = f"""You are a senior frontend designer specializing in Tailwind CSS. Your goal is to edit ONE specific element within a webpage section.
+
+## Your Task
+Edit ONLY the element with `data-element-id="{element_id}"` based on the user's instructions. Return ONLY that single element — nothing else.
+{PromptTemplates._get_design_quality_guidelines()}
+## Technical Requirements
+- Use Tailwind CSS classes inline for all styling
+- Make responsive: `md:text-6xl`, `lg:grid-cols-3`, `sm:flex-row`
+- The element MUST keep its `data-element-id="{element_id}"` attribute
+- Preserve `data-element-id` on any editable child elements
+- You may restructure the element's children freely
+- You may change/add/remove classes, attributes, and child elements
+- All text is in {lang_name} — keep it that way, do NOT use template variables
+
+## Images
+- **PRESERVE existing image `src` URLs exactly as they are.** Do NOT replace, remove, or change any existing `src` attribute unless the user explicitly asks to change the image itself.
+- When adding NEW images, use placeholder: `src="https://placehold.co/WIDTHxHEIGHT?text=Label"` with `data-image-prompt="description"` and `data-image-name="slug_name"`
+
+## CRITICAL: Return ONLY the Target Element
+- Output ONLY the single element with `data-element-id="{element_id}"` and its children
+- Do NOT return the parent section or any sibling elements
+- Do NOT include `<html>`, `<head>`, `<body>`, `<section>`, `<header>`, `<nav>`, or `<footer>` tags
+- Do NOT include `<script>` or `<link>` tags
+
+## Important
+- Return ONLY the updated element HTML
+- Do NOT use `{{{{{{ trans.xxx }}}}}}` or any template variables
+- Do NOT wrap the output in JSON
+- No markdown code blocks, no explanations{design_guidelines}
+{PromptTemplates._get_components_reference()}"""
+
+        history_block = ""
+        if conversation_history:
+            history_block = f"""
+# PREVIOUS REFINEMENTS
+
+This element has been refined through a conversation:
+
+{conversation_history}
+
+Do NOT undo any of these previous changes unless specifically asked to.
+
+---
+"""
+
+        user_prompt = f"""# SECTION CONTEXT (for design consistency — do NOT output the full section)
+
+The element lives inside `<section data-section="{section_name}">`. Here is the full section so you can see the surrounding design, colors, spacing, and style:
+
+```html
+{section_html}
+```
+
+---
+
+# ELEMENT TO EDIT
+
+The element with `data-element-id="{element_id}"`:
+
+```html
+{element_html}
+```
+
+---
+{history_block}
+# USER REQUEST
+
+Edit the element with `data-element-id="{element_id}"`:
+
+{user_request}
+
+---
+
+Return ONLY the updated element. Nothing else. All text in {lang_name}. No template variables, no JSON, no code blocks."""
+
+        return (system_prompt, user_prompt)
+
+    @staticmethod
     def get_image_analysis_prompt(
         site_name: str,
         project_briefing: str,

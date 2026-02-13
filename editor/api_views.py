@@ -590,6 +590,216 @@ def save_ai_section(request):
         }, status=500)
 
 
+@superuser_required
+@require_http_methods(["POST"])
+def refine_element(request):
+    """
+    Refine a single element using AI without saving to DB.
+    Returns the element's html_template and content for client-side preview.
+
+    Expected POST data:
+    {
+        "page_id": 1,
+        "section_name": "hero",
+        "element_id": "hero_cta_button",
+        "instructions": "Make it larger with a gradient background",
+        "conversation_history": [{"role": "user", "content": "..."}, ...],
+        "session_id": null,
+        "model": "gemini-flash"
+    }
+    """
+    try:
+        data = json.loads(request.body)
+        page_id = data.get('page_id')
+        section_name = data.get('section_name')
+        element_id = data.get('element_id')
+        instructions = data.get('instructions', '').strip()
+        conversation_history = data.get('conversation_history', [])
+        model = data.get('model', 'gemini-flash')
+        session_id = data.get('session_id')
+
+        if not page_id or not section_name or not element_id:
+            return JsonResponse({
+                'success': False,
+                'error': 'Missing page_id, section_name, or element_id'
+            }, status=400)
+
+        if not instructions:
+            return JsonResponse({
+                'success': False,
+                'error': 'Missing instructions'
+            }, status=400)
+
+        page = Page.objects.get(pk=page_id)
+
+        # Load or create RefinementSession
+        session = None
+        if session_id:
+            try:
+                session = RefinementSession.objects.get(id=session_id, page=page)
+            except RefinementSession.DoesNotExist:
+                session = None
+
+        if not session:
+            session = RefinementSession(
+                page=page,
+                title=f'[{element_id}] {instructions[:60]}',
+                model_used=model,
+                created_by=request.user if request.user.is_authenticated else None,
+            )
+            session.save()
+
+        session.add_user_message(instructions)
+
+        from ai.services import ContentGenerationService
+        service = ContentGenerationService(model_name=model)
+        result = service.refine_element_only(
+            page_id=page_id,
+            section_name=section_name,
+            element_id=element_id,
+            instructions=instructions,
+            conversation_history=conversation_history,
+            model_override=model,
+        )
+
+        assistant_msg = result.get('assistant_message', 'Changes applied.')
+        session.add_assistant_message(assistant_msg, [f'{section_name}/{element_id}'])
+        session.save()
+
+        return JsonResponse({
+            'success': True,
+            'element': {
+                'html_template': result['html_template'],
+                'content': result['content'],
+            },
+            'assistant_message': assistant_msg,
+            'session_id': session.id,
+        })
+
+    except Page.DoesNotExist:
+        return JsonResponse({
+            'success': False,
+            'error': 'Page not found'
+        }, status=400)
+    except json.JSONDecodeError:
+        return JsonResponse({
+            'success': False,
+            'error': 'Invalid JSON'
+        }, status=400)
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+
+
+@superuser_required
+@require_http_methods(["POST"])
+def save_ai_element(request):
+    """
+    Save an AI-refined element to the page in DB.
+    Finds the element by data-element-id and replaces it.
+
+    Expected POST data:
+    {
+        "page_id": 1,
+        "section_name": "hero",
+        "element_id": "hero_cta_button",
+        "html_template": "<a data-element-id='hero_cta_button' ...>...</a>",
+        "content": {"translations": {"pt": {...}, "en": {...}}}
+    }
+    """
+    try:
+        data = json.loads(request.body)
+        page_id = data.get('page_id')
+        section_name = data.get('section_name', '')
+        element_id = data.get('element_id')
+        html_template = data.get('html_template', '')
+        content = data.get('content', {})
+
+        if not page_id or not element_id or not html_template:
+            return JsonResponse({
+                'success': False,
+                'error': 'Missing page_id, element_id, or html_template'
+            }, status=400)
+
+        try:
+            page = Page.objects.get(pk=page_id)
+        except Page.DoesNotExist:
+            return JsonResponse({
+                'success': False,
+                'error': 'Page not found'
+            }, status=400)
+
+        # Create version for rollback
+        page.create_version(
+            user=request.user,
+            change_summary=f'AI refined element: {element_id} in {section_name}'
+        )
+
+        # Parse current page HTML and find the target element (scoped to section if provided)
+        soup = BeautifulSoup(page.html_content, 'html.parser')
+        if section_name:
+            section_el = soup.find('section', attrs={'data-section': section_name})
+            old_element = section_el.find(attrs={'data-element-id': element_id}) if section_el else None
+        else:
+            old_element = None
+        if not old_element:
+            old_element = soup.find(attrs={'data-element-id': element_id})
+
+        if not old_element:
+            return JsonResponse({
+                'success': False,
+                'error': f'Element "{element_id}" not found in page HTML'
+            }, status=400)
+
+        # Parse the new element HTML
+        new_element_soup = BeautifulSoup(html_template, 'html.parser')
+        new_element = new_element_soup.find(attrs={'data-element-id': element_id})
+        if not new_element:
+            children = list(new_element_soup.children)
+            new_element = children[0] if children else new_element_soup
+
+        old_element.replace_with(new_element)
+
+        # Save updated HTML
+        new_html = str(soup)
+        if new_html.startswith('<html><body>'):
+            new_html = new_html[12:-14]
+        page.html_content = new_html
+
+        # Merge translations
+        new_translations = content.get('translations', {})
+        page_content = page.content or {}
+        if 'translations' not in page_content:
+            page_content['translations'] = {}
+
+        for lang_code, lang_trans in new_translations.items():
+            if lang_code not in page_content['translations']:
+                page_content['translations'][lang_code] = {}
+            page_content['translations'][lang_code].update(lang_trans)
+
+        page.content = page_content
+        page.save()
+
+        return JsonResponse({
+            'success': True,
+            'message': f'Element "{element_id}" saved successfully',
+            'page_id': page.id,
+        })
+
+    except json.JSONDecodeError:
+        return JsonResponse({
+            'success': False,
+            'error': 'Invalid JSON'
+        }, status=400)
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+
+
 @staff_member_required
 @require_http_methods(["POST"])
 def update_section_video(request):

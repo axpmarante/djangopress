@@ -28,7 +28,11 @@ function buildItems(el) {
   items.push(null); // separator
   if (section) {
     const name = section.getAttribute('data-section');
-    items.push({ label: `AI Refine Section`, icon: '✦', action: () => events.emit('context:ai-refine', { section: name }) });
+    const elId = el.getAttribute('data-element-id');
+    if (elId && !el.hasAttribute('data-section')) {
+      items.push({ label: 'AI Refine Element', icon: '✦', action: () => events.emit('context:ai-refine', { section: name, elementId: elId }) });
+    }
+    items.push({ label: 'AI Refine Section', icon: '✦', action: () => events.emit('context:ai-refine', { section: name }) });
     items.push(null);
   }
   items.push({ label: 'Copy Element HTML', icon: '⎘', action: () => navigator.clipboard.writeText(el.outerHTML) });

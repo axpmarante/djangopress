@@ -22,4 +22,8 @@ urlpatterns = [
     # AI section refinement endpoints
     path('api/refine-section/', api_views.refine_section, name='api_refine_section'),
     path('api/save-ai-section/', api_views.save_ai_section, name='api_save_ai_section'),
+
+    # AI element refinement endpoints
+    path('api/refine-element/', api_views.refine_element, name='api_refine_element'),
+    path('api/save-ai-element/', api_views.save_ai_element, name='api_save_ai_element'),
 ]

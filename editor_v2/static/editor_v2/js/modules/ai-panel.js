@@ -10,6 +10,8 @@ function esc(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>
 const config = () => window.EDITOR_CONFIG || {};
 let unsubs = [];
 let currentSection = null;
+let currentElementId = null;
+let refinementMode = null; // 'section' or 'element'
 let sessionId = null;
 let messages = [];
 let pendingResult = null;
@@ -22,12 +24,26 @@ export function init() {
     }));
     unsubs.push(events.on('selection:changed', (el) => {
         const sec = el?.closest?.('[data-section]');
-        const name = sec?.getAttribute('data-section') || null;
-        if (name !== currentSection) { currentSection = name; sessionId = null; messages = []; pendingResult = null; }
+        const sectionName = sec?.getAttribute('data-section') || null;
+        const isSection = el?.hasAttribute?.('data-section');
+        const elId = (!isSection && el?.getAttribute?.('data-element-id')) || null;
+
+        const newMode = isSection ? 'section' : (elId ? 'element' : null);
+        const newSection = sectionName;
+        const newElementId = elId;
+
+        if (newMode !== refinementMode || newSection !== currentSection || newElementId !== currentElementId) {
+            sessionId = null; messages = []; pendingResult = null;
+        }
+        currentSection = newSection;
+        currentElementId = newElementId;
+        refinementMode = newMode;
         if (activeTab === 'ai') render();
     }));
     unsubs.push(events.on('context:ai-refine', (data) => {
         currentSection = data?.section || null;
+        currentElementId = data?.elementId || null;
+        refinementMode = data?.elementId ? 'element' : 'section';
         sessionId = null; messages = []; pendingResult = null;
         events.emit('sidebar:switch-tab', 'ai');
     }));
@@ -36,7 +52,7 @@ export function init() {
 export function destroy() {
     unsubs.forEach(u => u());
     unsubs = [];
-    currentSection = null; sessionId = null; messages = []; pendingResult = null; activeTab = null;
+    currentSection = null; currentElementId = null; refinementMode = null; sessionId = null; messages = []; pendingResult = null; activeTab = null;
 }
 
 function render() {
@@ -47,14 +63,18 @@ function render() {
         container.innerHTML = '<p class="ev2-placeholder ev2-empty-state">AI features require superuser access.</p>';
         return;
     }
-    if (!currentSection) {
-        container.innerHTML = '<p class="ev2-placeholder ev2-empty-state">Select a section to use AI refinement.</p>';
+    if (!refinementMode) {
+        container.innerHTML = '<p class="ev2-placeholder ev2-empty-state">Select a section or labeled element to use AI refinement.</p>';
         return;
     }
 
+    const targetLabel = refinementMode === 'element'
+        ? `element: <strong style="color:var(--ev2-text);">${esc(currentElementId)}</strong> <span style="color:var(--ev2-text-faint)">in ${esc(currentSection)}</span>`
+        : `section: <strong style="color:var(--ev2-text);">${esc(currentSection)}</strong>`;
+
     container.innerHTML = `
         <div style="padding:8px 0;font-size:12px;color:var(--ev2-text-faint);">
-            Refining: <strong style="color:var(--ev2-text);">${esc(currentSection)}</strong>
+            Refining ${targetLabel}
         </div>
         <div class="ev2-ai-messages" id="ev2-ai-msgs"></div>
         <div class="ev2-ai-input-row">
@@ -93,7 +113,7 @@ function renderMessages() {
 async function send() {
     const input = $('#ev2-ai-input');
     const text = input?.value?.trim();
-    if (!text || !currentSection) return;
+    if (!text || !refinementMode) return;
     input.value = '';
 
     messages.push({ role: 'user', content: text });
@@ -103,17 +123,29 @@ async function send() {
 
     try {
         const history = messages.slice(0, -1).map(m => ({ role: m.role, content: m.content }));
-        const res = await api.post('/refine-section/', {
-            page_id: config().pageId,
-            section_name: currentSection,
-            instructions: text,
-            conversation_history: history,
-            session_id: sessionId,
-        });
+        let res;
+        if (refinementMode === 'element') {
+            res = await api.post('/refine-element/', {
+                page_id: config().pageId,
+                section_name: currentSection,
+                element_id: currentElementId,
+                instructions: text,
+                conversation_history: history,
+                session_id: sessionId,
+            });
+        } else {
+            res = await api.post('/refine-section/', {
+                page_id: config().pageId,
+                section_name: currentSection,
+                instructions: text,
+                conversation_history: history,
+                session_id: sessionId,
+            });
+        }
         if (res.success) {
             sessionId = res.session_id || sessionId;
             messages.push({ role: 'assistant', content: res.assistant_message || 'Changes ready to apply.' });
-            pendingResult = res.section;
+            pendingResult = res.element || res.section;
         } else {
             messages.push({ role: 'assistant', content: 'Error: ' + (res.error || 'Unknown error') });
         }
@@ -145,14 +177,24 @@ function setLoading(loading) {
 }
 
 async function applyResult() {
-    if (!pendingResult || !currentSection) return;
+    if (!pendingResult || !refinementMode) return;
     try {
-        await api.post('/save-ai-section/', {
-            page_id: config().pageId,
-            section_name: currentSection,
-            html_template: pendingResult.html_template,
-            content: pendingResult.content,
-        });
+        if (refinementMode === 'element') {
+            await api.post('/save-ai-element/', {
+                page_id: config().pageId,
+                section_name: currentSection,
+                element_id: currentElementId,
+                html_template: pendingResult.html_template,
+                content: pendingResult.content,
+            });
+        } else {
+            await api.post('/save-ai-section/', {
+                page_id: config().pageId,
+                section_name: currentSection,
+                html_template: pendingResult.html_template,
+                content: pendingResult.content,
+            });
+        }
         pendingResult = null;
         window.location.reload();
     } catch (err) {

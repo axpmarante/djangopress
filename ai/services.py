@@ -1106,6 +1106,148 @@ Return the complete, corrected JSON now:"""
             'assistant_message': assistant_message,
         }
 
+    def refine_element_only(
+        self,
+        page_id: int,
+        section_name: str,
+        element_id: str,
+        instructions: str,
+        conversation_history: list = None,
+        model_override: str = None
+    ) -> Dict:
+        """
+        Refine a single element within a section without saving to DB.
+        Returns the element's html_template and content (translations).
+        """
+        from core.models import Page, SiteSettings
+        from bs4 import BeautifulSoup
+
+        print(f"\n=== Refining Element Only ===")
+        print(f"Page ID: {page_id}, Section: {section_name}, Element: {element_id}")
+        print(f"Instructions: {instructions}")
+
+        try:
+            page = Page.objects.get(id=page_id)
+        except Page.DoesNotExist:
+            raise ValueError(f"Page with ID {page_id} not found")
+
+        site_settings = SiteSettings.objects.first()
+        default_language = site_settings.get_default_language() if site_settings else 'pt'
+        site_name = site_settings.get_site_name(default_language) if site_settings else 'Website'
+        site_description = site_settings.get_site_description(default_language) if site_settings else ''
+        project_briefing = site_settings.get_project_briefing() if site_settings else ''
+        languages = site_settings.get_language_codes() if site_settings else ['pt', 'en']
+        design_guide = site_settings.design_guide if site_settings else ''
+        model = model_override or self.model_name
+
+        # De-templatize full page HTML, then extract parent section
+        current_html = page.html_content or ''
+        current_translations = (page.content or {}).get('translations', {})
+
+        if current_translations.get(default_language):
+            clean_html = self._detemplatize_html(current_html, current_translations, default_language)
+        else:
+            clean_html = current_html
+
+        # Extract the parent section for context
+        soup = BeautifulSoup(clean_html, 'html.parser')
+        section_el = soup.find('section', attrs={'data-section': section_name})
+        if not section_el:
+            raise ValueError(f"Section '{section_name}' not found in page HTML")
+        section_html = str(section_el)
+
+        # Extract the target element
+        element_el = section_el.find(attrs={'data-element-id': element_id})
+        if not element_el:
+            raise ValueError(f"Element '{element_id}' not found in section '{section_name}'")
+        element_html = str(element_el)
+
+        # Build conversation history string for prompt
+        history_text = ''
+        if conversation_history:
+            for msg in conversation_history:
+                role = msg.get('role', 'user')
+                content = msg.get('content', '')
+                if role == 'user':
+                    history_text += f"\nUser: {content}"
+                elif role == 'assistant':
+                    history_text += f"\nAssistant: {content}"
+
+        # Step 1: Refine element HTML
+        print(f"\n--- Step 1: Refine element '{element_id}' in {default_language.upper()} ---")
+
+        system_prompt, user_prompt = PromptTemplates.get_element_refinement_prompt(
+            site_name=site_name,
+            site_description=site_description,
+            project_briefing=project_briefing,
+            default_language=default_language,
+            section_html=section_html,
+            section_name=section_name,
+            element_id=element_id,
+            element_html=element_html,
+            user_request=instructions,
+            design_guide=design_guide,
+            conversation_history=history_text,
+        )
+
+        messages = [
+            {'role': 'system', 'content': system_prompt},
+            {'role': 'user', 'content': user_prompt}
+        ]
+
+        actual_model, provider_str = self._get_model_info(model)
+        t0 = time.time()
+        try:
+            response = self.llm.get_completion(messages, tool_name=model)
+            usage = self._extract_usage(response)
+            log_ai_call(
+                action='refine_element', model_name=actual_model, provider=provider_str,
+                system_prompt=system_prompt, user_prompt=user_prompt,
+                response_text=response.choices[0].message.content,
+                duration_ms=int((time.time() - t0) * 1000),
+                page=page, section_name=f'{section_name}/{element_id}', **usage,
+            )
+        except Exception as e:
+            log_ai_call(
+                action='refine_element', model_name=actual_model, provider=provider_str,
+                system_prompt=system_prompt, user_prompt=user_prompt,
+                duration_ms=int((time.time() - t0) * 1000),
+                page=page, section_name=f'{section_name}/{element_id}',
+                success=False, error_message=str(e),
+            )
+            raise
+
+        refined_html = self._extract_html_from_response(response.choices[0].message.content)
+
+        if not refined_html or len(refined_html.strip()) < 10:
+            raise ValueError("Step 1 returned empty or too-short HTML")
+
+        print(f"Step 1 produced {len(refined_html)} chars of refined element HTML")
+
+        # Verify the response contains the target element
+        result_soup = BeautifulSoup(refined_html, 'html.parser')
+        target_el = result_soup.find(attrs={'data-element-id': element_id})
+
+        if target_el:
+            element_result_html = str(target_el)
+        else:
+            # LLM returned the element without the wrapper or changed structure
+            print(f"WARNING: data-element-id='{element_id}' not found in response, using full response")
+            element_result_html = refined_html
+
+        print(f"Element '{element_id}': {len(element_result_html)} chars")
+
+        # Step 2: Templatize + translate just the element
+        element_data = self._templatize_and_translate(element_result_html, languages, default_language, model)
+
+        assistant_message = f"I've updated the {element_id} element based on your instructions."
+
+        return {
+            'html_template': element_data['html_content'],
+            'content': element_data['content'],
+            'assistant_message': assistant_message,
+        }
+
     def process_page_images(
         self,
         page_id: int,
