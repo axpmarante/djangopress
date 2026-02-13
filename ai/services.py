@@ -209,8 +209,34 @@ Return the complete, corrected JSON now:"""
         # Always use gemini-flash for templatization — fast and reliable for text extraction/translation
         model = 'gemini-flash'
 
+        # Protect Django template tags from being corrupted by the LLM.
+        # Step 1 may generate HTML with {% csrf_token %}, {% url ... %}, {{ SITE_NAME }}, etc.
+        # These must be preserved exactly — the LLM should never see or extract them.
+        protected_tags = {}
+        protected_html = html
+
+        # Normalize double-brace template tags that LLMs sometimes generate.
+        # LLMs may output {{% csrf_token %}} or {{{{ trans.xxx }}}} (double-escaped)
+        # because they mimic f-string escaping from the prompt source code.
+        protected_html = re.sub(r'\{\{(%.*?%)\}\}', r'{\1}', protected_html)
+        protected_html = re.sub(r'\{\{\{\{(.*?)\}\}\}\}', r'{{\1}}', protected_html)
+
+        def protect_tag(match):
+            # Use HTML comment format — the LLM prompt explicitly says to skip HTML comments
+            placeholder = f'<!-- PROTECTED_DJANGO_TAG_{len(protected_tags)} -->'
+            protected_tags[placeholder] = match.group(0)
+            return placeholder
+
+        # Protect {% ... %} tags (csrf_token, url, if, for, load, etc.)
+        protected_html = re.sub(r'\{%.*?%\}', protect_tag, protected_html, flags=re.DOTALL)
+        # Protect {{ ... }} context variables (SITE_NAME, LOGO.url, etc.) already in the HTML
+        protected_html = re.sub(r'\{\{.*?\}\}', protect_tag, protected_html, flags=re.DOTALL)
+
+        if protected_tags:
+            print(f"Protected {len(protected_tags)} Django template tags from templatization")
+
         system_prompt, user_prompt = PromptTemplates.get_templatize_and_translate_prompt(
-            html=html,
+            html=protected_html,
             languages=languages,
             default_language=default_language
         )
@@ -272,7 +298,7 @@ Return the complete, corrected JSON now:"""
 
         # Build translations dict and do HTML replacements
         translations = {lang: {} for lang in languages}
-        templatized_html = html
+        templatized_html = protected_html
 
         # Sort by length of original text (longest first) to avoid partial replacements
         mappings.sort(key=lambda m: len(m.get('original', '')), reverse=True)
@@ -284,6 +310,11 @@ Return the complete, corrected JSON now:"""
             trans = mapping.get('translations', {})
 
             if not var_name or not original_text:
+                continue
+
+            # Skip if the original text is or contains a protected placeholder
+            if 'PROTECTED_DJANGO_TAG' in original_text:
+                print(f"  Skipping mapping '{var_name}' — original text contains a protected placeholder")
                 continue
 
             # Sanitize variable name: Django template variables must be valid
@@ -319,6 +350,18 @@ Return the complete, corrected JSON now:"""
                     print(f"  - {lang.upper()}: {', '.join(vars_list)}")
 
         print(f"Templatized HTML with {len(trans_vars)} translation variables")
+
+        # Restore protected Django template tags
+        if protected_tags:
+            restored_count = 0
+            for placeholder, original_tag in protected_tags.items():
+                if placeholder in templatized_html:
+                    templatized_html = templatized_html.replace(placeholder, original_tag)
+                    restored_count += 1
+                else:
+                    print(f"WARNING: Placeholder {placeholder} was consumed during templatization — re-inserting is not possible")
+                    print(f"  Original tag was: {original_tag}")
+            print(f"Restored {restored_count}/{len(protected_tags)} protected Django template tags")
 
         # Validate template syntax before returning
         from django.template import Template, TemplateSyntaxError

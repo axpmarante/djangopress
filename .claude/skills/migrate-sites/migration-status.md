@@ -1,6 +1,6 @@
 # Migration Status
 
-Last updated: 2025-02-12
+Last updated: 2026-02-12
 
 ## Legend
 - [ ] = Not started
@@ -19,7 +19,7 @@ Last updated: 2025-02-12
 |------|--------|----------|----------|-----------|----------|-------|
 | centianesboattrip.com | centianes-boattrip | [x] | [x] | [x] | [x] | Railway: web-production URL |
 | prestigerealestate.pt | prestige-realestate-algarve | [x] | [x] | [x] | [x] | Railway: web-production-3fb27 |
-| windmillrestaurant.pt | windmill-restaurant | [x] | [x] | [x] | [ ] | Local project exists |
+| windmillrestaurant.pt | windmill-restaurant | [x] | [x] | [ ] | [ ] | Test migration — new briefing created, regenerating |
 | algarvelodging.com | algarve-lodging | [x] | [x] | [x] | [ ] | Local project exists |
 
 ---
