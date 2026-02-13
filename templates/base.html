@@ -26,7 +26,9 @@
 
     <!-- Custom site styles -->
     <link href="{% static 'css/lightbox.css' %}" rel="stylesheet">
-    {% if edit_mode %}
+    {% if edit_mode == 'v2' %}
+    <link href="{% static 'editor_v2/css/editor.css' %}?v=5" rel="stylesheet">
+    {% elif edit_mode %}
     <link href="{% static 'css/inline-editor.css' %}?v=5" rel="stylesheet">
     {% endif %}
     <style>[x-cloak] { display: none !important; }</style>
@@ -65,11 +67,14 @@
     </script>
     {% endif %}
 </head>
-<body class="bg-white" {% if edit_mode %}data-edit-mode="true"{% endif %}>
-    {% if edit_mode %}
+<body class="bg-white" {% if edit_mode %}data-edit-mode="{% if edit_mode == 'v2' %}v2{% else %}true{% endif %}"{% endif %}>
+    {% if edit_mode == 'v2' %}
+    <!-- Editor v2 -->
+    {% include 'editor_v2/partials/editor.html' %}
+    <div class="editor-v2-content">
+    {% elif edit_mode %}
     <!-- Simple Editor Sidebar (left side) -->
     {% include 'editor/partials/simple_sidebar.html' %}
-
     <!-- Content wrapper (right side) -->
     <div class="editor-content-wrapper">
     {% endif %}
@@ -95,7 +100,9 @@
     {% load_global_section 'main-footer' fallback_template='partials/footer.html' %}
     {% include 'partials/admin_toolbar.html' %}
 
-    {% if edit_mode %}
+    {% if edit_mode == 'v2' %}
+    </div> <!-- Close editor-v2-content -->
+    {% elif edit_mode %}
     </div> <!-- Close editor-content-wrapper -->
     {% include 'editor/partials/image_modal.html' %}
     {% endif %}
@@ -111,15 +118,28 @@
     </script>
 
     <script src="{% static 'js/lightbox.js' %}"></script>
-    {% if edit_mode %}
-    <!-- Simple Editor System -->
+    {% if edit_mode == 'v2' %}
+    <!-- Editor v2 (ES modules) -->
+    <script>
+      window.EDITOR_CONFIG = {
+        pageId: {{ page_obj.id|default:"0" }},
+        language: '{{ LANGUAGE_CODE }}',
+        languages: [{% for code, name in SITE_LANGUAGES %}'{{ code }}'{% if not forloop.last %}, {% endif %}{% endfor %}],
+        languageNames: { {% for code, name in SITE_LANGUAGES %}'{{ code }}': '{{ name }}'{% if not forloop.last %}, {% endif %}{% endfor %} },
+        aiEnabled: {{ user.is_superuser|yesno:"true,false" }},
+        csrfToken: '{{ csrf_token }}',
+        apiBase: '/editor-v2/api',
+      };
+    </script>
+    <script type="module" src="{% static 'editor_v2/js/editor.js' %}?v=8"></script>
+    {% elif edit_mode %}
+    <!-- Simple Editor System (v1) -->
     <script>window.EDITOR_AI_ENABLED = {{ user.is_superuser|yesno:"true,false" }};</script>
     <script src="{% static 'editor/js/simple-selector.js' %}?v=25"></script>
     <script src="{% static 'editor/js/simple-sidebar.js' %}?v=25"></script>
     <script src="{% static 'editor/js/simple-tracker.js' %}?v=25"></script>
     <script src="{% static 'editor/js/image-modal.js' %}?v=25"></script>
     <script>
-      // Initialize simple editor when page loads
       document.addEventListener('DOMContentLoaded', function() {
         SimpleSelector.enable();
         console.log('🎨 Simple Editor active - click any element to edit');

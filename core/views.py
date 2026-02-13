@@ -83,10 +83,12 @@ class PageView(TemplateView):
         else:
             context['page_content'] = ''
 
-        # Enable edit mode for staff users with ?edit=true
-        context['edit_mode'] = (
-            self.request.user.is_staff and self.request.GET.get('edit') == 'true'
-        )
+        # Enable edit mode for staff users with ?edit=true or ?edit=v2
+        edit_param = self.request.GET.get('edit')
+        if self.request.user.is_staff and edit_param in ('true', 'v2'):
+            context['edit_mode'] = edit_param if edit_param == 'v2' else True
+        else:
+            context['edit_mode'] = False
 
         # SEO context
         context['seo_title'] = page_obj.get_meta_title(language)

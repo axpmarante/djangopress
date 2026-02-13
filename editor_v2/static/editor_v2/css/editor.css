@@ -1,0 +1,1338 @@
+/* ==========================================================================
+   Editor V2 — Complete CSS
+   All class names prefixed with `ev2-` to avoid conflicts with Tailwind/page styles.
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   CSS Custom Properties
+   -------------------------------------------------------------------------- */
+:root {
+  --ev2-primary: #2563eb;
+  --ev2-primary-hover: #1d4ed8;
+  --ev2-primary-light: #eff6ff;
+  --ev2-primary-alpha: rgba(37, 99, 235, 0.2);
+  --ev2-bg: #ffffff;
+  --ev2-bg-subtle: #f1f5f9;
+  --ev2-bg-hover: #f8fafc;
+  --ev2-border: #e2e8f0;
+  --ev2-border-light: #f1f5f9;
+  --ev2-border-dark: #cbd5e1;
+  --ev2-text: #1e293b;
+  --ev2-text-secondary: #374151;
+  --ev2-text-muted: #64748b;
+  --ev2-text-faint: #94a3b8;
+  --ev2-sidebar-width: 380px;
+  --ev2-topbar-height: 44px;
+  --ev2-radius: 6px;
+  --ev2-radius-lg: 8px;
+  --ev2-radius-xl: 12px;
+  --ev2-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --ev2-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.15);
+  --ev2-shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.25);
+  --ev2-shadow-xl: 0 16px 48px rgba(0, 0, 0, 0.2);
+  --ev2-transition: all 0.15s ease;
+  --ev2-font: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+    'Helvetica Neue', Arial, sans-serif;
+  --ev2-font-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas,
+    'Liberation Mono', monospace;
+}
+
+/* --------------------------------------------------------------------------
+   Layout — Edit Mode Body
+   -------------------------------------------------------------------------- */
+body[data-edit-mode="v2"] {
+  min-height: 100vh;
+  margin: 0;
+  padding: 0 !important; /* Override admin toolbar's body padding-bottom */
+}
+
+/* --------------------------------------------------------------------------
+   Content Wrapper
+   -------------------------------------------------------------------------- */
+.editor-v2-content {
+  margin-left: var(--ev2-sidebar-width);
+  width: calc(100% - var(--ev2-sidebar-width));
+  min-height: 100vh;
+  padding-top: var(--ev2-topbar-height);
+}
+
+/* --------------------------------------------------------------------------
+   Top Bar
+   -------------------------------------------------------------------------- */
+.ev2-topbar {
+  position: fixed;
+  top: 0;
+  left: var(--ev2-sidebar-width);
+  right: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  height: var(--ev2-topbar-height);
+  background: var(--ev2-bg);
+  border-bottom: 1px solid var(--ev2-border);
+  z-index: 9998;
+}
+
+.ev2-breadcrumbs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  color: var(--ev2-text-muted);
+}
+
+.ev2-breadcrumb-item {
+  cursor: pointer;
+  transition: var(--ev2-transition);
+}
+
+.ev2-breadcrumb-item:hover {
+  color: var(--ev2-primary);
+}
+
+.ev2-breadcrumb-sep {
+  color: var(--ev2-border-dark);
+}
+
+.ev2-breadcrumb-sep::after {
+  content: "\203A"; /* › */
+}
+
+.ev2-topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ev2-icon-btn {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--ev2-radius);
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  color: #475569;
+  transition: var(--ev2-transition);
+}
+
+.ev2-icon-btn:hover {
+  background: var(--ev2-bg-subtle);
+}
+
+.ev2-icon-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.ev2-save-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--ev2-primary);
+  color: #ffffff;
+  padding: 6px 16px;
+  border-radius: var(--ev2-radius);
+  border: none;
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+  transition: var(--ev2-transition);
+}
+
+.ev2-save-btn:hover {
+  background: var(--ev2-primary-hover);
+}
+
+.ev2-save-badge {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 9999px;
+  padding: 1px 8px;
+  font-size: 11px;
+}
+
+/* --------------------------------------------------------------------------
+   Sidebar
+   -------------------------------------------------------------------------- */
+.ev2-sidebar {
+  width: var(--ev2-sidebar-width);
+  height: 100vh;
+  position: fixed;
+  left: 0;
+  top: 0;
+  background: var(--ev2-bg);
+  border-right: 1px solid var(--ev2-border);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  z-index: 9999;
+  font-family: var(--ev2-font);
+  box-sizing: border-box;
+}
+
+.ev2-sidebar-header {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--ev2-border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+/* --------------------------------------------------------------------------
+   Language Bar
+   -------------------------------------------------------------------------- */
+.ev2-language-bar {
+  display: flex;
+  gap: 4px;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--ev2-border-light);
+}
+
+.ev2-lang-btn {
+  padding: 4px 12px;
+  border-radius: var(--ev2-radius);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid var(--ev2-border);
+  background: var(--ev2-bg);
+  color: var(--ev2-text-secondary);
+  transition: var(--ev2-transition);
+}
+
+.ev2-lang-btn:hover {
+  background: var(--ev2-bg-subtle);
+}
+
+.ev2-lang-btn.active {
+  background: var(--ev2-primary);
+  color: #ffffff;
+  border-color: var(--ev2-primary);
+}
+
+/* --------------------------------------------------------------------------
+   Tabs
+   -------------------------------------------------------------------------- */
+.ev2-tabs {
+  display: flex;
+  border-bottom: 1px solid var(--ev2-border);
+}
+
+.ev2-tab {
+  flex: 1;
+  padding: 10px 8px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--ev2-text-muted);
+  text-align: center;
+  transition: var(--ev2-transition);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+
+.ev2-tab:hover {
+  color: var(--ev2-text-secondary);
+}
+
+.ev2-tab.active {
+  color: var(--ev2-primary);
+  border-bottom-color: var(--ev2-primary);
+}
+
+/* --------------------------------------------------------------------------
+   Tab Content
+   -------------------------------------------------------------------------- */
+.ev2-tab-content {
+  flex: 1;
+  min-height: 0; /* Allow flex child to shrink and scroll */
+  overflow-y: auto;
+  padding: 16px;
+}
+
+/* Scrollbar styling */
+.ev2-tab-content::-webkit-scrollbar {
+  width: 6px;
+}
+
+.ev2-tab-content::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.ev2-tab-content::-webkit-scrollbar-thumb {
+  background: var(--ev2-border-dark);
+  border-radius: 3px;
+}
+
+.ev2-tab-content::-webkit-scrollbar-thumb:hover {
+  background: var(--ev2-text-faint);
+}
+
+/* --------------------------------------------------------------------------
+   Sidebar Footer
+   -------------------------------------------------------------------------- */
+.ev2-sidebar-footer {
+  padding: 12px 16px;
+  border-top: 1px solid var(--ev2-border);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* --------------------------------------------------------------------------
+   Buttons
+   -------------------------------------------------------------------------- */
+.ev2-btn-primary {
+  background: var(--ev2-primary);
+  color: #ffffff;
+  padding: 8px 20px;
+  border-radius: var(--ev2-radius);
+  font-size: 13px;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  transition: var(--ev2-transition);
+}
+
+.ev2-btn-primary:hover {
+  background: var(--ev2-primary-hover);
+}
+
+.ev2-btn-secondary {
+  background: var(--ev2-bg-subtle);
+  color: #475569;
+  padding: 8px 20px;
+  border-radius: var(--ev2-radius);
+  font-size: 13px;
+  font-weight: 500;
+  border: 1px solid var(--ev2-border);
+  cursor: pointer;
+  transition: var(--ev2-transition);
+}
+
+.ev2-btn-secondary:hover {
+  background: var(--ev2-border);
+}
+
+.ev2-status {
+  font-size: 12px;
+  color: var(--ev2-text-faint);
+  margin-left: auto;
+}
+
+/* --------------------------------------------------------------------------
+   Selection Highlighting (on the page content)
+   -------------------------------------------------------------------------- */
+.ev2-hover-outline {
+  outline: 2px dashed #93c5fd;
+  outline-offset: 2px;
+}
+
+.ev2-selected {
+  outline: 2px solid var(--ev2-primary);
+  outline-offset: 2px;
+}
+
+.ev2-element-label {
+  position: absolute;
+  top: -22px;
+  left: -2px;
+  background: var(--ev2-primary);
+  color: #ffffff;
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 4px 4px 0 0;
+  font-family: var(--ev2-font-mono);
+  pointer-events: none;
+  z-index: 9990;
+  white-space: nowrap;
+}
+
+/* --------------------------------------------------------------------------
+   Floating Toolbar
+   -------------------------------------------------------------------------- */
+.ev2-floating-toolbar {
+  position: fixed;
+  z-index: 10000;
+  background: var(--ev2-bg);
+  border-radius: var(--ev2-radius-lg);
+  box-shadow: var(--ev2-shadow-md);
+  padding: 4px;
+  display: flex;
+  gap: 2px;
+}
+
+.ev2-floating-toolbar.hidden {
+  display: none;
+}
+
+.ev2-toolbar-btn {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--ev2-radius);
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  color: var(--ev2-text-secondary);
+  transition: var(--ev2-transition);
+}
+
+.ev2-toolbar-btn:hover {
+  background: var(--ev2-bg-subtle);
+}
+
+.ev2-toolbar-btn.active {
+  background: var(--ev2-primary-light);
+  color: var(--ev2-primary);
+}
+
+.ev2-toolbar-sep {
+  width: 1px;
+  height: 20px;
+  background: var(--ev2-border);
+  margin: 0 2px;
+  align-self: center;
+}
+
+/* --------------------------------------------------------------------------
+   Context Menu
+   -------------------------------------------------------------------------- */
+.ev2-context-menu {
+  position: fixed;
+  z-index: 10001;
+  background: #1e293b;
+  border-radius: var(--ev2-radius-lg);
+  padding: 4px;
+  min-width: 200px;
+  box-shadow: var(--ev2-shadow-lg);
+}
+
+.ev2-context-menu.hidden {
+  display: none;
+}
+
+.ev2-context-item {
+  padding: 8px 12px;
+  font-size: 13px;
+  color: #e2e8f0;
+  cursor: pointer;
+  border-radius: var(--ev2-radius);
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: var(--ev2-transition);
+}
+
+.ev2-context-item:hover {
+  background: #334155;
+}
+
+.ev2-context-sep {
+  height: 1px;
+  background: #334155;
+  margin: 4px 0;
+}
+
+/* --------------------------------------------------------------------------
+   Command Palette
+   -------------------------------------------------------------------------- */
+.ev2-command-palette {
+  position: fixed;
+  inset: 0;
+  z-index: 10002;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 20vh;
+}
+
+.ev2-command-palette.hidden {
+  display: none;
+}
+
+.ev2-command-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+}
+
+.ev2-command-dialog {
+  position: relative;
+  background: var(--ev2-bg);
+  border-radius: var(--ev2-radius-xl);
+  width: 560px;
+  max-height: 400px;
+  overflow: hidden;
+  box-shadow: var(--ev2-shadow-xl);
+  display: flex;
+  flex-direction: column;
+}
+
+.ev2-command-input {
+  width: 100%;
+  padding: 16px 20px;
+  font-size: 16px;
+  border: none;
+  border-bottom: 1px solid var(--ev2-border);
+  outline: none;
+  background: var(--ev2-bg);
+  color: var(--ev2-text);
+  font-family: var(--ev2-font);
+}
+
+.ev2-command-input::placeholder {
+  color: var(--ev2-text-faint);
+}
+
+.ev2-command-results {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
+}
+
+.ev2-command-result {
+  padding: 10px 16px;
+  font-size: 14px;
+  cursor: pointer;
+  border-radius: var(--ev2-radius-lg);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: var(--ev2-text);
+  transition: var(--ev2-transition);
+}
+
+.ev2-command-result:hover {
+  background: var(--ev2-bg-subtle);
+}
+
+.ev2-command-result.selected {
+  background: var(--ev2-primary-light);
+  color: var(--ev2-primary);
+}
+
+.ev2-command-result-hint {
+  font-size: 12px;
+  color: var(--ev2-text-faint);
+}
+
+/* --------------------------------------------------------------------------
+   Form Elements (Sidebar Tabs)
+   -------------------------------------------------------------------------- */
+.ev2-field {
+  margin-bottom: 16px;
+}
+
+.ev2-label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ev2-text-secondary);
+  margin-bottom: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.ev2-input {
+  width: 100%;
+  padding: 8px 12px;
+  font-size: 13px;
+  border: 1px solid #d1d5db;
+  border-radius: var(--ev2-radius);
+  outline: none;
+  background: var(--ev2-bg);
+  color: var(--ev2-text);
+  font-family: var(--ev2-font);
+  transition: var(--ev2-transition);
+  box-sizing: border-box;
+}
+
+.ev2-input:focus {
+  border-color: var(--ev2-primary);
+  box-shadow: 0 0 0 2px var(--ev2-primary-alpha);
+}
+
+.ev2-textarea {
+  width: 100%;
+  padding: 8px 12px;
+  font-size: 13px;
+  border: 1px solid #d1d5db;
+  border-radius: var(--ev2-radius);
+  outline: none;
+  background: var(--ev2-bg);
+  color: var(--ev2-text);
+  font-family: var(--ev2-font);
+  min-height: 80px;
+  resize: vertical;
+  transition: var(--ev2-transition);
+  box-sizing: border-box;
+}
+
+.ev2-textarea:focus {
+  border-color: var(--ev2-primary);
+  box-shadow: 0 0 0 2px var(--ev2-primary-alpha);
+}
+
+.ev2-hint {
+  font-size: 11px;
+  color: var(--ev2-text-faint);
+  margin-top: 4px;
+}
+
+.ev2-element-info {
+  font-size: 13px;
+  color: #475569;
+  padding: 8px 0;
+}
+
+.ev2-empty-state {
+  text-align: center;
+  padding: 40px 20px;
+  color: var(--ev2-text-faint);
+  font-size: 14px;
+}
+
+/* --------------------------------------------------------------------------
+   AI Chat (Sidebar)
+   -------------------------------------------------------------------------- */
+.ev2-ai-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ev2-ai-message {
+  padding: 10px 14px;
+  border-radius: var(--ev2-radius-lg);
+  font-size: 13px;
+  line-height: 1.5;
+  max-width: 95%;
+}
+
+.ev2-ai-message.user {
+  background: var(--ev2-primary);
+  color: #ffffff;
+  align-self: flex-end;
+  border-bottom-right-radius: 4px;
+}
+
+.ev2-ai-message.assistant {
+  background: var(--ev2-bg-subtle);
+  color: var(--ev2-text);
+  align-self: flex-start;
+  border-bottom-left-radius: 4px;
+}
+
+.ev2-ai-input-row {
+  display: flex;
+  gap: 8px;
+  padding-top: 8px;
+}
+
+.ev2-ai-input {
+  flex: 1;
+  padding: 8px 12px;
+  font-size: 13px;
+  border: 1px solid #d1d5db;
+  border-radius: var(--ev2-radius);
+  outline: none;
+  background: var(--ev2-bg);
+  color: var(--ev2-text);
+  font-family: var(--ev2-font);
+  transition: var(--ev2-transition);
+}
+
+.ev2-ai-input:focus {
+  border-color: var(--ev2-primary);
+  box-shadow: 0 0 0 2px var(--ev2-primary-alpha);
+}
+
+.ev2-ai-send {
+  padding: 8px 16px;
+  background: var(--ev2-primary);
+  color: #ffffff;
+  border: none;
+  border-radius: var(--ev2-radius);
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+  transition: var(--ev2-transition);
+}
+
+.ev2-ai-send:hover {
+  background: var(--ev2-primary-hover);
+}
+
+/* --------------------------------------------------------------------------
+   Structure Tab (DOM Tree)
+   -------------------------------------------------------------------------- */
+.ev2-tree {
+  font-size: 13px;
+  font-family: var(--ev2-font-mono);
+}
+
+.ev2-tree-item {
+  padding: 4px 8px;
+  cursor: pointer;
+  border-radius: var(--ev2-radius);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: var(--ev2-transition);
+}
+
+.ev2-tree-item:hover {
+  background: var(--ev2-bg-subtle);
+}
+
+.ev2-tree-item.current {
+  background: var(--ev2-primary-light);
+  color: var(--ev2-primary);
+  font-weight: 600;
+}
+
+.ev2-tree-indent {
+  width: 16px;
+  flex-shrink: 0;
+  border-left: 1px solid var(--ev2-border);
+}
+
+/* --------------------------------------------------------------------------
+   Image Picker (Sidebar)
+   -------------------------------------------------------------------------- */
+.ev2-image-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  margin-top: 12px;
+}
+
+.ev2-image-thumb {
+  aspect-ratio: 1;
+  border-radius: var(--ev2-radius);
+  object-fit: cover;
+  width: 100%;
+  cursor: pointer;
+  border: 2px solid transparent;
+  transition: var(--ev2-transition);
+}
+
+.ev2-image-thumb:hover {
+  border-color: var(--ev2-primary);
+  opacity: 0.85;
+}
+
+.ev2-image-search {
+  width: 100%;
+  padding: 6px 10px;
+  font-size: 12px;
+  border: 1px solid var(--ev2-border);
+  border-radius: var(--ev2-radius);
+  outline: none;
+  background: var(--ev2-bg);
+  color: var(--ev2-text);
+  font-family: var(--ev2-font);
+  margin-bottom: 8px;
+  box-sizing: border-box;
+}
+
+.ev2-image-search:focus {
+  border-color: var(--ev2-primary);
+}
+
+.ev2-browse-btn {
+  display: block;
+  width: 100%;
+  padding: 8px;
+  margin-top: 8px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ev2-primary);
+  background: var(--ev2-primary-light);
+  border: 1px solid var(--ev2-primary-alpha);
+  border-radius: var(--ev2-radius);
+  cursor: pointer;
+  text-align: center;
+  transition: var(--ev2-transition);
+}
+
+.ev2-browse-btn:hover {
+  background: var(--ev2-primary-alpha);
+}
+
+/* --------------------------------------------------------------------------
+   Buttons — disabled state
+   -------------------------------------------------------------------------- */
+.ev2-btn-primary:disabled,
+.ev2-btn-secondary:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.ev2-topbar-btn {
+  padding: 6px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  color: var(--ev2-text-muted);
+  border-radius: var(--ev2-radius);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  transition: var(--ev2-transition);
+}
+
+.ev2-topbar-btn:hover {
+  background: var(--ev2-bg-subtle);
+  color: var(--ev2-text);
+}
+
+.ev2-topbar-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.ev2-topbar-save-btn {
+  background: var(--ev2-primary);
+  color: white;
+  padding: 6px 14px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.ev2-topbar-save-btn:hover {
+  background: var(--ev2-primary-hover);
+}
+
+.ev2-topbar-save-btn:disabled {
+  background: var(--ev2-bg-subtle);
+  color: var(--ev2-text-faint);
+}
+
+.ev2-change-count {
+  background: rgba(255,255,255,0.25);
+  border-radius: 9999px;
+  padding: 1px 7px;
+  font-size: 11px;
+}
+
+.ev2-topbar-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  overflow: hidden;
+}
+
+.ev2-topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* --------------------------------------------------------------------------
+   Inline editing — contenteditable highlight
+   -------------------------------------------------------------------------- */
+[contenteditable="true"] {
+  outline: 2px solid #f59e0b !important;
+  outline-offset: 2px;
+  min-height: 1em;
+}
+
+/* --------------------------------------------------------------------------
+   Admin Toolbar Override (v2 edit mode)
+   -------------------------------------------------------------------------- */
+body[data-edit-mode="v2"] #admin-toolbar {
+  left: var(--ev2-sidebar-width);
+}
+
+/* --------------------------------------------------------------------------
+   Animations
+   -------------------------------------------------------------------------- */
+.ev2-fade-in {
+  animation: ev2-fadeIn 0.15s ease;
+}
+
+@keyframes ev2-fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Image Preview (Sidebar Content Tab)
+   -------------------------------------------------------------------------- */
+.ev2-img-preview-wrap {
+  margin-bottom: 12px;
+  border-radius: var(--ev2-radius-lg);
+  overflow: hidden;
+  border: 1px solid var(--ev2-border);
+  background: var(--ev2-bg-subtle);
+}
+
+.ev2-img-preview {
+  display: block;
+  width: 100%;
+  max-height: 200px;
+  object-fit: contain;
+}
+
+.ev2-btn-change-img {
+  display: block;
+  width: 100%;
+  padding: 8px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ev2-primary);
+  background: var(--ev2-primary-light);
+  border: 1px solid var(--ev2-primary-alpha);
+  border-radius: var(--ev2-radius);
+  cursor: pointer;
+  text-align: center;
+  transition: var(--ev2-transition);
+  font-family: var(--ev2-font);
+}
+
+.ev2-btn-change-img:hover {
+  background: var(--ev2-primary-alpha);
+}
+
+.ev2-input-mono {
+  font-family: var(--ev2-font-mono);
+  font-size: 12px;
+}
+
+/* --------------------------------------------------------------------------
+   Image Modal
+   -------------------------------------------------------------------------- */
+.ev2-image-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 10003;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--ev2-font);
+}
+
+.ev2-image-modal.hidden {
+  display: none;
+}
+
+.ev2-image-modal-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+}
+
+.ev2-image-modal-dialog {
+  position: relative;
+  background: var(--ev2-bg);
+  border-radius: var(--ev2-radius-xl);
+  width: 720px;
+  max-width: 90vw;
+  max-height: 85vh;
+  box-shadow: var(--ev2-shadow-xl);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Modal Header */
+.ev2-image-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--ev2-border);
+}
+
+.ev2-image-modal-header h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--ev2-text);
+}
+
+.ev2-image-modal-close {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  color: var(--ev2-text-muted);
+  border-radius: var(--ev2-radius);
+  transition: var(--ev2-transition);
+}
+
+.ev2-image-modal-close:hover {
+  background: var(--ev2-bg-subtle);
+  color: var(--ev2-text);
+}
+
+/* Modal Tabs */
+.ev2-image-modal-tabs {
+  display: flex;
+  padding: 0 20px;
+  border-bottom: 1px solid var(--ev2-border);
+}
+
+.ev2-image-modal-tab {
+  padding: 10px 20px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--ev2-text-muted);
+  transition: var(--ev2-transition);
+  font-family: var(--ev2-font);
+}
+
+.ev2-image-modal-tab:hover {
+  color: var(--ev2-text-secondary);
+}
+
+.ev2-image-modal-tab.active {
+  color: var(--ev2-primary);
+  border-bottom-color: var(--ev2-primary);
+}
+
+/* Modal Body */
+.ev2-image-modal-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px 20px;
+  min-height: 0;
+}
+
+/* Image Grid */
+.ev2-image-modal-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.ev2-image-modal-item {
+  position: relative;
+  aspect-ratio: 1;
+  border-radius: var(--ev2-radius-lg);
+  overflow: hidden;
+  cursor: pointer;
+  border: 2px solid transparent;
+  transition: var(--ev2-transition);
+  background: var(--ev2-bg-subtle);
+}
+
+.ev2-image-modal-item img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.ev2-image-modal-item:hover {
+  border-color: var(--ev2-primary-alpha);
+  box-shadow: var(--ev2-shadow-sm);
+}
+
+.ev2-image-modal-item.selected {
+  border-color: var(--ev2-primary);
+  box-shadow: 0 0 0 2px var(--ev2-primary-alpha);
+}
+
+/* Checkmark overlay */
+.ev2-image-modal-check {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--ev2-primary);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  box-shadow: var(--ev2-shadow-sm);
+}
+
+.ev2-image-modal-item.selected .ev2-image-modal-check {
+  display: flex;
+}
+
+/* Image title below thumbnail */
+.ev2-image-modal-item-title {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 4px 6px;
+  font-size: 10px;
+  color: #fff;
+  background: linear-gradient(transparent, rgba(0,0,0,0.6));
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Loading & empty states */
+.ev2-image-modal-loading,
+.ev2-image-modal-empty {
+  text-align: center;
+  padding: 40px 20px;
+  color: var(--ev2-text-faint);
+  font-size: 14px;
+}
+
+/* Upload Drop Zone */
+.ev2-image-drop-zone {
+  border: 2px dashed var(--ev2-border-dark);
+  border-radius: var(--ev2-radius-xl);
+  padding: 40px 20px;
+  text-align: center;
+  cursor: pointer;
+  transition: var(--ev2-transition);
+  color: var(--ev2-text-muted);
+}
+
+.ev2-image-drop-zone:hover {
+  border-color: var(--ev2-primary);
+  background: var(--ev2-primary-light);
+}
+
+.ev2-image-drop-zone.ev2-dragover {
+  border-color: var(--ev2-primary);
+  background: var(--ev2-primary-light);
+}
+
+.ev2-image-drop-zone p {
+  margin: 8px 0 0;
+  font-size: 14px;
+}
+
+.ev2-image-drop-zone .ev2-hint {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--ev2-text-faint);
+}
+
+/* Upload Preview */
+.ev2-image-upload-preview {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.ev2-image-upload-preview > img {
+  width: 120px;
+  height: 120px;
+  object-fit: cover;
+  border-radius: var(--ev2-radius-lg);
+  border: 1px solid var(--ev2-border);
+  flex-shrink: 0;
+}
+
+.ev2-image-upload-fields {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Modal Footer */
+.ev2-image-modal-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 20px;
+  border-top: 1px solid var(--ev2-border);
+}
+
+.ev2-image-modal-status {
+  font-size: 12px;
+  color: var(--ev2-text-faint);
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-right: 12px;
+}
+
+.ev2-image-modal-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.ev2-image-modal-actions .ev2-btn-primary,
+.ev2-image-modal-actions .ev2-btn-secondary {
+  padding: 8px 16px;
+  font-size: 13px;
+}
+
+/* --------------------------------------------------------------------------
+   Design Tab — Section Background Controls
+   -------------------------------------------------------------------------- */
+.ev2-design-section {
+  margin-bottom: 16px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--ev2-border-light);
+}
+
+.ev2-design-section:last-of-type {
+  border-bottom: none;
+}
+
+/* Background Image Preview */
+.ev2-bg-preview {
+  width: 100%;
+  height: 100px;
+  border-radius: var(--ev2-radius-lg);
+  border: 1px solid var(--ev2-border);
+  background-size: cover;
+  background-position: center;
+  margin: 8px 0;
+}
+
+.ev2-bg-actions {
+  display: flex;
+  gap: 6px;
+}
+
+/* Small buttons (Change / Remove) */
+.ev2-btn-sm {
+  padding: 5px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: var(--ev2-radius);
+  border: none;
+  cursor: pointer;
+  transition: var(--ev2-transition);
+  font-family: var(--ev2-font);
+}
+
+.ev2-btn-sm-primary {
+  background: var(--ev2-primary-light);
+  color: var(--ev2-primary);
+  border: 1px solid var(--ev2-primary-alpha);
+}
+
+.ev2-btn-sm-primary:hover {
+  background: var(--ev2-primary-alpha);
+}
+
+.ev2-btn-sm-danger {
+  background: #fef2f2;
+  color: #dc2626;
+  border: 1px solid rgba(220, 38, 38, 0.2);
+}
+
+.ev2-btn-sm-danger:hover {
+  background: #fee2e2;
+}
+
+/* Color Picker Row */
+.ev2-color-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.ev2-color-input {
+  width: 36px;
+  height: 36px;
+  padding: 2px;
+  border: 1px solid var(--ev2-border);
+  border-radius: var(--ev2-radius);
+  cursor: pointer;
+  background: var(--ev2-bg);
+}
+
+.ev2-color-input::-webkit-color-swatch-wrapper {
+  padding: 2px;
+}
+
+.ev2-color-input::-webkit-color-swatch {
+  border: none;
+  border-radius: 3px;
+}
+
+.ev2-color-value {
+  font-size: 12px;
+  color: var(--ev2-text-muted);
+  font-family: var(--ev2-font-mono);
+  flex: 1;
+}
+
+/* Overlay Row */
+.ev2-overlay-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.ev2-overlay-value {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ev2-text-muted);
+  font-family: var(--ev2-font-mono);
+  min-width: 32px;
+  text-align: right;
+}
+
+/* Range Slider */
+.ev2-range {
+  flex: 1;
+  height: 6px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: var(--ev2-border);
+  border-radius: 3px;
+  outline: none;
+  cursor: pointer;
+}
+
+.ev2-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--ev2-primary);
+  border: 2px solid #fff;
+  box-shadow: var(--ev2-shadow-sm);
+  cursor: pointer;
+}
+
+.ev2-range::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--ev2-primary);
+  border: 2px solid #fff;
+  box-shadow: var(--ev2-shadow-sm);
+  cursor: pointer;
+}

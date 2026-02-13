@@ -79,7 +79,7 @@ class DynamicLanguageMiddleware:
     def __init__(self, get_response):
         self.get_response = get_response
         # Paths that should bypass language handling
-        self.bypass_paths = ['/django-admin/', '/backoffice/', '/ai/', '/editor/', '/site-assistant/', '/i18n/', '/set-language/', '/forms/', '/sitemap.xml', '/media/', '/static/']
+        self.bypass_paths = ['/django-admin/', '/backoffice/', '/ai/', '/editor/', '/editor-v2/', '/site-assistant/', '/i18n/', '/set-language/', '/forms/', '/sitemap.xml', '/media/', '/static/']
 
     def __call__(self, request):
         from django.urls import resolve, Resolver404
@@ -89,7 +89,12 @@ class DynamicLanguageMiddleware:
 
         # Skip processing for specific paths
         if any(path.startswith(bp) for bp in self.bypass_paths):
+            if 'editor-v2' in path:
+                print(f'[MW] BYPASS editor-v2: {request.method} {path}')
             return self.get_response(request)
+
+        if 'editor-v2' in path:
+            print(f'[MW] NOT BYPASSED: {request.method} {path} — this should not happen!')
 
         # Get default language from SiteSettings (with caching)
         default_language = cache.get('default_language_code')

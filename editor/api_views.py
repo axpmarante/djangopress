@@ -40,11 +40,18 @@ def update_page_content(request):
         "value": "New Title"
     }
     """
+    print(f'[API] update_page_content called: {request.method} {request.path}')
     try:
         data = json.loads(request.body)
         page_id = data.get('page_id')
         field_key = data.get('field_key')
         language = data.get('language', 'pt')
+
+        # Normalize field_key: hyphens → underscores (Django templates use {{ trans.xxx_yyy }})
+        if field_key:
+            field_key = field_key.replace('-', '_')
+
+        print(f'[API] update_page_content data: page_id={page_id}, field_key={field_key}, lang={language}')
         value = data.get('value', '').strip() if isinstance(data.get('value'), str) else data.get('value')
 
         if not page_id or not field_key:
@@ -130,8 +137,10 @@ def update_page_element_classes(request):
         "new_classes": "text-5xl font-black text-white"
     }
     """
+    print(f'[API] update_page_element_classes called: {request.method} {request.path}')
     try:
         data = json.loads(request.body)
+        print(f'[API] update_page_element_classes data: page_id={data.get("page_id")}, element_id={data.get("element_id")}')
         page_id = data.get('page_id')
         element_id = data.get('element_id')
         new_classes = data.get('new_classes', '').strip()
@@ -227,8 +236,10 @@ def update_page_element_attribute(request):
         "tag_name": "img"                 (optional, fallback when element_id missing)
     }
     """
+    print(f'[API] update_page_element_attribute called: {request.method} {request.path}')
     try:
         data = json.loads(request.body)
+        print(f'[API] update_page_element_attribute data: page_id={data.get("page_id")}, element_id={data.get("element_id")}, attr={data.get("attribute")}')
         page_id = data.get('page_id')
         element_id = data.get('element_id')
         attribute = data.get('attribute')

@@ -47,6 +47,7 @@ INSTALLED_APPS = [
     'ai',
     'backoffice',
     'editor',
+    'editor_v2',
     'core',
     'news',
     'site_assistant',
