@@ -60,6 +60,7 @@
                                   class="w-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
                                   placeholder="Example: Create a services page showcasing our athlete management, training programs, and career guidance services. Include a hero section welcoming visitors, a features section highlighting our 15 years of experience, testimonials from successful athletes, and a call-to-action to schedule a consultation.">{{ blueprint_brief|default:'' }}</textarea>
                         <p class="mt-2 text-xs text-gray-500">Describe the page purpose, target audience, and key content you want to include. The more detail you provide, the better the results.</p>
+                        {% include 'backoffice/partials/style_tags.html' with target_id='brief' %}
                     </div>
 
                     <!-- Page Details - Multi-Language -->
@@ -628,4 +629,5 @@ function getCookie(name) {
     return cookieValue;
 }
 </script>
+<script src="{% static 'js/style-prompt-tools.js' %}"></script>
 {% endblock %}

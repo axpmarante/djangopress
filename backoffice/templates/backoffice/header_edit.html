@@ -1,5 +1,6 @@
 {% extends 'backoffice/base.html' %}
 {% load i18n %}
+{% load static %}
 
 {% block title %}Edit Header{% endblock %}
 
@@ -214,6 +215,7 @@
                                   class="w-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-purple-500 focus:border-purple-500"
                                   placeholder="Examples:&#10;- Create a modern header with navigation menu for Home, About, and Contact pages&#10;- Add a mobile hamburger menu with smooth animations&#10;- Include the site logo and a language switcher"></textarea>
                         <p class="mt-2 text-xs text-gray-500">Describe what you want the AI to create or how to improve the current header.</p>
+                        {% include 'backoffice/partials/style_tags.html' with target_id='ai_instructions' %}
                     </div>
 
                     <!-- Reference Images -->
@@ -540,4 +542,5 @@ document.getElementById('aiModal').addEventListener('click', function(e) {
     if (e.target === this) closeAIModal();
 });
 </script>
+<script src="{% static 'js/style-prompt-tools.js' %}"></script>
 {% endblock %}
