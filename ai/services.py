@@ -1238,7 +1238,18 @@ Return the complete, corrected JSON now:"""
         print(f"Element '{element_id}': {len(element_result_html)} chars")
 
         # Step 2: Templatize + translate just the element
-        element_data = self._templatize_and_translate(element_result_html, languages, default_language, model)
+        # Skip templatization for elements with no visible text (e.g. <img> tags)
+        check_soup = BeautifulSoup(element_result_html, 'html.parser')
+        has_text = bool(check_soup.get_text(strip=True))
+
+        if has_text:
+            element_data = self._templatize_and_translate(element_result_html, languages, default_language, model)
+        else:
+            print("No visible text in element — skipping templatization")
+            element_data = {
+                'html_content': element_result_html,
+                'content': {'translations': {lang: {} for lang in languages}},
+            }
 
         assistant_message = f"I've updated the {element_id} element based on your instructions."
 
