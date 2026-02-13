@@ -33,52 +33,6 @@ class PromptTemplates:
         return "\n".join(lines) + "\n"
 
     @staticmethod
-    def _get_design_quality_guidelines():
-        """Return design quality principles injected into every generation/refinement prompt."""
-        return """
-
-## Design Quality Standards
-
-You are a senior frontend designer, not a generic page builder. Every page you create should feel intentionally designed, not auto-generated. Follow these principles:
-
-### Visual Hierarchy
-- Every section needs a clear focal point — one element that draws the eye first
-- Use size contrast aggressively: hero headings should be dramatically larger than body text
-- Guide the reader's eye with deliberate size, weight, and color progression
-
-### Layout & Spacing
-- Vary section layouts — never use the same structure twice in a row (e.g. don't follow a 3-column grid with another 3-column grid)
-- Use asymmetric layouts where appropriate (60/40 splits, offset grids, overlapping elements)
-- Whitespace is a design element — use generous padding between sections (py-20 minimum, py-32 for heroes)
-- Alternate between full-width backgrounds and contained content for visual rhythm
-
-### Typography
-- Create strong contrast between heading weight/size and body text
-- Use font-size jumps between hierarchy levels (don't make h2 and h3 look similar)
-- Keep body text readable: max-w-prose or max-w-2xl for long paragraphs
-- Use text-balance or max-width on headings to avoid awkward line breaks
-
-### Color & Contrast
-- Use accent colors sparingly — they lose impact when overused
-- Never make adjacent sections the same background color — alternate between light, white, subtle tint, and dark/primary backgrounds
-- Dark background sections create visual anchors — use 1-2 per page for rhythm
-- Ensure sufficient contrast for readability (light text on dark, dark text on light)
-
-### Visual Polish
-- Add subtle hover transitions on interactive elements (transition-all duration-300)
-- Use shadow and border-radius consistently throughout the page
-- Icons and decorative elements should support the content, not fill space
-- Avoid perfect symmetry everywhere — slight asymmetry feels more natural and designed
-
-### Anti-Patterns to Avoid
-- No walls of cards with identical layouts — vary card sizes or highlight a featured item
-- No centered-everything layouts — mix text alignment (left-aligned content reads better for long text)
-- No generic stock-photo grids — if using image placeholders, vary sizes and aspect ratios
-- No same-height sections stacked — vary section padding for visual rhythm
-- No monochrome sameness — each section should feel distinct while maintaining brand cohesion
-"""
-
-    @staticmethod
     def _get_components_reference():
         """Return HTML patterns doc for interactive components pre-loaded in base.html."""
         return """
@@ -381,7 +335,7 @@ Follow these design patterns and conventions:
 
 ## Your Task
 Improve the provided {section_type} by applying the requested changes. Return a JSON object with the refined {section_type}.
-{PromptTemplates._get_design_quality_guidelines()}
+
 ## Technical Requirements
 - Use Tailwind CSS classes inline
 - Make responsive
@@ -701,7 +655,7 @@ Return a JSON object:
 
 ## Task
 Generate a complete, professional web page as clean HTML with real text content written in {lang_name}.
-{PromptTemplates._get_design_quality_guidelines()}
+
 ## Technical Requirements
 - Use Tailwind CSS classes inline for all styling
 - Make responsive with breakpoint prefixes: `sm:`, `md:`, `lg:`
@@ -818,7 +772,7 @@ Return ONLY the raw HTML for this page. All text must be real content in {lang_n
 
 ## Your Task
 Edit the provided HTML page by applying the requested changes. Return the complete updated HTML.
-{PromptTemplates._get_design_quality_guidelines()}
+
 ## Technical Requirements
 - Use Tailwind CSS classes inline for all styling
 - Make responsive: `md:text-6xl`, `lg:grid-cols-3`, `sm:flex-row`
@@ -988,7 +942,7 @@ Do NOT undo any of these previous changes unless specifically asked to.
 
 ## Your Task
 Edit ONLY the `<section data-section="{section_name}">` section based on the user's instructions. Return ONLY that single section — nothing else.
-{PromptTemplates._get_design_quality_guidelines()}
+
 ## Technical Requirements
 - Use Tailwind CSS classes inline for all styling
 - Make responsive: `md:text-6xl`, `lg:grid-cols-3`, `sm:flex-row`
@@ -1101,7 +1055,7 @@ Return ONLY the updated `<section data-section="{section_name}">...</section>` b
 
 ## Your Task
 Edit ONLY the element with `data-element-id="{element_id}"` based on the user's instructions. Return ONLY that single element — nothing else.
-{PromptTemplates._get_design_quality_guidelines()}
+
 ## Technical Requirements
 - Use Tailwind CSS classes inline for all styling
 - Make responsive: `md:text-6xl`, `lg:grid-cols-3`, `sm:flex-row`
