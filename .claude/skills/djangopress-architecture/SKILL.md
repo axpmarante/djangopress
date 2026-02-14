@@ -61,7 +61,7 @@ Key files: `ai/services.py` (ContentGenerationService), `ai/utils/prompts.py` (P
 
 ## URL Structure
 
-- Non-i18n: `/backoffice/`, `/ai/`, `/editor/`, `/django-admin/`, `/media/`, `/static/`
+- Non-i18n: `/backoffice/`, `/ai/`, `/editor-v2/`, `/django-admin/`, `/media/`, `/static/`
 - i18n (all inside `i18n_patterns`): `/en/`, `/pt/about/`, `/en/contact/`
 - Default language URLs have no prefix (handled by DynamicLanguageMiddleware)
 - `core.urls` is a **catch-all** — any app with public URLs must be registered BEFORE it in `i18n_patterns`
@@ -71,7 +71,7 @@ Key files: `ai/services.py` (ContentGenerationService), `ai/utils/prompts.py` (P
 These are the shared CMS engine — modify only in the upstream djangopress repo:
 - `core/` — models, views, templatetags, middleware, context processors
 - `ai/` — LLM integration, generation, refinement, prompts
-- `editor/` — inline editor JS and API
+- `editor_v2/` — inline editor JS and API
 - `backoffice/` — admin dashboard views and templates
 - `templates/base.html` — master layout
 - `config/` — settings, urls, storage backends

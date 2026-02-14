@@ -7,7 +7,7 @@ allowed-tools: Bash, Read, Write, Edit, Grep, Glob, AskUserQuestion
 
 # New DjangoPress Site Setup
 
-You are setting up a **new website** from the DjangoPress template. This is a child project — the CMS engine (`core/`, `ai/`, `editor/`, `backoffice/`) is shared and should NOT be modified. All customization happens through the database (SiteSettings) and `.env`.
+You are setting up a **new website** from the DjangoPress template. This is a child project — the CMS engine (`core/`, `ai/`, `editor_v2/`, `backoffice/`) is shared and should NOT be modified. All customization happens through the database (SiteSettings) and `.env`.
 
 Walk the user through each step interactively. Check what's already done and skip completed steps. Ask questions to gather project details.
 
@@ -167,7 +167,7 @@ Tell the user:
 
 ## Important Reminders
 
-- **Never modify core engine files** (`core/`, `ai/`, `editor/`, `backoffice/`, `templates/base.html`) for a standard site
+- **Never modify core engine files** (`core/`, `ai/`, `editor_v2/`, `backoffice/`, `templates/base.html`) for a standard site
 - **Domain must be set before uploading media** when using GCS
 - **Home page slug must be `home` in ALL languages**
 - To pull future DjangoPress updates: `git fetch upstream && git merge upstream/main`
