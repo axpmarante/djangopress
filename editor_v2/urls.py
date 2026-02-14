@@ -33,4 +33,8 @@ urlpatterns = [
 
     # Session history endpoint
     path('api/session/<int:page_id>/', api_views.get_editor_session, name='api_get_session'),
+
+    # Version navigation endpoints
+    path('api/versions/<int:page_id>/', api_views.list_page_versions, name='api_list_versions'),
+    path('api/versions/<int:page_id>/<int:version_number>/', api_views.get_page_version, name='api_get_version'),
 ]

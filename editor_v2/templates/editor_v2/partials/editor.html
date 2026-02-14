@@ -6,6 +6,23 @@
     <div id="ev2-breadcrumbs" class="ev2-breadcrumbs"></div>
   </div>
   <div class="ev2-topbar-right">
+    <!-- Version Navigation -->
+    <div id="ev2-version-nav" class="ev2-version-nav" style="display:none">
+      <button id="ev2-version-prev" class="ev2-topbar-btn" title="Previous version (Ctrl+[)" disabled>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="15 18 9 12 15 6"/>
+        </svg>
+      </button>
+      <button id="ev2-version-label" class="ev2-version-label" title="Version history">
+        v0 / 0
+      </button>
+      <button id="ev2-version-next" class="ev2-topbar-btn" title="Next version (Ctrl+])" disabled>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="9 18 15 12 9 6"/>
+        </svg>
+      </button>
+    </div>
+    <div class="ev2-topbar-sep"></div>
     <button id="ev2-undo-btn" class="ev2-topbar-btn" title="Undo (Ctrl+Z)" disabled>
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <path d="M3 7v6h6"/>
@@ -28,6 +45,13 @@
       <span id="ev2-change-count" class="ev2-change-count hidden">0</span>
     </button>
   </div>
+</div>
+
+<!-- Version Restore Bar -->
+<div id="ev2-version-bar" class="ev2-version-bar" style="display:none">
+  <span id="ev2-version-bar-label">Previewing version</span>
+  <button id="ev2-version-restore" class="ev2-btn ev2-btn-primary ev2-btn-sm">Restore</button>
+  <button id="ev2-version-cancel" class="ev2-btn ev2-btn-secondary ev2-btn-sm">Cancel</button>
 </div>
 
 <!-- Editor v2 Sidebar -->

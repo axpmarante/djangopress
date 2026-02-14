@@ -1492,3 +1492,88 @@ body[data-edit-mode="v2"] #admin-toolbar {
 .ev2-ai-input {
     resize: none;
 }
+
+/* --------------------------------------------------------------------------
+   Version Navigation (Topbar)
+   -------------------------------------------------------------------------- */
+.ev2-version-nav {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.ev2-version-label {
+  font-size: 12px;
+  color: var(--ev2-text-muted);
+  padding: 2px 8px;
+  cursor: default;
+  background: none;
+  border: none;
+  font-family: var(--ev2-font-mono);
+  white-space: nowrap;
+}
+
+.ev2-topbar-sep {
+  width: 1px;
+  height: 20px;
+  background: var(--ev2-border);
+  margin: 0 6px;
+}
+
+/* Version Restore Bar */
+.ev2-version-bar {
+  position: fixed;
+  top: var(--ev2-topbar-height);
+  left: var(--ev2-sidebar-width);
+  right: 0;
+  height: 36px;
+  background: #fef3c7;
+  border-bottom: 1px solid #f59e0b;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  font-size: 13px;
+  font-family: var(--ev2-font);
+  color: #92400e;
+  z-index: 9997;
+}
+
+.ev2-version-bar .ev2-btn-sm {
+  padding: 4px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: var(--ev2-radius);
+  border: none;
+  cursor: pointer;
+  transition: var(--ev2-transition);
+  font-family: var(--ev2-font);
+}
+
+.ev2-version-bar .ev2-btn-primary {
+  background: #f59e0b;
+  color: #fff;
+  padding: 4px 14px;
+  font-size: 12px;
+}
+
+.ev2-version-bar .ev2-btn-primary:hover {
+  background: #d97706;
+}
+
+.ev2-version-bar .ev2-btn-secondary {
+  background: #fff;
+  color: #92400e;
+  border: 1px solid #f59e0b;
+  padding: 4px 14px;
+  font-size: 12px;
+}
+
+.ev2-version-bar .ev2-btn-secondary:hover {
+  background: #fef3c7;
+}
+
+/* Shift content down when version bar is visible */
+body.ev2-version-preview .editor-v2-content {
+  padding-top: calc(var(--ev2-topbar-height) + 36px);
+}

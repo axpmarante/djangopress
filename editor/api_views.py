@@ -10,7 +10,7 @@ from django.views.decorators.http import require_http_methods
 from django.contrib.admin.views.decorators import staff_member_required
 from core.decorators import superuser_required
 from django.views.decorators.csrf import csrf_exempt
-from core.models import Page, SiteImage
+from core.models import Page, PageVersion, SiteImage
 from ai.models import RefinementSession
 from bs4 import BeautifulSoup
 
@@ -1409,3 +1409,55 @@ def get_editor_session(request, page_id):
         import traceback
         traceback.print_exc()
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
+@superuser_required
+@require_http_methods(["GET"])
+def list_page_versions(request, page_id):
+    """
+    List all versions for a page (newest first, max 10).
+
+    GET /editor-v2/api/versions/<page_id>/
+    """
+    try:
+        page = Page.objects.get(pk=page_id)
+    except Page.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Page not found'}, status=404)
+
+    versions = page.versions.order_by('-version_number')[:10]
+    return JsonResponse({
+        'success': True,
+        'versions': [{
+            'id': v.id,
+            'version_number': v.version_number,
+            'change_summary': v.change_summary,
+            'created_at': v.created_at.isoformat(),
+            'created_by': str(v.created_by) if v.created_by else 'System',
+        } for v in versions],
+        'current_version': versions[0].version_number if versions else 0,
+    })
+
+
+@superuser_required
+@require_http_methods(["GET"])
+def get_page_version(request, page_id, version_number):
+    """
+    Get a specific version's content.
+
+    GET /editor-v2/api/versions/<page_id>/<version_number>/
+    """
+    try:
+        version = PageVersion.objects.get(page_id=page_id, version_number=version_number)
+    except PageVersion.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Version not found'}, status=404)
+
+    return JsonResponse({
+        'success': True,
+        'version': {
+            'version_number': version.version_number,
+            'html_content': version.html_content,
+            'content': version.content,
+            'change_summary': version.change_summary,
+            'created_at': version.created_at.isoformat(),
+        }
+    })
