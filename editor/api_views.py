@@ -15,6 +15,245 @@ from ai.models import RefinementSession
 from bs4 import BeautifulSoup
 
 
+# ---------------------------------------------------------------------------
+# Lookup tools for instruction enrichment
+# ---------------------------------------------------------------------------
+
+def _lookup_list_pages(params):
+    """List all pages with IDs, titles, slugs."""
+    pages = Page.objects.all().order_by('sort_order', 'created_at')
+    data = [{'id': p.id, 'title': p.title_i18n, 'slug': p.slug_i18n, 'is_active': p.is_active} for p in pages]
+    return {'success': True, 'pages': data, 'message': f'{len(data)} pages found'}
+
+
+def _lookup_get_page_info(params):
+    """Get page metadata + list of section names."""
+    page_id = params.get('page_id')
+    title = params.get('title')
+
+    if not page_id and not title:
+        return {'success': False, 'message': 'Provide page_id or title'}
+
+    page = None
+    if page_id:
+        try:
+            page = Page.objects.get(pk=page_id)
+        except Page.DoesNotExist:
+            return {'success': False, 'message': f'Page {page_id} not found'}
+    else:
+        for p in Page.objects.all():
+            if p.title_i18n and isinstance(p.title_i18n, dict):
+                for lang, t in p.title_i18n.items():
+                    if t and title.lower() in t.lower():
+                        page = p
+                        break
+            if page:
+                break
+        if not page:
+            return {'success': False, 'message': f'No page found matching "{title}"'}
+
+    sections = []
+    if page.html_content:
+        soup = BeautifulSoup(page.html_content, 'html.parser')
+        for sec in soup.find_all('section', attrs={'data-section': True}):
+            sections.append(sec['data-section'])
+
+    return {
+        'success': True,
+        'page': {
+            'id': page.id,
+            'title': page.title_i18n,
+            'slug': page.slug_i18n,
+            'sections': sections,
+        },
+        'message': f'Page "{page.default_title}" with {len(sections)} sections',
+    }
+
+
+def _lookup_get_section_html(params):
+    """Get a section's de-templatized HTML from a page."""
+    page_id = params.get('page_id')
+    section_name = params.get('section_name')
+
+    if not page_id or not section_name:
+        return {'success': False, 'message': 'Provide page_id and section_name'}
+
+    try:
+        page = Page.objects.get(pk=page_id)
+    except Page.DoesNotExist:
+        return {'success': False, 'message': f'Page {page_id} not found'}
+
+    if not page.html_content:
+        return {'success': False, 'message': 'Page has no HTML content'}
+
+    soup = BeautifulSoup(page.html_content, 'html.parser')
+    section = soup.find('section', attrs={'data-section': section_name})
+    if not section:
+        return {'success': False, 'message': f'Section "{section_name}" not found in page'}
+
+    html = str(section)
+
+    # De-templatize: replace {{ trans.xxx }} with real text for readability
+    content = page.content or {}
+    translations = content.get('translations', {})
+    default_lang = None
+    if translations:
+        from core.models import SiteSettings
+        settings = SiteSettings.load()
+        default_lang = settings.get_default_language() if settings else None
+        if not default_lang:
+            default_lang = next(iter(translations))
+
+    if default_lang and default_lang in translations:
+        lang_trans = translations[default_lang]
+        for var_name, text in lang_trans.items():
+            html = html.replace('{{ trans.' + var_name + ' }}', str(text))
+
+    # Truncate to avoid blowing up context
+    if len(html) > 3000:
+        html = html[:3000] + '\n<!-- truncated -->'
+
+    return {'success': True, 'html': html, 'message': f'Section "{section_name}" HTML ({len(html)} chars)'}
+
+
+_LOOKUP_TOOLS = {
+    'list_pages': _lookup_list_pages,
+    'get_page_info': _lookup_get_page_info,
+    'get_section_html': _lookup_get_section_html,
+}
+
+
+# ---------------------------------------------------------------------------
+# Instruction enrichment via tool-calling pre-processor
+# ---------------------------------------------------------------------------
+
+def _parse_enrichment_response(raw):
+    """Parse LLM response for <refined_instructions> or <actions> tags."""
+    match = re.search(r'<refined_instructions>(.*?)</refined_instructions>', raw, re.DOTALL)
+    if match:
+        return {'done': True, 'instructions': match.group(1).strip()}
+    actions_match = re.search(r'<actions>(.*?)</actions>', raw, re.DOTALL)
+    if actions_match:
+        try:
+            actions = json.loads(actions_match.group(1).strip())
+            return {'done': False, 'actions': actions}
+        except json.JSONDecodeError:
+            pass
+    return {'done': True, 'instructions': raw.strip()}
+
+
+def _format_lookup_results(tool_name, result):
+    """Format tool results compactly for feeding back to the LLM."""
+    if tool_name == 'list_pages':
+        pages = result.get('pages', [])
+        lines = [f"ID:{p['id']} | {p.get('title', {})}" for p in pages]
+        return f"Pages:\n" + "\n".join(lines)
+    elif tool_name == 'get_page_info':
+        page = result.get('page', {})
+        sections = ', '.join(page.get('sections', []))
+        return f"Page: {page.get('title', {})} (ID:{page.get('id')}), Sections: {sections}"
+    elif tool_name == 'get_section_html':
+        html = result.get('html', '')
+        return f"```html\n{html}\n```"
+    else:
+        return json.dumps(result, default=str)
+
+
+def _enrich_instructions(instructions, page):
+    """
+    Pre-process user instructions with lookup tools.
+    If the instruction references other pages/sections, uses gemini-flash
+    to look them up and produce an enriched instruction for the refinement LLM.
+    Returns the original or enriched instruction string.
+    """
+    # Quick check: skip enrichment for simple instructions that don't reference other pages
+    reference_keywords = [
+        'like the', 'like on', 'match the', 'same as', 'copy from', 'similar to',
+        'from the', 'on the', 'other page', 'another page', 'about page',
+        'home page', 'services page', 'contact page',
+    ]
+    lower_inst = instructions.lower()
+    if not any(kw in lower_inst for kw in reference_keywords):
+        return instructions
+
+    try:
+        from ai.utils.llm_config import LLMBase
+
+        # Build page title for context
+        page_title = page.default_title if hasattr(page, 'default_title') else str(page.title_i18n)
+
+        system_prompt = (
+            "You are a pre-processor for a website page editor. The user wants to refine part of a page.\n"
+            "If the instruction references another page, section, or style you don't have context for, "
+            "use the available tools to look it up. Then output the final enriched instruction inside "
+            "<refined_instructions> tags with all the context the refinement LLM will need.\n\n"
+            "If no lookups are needed, output the instruction unchanged in <refined_instructions> tags.\n\n"
+            "Available tools (call via <actions> JSON array):\n"
+            '- `list_pages` — List all pages with IDs and titles. No params needed.\n'
+            '- `get_page_info` — Get page sections. Params: {"page_id": int} OR {"title": "search"}\n'
+            '- `get_section_html` — Get a section\'s HTML. Params: {"page_id": int, "section_name": "hero"}\n\n'
+            "To call tools, output:\n"
+            '<actions>[{"tool": "tool_name", "params": {...}}]</actions>\n\n'
+            "After receiving tool results, output:\n"
+            "<refined_instructions>enriched instruction with full context</refined_instructions>\n\n"
+            f'Current page: "{page_title}" (ID: {page.id})'
+        )
+
+        messages = [
+            {'role': 'system', 'content': system_prompt},
+            {'role': 'user', 'content': instructions},
+        ]
+
+        llm = LLMBase()
+
+        for iteration in range(3):
+            response = llm.get_completion(messages, tool_name='gemini-flash')
+            raw = response.choices[0].message.content
+
+            parsed = _parse_enrichment_response(raw)
+
+            if parsed['done']:
+                enriched = parsed['instructions']
+                print(f"[Enrich] Done after {iteration} tool calls. Enriched: {enriched[:200]}...")
+                return enriched
+
+            # Execute tool calls
+            actions = parsed['actions']
+            results_text = []
+            for action in actions:
+                tool_name = action.get('tool', '')
+                params = action.get('params', {})
+                tool_fn = _LOOKUP_TOOLS.get(tool_name)
+                if tool_fn:
+                    result = tool_fn(params)
+                    formatted = _format_lookup_results(tool_name, result)
+                    results_text.append(f"[{tool_name}] {formatted}")
+                else:
+                    results_text.append(f"[{tool_name}] Unknown tool")
+
+            # Feed results back to the LLM
+            messages.append({'role': 'assistant', 'content': raw})
+            messages.append({'role': 'user', 'content': "Tool results:\n" + "\n\n".join(results_text)})
+
+        # All 3 tool iterations used — one final LLM call to get the enriched instruction
+        messages.append({'role': 'user', 'content': 'Now output the final enriched instruction in <refined_instructions> tags.'})
+        response = llm.get_completion(messages, tool_name='gemini-flash')
+        raw = response.choices[0].message.content
+        parsed = _parse_enrichment_response(raw)
+        if parsed['done']:
+            enriched = parsed['instructions']
+            print(f"[Enrich] Done after final call. Enriched: {enriched[:200]}...")
+            return enriched
+
+        # True fallback
+        print("[Enrich] Could not extract enriched instructions, using original")
+        return instructions
+
+    except Exception as e:
+        print(f"[Enrich] Error during enrichment: {e}")
+        return instructions
+
+
 def _sanitize_trans_vars(html):
     """Fix hyphenated {{ trans.xxx-yyy }} → {{ trans.xxx_yyy }} in HTML.
     Django templates don't allow hyphens in variable names."""
@@ -432,6 +671,9 @@ def refine_section(request):
 
         page = Page.objects.get(pk=page_id)
 
+        # Enrich instructions with cross-page context if needed
+        instructions = _enrich_instructions(instructions, page)
+
         # Load or create RefinementSession
         session = None
         if session_id:
@@ -631,6 +873,9 @@ def refine_element(request):
             }, status=400)
 
         page = Page.objects.get(pk=page_id)
+
+        # Enrich instructions with cross-page context if needed
+        instructions = _enrich_instructions(instructions, page)
 
         # Load or create RefinementSession
         session = None
@@ -1001,6 +1246,9 @@ def refine_page(request):
             page = Page.objects.get(id=page_id)
         except Page.DoesNotExist:
             return JsonResponse({'success': False, 'error': f'Page {page_id} not found'}, status=404)
+
+        # Enrich instructions with cross-page context if needed
+        instructions = _enrich_instructions(instructions, page)
 
         # Load or create session
         if session_id:
