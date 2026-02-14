@@ -86,7 +86,7 @@ class PageView(TemplateView):
         # Enable edit mode for staff users with ?edit=true or ?edit=v2
         edit_param = self.request.GET.get('edit')
         if self.request.user.is_staff and edit_param in ('true', 'v2'):
-            context['edit_mode'] = edit_param if edit_param == 'v2' else True
+            context['edit_mode'] = 'v2'
         else:
             context['edit_mode'] = False
 

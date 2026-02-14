@@ -28,8 +28,6 @@
     <link href="{% static 'css/lightbox.css' %}" rel="stylesheet">
     {% if edit_mode == 'v2' %}
     <link href="{% static 'editor_v2/css/editor.css' %}?v=9" rel="stylesheet">
-    {% elif edit_mode %}
-    <link href="{% static 'css/inline-editor.css' %}?v=5" rel="stylesheet">
     {% endif %}
     <style>[x-cloak] { display: none !important; }</style>
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
@@ -67,16 +65,10 @@
     </script>
     {% endif %}
 </head>
-<body class="bg-white" {% if edit_mode %}data-edit-mode="{% if edit_mode == 'v2' %}v2{% else %}true{% endif %}"{% endif %}>
+<body class="bg-white" {% if edit_mode == 'v2' %}data-edit-mode="v2"{% endif %}>
     {% if edit_mode == 'v2' %}
-    <!-- Editor v2 -->
     {% include 'editor_v2/partials/editor.html' %}
     <div class="editor-v2-content">
-    {% elif edit_mode %}
-    <!-- Simple Editor Sidebar (left side) -->
-    {% include 'editor/partials/simple_sidebar.html' %}
-    <!-- Content wrapper (right side) -->
-    <div class="editor-content-wrapper">
     {% endif %}
 
     {# Load header from database (GlobalSection) with fallback to file template #}
@@ -102,9 +94,6 @@
 
     {% if edit_mode == 'v2' %}
     </div> <!-- Close editor-v2-content -->
-    {% elif edit_mode %}
-    </div> <!-- Close editor-content-wrapper -->
-    {% include 'editor/partials/image_modal.html' %}
     {% endif %}
 
     <!-- Splide.js Carousel -->
@@ -119,7 +108,6 @@
 
     <script src="{% static 'js/lightbox.js' %}"></script>
     {% if edit_mode == 'v2' %}
-    <!-- Editor v2 (ES modules) -->
     <script>
       window.EDITOR_CONFIG = {
         pageId: {{ page_obj.id|default:"0" }},
@@ -132,19 +120,6 @@
       };
     </script>
     <script type="module" src="{% static 'editor_v2/js/editor.js' %}?v=14"></script>
-    {% elif edit_mode %}
-    <!-- Simple Editor System (v1) -->
-    <script>window.EDITOR_AI_ENABLED = {{ user.is_superuser|yesno:"true,false" }};</script>
-    <script src="{% static 'editor/js/simple-selector.js' %}?v=25"></script>
-    <script src="{% static 'editor/js/simple-sidebar.js' %}?v=25"></script>
-    <script src="{% static 'editor/js/simple-tracker.js' %}?v=25"></script>
-    <script src="{% static 'editor/js/image-modal.js' %}?v=25"></script>
-    <script>
-      document.addEventListener('DOMContentLoaded', function() {
-        SimpleSelector.enable();
-        console.log('🎨 Simple Editor active - click any element to edit');
-      });
-    </script>
     {% endif %}
     {% block extra_js %}{% endblock %}
     {% if CUSTOM_BODY_CODE %}{{ CUSTOM_BODY_CODE|safe }}{% endif %}

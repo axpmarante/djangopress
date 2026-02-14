@@ -108,7 +108,7 @@ After generating pages with image placeholders, go to `/backoffice/page/<id>/ima
 These files rarely need changes for a new site — everything is DB-driven:
 
 - `core/` — the CMS engine (models, views, templatetags) — shared across all sites
-- `editor/` — inline editing system — shared
+- `editor_v2/` — inline editing system — shared
 - `ai/` — AI generation/refinement — shared
 - `templates/base.html` — master layout — shared
 - `config/urls.py` — URL routing — shared
@@ -172,7 +172,7 @@ DjangoPress ships with Claude Code skills (`.claude/skills/`) that automate comm
 config/          → Django settings, root URLs, WSGI/ASGI, storage backends
 core/            → CMS engine: Page, SiteSettings, GlobalSection, SiteImage, PageVersion
 backoffice/      → Admin dashboard: page management, settings, media library, AI tools
-editor/          → Inline editor: frontend JS + API for ?edit=true mode
+editor_v2/       → Inline editor: ES modules, API views, AI chat refinement
 ai/              → LLM integration: generation, refinement, chat, bulk analysis, image processing
 news/            → Decoupled blog/news app (optional)
 templates/       → base.html + partials (admin toolbar only)
@@ -213,24 +213,34 @@ static/          → CSS/JS assets
 - Full Django template syntax available: `{% url %}`, `{% csrf_token %}`, `{% if %}`, `{% for %}`, etc.
 - **Caching:** Uses `LocMemCache` by default (per-process). Restart server or set `DummyCache` in dev to see DB changes instantly.
 
-## The Editor App (Inline Editor)
+## The Editor (Inline Editor)
 
-The `editor` app powers the `?edit=true` mode for staff users.
+The `editor_v2` app powers the `?edit=v2` (or `?edit=true`) mode for staff users.
 
 ### How it works:
-1. Staff visits any page with `?edit=true` in the URL
-2. `base.html` loads the editor sidebar, image modal, and JS files
-3. `SimpleSelector` — click any element to select it
-4. `SimpleSidebar` — Content/Design/Structure/AI tabs for the selected element
-5. `SimpleTracker` — tracks all changes, undo/redo, batched save
-6. Changes are persisted via `/editor/api/*` endpoints to `Page.html_content` and `Page.content`
+1. Staff visits any page with `?edit=v2` or `?edit=true` in the URL
+2. `base.html` loads the editor panel and ES module JS
+3. ES module architecture with selector, sidebar, tracker, and AI chat
+4. Supports section/element/full-page AI refinement with session history
+5. Version navigation for page rollback
+6. Changes are persisted via `/editor-v2/api/*` endpoints to `Page.html_content` and `Page.content`
 
 ### Editor API Endpoints (all require staff auth):
-- `POST /editor/api/update-page-content/` — update translation text
-- `POST /editor/api/update-page-classes/` — update element CSS classes
-- `POST /editor/api/update-page-attribute/` — update element attributes (href, src, etc.)
-- `GET /editor/api/media-library/` — browse images with filtering
-- `POST /editor/api/images/upload/` — upload new image
+- `POST /editor-v2/api/update-page-content/` — update translation text
+- `POST /editor-v2/api/update-page-classes/` — update element CSS classes
+- `POST /editor-v2/api/update-page-attribute/` — update element attributes (href, src, etc.)
+- `POST /editor-v2/api/update-section-video/` — update/remove section background video
+- `GET /editor-v2/api/media-library/` — browse images with filtering
+- `POST /editor-v2/api/images/upload/` — upload new image
+- `POST /editor-v2/api/refine-section/` — AI section refinement (superuser)
+- `POST /editor-v2/api/save-ai-section/` — save AI-refined section (superuser)
+- `POST /editor-v2/api/refine-element/` — AI element refinement (superuser)
+- `POST /editor-v2/api/save-ai-element/` — save AI-refined element (superuser)
+- `POST /editor-v2/api/refine-page/` — AI full-page refinement (superuser)
+- `POST /editor-v2/api/save-ai-page/` — save AI-refined page (superuser)
+- `GET /editor-v2/api/session/<page_id>/` — load chat session history (superuser)
+- `GET /editor-v2/api/versions/<page_id>/` — list page versions (superuser)
+- `GET /editor-v2/api/versions/<page_id>/<version>/` — get specific version (superuser)
 
 ## Design System
 
@@ -308,7 +318,7 @@ Both `Page.content` and `GlobalSection.content` use this structure.
 - `/backoffice/forms/` → manage dynamic forms
 - `/backoffice/forms/<id>/submissions/` → view form submissions
 - `/ai/api/*` → AI API endpoints
-- `/editor/api/*` → inline editor API (staff only)
+- `/editor-v2/api/*` → inline editor API (staff only)
 
 ## AI System
 
@@ -424,8 +434,8 @@ The API key is never exposed to the frontend — searches are proxied via `/ai/a
 - `backoffice/templates/backoffice/` — all admin templates
 
 ### Editor
-- `editor/api_views.py` — inline editor API endpoints
-- `editor/static/editor/js/` — selector, sidebar, tracker, image modal JS
+- `editor_v2/api_views.py` — inline editor API endpoints
+- `editor_v2/static/editor_v2/js/` — editor ES modules
 
 ## Development Notes
 
@@ -448,7 +458,7 @@ git fetch upstream
 git merge upstream/main
 ```
 
-The first merge requires `--allow-unrelated-histories` since GitHub template repos don't share git history. Resolve conflicts by taking the upstream version for core engine files (`core/`, `ai/`, `backoffice/`, `editor/`, `config/`, `templates/`). Site-specific content lives in the database and `.env`, so it won't conflict.
+The first merge requires `--allow-unrelated-histories` since GitHub template repos don't share git history. Resolve conflicts by taking the upstream version for core engine files (`core/`, `ai/`, `backoffice/`, `editor_v2/`, `config/`, `templates/`). Site-specific content lives in the database and `.env`, so it won't conflict.
 
 ## Git Conventions
 

@@ -28,8 +28,7 @@ urlpatterns = [
     path('django-admin/', admin.site.urls),  # Django admin (fallback/advanced)
     path('ai/', include('ai.urls')),  # AI content generation
     path('backoffice/', include('backoffice.urls')),  # Custom backoffice
-    path('editor/', include('editor.urls')),  # Inline editor v1
-    path('editor-v2/', include('editor_v2.urls')),  # Inline editor v2
+    path('editor-v2/', include('editor_v2.urls')),  # Inline editor
     path('site-assistant/', include('site_assistant.urls')),  # Site Assistant
     path('i18n/', include('django.conf.urls.i18n')),  # Django's built-in (keep for any other i18n URLs)
     path('set-language/', set_language, name='set_language'),  # Must be AFTER i18n/ to override the name
