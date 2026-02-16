@@ -1045,6 +1045,248 @@ def save_ai_element(request):
         }, status=500)
 
 
+@superuser_required
+@require_http_methods(["POST"])
+def refine_multi(request):
+    """
+    Refine a section or element, returning 3 variations for the user to pick from.
+    No templatize step — returns raw HTML with real text.
+    """
+    try:
+        data = json.loads(request.body)
+        page_id = data.get('page_id')
+        scope = data.get('scope', 'section')
+        section_name = data.get('section_name')
+        element_id = data.get('element_id')
+        instructions = data.get('instructions', '').strip()
+        conversation_history = data.get('conversation_history', [])
+        session_id = data.get('session_id')
+        mode = data.get('mode', 'refine')
+        insert_after = data.get('insert_after')
+
+        if not page_id or not instructions:
+            return JsonResponse({'success': False, 'error': 'Missing page_id or instructions'}, status=400)
+
+        if mode != 'create':
+            if scope == 'element' and (not element_id or not section_name):
+                return JsonResponse({'success': False, 'error': 'Missing element_id or section_name for element scope'}, status=400)
+            if scope == 'section' and not section_name:
+                return JsonResponse({'success': False, 'error': 'Missing section_name for section scope'}, status=400)
+
+        page = Page.objects.get(pk=page_id)
+
+        # Load or create RefinementSession
+        session = None
+        if session_id:
+            try:
+                session = RefinementSession.objects.get(id=session_id, page=page)
+            except RefinementSession.DoesNotExist:
+                session = None
+
+        if not session:
+            if mode == 'create':
+                prefix = '[new section]'
+            elif scope == 'element':
+                prefix = f'[{element_id}]'
+            else:
+                prefix = f'[{section_name}]'
+            session = RefinementSession(
+                page=page,
+                title=f'{prefix} {instructions[:60]}',
+                model_used='gemini-flash',
+                created_by=request.user if request.user.is_authenticated else None,
+            )
+            session.save()
+
+        session.add_user_message(instructions)
+
+        from ai.services import ContentGenerationService
+        service = ContentGenerationService(model_name='gemini-flash')
+
+        if mode == 'create':
+            result = service.generate_section(
+                page_id=page_id,
+                insert_after=insert_after,
+                instructions=instructions,
+                conversation_history=conversation_history,
+            )
+        elif scope == 'element':
+            result = service.refine_element_only(
+                page_id=page_id,
+                section_name=section_name,
+                element_id=element_id,
+                instructions=instructions,
+                conversation_history=conversation_history,
+                multi_option=True,
+            )
+        else:
+            result = service.refine_section_only(
+                page_id=page_id,
+                section_name=section_name,
+                instructions=instructions,
+                conversation_history=conversation_history,
+                multi_option=True,
+            )
+
+        assistant_msg = result.get('assistant_message', 'Here are 3 variations.')
+        if mode == 'create':
+            target = f'new_after_{insert_after or "top"}'
+        else:
+            target = f'{section_name}/{element_id}' if scope == 'element' else section_name
+        session.add_assistant_message(assistant_msg, [target])
+        session.save()
+
+        return JsonResponse({
+            'success': True,
+            'options': result.get('options', []),
+            'assistant_message': assistant_msg,
+            'session_id': session.id,
+        })
+
+    except Page.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Page not found'}, status=400)
+    except json.JSONDecodeError:
+        return JsonResponse({'success': False, 'error': 'Invalid JSON'}, status=400)
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
+@superuser_required
+@require_http_methods(["POST"])
+def apply_option(request):
+    """
+    Templatize + translate the chosen option HTML, then save it to the page.
+    """
+    try:
+        data = json.loads(request.body)
+        page_id = data.get('page_id')
+        scope = data.get('scope', 'section')
+        section_name = data.get('section_name')
+        element_id = data.get('element_id')
+        html = data.get('html', '').strip()
+        mode = data.get('mode', 'replace')
+        insert_after = data.get('insert_after')
+
+        if not page_id or not html:
+            return JsonResponse({'success': False, 'error': 'Missing page_id or html'}, status=400)
+
+        page = Page.objects.get(pk=page_id)
+
+        # Templatize + translate the chosen option
+        from ai.services import ContentGenerationService
+        from core.models import SiteSettings
+        site_settings = SiteSettings.objects.first()
+        default_language = site_settings.get_default_language() if site_settings else 'pt'
+        languages = site_settings.get_language_codes() if site_settings else ['pt', 'en']
+
+        service = ContentGenerationService(model_name='gemini-flash')
+        templatized = service._templatize_and_translate(html, languages, default_language, 'gemini-flash')
+
+        html_template = templatized['html_content']
+        content = templatized['content']
+
+        if mode == 'insert':
+            # Insert new section into page
+            soup = BeautifulSoup(page.html_content or '', 'html.parser')
+            new_soup = BeautifulSoup(html_template, 'html.parser')
+            new_section = new_soup.find('section')
+            if not new_section:
+                return JsonResponse({'success': False, 'error': 'No section found in generated HTML'}, status=400)
+
+            if insert_after:
+                anchor = soup.find('section', attrs={'data-section': insert_after})
+                if anchor:
+                    anchor.insert_after(new_section)
+                else:
+                    # Fallback: append at end
+                    soup.append(new_section)
+            else:
+                # Insert at top (before first section)
+                first_section = soup.find('section')
+                if first_section:
+                    first_section.insert_before(new_section)
+                else:
+                    soup.append(new_section)
+
+            new_html = str(soup)
+            if new_html.startswith('<html><body>'):
+                new_html = new_html[12:-14]
+            page.html_content = new_html
+            change_target = new_section.get('data-section', 'new section')
+
+        elif scope == 'element' and element_id:
+            # Surgical element replacement
+            soup = BeautifulSoup(page.html_content, 'html.parser')
+            old_element = soup.find(attrs={'data-element-id': element_id})
+            if not old_element:
+                return JsonResponse({'success': False, 'error': f'Element "{element_id}" not found'}, status=400)
+
+            new_soup = BeautifulSoup(html_template, 'html.parser')
+            new_element = new_soup.find(attrs={'data-element-id': element_id})
+            if not new_element:
+                children = list(new_soup.children)
+                new_element = children[0] if children else new_soup
+
+            old_element.replace_with(new_element)
+            new_html = str(soup)
+            if new_html.startswith('<html><body>'):
+                new_html = new_html[12:-14]
+            page.html_content = new_html
+            change_target = element_id
+        else:
+            # Surgical section replacement
+            soup = BeautifulSoup(page.html_content, 'html.parser')
+            old_section = soup.find('section', attrs={'data-section': section_name})
+            if not old_section:
+                return JsonResponse({'success': False, 'error': f'Section "{section_name}" not found'}, status=400)
+
+            new_soup = BeautifulSoup(html_template, 'html.parser')
+            new_section = new_soup.find('section', attrs={'data-section': section_name})
+            if not new_section:
+                new_section = new_soup.find('section')
+            if not new_section:
+                return JsonResponse({'success': False, 'error': 'No section found in templatized HTML'}, status=400)
+
+            old_section.replace_with(new_section)
+            new_html = str(soup)
+            if new_html.startswith('<html><body>'):
+                new_html = new_html[12:-14]
+            page.html_content = new_html
+            change_target = section_name
+
+        # Create version for rollback
+        page.create_version(
+            user=request.user,
+            change_summary=f'AI {"new section" if mode == "insert" else "multi-option"} applied: {change_target}'
+        )
+
+        # Merge translations
+        new_translations = content.get('translations', {})
+        page_content = page.content or {}
+        if 'translations' not in page_content:
+            page_content['translations'] = {}
+        for lang_code, lang_trans in new_translations.items():
+            if lang_code not in page_content['translations']:
+                page_content['translations'][lang_code] = {}
+            page_content['translations'][lang_code].update(lang_trans)
+        page.content = page_content
+
+        page.save()
+
+        return JsonResponse({
+            'success': True,
+            'message': f'{scope.capitalize()} saved successfully',
+            'page_id': page.id,
+        })
+
+    except Page.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Page not found'}, status=400)
+    except json.JSONDecodeError:
+        return JsonResponse({'success': False, 'error': 'Invalid JSON'}, status=400)
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
 @staff_member_required
 @require_http_methods(["POST"])
 def update_section_video(request):
