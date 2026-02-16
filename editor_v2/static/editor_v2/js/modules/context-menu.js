@@ -3,6 +3,7 @@
  */
 import { events } from '../lib/events.js';
 import { $, getContentWrapper, isTextElement, hasStoredElementId } from '../lib/dom.js';
+import { insertBefore, insertAfterSection } from './section-inserter.js';
 
 function esc(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
@@ -33,6 +34,8 @@ function buildItems(el) {
       items.push({ label: 'AI Refine Element', icon: '✦', action: () => events.emit('context:ai-refine', { section: name, elementId: elId }) });
     }
     items.push({ label: 'AI Refine Section', icon: '✦', action: () => events.emit('context:ai-refine', { section: name }) });
+    items.push({ label: 'Insert Section Before', icon: '+', action: () => insertBefore(name) });
+    items.push({ label: 'Insert Section After', icon: '+', action: () => insertAfterSection(name) });
     items.push(null);
   }
   items.push({ label: 'Copy Element HTML', icon: '⎘', action: () => navigator.clipboard.writeText(el.outerHTML) });
