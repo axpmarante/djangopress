@@ -164,6 +164,29 @@ Return the complete, corrected JSON now:"""
         # Otherwise return content stripped of leading/trailing whitespace
         return content.strip()
 
+    def _split_multi_options(self, html: str) -> list:
+        """
+        Split already-extracted HTML containing multiple options separated by
+        <!-- OPTION_N --> markers into a list of HTML strings.
+
+        Args:
+            html: HTML string (already extracted from LLM response)
+
+        Returns:
+            List of HTML strings (1-3 items). Falls back to [html]
+            if no markers found.
+        """
+        # Split on <!-- OPTION_N --> markers
+        parts = re.split(r'<!--\s*OPTION_\d+\s*-->', html)
+
+        # Filter out empty/whitespace-only parts
+        options = [p.strip() for p in parts if p.strip()]
+
+        if not options:
+            return [html]
+
+        return options[:3]  # Cap at 3
+
     def _detemplatize_html(self, html: str, translations: dict, language: str) -> str:
         """
         Replace {{ trans.xxx }} variables in HTML with actual text from translations.
@@ -949,6 +972,7 @@ Return the complete, corrected JSON now:"""
         section_name: str,
         instructions: str,
         conversation_history: list = None,
+        multi_option: bool = False,
         model_override: str = None
     ) -> Dict:
         """
@@ -1031,6 +1055,7 @@ Return the complete, corrected JSON now:"""
             conversation_history=history_text,
             pages=pages_data,
             languages=languages,
+            multi_option=multi_option,
         )
 
         messages = [
@@ -1066,6 +1091,27 @@ Return the complete, corrected JSON now:"""
             raise ValueError("Step 1 returned empty or too-short HTML")
 
         print(f"Step 1 produced {len(refined_html)} chars of refined section HTML")
+
+        if multi_option:
+            # Multi-option: split into options, skip templatize, return raw HTML
+            options = self._split_multi_options(refined_html)
+            validated = []
+            for i, opt_html in enumerate(options):
+                opt_soup = BeautifulSoup(opt_html, 'html.parser')
+                opt_section = opt_soup.find('section', attrs={'data-section': section_name})
+                if opt_section:
+                    validated.append({'html': str(opt_section)})
+                elif opt_soup.find('section'):
+                    validated.append({'html': str(opt_soup.find('section'))})
+                else:
+                    validated.append({'html': opt_html})
+                print(f"  Option {i+1}: {len(validated[-1]['html'])} chars")
+
+            assistant_message = f"Here are {len(validated)} variations for the {section_name} section."
+            return {
+                'options': validated,
+                'assistant_message': assistant_message,
+            }
 
         # Verify the response contains the target section
         soup = BeautifulSoup(refined_html, 'html.parser')
@@ -1106,6 +1152,149 @@ Return the complete, corrected JSON now:"""
             'assistant_message': assistant_message,
         }
 
+    def generate_section(
+        self,
+        page_id: int,
+        insert_after: str,
+        instructions: str,
+        conversation_history: list = None,
+        model_override: str = None
+    ) -> Dict:
+        """
+        Generate a brand new section (3 variations) to insert into a page.
+        Returns raw HTML options (no templatization — that happens when the user picks one).
+
+        Args:
+            page_id: ID of the page to add the section to
+            insert_after: data-section value of the section to insert after (empty/None = top of page)
+            instructions: User's description of what the new section should be
+            conversation_history: List of {role, content} dicts for chat context
+            model_override: Override the default model
+
+        Returns:
+            Dict with 'options' (list of {'html': str}) and 'assistant_message'
+        """
+        from core.models import Page, SiteSettings
+        from bs4 import BeautifulSoup
+
+        print(f"\n=== Generating New Section ===")
+        print(f"Page ID: {page_id}, Insert after: {insert_after or '(top of page)'}")
+        print(f"Instructions: {instructions}")
+
+        try:
+            page = Page.objects.get(id=page_id)
+        except Page.DoesNotExist:
+            raise ValueError(f"Page with ID {page_id} not found")
+
+        site_settings = SiteSettings.objects.first()
+        default_language = site_settings.get_default_language() if site_settings else 'pt'
+        site_name = site_settings.get_site_name(default_language) if site_settings else 'Website'
+        site_description = site_settings.get_site_description(default_language) if site_settings else ''
+        project_briefing = site_settings.get_project_briefing() if site_settings else ''
+        languages = site_settings.get_language_codes() if site_settings else ['pt', 'en']
+        design_guide = site_settings.design_guide if site_settings else ''
+        model = model_override or self.model_name
+
+        page_title = page.default_title
+        page_slug = page.default_slug
+
+        # Build pages list for inter-page linking context
+        pages_data = []
+        for p in Page.objects.filter(is_active=True).order_by('id'):
+            pages_data.append({'title': p.title_i18n or {}, 'slug': p.slug_i18n or {}})
+
+        # De-templatize full page HTML
+        current_html = page.html_content or ''
+        current_translations = (page.content or {}).get('translations', {})
+
+        if current_translations.get(default_language):
+            clean_html = self._detemplatize_html(current_html, current_translations, default_language)
+        else:
+            clean_html = current_html
+
+        # Build conversation history string for prompt
+        history_text = ''
+        if conversation_history:
+            for msg in conversation_history:
+                role = msg.get('role', 'user')
+                content = msg.get('content', '')
+                if role == 'user':
+                    history_text += f"\nUser: {content}"
+                elif role == 'assistant':
+                    history_text += f"\nAssistant: {content}"
+
+        # Generate new section HTML (3 variations)
+        print(f"\n--- Generating new section (insert after '{insert_after or 'top'}') in {default_language.upper()} ---")
+
+        system_prompt, user_prompt = PromptTemplates.get_section_generation_prompt(
+            site_name=site_name,
+            site_description=site_description,
+            project_briefing=project_briefing,
+            default_language=default_language,
+            full_page_html=clean_html,
+            insert_after=insert_after,
+            user_request=instructions,
+            page_title=page_title,
+            page_slug=page_slug,
+            design_guide=design_guide,
+            conversation_history=history_text,
+            pages=pages_data,
+            languages=languages,
+        )
+
+        messages = [
+            {'role': 'system', 'content': system_prompt},
+            {'role': 'user', 'content': user_prompt}
+        ]
+
+        actual_model, provider_str = self._get_model_info(model)
+        t0 = time.time()
+        try:
+            response = self.llm.get_completion(messages, tool_name=model)
+            usage = self._extract_usage(response)
+            log_ai_call(
+                action='generate_section', model_name=actual_model, provider=provider_str,
+                system_prompt=system_prompt, user_prompt=user_prompt,
+                response_text=response.choices[0].message.content,
+                duration_ms=int((time.time() - t0) * 1000),
+                page=page, section_name=f'new_after_{insert_after or "top"}', **usage,
+            )
+        except Exception as e:
+            log_ai_call(
+                action='generate_section', model_name=actual_model, provider=provider_str,
+                system_prompt=system_prompt, user_prompt=user_prompt,
+                duration_ms=int((time.time() - t0) * 1000),
+                page=page, section_name=f'new_after_{insert_after or "top"}',
+                success=False, error_message=str(e),
+            )
+            raise
+
+        generated_html = self._extract_html_from_response(response.choices[0].message.content)
+
+        if not generated_html or len(generated_html.strip()) < 50:
+            raise ValueError("AI returned empty or too-short HTML for new section")
+
+        print(f"AI produced {len(generated_html)} chars of new section HTML")
+
+        # Split into options and validate each one
+        options = self._split_multi_options(generated_html)
+        validated = []
+        for i, opt_html in enumerate(options):
+            opt_soup = BeautifulSoup(opt_html, 'html.parser')
+            # Don't filter by specific data-section name — the LLM creates the name
+            section_tag = opt_soup.find('section')
+            if section_tag:
+                validated.append({'html': str(section_tag)})
+            else:
+                validated.append({'html': opt_html})
+            print(f"  Option {i+1}: {len(validated[-1]['html'])} chars")
+
+        assistant_message = f"Here are {len(validated)} design options for the new section."
+        return {
+            'options': validated,
+            'assistant_message': assistant_message,
+        }
+
     def refine_element_only(
         self,
         page_id: int,
@@ -1113,6 +1302,7 @@ Return the complete, corrected JSON now:"""
         element_id: str,
         instructions: str,
         conversation_history: list = None,
+        multi_option: bool = False,
         model_override: str = None
     ) -> Dict:
         """
@@ -1188,6 +1378,7 @@ Return the complete, corrected JSON now:"""
             user_request=instructions,
             design_guide=design_guide,
             conversation_history=history_text,
+            multi_option=multi_option,
         )
 
         messages = [
@@ -1223,6 +1414,25 @@ Return the complete, corrected JSON now:"""
             raise ValueError("Step 1 returned empty or too-short HTML")
 
         print(f"Step 1 produced {len(refined_html)} chars of refined element HTML")
+
+        if multi_option:
+            # Multi-option: split into options, skip templatize, return raw HTML
+            options = self._split_multi_options(refined_html)
+            validated = []
+            for i, opt_html in enumerate(options):
+                opt_soup = BeautifulSoup(opt_html, 'html.parser')
+                opt_el = opt_soup.find(attrs={'data-element-id': element_id})
+                if opt_el:
+                    validated.append({'html': str(opt_el)})
+                else:
+                    validated.append({'html': opt_html})
+                print(f"  Option {i+1}: {len(validated[-1]['html'])} chars")
+
+            assistant_message = f"Here are {len(validated)} variations for the {element_id} element."
+            return {
+                'options': validated,
+                'assistant_message': assistant_message,
+            }
 
         # Verify the response contains the target element
         result_soup = BeautifulSoup(refined_html, 'html.parser')
