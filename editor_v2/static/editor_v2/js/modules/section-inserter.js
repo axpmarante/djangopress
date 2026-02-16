@@ -68,23 +68,24 @@ function insertPlaceholder(afterSectionName) {
     placeholder.className = 'ev2-section-placeholder';
     placeholder.textContent = 'New section \u2014 describe it in the AI panel \u2192';
 
+    // Sections live inside <main>, not directly in .editor-v2-content
+    const container = wrapper.querySelector('main') || wrapper;
+
     if (afterSectionName === null) {
         // Insert before the first section, or append if the page is empty.
         const sections = getSections();
         if (sections.length > 0) {
-            wrapper.insertBefore(placeholder, sections[0]);
+            sections[0].parentNode.insertBefore(placeholder, sections[0]);
         } else {
-            wrapper.appendChild(placeholder);
+            container.appendChild(placeholder);
         }
     } else {
         const target = wrapper.querySelector(`[data-section="${CSS.escape(afterSectionName)}"]`);
-        if (target && target.nextSibling) {
-            wrapper.insertBefore(placeholder, target.nextSibling);
-        } else if (target) {
-            wrapper.appendChild(placeholder);
+        if (target) {
+            target.parentNode.insertBefore(placeholder, target.nextSibling);
         } else {
             // Fallback — section not found; append at end
-            wrapper.appendChild(placeholder);
+            container.appendChild(placeholder);
         }
     }
 
@@ -110,27 +111,25 @@ export function renderLines() {
     const sections = getSections();
 
     if (sections.length === 0) {
-        // Empty page — single line at the top.
+        // Empty page — single line inside <main> or wrapper.
+        const main = wrapper.querySelector('main') || wrapper;
         const line = createLine(null);
-        wrapper.prepend(line);
+        main.prepend(line);
         lines.push(line);
         return;
     }
 
     // Line before the first section (afterSectionName = null → insert at top).
+    // Use parentNode because sections live inside <main>, not directly in wrapper.
     const firstLine = createLine(null);
-    wrapper.insertBefore(firstLine, sections[0]);
+    sections[0].parentNode.insertBefore(firstLine, sections[0]);
     lines.push(firstLine);
 
     // Line after each section (afterSectionName = that section's name).
     for (const section of sections) {
         const name = section.getAttribute('data-section');
         const line = createLine(name);
-        if (section.nextSibling) {
-            wrapper.insertBefore(line, section.nextSibling);
-        } else {
-            wrapper.appendChild(line);
-        }
+        section.parentNode.insertBefore(line, section.nextSibling);
         lines.push(line);
     }
 }
