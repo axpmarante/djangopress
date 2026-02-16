@@ -13,7 +13,8 @@ import * as contextMenu   from './modules/context-menu.js';
 import * as commandPalette from './modules/command-palette.js';
 import * as aiPanel       from './modules/ai-panel.js';
 import * as imagePicker   from './modules/image-picker.js';
-import * as versions      from './modules/versions.js';
+import * as versions         from './modules/versions.js';
+import * as sectionInserter  from './modules/section-inserter.js';
 
 document.addEventListener('DOMContentLoaded', () => {
     changes.init();
@@ -25,6 +26,7 @@ document.addEventListener('DOMContentLoaded', () => {
     aiPanel.init();
     imagePicker.init();
     versions.init();
+    sectionInserter.init();
 
     console.log('Editor v2 active');
 });
