@@ -1185,6 +1185,12 @@ def apply_option(request):
         html_template = templatized['html_content']
         content = templatized['content']
 
+        # Create version for rollback BEFORE modifying page.html_content
+        page.create_version(
+            user=request.user,
+            change_summary=f'AI {"new section" if mode == "insert" else "multi-option"} applied'
+        )
+
         if mode == 'insert':
             # Insert new section into page
             soup = BeautifulSoup(page.html_content or '', 'html.parser')
@@ -1211,8 +1217,7 @@ def apply_option(request):
             new_html = str(soup)
             if new_html.startswith('<html><body>'):
                 new_html = new_html[12:-14]
-            page.html_content = new_html
-            change_target = new_section.get('data-section', 'new section')
+            page.html_content = _sanitize_trans_vars(new_html)
 
         elif scope == 'element' and element_id:
             # Surgical element replacement
@@ -1231,8 +1236,8 @@ def apply_option(request):
             new_html = str(soup)
             if new_html.startswith('<html><body>'):
                 new_html = new_html[12:-14]
-            page.html_content = new_html
-            change_target = element_id
+            page.html_content = _sanitize_trans_vars(new_html)
+
         else:
             # Surgical section replacement
             soup = BeautifulSoup(page.html_content, 'html.parser')
@@ -1251,14 +1256,7 @@ def apply_option(request):
             new_html = str(soup)
             if new_html.startswith('<html><body>'):
                 new_html = new_html[12:-14]
-            page.html_content = new_html
-            change_target = section_name
-
-        # Create version for rollback
-        page.create_version(
-            user=request.user,
-            change_summary=f'AI {"new section" if mode == "insert" else "multi-option"} applied: {change_target}'
-        )
+            page.html_content = _sanitize_trans_vars(new_html)
 
         # Merge translations
         new_translations = content.get('translations', {})
