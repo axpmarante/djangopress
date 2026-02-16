@@ -4,6 +4,7 @@
 import { events } from '../lib/events.js';
 import { $, hasStoredElementId } from '../lib/dom.js';
 import { api } from '../lib/api.js';
+import { getInsertState, previewInPlaceholder, resetPlaceholder, removePlaceholder, renderLines } from './section-inserter.js';
 
 function esc(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
@@ -22,6 +23,8 @@ let pendingScope = null;
 let originalHtml = null;
 let activeTab = null;
 let sessionLoaded = false;
+let options = [];               // multi-option: array of {html} objects
+let activeOption = 0;           // which option tab is active (0, 1, 2)
 
 function detemplatize(html, translations, lang) {
     const trans = translations?.[lang] || {};
@@ -58,6 +61,11 @@ export function init() {
         activeScope = data?.elementId ? 'element' : 'section';
         events.emit('sidebar:switch-tab', 'ai');
     }));
+    unsubs.push(events.on('inserter:activated', (data) => {
+        activeScope = 'new-section';
+        currentSection = data.afterSection;
+        events.emit('sidebar:switch-tab', 'ai');
+    }));
 }
 
 export function destroy() {
@@ -68,6 +76,8 @@ export function destroy() {
     sessionId = null; sessionsList = []; messages = [];
     pendingResult = null; pendingScope = null;
     originalHtml = null; activeTab = null; sessionLoaded = false;
+    options = []; activeOption = 0;
+    removePlaceholder();
 }
 
 async function loadSession(targetSessionId) {
@@ -110,7 +120,10 @@ function render() {
         ${buildSessionBar()}
         ${buildScopeSelect()}
         <div class="ev2-ai-messages" id="ev2-ai-msgs"></div>
-        ${pendingResult ? `<div class="ev2-ai-actions">
+        ${(options.length > 0 || pendingResult) ? `<div class="ev2-ai-actions">
+            ${options.length > 1 ? `<div class="ev2-option-tabs">
+                ${options.map((_, i) => `<button class="ev2-option-tab ${i === activeOption ? 'active' : ''}" data-option="${i}">${String.fromCharCode(65 + i)}</button>`).join('')}
+            </div>` : ''}
             <button id="ev2-ai-apply" class="ev2-btn-primary" style="flex:1;padding:6px;font-size:12px;">Apply</button>
             <button id="ev2-ai-discard" class="ev2-btn-secondary" style="flex:1;padding:6px;font-size:12px;">Discard</button>
         </div>` : ''}
@@ -132,6 +145,18 @@ function render() {
     $('#ev2-ai-send')?.addEventListener('click', send);
     $('#ev2-ai-apply')?.addEventListener('click', applyResult);
     $('#ev2-ai-discard')?.addEventListener('click', discardResult);
+    // Option tab click handlers
+    container.querySelectorAll('.ev2-option-tab').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const idx = parseInt(btn.dataset.option, 10);
+            if (idx === activeOption || !options[idx]) return;
+            restorePreview();
+            activeOption = idx;
+            showMultiPreview(idx);
+            container.querySelectorAll('.ev2-option-tab').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+        });
+    });
     bindSessionBar();
     bindScopeSelect();
     bindStyleTools();
@@ -168,6 +193,12 @@ function bindSessionBar() {
         pendingResult = null;
         pendingScope = null;
         originalHtml = null;
+        options = [];
+        activeOption = 0;
+        if (activeScope === 'new-section') {
+            removePlaceholder();
+            activeScope = 'page';
+        }
         await loadSession(parseInt(id));
     });
     $('#ev2-new-chat')?.addEventListener('click', () => {
@@ -177,6 +208,12 @@ function bindSessionBar() {
         pendingResult = null;
         pendingScope = null;
         originalHtml = null;
+        options = [];
+        activeOption = 0;
+        if (activeScope === 'new-section') {
+            removePlaceholder();
+            activeScope = 'page';
+        }
         render();
     });
 }
@@ -191,6 +228,9 @@ function buildScopeSelect() {
     if (currentElementId) {
         options += `<option value="element"${activeScope === 'element' ? ' selected' : ''}>Element: ${esc(currentElementId)}</option>`;
     }
+    if (activeScope === 'new-section') {
+        options += '<option value="new-section" selected>New Section</option>';
+    }
 
     return `<div class="ev2-scope-row">
         <span class="ev2-scope-label">Target</span>
@@ -203,7 +243,13 @@ function bindScopeSelect() {
         restorePreview();
         pendingResult = null;
         pendingScope = null;
+        options = [];
+        activeOption = 0;
         activeScope = e.target.value;
+        if (e.target.value !== 'new-section') {
+            removePlaceholder();
+            renderLines();
+        }
         render();
     });
 }
@@ -240,6 +286,7 @@ async function send() {
     let scopeLabel = 'page';
     if (activeScope === 'section') scopeLabel = currentSection;
     if (activeScope === 'element') scopeLabel = currentElementId;
+    if (activeScope === 'new-section') scopeLabel = 'new section';
 
     messages.push({ role: 'user', content: text, scope: scopeLabel });
     renderMessages();
@@ -249,7 +296,17 @@ async function send() {
         const history = messages.filter(m => m.role !== 'system').slice(0, -1).map(m => ({ role: m.role, content: m.content }));
         let res;
 
-        if (activeScope === 'page') {
+        if (activeScope === 'new-section') {
+            const insertState = getInsertState();
+            res = await api.post('/refine-multi/', {
+                page_id: config().pageId,
+                mode: 'create',
+                insert_after: insertState?.afterSection || null,
+                instructions: text,
+                conversation_history: history,
+                session_id: sessionId,
+            });
+        } else if (activeScope === 'page') {
             res = await api.post('/refine-page/', {
                 page_id: config().pageId,
                 instructions: text,
@@ -257,8 +314,9 @@ async function send() {
                 session_id: sessionId,
             });
         } else if (activeScope === 'element') {
-            res = await api.post('/refine-element/', {
+            res = await api.post('/refine-multi/', {
                 page_id: config().pageId,
+                scope: 'element',
                 section_name: currentSection,
                 element_id: currentElementId,
                 instructions: text,
@@ -266,8 +324,9 @@ async function send() {
                 session_id: sessionId,
             });
         } else {
-            res = await api.post('/refine-section/', {
+            res = await api.post('/refine-multi/', {
                 page_id: config().pageId,
+                scope: 'section',
                 section_name: currentSection,
                 instructions: text,
                 conversation_history: history,
@@ -279,10 +338,20 @@ async function send() {
             sessionId = res.session_id || sessionId;
             const msg = res.assistant_message || 'Changes ready to apply.';
             messages.push({ role: 'assistant', content: msg, scope: scopeLabel });
-            pendingResult = res.page || res.section || res.element;
-            pendingScope = activeScope;
-            if (pendingResult) showPreview();
-            // Refresh sessions list so the new/updated session appears in dropdown
+
+            if (res.options) {
+                // Multi-option response
+                options = res.options;
+                activeOption = 0;
+                pendingScope = activeScope;
+                if (options.length > 0) showMultiPreview(0);
+            } else {
+                // Single-option response (page scope)
+                pendingResult = res.page || res.section || res.element;
+                pendingScope = activeScope;
+                options = [];
+                if (pendingResult) showPreview();
+            }
             refreshSessionsList();
         } else {
             messages.push({ role: 'assistant', content: 'Error: ' + (res.error || 'Unknown error'), scope: scopeLabel });
@@ -324,34 +393,51 @@ function setLoading(loading) {
 // ── Apply / Discard ──
 
 async function applyResult() {
-    if (!pendingResult || !pendingScope) return;
+    const applyBtn = $('#ev2-ai-apply');
+    const discardBtn = $('#ev2-ai-discard');
+    if (applyBtn) { applyBtn.textContent = 'Saving...'; applyBtn.disabled = true; }
+    if (discardBtn) discardBtn.disabled = true;
+
     try {
-        if (pendingScope === 'page') {
-            await api.post('/save-ai-page/', {
+        if (options.length > 0 && pendingScope) {
+            // Multi-option: send chosen option to apply-option endpoint
+            const chosen = options[activeOption];
+            if (!chosen) return;
+            const isInsert = pendingScope === 'new-section';
+            const insertState = getInsertState();
+            await api.post('/apply-option/', {
                 page_id: config().pageId,
-                html_template: pendingResult.html_template,
-                content: pendingResult.content,
+                scope: isInsert ? 'new-section' : pendingScope,
+                section_name: isInsert ? null : currentSection,
+                element_id: isInsert ? null : currentElementId,
+                html: chosen.html,
+                ...(isInsert && { mode: 'insert', insert_after: insertState?.afterSection || null }),
             });
-        } else if (pendingScope === 'element') {
-            await api.post('/save-ai-element/', {
-                page_id: config().pageId,
-                section_name: currentSection,
-                element_id: currentElementId,
-                html_template: pendingResult.html_template,
-                content: pendingResult.content,
-            });
+        } else if (pendingResult && pendingScope) {
+            // Single-option (page scope): existing flow
+            if (pendingScope === 'page') {
+                await api.post('/save-ai-page/', {
+                    page_id: config().pageId,
+                    html_template: pendingResult.html_template,
+                    content: pendingResult.content,
+                });
+            }
         } else {
-            await api.post('/save-ai-section/', {
-                page_id: config().pageId,
-                section_name: currentSection,
-                html_template: pendingResult.html_template,
-                content: pendingResult.content,
-            });
+            return;
         }
         pendingResult = null;
         pendingScope = null;
-        window.location.reload();
+        options = [];
+
+        // Visual feedback before reload
+        if (applyBtn) {
+            applyBtn.textContent = 'Saved!';
+            applyBtn.style.background = '#10b981';
+        }
+        setTimeout(() => window.location.reload(), 600);
     } catch (err) {
+        if (applyBtn) { applyBtn.textContent = 'Apply'; applyBtn.disabled = false; }
+        if (discardBtn) discardBtn.disabled = false;
         messages.push({ role: 'assistant', content: 'Save failed: ' + (err.message || err), scope: '' });
         render();
     }
@@ -361,6 +447,13 @@ function discardResult() {
     restorePreview();
     pendingResult = null;
     pendingScope = null;
+    options = [];
+    activeOption = 0;
+    if (activeScope === 'new-section') {
+        removePlaceholder();
+        activeScope = 'page';
+        renderLines();
+    }
     render();
 }
 
@@ -390,7 +483,36 @@ function showPreview() {
     }
 }
 
+function showMultiPreview(index) {
+    if (!options[index]) return;
+    const html = options[index].html;
+
+    if (pendingScope === 'new-section') {
+        previewInPlaceholder(html);
+        return;
+    }
+
+    // Restore before switching
+    if (originalHtml) restorePreview();
+
+    if (pendingScope === 'element' && currentElementId) {
+        const el = document.querySelector(`[data-element-id="${currentElementId}"]`);
+        if (!el) return;
+        if (!originalHtml) originalHtml = el.outerHTML;
+        el.outerHTML = html;
+    } else if (pendingScope === 'section' && currentSection) {
+        const sec = document.querySelector(`[data-section="${currentSection}"]`);
+        if (!sec) return;
+        if (!originalHtml) originalHtml = sec.outerHTML;
+        sec.outerHTML = html;
+    }
+}
+
 function restorePreview() {
+    if (pendingScope === 'new-section') {
+        resetPlaceholder();
+        return;
+    }
     if (!originalHtml) return;
     if (pendingScope === 'page') {
         const wrapper = document.querySelector('.editor-v2-content');
