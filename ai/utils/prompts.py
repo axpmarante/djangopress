@@ -922,7 +922,8 @@ Do NOT undo any of these previous changes unless specifically asked to.
         design_guide: str = '',
         conversation_history: str = '',
         pages: list = None,
-        languages: list = None
+        languages: list = None,
+        multi_option: bool = False,
     ) -> tuple:
         """
         Generate prompt for section-only refinement.
@@ -937,6 +938,21 @@ Do NOT undo any of these previous changes unless specifically asked to.
         design_guidelines = ""
         if design_guide:
             design_guidelines = "\n\n## Design Guide\nFollow these design patterns and conventions:\n" + design_guide
+
+        multi_option_block = ""
+        if multi_option:
+            multi_option_block = f"""
+
+## Multiple Options
+Return exactly 3 distinct variations of the section. Separate them with HTML comment markers on their own line:
+<!-- OPTION_1 -->
+(first variation — full <section> block)
+<!-- OPTION_2 -->
+(second variation — full <section> block)
+<!-- OPTION_3 -->
+(third variation — full <section> block)
+
+Make each variation meaningfully different: vary layout structure, visual emphasis, spacing, or content arrangement. All 3 must satisfy the user request and include the complete <section data-section="{section_name}"> wrapper."""
 
         system_prompt = f"""You are a senior frontend designer specializing in Tailwind CSS. Your goal is to edit ONE specific section of a webpage.
 
@@ -968,7 +984,7 @@ Edit ONLY the `<section data-section="{section_name}">` section based on the use
 - Return ONLY the updated section HTML
 - Do NOT use `{{{{ trans.xxx }}}}` or any template variables
 - Do NOT wrap the output in JSON
-- No markdown code blocks, no explanations{design_guidelines}
+- No markdown code blocks, no explanations{multi_option_block}{design_guidelines}
 {PromptTemplates._get_components_reference()}"""
 
         pages_info = PromptTemplates._format_pages_info(pages, languages or [])
@@ -1024,6 +1040,135 @@ Return ONLY the updated `<section data-section="{section_name}">...</section>` b
         return (system_prompt, user_prompt)
 
     @staticmethod
+    def get_section_generation_prompt(
+        site_name: str,
+        site_description: str,
+        project_briefing: str,
+        default_language: str,
+        full_page_html: str,
+        insert_after: str,
+        user_request: str,
+        page_title: str = '',
+        page_slug: str = '',
+        design_guide: str = '',
+        conversation_history: str = '',
+        pages: list = None,
+        languages: list = None,
+    ) -> tuple:
+        """
+        Generate prompt for creating a brand new section on a page.
+        Sends the full page for design context and asks the LLM to return
+        3 variations of a new section.
+
+        Returns:
+            Tuple of (system_prompt, user_prompt)
+        """
+        lang_name = {'pt': 'Portuguese', 'en': 'English', 'es': 'Spanish', 'fr': 'French', 'de': 'German', 'it': 'Italian'}.get(default_language, default_language.upper())
+
+        if insert_after:
+            position_context = f'after the `<section data-section="{insert_after}">` section'
+        else:
+            position_context = 'at the top of the page (before all other sections)'
+
+        design_guidelines = ""
+        if design_guide:
+            design_guidelines = "\n\n## Design Guide\nFollow these design patterns and conventions:\n" + design_guide
+
+        system_prompt = f"""You are a senior frontend designer specializing in Tailwind CSS. Your goal is to create a brand new section for a webpage.
+
+## Your Task
+Create a brand new section based on the user's description. The section will be inserted {position_context}.
+
+## Technical Requirements
+- Use Tailwind CSS classes inline for all styling
+- Make responsive: `md:text-6xl`, `lg:grid-cols-3`, `sm:flex-row`
+- The `<section>` MUST have `data-section="section_name"` and `id="section_name"` attributes — choose a descriptive snake_case name based on the section's purpose (e.g. `testimonials`, `pricing_plans`, `team_members`)
+- Use `data-element-id="unique_id"` on editable text elements (headings, paragraphs, buttons, links)
+- Match the visual style, colors, spacing, and typography of the existing page sections
+- All text must be in {lang_name} — do NOT use template variables
+
+## Images
+- NEVER use external URLs (Unsplash, Pexels, etc.). Instead use placeholder images:
+  - `<img>` tags: use `src="https://placehold.co/WIDTHxHEIGHT?text=Label"` with `data-image-prompt="description of ideal image"` and `data-image-name="slug_name"`
+  - Background images: use a CSS background-color as fallback and add a child `<img>` with `class="absolute inset-0 w-full h-full object-cover"` using the same placeholder pattern above, so the image can be processed later
+
+## Multiple Options
+Return exactly 3 distinct variations of the new section. Separate them with HTML comment markers on their own line:
+<!-- OPTION_1 -->
+(first variation — full <section> block)
+<!-- OPTION_2 -->
+(second variation — full <section> block)
+<!-- OPTION_3 -->
+(third variation — full <section> block)
+
+Make each variation meaningfully different: vary layout structure, visual emphasis, spacing, or content arrangement. All 3 must satisfy the user request and include the complete `<section data-section="section_name">` wrapper with matching `id`.
+
+## CRITICAL: Return ONLY the New Section Variations
+- Output ONLY the 3 `<section>` variations with their option markers
+- Do NOT return any existing sections from the page
+- Do NOT include `<html>`, `<head>`, `<body>`, `<header>`, `<nav>`, or `<footer>` tags
+- Do NOT include `<script>` or `<link>` tags
+
+## Important
+- Return ONLY the new section HTML (3 variations)
+- Do NOT use `{{{{ trans.xxx }}}}` or any template variables
+- Do NOT wrap the output in JSON
+- No markdown code blocks, no explanations{design_guidelines}
+{PromptTemplates._get_components_reference()}"""
+
+        pages_info = PromptTemplates._format_pages_info(pages, languages or [])
+
+        history_block = ""
+        if conversation_history:
+            history_block = f"""
+# PREVIOUS CONVERSATION
+
+This section is being created through a conversation:
+
+{conversation_history}
+
+Take into account any previous feedback or direction from the user.
+
+---
+"""
+
+        user_prompt = f"""# PROJECT CONTEXT
+
+**Site Name:** {site_name}
+**Description:** {site_description}
+
+**Project Briefing:**
+{project_briefing}
+{pages_info}
+---
+
+# EXISTING PAGE — do NOT reproduce these sections
+
+The full page HTML is provided below so you can see the overall design, colors, spacing, and style. Use it as context to keep the new section visually consistent with the rest of the page. Do NOT reproduce any of these existing sections.
+
+**Page:** {page_title if page_title else 'Untitled'}
+**Slug:** {page_slug if page_slug else 'unknown'}
+**Language:** {lang_name}
+
+```html
+{full_page_html if full_page_html.strip() else "<!-- EMPTY PAGE -->"}
+```
+
+---
+{history_block}
+# USER REQUEST
+
+Create a new section to be inserted {position_context}:
+
+{user_request}
+
+---
+
+Return ONLY 3 variations of the new section, separated by <!-- OPTION_1 -->, <!-- OPTION_2 -->, <!-- OPTION_3 --> markers. Each must be a complete `<section>` block. All text in {lang_name}. No template variables, no JSON, no code blocks."""
+
+        return (system_prompt, user_prompt)
+
+    @staticmethod
     def get_element_refinement_prompt(
         site_name: str,
         site_description: str,
@@ -1036,6 +1181,7 @@ Return ONLY the updated `<section data-section="{section_name}">...</section>` b
         user_request: str,
         design_guide: str = '',
         conversation_history: str = '',
+        multi_option: bool = False,
     ) -> tuple:
         """
         Generate prompt for element-level refinement.
@@ -1050,6 +1196,22 @@ Return ONLY the updated `<section data-section="{section_name}">...</section>` b
         design_guidelines = ""
         if design_guide:
             design_guidelines = "\n\n## Design Guide\nFollow these design patterns and conventions:\n" + design_guide
+
+
+        multi_option_block = ""
+        if multi_option:
+            multi_option_block = f"""
+
+## Multiple Options
+Return exactly 3 distinct variations of the element. Separate them with HTML comment markers on their own line:
+<!-- OPTION_1 -->
+(first variation — the element with data-element-id="{element_id}")
+<!-- OPTION_2 -->
+(second variation)
+<!-- OPTION_3 -->
+(third variation)
+
+Make each variation meaningfully different: vary styling, layout, or visual approach. All 3 must satisfy the user request and keep the data-element-id="{element_id}" attribute."""
 
         system_prompt = f"""You are a senior frontend designer specializing in Tailwind CSS. Your goal is to edit ONE specific element within a webpage section.
 
@@ -1079,7 +1241,7 @@ Edit ONLY the element with `data-element-id="{element_id}"` based on the user's 
 - Return ONLY the updated element HTML
 - Do NOT use `{{{{{{ trans.xxx }}}}}}` or any template variables
 - Do NOT wrap the output in JSON
-- No markdown code blocks, no explanations{design_guidelines}
+- No markdown code blocks, no explanations{multi_option_block}{design_guidelines}
 {PromptTemplates._get_components_reference()}"""
 
         history_block = ""
