@@ -31,7 +31,9 @@ function renderMediaCollection(container, collectionEl) {
     const type = collectionEl.getAttribute('data-media-collection') || 'media';
     const section = collectionEl.closest('[data-section]');
     const sectionName = section ? section.getAttribute('data-section') : null;
-    const imgs = Array.from(collectionEl.querySelectorAll('img'));
+    // Filter out Splide cloned slides (type:"loop" clones elements)
+    const imgs = Array.from(collectionEl.querySelectorAll('img'))
+        .filter(img => !img.closest('.splide__slide--clone'));
 
     let html = '<div class="ev2-media-collection-header">';
     html += `<h4>${imgs.length} image${imgs.length !== 1 ? 's' : ''}</h4>`;
