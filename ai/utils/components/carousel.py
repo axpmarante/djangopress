@@ -10,9 +10,10 @@ NAME = "carousel"
 DESCRIPTION = "Splide.js carousel/slider for image galleries, testimonials, logos, etc."
 
 INDEX_ENTRY = (
-    "Splide.js carousel. `.splide` container with `data-splide` JSON config, "
-    "`.splide__track > .splide__list > .splide__slide` structure. "
-    "Options: type (slide|loop|fade), perPage, gap, autoplay, breakpoints."
+    "Carousel / slider (Splide.js). Use for any sliding/scrolling content: "
+    "image sliders, testimonial carousels, logo strips, team member cards. "
+    "`.splide` container with `data-splide` JSON config, "
+    "`.splide__track > .splide__list > .splide__slide` structure."
 )
 
 FULL_REFERENCE = """\
