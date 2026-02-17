@@ -1338,6 +1338,75 @@ body[data-edit-mode="v2"] #admin-toolbar {
   background: #fee2e2;
 }
 
+/* --------------------------------------------------------------------------
+   Design Tab — Tailwind Class Dropdowns
+   -------------------------------------------------------------------------- */
+.ev2-class-group {
+  margin-bottom: 14px;
+}
+
+.ev2-class-group-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ev2-text-faint);
+  margin-bottom: 6px;
+}
+
+.ev2-class-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 5px;
+}
+
+.ev2-class-row label {
+  font-size: 12px;
+  color: var(--ev2-text-secondary);
+  white-space: nowrap;
+  min-width: 80px;
+}
+
+.ev2-class-select {
+  flex: 1;
+  font-size: 12px;
+  padding: 4px 6px;
+  border: 1px solid var(--ev2-border);
+  border-radius: var(--ev2-radius);
+  background: var(--ev2-bg);
+  color: var(--ev2-text);
+  font-family: var(--ev2-font);
+  cursor: pointer;
+  max-width: 140px;
+}
+
+.ev2-class-select:focus {
+  outline: none;
+  border-color: var(--ev2-primary);
+  box-shadow: 0 0 0 2px var(--ev2-primary-alpha);
+}
+
+/* Color picker: two selects side by side */
+.ev2-color-selects {
+  display: flex;
+  gap: 4px;
+  flex: 1;
+}
+
+.ev2-color-selects .ev2-class-select {
+  max-width: none;
+}
+
+.ev2-color-selects .ev2-class-select:first-child {
+  flex: 1.2;
+}
+
+.ev2-color-selects .ev2-class-select:last-child {
+  flex: 0.8;
+}
+
 /* Color Picker Row */
 .ev2-color-row {
   display: flex;
