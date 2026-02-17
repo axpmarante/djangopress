@@ -8,6 +8,7 @@ import time
 from typing import Dict, List, Any, Optional, Union
 from .utils.llm_config import LLMBase, MODEL_CONFIG
 from .utils.prompts import PromptTemplates
+from .utils.components import ComponentRegistry
 from .models import log_ai_call
 
 
@@ -530,6 +531,14 @@ Return the complete, corrected JSON now:"""
         for p in Page.objects.filter(is_active=True).order_by('id'):
             pages_data.append({'title': p.title_i18n or {}, 'slug': p.slug_i18n or {}})
 
+        # Pass 1: Select relevant component skills
+        selected_components = ComponentRegistry.select_components(
+            user_request=brief,
+            existing_html="",
+            llm=self.llm,
+        )
+        component_references = ComponentRegistry.get_references(selected_components)
+
         system_prompt, user_prompt = PromptTemplates.get_page_generation_html_prompt(
             site_name=site_name,
             site_description=site_description,
@@ -540,7 +549,8 @@ Return the complete, corrected JSON now:"""
             design_guide=design_guide,
             pages=pages_data,
             languages=languages,
-            outline=outline
+            outline=outline,
+            component_references=component_references,
         )
 
         # Debug output
@@ -879,6 +889,14 @@ Return the complete, corrected JSON now:"""
         # --- Step 1: Refine the clean HTML ---
         print(f"\n--- Step 1: Refine HTML in {default_language.upper()} ---")
 
+        # Pass 1: Select relevant component skills
+        selected_components = ComponentRegistry.select_components(
+            user_request=targeted_instructions,
+            existing_html=clean_html,
+            llm=self.llm,
+        )
+        component_references = ComponentRegistry.get_references(selected_components)
+
         if conversation_history:
             system_prompt, user_prompt = PromptTemplates.get_chat_refinement_html_prompt(
                 site_name=site_name,
@@ -895,6 +913,7 @@ Return the complete, corrected JSON now:"""
                 handle_images=handle_images,
                 pages=pages_data,
                 languages=languages,
+                component_references=component_references,
             )
         else:
             system_prompt, user_prompt = PromptTemplates.get_page_refinement_html_prompt(
@@ -911,6 +930,7 @@ Return the complete, corrected JSON now:"""
                 handle_images=handle_images,
                 pages=pages_data,
                 languages=languages,
+                component_references=component_references,
             )
 
         # Debug output
@@ -1047,6 +1067,14 @@ Return the complete, corrected JSON now:"""
         # Step 1: Refine section HTML (section-only prompt — LLM returns just the target section)
         print(f"\n--- Step 1: Refine section '{section_name}' in {default_language.upper()} ---")
 
+        # Pass 1: Select relevant component skills
+        selected_components = ComponentRegistry.select_components(
+            user_request=instructions,
+            existing_html=clean_html,
+            llm=self.llm,
+        )
+        component_references = ComponentRegistry.get_references(selected_components)
+
         system_prompt, user_prompt = PromptTemplates.get_section_refinement_prompt(
             site_name=site_name,
             site_description=site_description,
@@ -1062,6 +1090,7 @@ Return the complete, corrected JSON now:"""
             pages=pages_data,
             languages=languages,
             multi_option=multi_option,
+            component_references=component_references,
         )
 
         messages = [
@@ -1233,6 +1262,14 @@ Return the complete, corrected JSON now:"""
         # Generate new section HTML (3 variations)
         print(f"\n--- Generating new section (insert after '{insert_after or 'top'}') in {default_language.upper()} ---")
 
+        # Pass 1: Select relevant component skills
+        selected_components = ComponentRegistry.select_components(
+            user_request=instructions,
+            existing_html=clean_html,
+            llm=self.llm,
+        )
+        component_references = ComponentRegistry.get_references(selected_components)
+
         system_prompt, user_prompt = PromptTemplates.get_section_generation_prompt(
             site_name=site_name,
             site_description=site_description,
@@ -1247,6 +1284,7 @@ Return the complete, corrected JSON now:"""
             conversation_history=history_text,
             pages=pages_data,
             languages=languages,
+            component_references=component_references,
         )
 
         messages = [
@@ -1378,6 +1416,14 @@ Return the complete, corrected JSON now:"""
         # Step 1: Refine element HTML
         print(f"\n--- Step 1: Refine element in {default_language.upper()} ---")
 
+        # Pass 1: Select relevant component skills
+        selected_components = ComponentRegistry.select_components(
+            user_request=instructions,
+            existing_html=clean_html,
+            llm=self.llm,
+        )
+        component_references = ComponentRegistry.get_references(selected_components)
+
         system_prompt, user_prompt = PromptTemplates.get_element_refinement_prompt(
             site_name=site_name,
             site_description=site_description,
@@ -1390,6 +1436,7 @@ Return the complete, corrected JSON now:"""
             design_guide=design_guide,
             conversation_history=history_text,
             multi_option=multi_option,
+            component_references=component_references,
         )
 
         messages = [

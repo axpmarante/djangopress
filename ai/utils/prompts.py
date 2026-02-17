@@ -757,7 +757,8 @@ Return ONLY the complete updated HTML. All text in {lang_name}. No template vari
         conversation_history: str = '',
         handle_images: bool = False,
         pages: list = None,
-        languages: list = None
+        languages: list = None,
+        component_references: str = '',
     ) -> tuple:
         """
         Wraps get_page_refinement_html_prompt and injects conversation history
@@ -780,6 +781,7 @@ Return ONLY the complete updated HTML. All text in {lang_name}. No template vari
             handle_images=handle_images,
             pages=pages,
             languages=languages,
+            component_references=component_references,
         )
 
         if conversation_history:
