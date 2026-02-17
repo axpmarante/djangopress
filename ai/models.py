@@ -20,6 +20,7 @@ ACTION_CHOICES = [
     ('generate_design_guide', 'Generate Design Guide'),
     ('suggest_sections', 'Suggest Sections'),
     ('fill_section', 'Fill Section'),
+    ('select_components', 'Select Components'),
 ]
 
 
