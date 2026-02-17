@@ -40,7 +40,7 @@ all elements with `data-lightbox` attributes on page load.
 #### Basic Gallery
 
 ```html
-<div class="grid grid-cols-2 md:grid-cols-3 gap-4">
+<div class="grid grid-cols-2 md:grid-cols-3 gap-4" data-media-collection="lightbox">
   <a href="/media/photo-1-full.jpg" data-lightbox="gallery" data-alt="{{ trans.photo_1_caption }}">
     <img src="/media/photo-1-thumb.jpg" alt="{{ trans.photo_1_caption }}" class="w-full h-48 object-cover rounded-lg hover:opacity-90 transition cursor-pointer">
   </a>
@@ -60,7 +60,7 @@ Navigating within one gallery won't show images from another.
 
 ```html
 <!-- Team photos gallery -->
-<div class="grid grid-cols-3 gap-4">
+<div class="grid grid-cols-3 gap-4" data-media-collection="lightbox">
   <a href="/media/team-1.jpg" data-lightbox="team" data-alt="Team Member 1">
     <img src="/media/team-1-thumb.jpg" alt="Team Member 1" class="w-full h-48 object-cover rounded-lg">
   </a>
@@ -70,7 +70,7 @@ Navigating within one gallery won't show images from another.
 </div>
 
 <!-- Venue photos gallery (separate) -->
-<div class="grid grid-cols-3 gap-4 mt-8">
+<div class="grid grid-cols-3 gap-4 mt-8" data-media-collection="lightbox">
   <a href="/media/venue-1.jpg" data-lightbox="venue" data-alt="Dining Room">
     <img src="/media/venue-1-thumb.jpg" alt="Dining Room" class="w-full h-48 object-cover rounded-lg">
   </a>
@@ -86,7 +86,7 @@ You can include lightbox items that are not visible on the page but still
 navigable in the lightbox. This is useful for "show 4, but lightbox has 12":
 
 ```html
-<div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+<div class="grid grid-cols-2 md:grid-cols-4 gap-4" data-media-collection="lightbox">
   <!-- Visible thumbnails -->
   <a href="/media/img-1.jpg" data-lightbox="portfolio" data-alt="Project 1">
     <img src="/media/img-1-thumb.jpg" alt="Project 1" class="w-full h-48 object-cover rounded-lg">
@@ -144,6 +144,7 @@ duplicate `data-lightbox` elements. Use `type:"slide"` if exact gallery count ma
 | `data-lightbox` | `<a>` | Yes | Group name string. All elements with the same value form one gallery. |
 | `href` | `<a>` | Yes | URL of the full-size image displayed in the lightbox. |
 | `data-alt` | `<a>` | No | Caption text shown below the image in the lightbox. |
+| `data-media-collection` | Container `<div>` | No | Set to `"lightbox"` on the grid/container wrapping all `<a data-lightbox>` elements. Enables editor media overview. |
 
 The lightbox also reads `data-src` and `src` as fallbacks for the image URL
 (in order: `href` > `data-src` > `src`).
@@ -157,6 +158,7 @@ The lightbox also reads `data-src` and `src` as fallbacks for the image URL
 - Add `data-alt` for captions (use `{{ trans.xxx }}` for translated captions)
 - Add `cursor-pointer` class to the `<a>` or `<img>` for visual affordance
 - Use `hover:opacity-90 transition` for hover feedback
+- Add `data-media-collection="lightbox"` on the container wrapping all lightbox links
 
 **Don't:**
 - Do NOT add inline `<script>` to initialize the lightbox — it auto-initializes
