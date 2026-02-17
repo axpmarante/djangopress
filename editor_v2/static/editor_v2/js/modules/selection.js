@@ -1,5 +1,5 @@
 import { events } from '../lib/events.js';
-import { $, getContentWrapper, getAncestors, getTagLabel, isEditable, getElementId } from '../lib/dom.js';
+import { $, getContentWrapper, getAncestors, getTagLabel, isEditable, getCssSelector } from '../lib/dom.js';
 
 let selected = null;
 let labelEl = null;
@@ -62,8 +62,8 @@ function updateBreadcrumbs(el) {
     container.innerHTML = crumbs.map((crumb, i) => {
         const sep = i < crumbs.length - 1 ? ' <span class="ev2-breadcrumb-sep">\u203a</span> ' : '';
         const active = i === crumbs.length - 1 ? ' ev2-breadcrumb-active' : '';
-        const id = getElementId(crumb.el);
-        return `<span class="ev2-breadcrumb${active}" data-crumb-id="${id}">${crumb.label}</span>${sep}`;
+        const sel = getCssSelector(crumb.el) || '';
+        return `<span class="ev2-breadcrumb${active}" data-crumb-selector="${sel}">${crumb.label}</span>${sep}`;
     }).join('');
 
     events.emit('selection:breadcrumbs', crumbs);
@@ -110,7 +110,7 @@ function onContentClick(e) {
     // Ignore clicks on non-editable elements (admin toolbar, editor UI)
     if (!isEditable(e.target)) return;
 
-    const target = e.target.closest('[data-element-id], [data-section]') || e.target;
+    const target = e.target;
     if (wrapper.contains(target) && target !== wrapper) {
         e.preventDefault();
         select(target);
@@ -126,14 +126,10 @@ function onEditorUiClick(e) {
 function onBreadcrumbClick(e) {
     const crumb = e.target.closest('.ev2-breadcrumb');
     if (!crumb) return;
-    const id = crumb.dataset.crumbId;
-    if (!id) return;
+    const sel = crumb.dataset.crumbSelector;
+    if (!sel) return;
 
-    const wrapper = getContentWrapper();
-    if (!wrapper) return;
-
-    const target = wrapper.querySelector(`[data-element-id="${id}"]`)
-        || document.getElementById(id);
+    const target = document.querySelector(sel);
     if (target) select(target);
 }
 

@@ -70,26 +70,25 @@ def update_element_styles(params, context):
     if not page:
         return {'success': False, 'message': 'Active page not found'}
 
-    element_id = params.get('element_id')
+    selector = params.get('selector')
     section_name = params.get('section_name')
     new_classes = params.get('new_classes', '')
 
-    if not element_id and not section_name:
-        return {'success': False, 'message': 'Provide element_id or section_name'}
+    if not selector and not section_name:
+        return {'success': False, 'message': 'Provide selector or section_name'}
 
     if not page.html_content:
         return {'success': False, 'message': 'Page has no HTML content'}
 
     soup = BeautifulSoup(page.html_content, 'html.parser')
 
-    if element_id:
-        element = soup.find(attrs={'data-element-id': element_id})
+    if selector:
+        element = soup.select_one(selector)
     else:
         element = soup.find('section', attrs={'data-section': section_name})
 
     if not element:
-        target = element_id or section_name
-        return {'success': False, 'message': f'Element "{target}" not found'}
+        return {'success': False, 'message': 'Element not found'}
 
     old_classes = ' '.join(element.get('class', []))
     if new_classes:
@@ -100,7 +99,7 @@ def update_element_styles(params, context):
     _save_html(page, soup)
     return {
         'success': True,
-        'message': f'Updated classes on "{element_id or section_name}"',
+        'message': 'Updated element classes',
         'old_classes': old_classes,
         'new_classes': new_classes,
     }
@@ -112,18 +111,18 @@ def update_element_attribute(params, context):
     if not page:
         return {'success': False, 'message': 'Active page not found'}
 
-    element_id = params.get('element_id')
+    selector = params.get('selector')
     attribute = params.get('attribute')
     value = params.get('value', '')
 
-    if not element_id or not attribute:
-        return {'success': False, 'message': 'Missing element_id or attribute'}
+    if not selector or not attribute:
+        return {'success': False, 'message': 'Missing selector or attribute'}
 
     soup = BeautifulSoup(page.html_content, 'html.parser')
-    element = soup.find(attrs={'data-element-id': element_id})
+    element = soup.select_one(selector)
 
     if not element:
-        return {'success': False, 'message': f'Element "{element_id}" not found'}
+        return {'success': False, 'message': 'Element not found for selector'}
 
     old_value = element.get(attribute, '')
     if value:
@@ -134,7 +133,7 @@ def update_element_attribute(params, context):
     _save_html(page, soup)
     return {
         'success': True,
-        'message': f'Updated {attribute} on "{element_id}"',
+        'message': f'Updated {attribute} on element',
         'old_value': old_value,
         'new_value': value,
     }

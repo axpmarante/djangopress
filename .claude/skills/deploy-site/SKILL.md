@@ -104,7 +104,7 @@ These should already exist in the template. If they do, skip this step.
 ## Phase 3: Create Railway Project
 
 ```bash
-railway init -n "<project-name>" -w "AM"
+railway init -n "<project-name>" -w "PWD"
 ```
 
 Both `-n` and `-w` flags make this non-interactive. Confirm success by checking output.

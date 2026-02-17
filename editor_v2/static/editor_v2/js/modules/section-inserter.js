@@ -1,12 +1,13 @@
 /**
- * Section Inserter — renders insertion lines between sections and manages
- * the placeholder element where a new section will be inserted.
+ * Section Inserter — manages the placeholder element where a new section
+ * will be inserted.  Triggered via the context menu ("Insert Section
+ * Before / After").
  *
  * Emits:
  *   inserter:activated  { afterSection }  — when a placeholder is inserted
+ *   inserter:cancelled                    — when the user cancels
  *
  * Listens:
- *   inserter:refresh   — re-renders insertion lines (e.g. after page save)
  *   inserter:cancel    — removes the active placeholder
  */
 
@@ -16,7 +17,6 @@ import { getContentWrapper, getSections } from '../lib/dom.js';
 // ---------------------------------------------------------------------------
 // Module state
 // ---------------------------------------------------------------------------
-let lines = [];        // DOM references to insertion-line elements
 let placeholder = null; // the active placeholder element
 let insertAfter = null; // section name the placeholder follows (null = top)
 
@@ -24,31 +24,24 @@ let insertAfter = null; // section name the placeholder follows (null = top)
 // Internal helpers
 // ---------------------------------------------------------------------------
 
-/** Remove all insertion-line elements from the DOM. */
-function removeLines() {
-    lines.forEach(el => el.remove());
-    lines = [];
-}
+/** Populate a placeholder element with label text and cancel button. */
+function buildPlaceholderContent(el) {
+    el.innerHTML = '';
+    const label = document.createElement('span');
+    label.className = 'ev2-placeholder-label';
+    label.textContent = 'New section \u2014 describe it in the modal';
+    el.appendChild(label);
 
-/**
- * Create a single insertion-line div with its "+" button.
- * @param {string|null} afterSectionName — data-section value, or null for top
- */
-function createLine(afterSectionName) {
-    const div = document.createElement('div');
-    div.className = 'ev2-insert-line';
-
-    const btn = document.createElement('button');
-    btn.className = 'ev2-insert-line-btn';
-    btn.title = 'Insert new section';
-    btn.textContent = '+';
-    btn.addEventListener('click', (e) => {
+    const cancelBtn = document.createElement('button');
+    cancelBtn.className = 'ev2-placeholder-cancel';
+    cancelBtn.title = 'Cancel';
+    cancelBtn.textContent = '\u00d7';
+    cancelBtn.addEventListener('click', (e) => {
         e.stopPropagation();
-        insertPlaceholder(afterSectionName);
+        removePlaceholder();
+        events.emit('inserter:cancelled');
     });
-
-    div.appendChild(btn);
-    return div;
+    el.appendChild(cancelBtn);
 }
 
 /**
@@ -57,7 +50,6 @@ function createLine(afterSectionName) {
  */
 function insertPlaceholder(afterSectionName) {
     removePlaceholder();
-    removeLines();
 
     insertAfter = afterSectionName;
 
@@ -66,7 +58,7 @@ function insertPlaceholder(afterSectionName) {
 
     placeholder = document.createElement('div');
     placeholder.className = 'ev2-section-placeholder';
-    placeholder.textContent = 'New section \u2014 describe it in the AI panel \u2192';
+    buildPlaceholderContent(placeholder);
 
     // Sections live inside <main>, not directly in .editor-v2-content
     const container = wrapper.querySelector('main') || wrapper;
@@ -98,42 +90,6 @@ function insertPlaceholder(afterSectionName) {
 // Public API
 // ---------------------------------------------------------------------------
 
-/** Render insertion lines between every pair of sections. */
-export function renderLines() {
-    removeLines();
-
-    // Don't show lines while a placeholder is active.
-    if (placeholder) return;
-
-    const wrapper = getContentWrapper();
-    if (!wrapper) return;
-
-    const sections = getSections();
-
-    if (sections.length === 0) {
-        // Empty page — single line inside <main> or wrapper.
-        const main = wrapper.querySelector('main') || wrapper;
-        const line = createLine(null);
-        main.prepend(line);
-        lines.push(line);
-        return;
-    }
-
-    // Line before the first section (afterSectionName = null → insert at top).
-    // Use parentNode because sections live inside <main>, not directly in wrapper.
-    const firstLine = createLine(null);
-    sections[0].parentNode.insertBefore(firstLine, sections[0]);
-    lines.push(firstLine);
-
-    // Line after each section (afterSectionName = that section's name).
-    for (const section of sections) {
-        const name = section.getAttribute('data-section');
-        const line = createLine(name);
-        section.parentNode.insertBefore(line, section.nextSibling);
-        lines.push(line);
-    }
-}
-
 /** Insert a placeholder before a given section. */
 export function insertBefore(sectionName) {
     const sections = getSections();
@@ -161,7 +117,7 @@ export function previewInPlaceholder(html) {
 export function resetPlaceholder() {
     if (!placeholder) return;
     placeholder.classList.remove('ev2-preview-active');
-    placeholder.textContent = 'New section \u2014 describe it in the AI panel \u2192';
+    buildPlaceholderContent(placeholder);
 }
 
 /** Remove the placeholder from the DOM and reset state. */
@@ -181,13 +137,10 @@ export function getInsertState() {
 
 /** Tear down — remove all DOM elements created by this module. */
 export function destroy() {
-    removeLines();
     removePlaceholder();
 }
 
 /** Initialise the module. */
 export function init() {
-    renderLines();
-    events.on('inserter:refresh', renderLines);
     events.on('inserter:cancel', removePlaceholder);
 }

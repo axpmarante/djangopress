@@ -908,7 +908,7 @@ class Page(models.Model):
             return f'/{lang}/'
         return f'/{lang}/{slug}/'
 
-    def create_version(self, user=None, change_summary='', max_versions=10):
+    def create_version(self, user=None, change_summary='', max_versions=20):
         """
         Create a version snapshot of current page state.
         Automatically deletes old versions to keep only the most recent ones.
@@ -916,7 +916,7 @@ class Page(models.Model):
         Args:
             user: User making the change (optional)
             change_summary: Description of the change (optional)
-            max_versions: Maximum number of versions to keep (default: 10)
+            max_versions: Maximum number of versions to keep (default: 20)
 
         Returns:
             PageVersion: The created version object

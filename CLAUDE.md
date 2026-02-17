@@ -263,13 +263,12 @@ When generating `html_content` for pages or GlobalSections:
 1. **Use Tailwind CSS only** — loaded via CDN in base.html
 2. **Use `{{ trans.field }}` for all text** — never hardcode strings
 3. **Every `<section>` must have `data-section="name"` and `id="name"`** — for targeting
-4. **Use `data-element-id="unique_id"` on editable elements** — for inline editor
-5. **Alpine.js is available** (`x-data`, `x-show`, `@click`, etc.) — loaded in base.html
-6. **Use context variables** for dynamic data: `{{ SITE_NAME }}`, `{{ LOGO.url }}`, `{{ CONTACT_EMAIL }}`, `{{ SOCIAL_MEDIA.instagram }}`, etc.
-7. **For GlobalSections:** use `{% load i18n %}`, `{% url 'core:home' %}`, `{% url 'core:page' slug='...' %}`, `{% url 'set_language' %}`, `{% csrf_token %}`
-8. **Responsive by default** — mobile-first with `sm:` / `md:` / `lg:` breakpoints
-9. **Page content only** — do NOT include `<html>`, `<head>`, `<body>`, `<header>`, `<nav>`, or `<footer>` tags. Those are handled by `base.html` and GlobalSections.
-10. **Interactive components are pre-loaded** — Splide.js (carousel), lightbox.js (gallery), Alpine.js (tabs, accordion, modal). Use HTML attributes to configure — no inline `<script>` needed. See prompt reference for patterns.
+4. **Alpine.js is available** (`x-data`, `x-show`, `@click`, etc.) — loaded in base.html
+5. **Use context variables** for dynamic data: `{{ SITE_NAME }}`, `{{ LOGO.url }}`, `{{ CONTACT_EMAIL }}`, `{{ SOCIAL_MEDIA.instagram }}`, etc.
+6. **For GlobalSections:** use `{% load i18n %}`, `{% url 'core:home' %}`, `{% url 'core:page' slug='...' %}`, `{% url 'set_language' %}`, `{% csrf_token %}`
+7. **Responsive by default** — mobile-first with `sm:` / `md:` / `lg:` breakpoints
+8. **Page content only** — do NOT include `<html>`, `<head>`, `<body>`, `<header>`, `<nav>`, or `<footer>` tags. Those are handled by `base.html` and GlobalSections.
+9. **Interactive components are pre-loaded** — Splide.js (carousel), lightbox.js (gallery), Alpine.js (tabs, accordion, modal). Use HTML attributes to configure — no inline `<script>` needed. See prompt reference for patterns.
 
 ### Lightbox Gallery Pattern
 

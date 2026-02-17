@@ -2,9 +2,8 @@
  * AI Panel — Unified chat with session switcher and scope selector.
  */
 import { events } from '../lib/events.js';
-import { $, hasStoredElementId } from '../lib/dom.js';
+import { $, getCssSelector, getElementLabel } from '../lib/dom.js';
 import { api } from '../lib/api.js';
-import { getInsertState, previewInPlaceholder, resetPlaceholder, removePlaceholder, renderLines } from './section-inserter.js';
 
 function esc(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
@@ -14,7 +13,7 @@ let unsubs = [];
 // State
 let activeScope = 'page';        // 'page' | 'section' | 'element'
 let currentSection = null;
-let currentElementId = null;
+let currentSelector = null;
 let sessionId = null;
 let sessionsList = [];            // [{id, title, updated_at}, ...]
 let messages = [];
@@ -23,6 +22,7 @@ let pendingScope = null;
 let originalHtml = null;
 let activeTab = null;
 let sessionLoaded = false;
+let freshChat = false;            // true when context menu triggers a new chat
 let options = [];               // multi-option: array of {html} objects
 let activeOption = 0;           // which option tab is active (0, 1, 2)
 
@@ -43,27 +43,31 @@ export function init() {
         const sec = el?.closest?.('[data-section]');
         const sectionName = sec?.getAttribute('data-section') || null;
         const isSection = el?.hasAttribute?.('data-section');
-        const elId = (!isSection && el && hasStoredElementId(el)) ? el.getAttribute('data-element-id') : null;
+        const selector = (!isSection && el) ? getCssSelector(el) : null;
 
         currentSection = sectionName;
-        currentElementId = elId;
+        currentSelector = selector;
 
         if (isSection && sectionName) {
             activeScope = 'section';
-        } else if (elId) {
+        } else if (selector) {
             activeScope = 'element';
         }
         if (activeTab === 'ai') render();
     }));
     unsubs.push(events.on('context:ai-refine', (data) => {
         currentSection = data?.section || null;
-        currentElementId = data?.elementId || null;
-        activeScope = data?.elementId ? 'element' : 'section';
-        events.emit('sidebar:switch-tab', 'ai');
-    }));
-    unsubs.push(events.on('inserter:activated', (data) => {
-        activeScope = 'new-section';
-        currentSection = data.afterSection;
+        currentSelector = data?.selector || null;
+        activeScope = data?.selector ? 'element' : 'section';
+        // Start a fresh chat targeting the clicked section/element
+        sessionId = null;
+        messages = [];
+        pendingResult = null;
+        pendingScope = null;
+        originalHtml = null;
+        options = [];
+        activeOption = 0;
+        freshChat = true;
         events.emit('sidebar:switch-tab', 'ai');
     }));
 }
@@ -72,24 +76,31 @@ export function destroy() {
     unsubs.forEach(u => u());
     unsubs = [];
     restorePreview();
-    activeScope = 'page'; currentSection = null; currentElementId = null;
+    activeScope = 'page'; currentSection = null; currentSelector = null;
     sessionId = null; sessionsList = []; messages = [];
     pendingResult = null; pendingScope = null;
-    originalHtml = null; activeTab = null; sessionLoaded = false;
+    originalHtml = null; activeTab = null; sessionLoaded = false; freshChat = false;
     options = []; activeOption = 0;
-    removePlaceholder();
 }
 
 async function loadSession(targetSessionId) {
     if (!config().pageId) return;
     const isInitial = !sessionLoaded;
     sessionLoaded = true;
+
+    // If freshChat flag is set, only fetch the sessions list (for the dropdown)
+    // but don't load any session content — we want an empty chat.
+    const wantFresh = freshChat;
+    freshChat = false;
+
     try {
         const qs = targetSessionId ? `?session_id=${targetSessionId}` : '';
         const res = await api.get(`/session/${config().pageId}/${qs}`);
         if (res.success) {
             sessionsList = res.sessions || [];
-            if (res.session_id) {
+            if (wantFresh) {
+                // Keep sessionId=null and messages=[] — fresh chat
+            } else if (res.session_id) {
                 sessionId = res.session_id;
                 messages = (res.messages || []).map(m => ({
                     role: m.role,
@@ -195,10 +206,6 @@ function bindSessionBar() {
         originalHtml = null;
         options = [];
         activeOption = 0;
-        if (activeScope === 'new-section') {
-            removePlaceholder();
-            activeScope = 'page';
-        }
         await loadSession(parseInt(id));
     });
     $('#ev2-new-chat')?.addEventListener('click', () => {
@@ -210,10 +217,6 @@ function bindSessionBar() {
         originalHtml = null;
         options = [];
         activeOption = 0;
-        if (activeScope === 'new-section') {
-            removePlaceholder();
-            activeScope = 'page';
-        }
         render();
     });
 }
@@ -225,11 +228,10 @@ function buildScopeSelect() {
     if (currentSection) {
         options += `<option value="section"${activeScope === 'section' ? ' selected' : ''}>Section: ${esc(currentSection)}</option>`;
     }
-    if (currentElementId) {
-        options += `<option value="element"${activeScope === 'element' ? ' selected' : ''}>Element: ${esc(currentElementId)}</option>`;
-    }
-    if (activeScope === 'new-section') {
-        options += '<option value="new-section" selected>New Section</option>';
+    if (currentSelector) {
+        const el = document.querySelector(currentSelector);
+        const label = el ? getElementLabel(el) : 'element';
+        options += `<option value="element"${activeScope === 'element' ? ' selected' : ''}>Element: ${esc(label)}</option>`;
     }
 
     return `<div class="ev2-scope-row">
@@ -246,10 +248,6 @@ function bindScopeSelect() {
         options = [];
         activeOption = 0;
         activeScope = e.target.value;
-        if (e.target.value !== 'new-section') {
-            removePlaceholder();
-            renderLines();
-        }
         render();
     });
 }
@@ -276,7 +274,7 @@ async function send() {
     if (!text) return;
 
     if (activeScope === 'section' && !currentSection) return;
-    if (activeScope === 'element' && (!currentElementId || !currentSection)) return;
+    if (activeScope === 'element' && !currentSelector) return;
 
     input.value = '';
     restorePreview();
@@ -285,8 +283,7 @@ async function send() {
 
     let scopeLabel = 'page';
     if (activeScope === 'section') scopeLabel = currentSection;
-    if (activeScope === 'element') scopeLabel = currentElementId;
-    if (activeScope === 'new-section') scopeLabel = 'new section';
+    if (activeScope === 'element') scopeLabel = 'element';
 
     messages.push({ role: 'user', content: text, scope: scopeLabel });
     renderMessages();
@@ -296,17 +293,7 @@ async function send() {
         const history = messages.filter(m => m.role !== 'system').slice(0, -1).map(m => ({ role: m.role, content: m.content }));
         let res;
 
-        if (activeScope === 'new-section') {
-            const insertState = getInsertState();
-            res = await api.post('/refine-multi/', {
-                page_id: config().pageId,
-                mode: 'create',
-                insert_after: insertState?.afterSection || null,
-                instructions: text,
-                conversation_history: history,
-                session_id: sessionId,
-            });
-        } else if (activeScope === 'page') {
+        if (activeScope === 'page') {
             res = await api.post('/refine-page/', {
                 page_id: config().pageId,
                 instructions: text,
@@ -317,8 +304,7 @@ async function send() {
             res = await api.post('/refine-multi/', {
                 page_id: config().pageId,
                 scope: 'element',
-                section_name: currentSection,
-                element_id: currentElementId,
+                selector: currentSelector,
                 instructions: text,
                 conversation_history: history,
                 session_id: sessionId,
@@ -403,15 +389,12 @@ async function applyResult() {
             // Multi-option: send chosen option to apply-option endpoint
             const chosen = options[activeOption];
             if (!chosen) return;
-            const isInsert = pendingScope === 'new-section';
-            const insertState = getInsertState();
             await api.post('/apply-option/', {
                 page_id: config().pageId,
-                scope: isInsert ? 'new-section' : pendingScope,
-                section_name: isInsert ? null : currentSection,
-                element_id: isInsert ? null : currentElementId,
+                scope: pendingScope,
+                section_name: currentSection,
+                selector: currentSelector,
                 html: chosen.html,
-                ...(isInsert && { mode: 'insert', insert_after: insertState?.afterSection || null }),
             });
         } else if (pendingResult && pendingScope) {
             // Single-option (page scope): existing flow
@@ -449,11 +432,6 @@ function discardResult() {
     pendingScope = null;
     options = [];
     activeOption = 0;
-    if (activeScope === 'new-section') {
-        removePlaceholder();
-        activeScope = 'page';
-        renderLines();
-    }
     render();
 }
 
@@ -470,8 +448,8 @@ function showPreview() {
         if (!wrapper) return;
         if (!originalHtml) originalHtml = wrapper.innerHTML;
         wrapper.innerHTML = previewHtml;
-    } else if (pendingScope === 'element' && currentElementId) {
-        const el = document.querySelector(`[data-element-id="${currentElementId}"]`);
+    } else if (pendingScope === 'element' && currentSelector) {
+        const el = document.querySelector(currentSelector);
         if (!el) return;
         if (!originalHtml) originalHtml = el.outerHTML;
         el.outerHTML = previewHtml;
@@ -487,16 +465,11 @@ function showMultiPreview(index) {
     if (!options[index]) return;
     const html = options[index].html;
 
-    if (pendingScope === 'new-section') {
-        previewInPlaceholder(html);
-        return;
-    }
-
     // Restore before switching
     if (originalHtml) restorePreview();
 
-    if (pendingScope === 'element' && currentElementId) {
-        const el = document.querySelector(`[data-element-id="${currentElementId}"]`);
+    if (pendingScope === 'element' && currentSelector) {
+        const el = document.querySelector(currentSelector);
         if (!el) return;
         if (!originalHtml) originalHtml = el.outerHTML;
         el.outerHTML = html;
@@ -509,16 +482,12 @@ function showMultiPreview(index) {
 }
 
 function restorePreview() {
-    if (pendingScope === 'new-section') {
-        resetPlaceholder();
-        return;
-    }
     if (!originalHtml) return;
     if (pendingScope === 'page') {
         const wrapper = document.querySelector('.editor-v2-content');
         if (wrapper) wrapper.innerHTML = originalHtml;
-    } else if (pendingScope === 'element' && currentElementId) {
-        const el = document.querySelector(`[data-element-id="${currentElementId}"]`);
+    } else if (pendingScope === 'element' && currentSelector) {
+        const el = document.querySelector(currentSelector);
         if (el) el.outerHTML = originalHtml;
     } else if (pendingScope === 'section' && currentSection) {
         const sec = document.querySelector(`[data-section="${currentSection}"]`);

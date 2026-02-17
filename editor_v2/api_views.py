@@ -293,11 +293,13 @@ def update_page_content(request):
         print(f'[API] update_page_content data: page_id={page_id}, field_key={field_key}, lang={language}')
         value = data.get('value', '').strip() if isinstance(data.get('value'), str) else data.get('value')
 
-        if not page_id or not field_key:
+        if not page_id:
             return JsonResponse({
                 'success': False,
-                'error': 'Missing page_id or field_key'
+                'error': 'Missing page_id'
             }, status=400)
+
+        selector = data.get('selector')
 
         try:
             page = Page.objects.get(pk=page_id)
@@ -305,6 +307,36 @@ def update_page_content(request):
             return JsonResponse({
                 'success': False,
                 'error': 'Page not found'
+            }, status=400)
+
+        # If field_key not provided, derive it from the template HTML via selector
+        if not field_key and selector and page.html_content:
+            soup = BeautifulSoup(page.html_content, 'html.parser')
+            element = soup.select_one(selector)
+            if element:
+                match = re.search(r'\{\{\s*trans\.(\w+)\s*\}\}', element.get_text())
+                if match:
+                    field_key = match.group(1)
+                    print(f'[API] derived field_key from template: {field_key}')
+                else:
+                    # Element has hardcoded text — generate a new trans variable
+                    section_el = element.find_parent('section', attrs={'data-section': True})
+                    section_name = section_el.get('data-section', 'page') if section_el else 'page'
+                    tag = element.name or 'text'
+                    # Build key like "hero_h1" or "about_p", ensure uniqueness
+                    base_key = f'{section_name}_{tag}'.replace('-', '_')
+                    existing_vars = set(re.findall(r'\{\{\s*trans\.(\w+)\s*\}\}', page.html_content))
+                    field_key = base_key
+                    counter = 1
+                    while field_key in existing_vars:
+                        counter += 1
+                        field_key = f'{base_key}_{counter}'
+                    print(f'[API] generated new field_key: {field_key} for hardcoded text')
+
+        if not field_key:
+            return JsonResponse({
+                'success': False,
+                'error': 'Cannot determine field_key from selector'
             }, status=400)
 
         # Update content translations
@@ -320,10 +352,9 @@ def update_page_content(request):
         # Also ensure the HTML template uses {{ trans.field_key }} instead of
         # hardcoded text. Elements generated before templatization (or where it
         # was missed) have raw text that ignores the JSON translations.
-        element_id = data.get('element_id') or field_key.replace('_', '-')
-        if page.html_content:
+        if page.html_content and selector:
             soup = BeautifulSoup(page.html_content, 'html.parser')
-            element = soup.find(attrs={'data-element-id': element_id})
+            element = soup.select_one(selector)
             if element:
                 trans_var = '{{ trans.' + field_key + ' }}'
                 element_html = str(element)
@@ -367,27 +398,27 @@ def update_page_content(request):
 def update_page_element_classes(request):
     """
     Update an element's CSS classes directly in the Page's html_content.
-    Uses BeautifulSoup to parse HTML and update specific elements by data-element-id.
+    Uses BeautifulSoup to parse HTML and update specific elements by CSS selector.
 
     Expected POST data:
     {
         "page_id": 1,
-        "element_id": "title",
+        "selector": "section[data-section='hero'] > div > h1",
         "new_classes": "text-5xl font-black text-white"
     }
     """
     print(f'[API] update_page_element_classes called: {request.method} {request.path}')
     try:
         data = json.loads(request.body)
-        print(f'[API] update_page_element_classes data: page_id={data.get("page_id")}, element_id={data.get("element_id")}')
+        print(f'[API] update_page_element_classes data: page_id={data.get("page_id")}, selector={data.get("selector")}')
         page_id = data.get('page_id')
-        element_id = data.get('element_id')
+        selector = data.get('selector')
         new_classes = data.get('new_classes', '').strip()
 
-        if not page_id or not element_id:
+        if not page_id or not selector:
             return JsonResponse({
                 'success': False,
-                'error': 'Missing page_id or element_id'
+                'error': 'Missing page_id or selector'
             }, status=400)
 
         try:
@@ -407,15 +438,13 @@ def update_page_element_classes(request):
         # Parse HTML with BeautifulSoup
         soup = BeautifulSoup(page.html_content, 'html.parser')
 
-        # Find element by data-element-id (or id fallback for sections)
-        element = soup.find(attrs={'data-element-id': element_id})
-        if not element:
-            element = soup.find(attrs={'id': element_id})
+        # Find element by CSS selector
+        element = soup.select_one(selector)
 
         if not element:
             return JsonResponse({
                 'success': False,
-                'error': f'Element with data-element-id="{element_id}" not found'
+                'error': f'Element not found for selector'
             }, status=400)
 
         # Store old classes
@@ -438,9 +467,8 @@ def update_page_element_classes(request):
 
         return JsonResponse({
             'success': True,
-            'message': f'Element "{element_id}" classes updated',
+            'message': 'Element classes updated',
             'page_id': page.id,
-            'element_id': element_id,
             'old_classes': old_classes,
             'new_classes': new_classes,
             'element_tag': element.name
@@ -468,19 +496,19 @@ def update_page_element_attribute(request):
     Expected POST data:
     {
         "page_id": 1,
-        "element_id": "button_primary",   (or null with old_value fallback)
+        "selector": "section[data-section='hero'] > div > a",   (or null with old_value fallback)
         "attribute": "href",
         "value": "/new-page/",
-        "old_value": "...",               (optional, fallback when element_id missing)
-        "tag_name": "img"                 (optional, fallback when element_id missing)
+        "old_value": "...",               (optional, fallback when selector missing)
+        "tag_name": "img"                 (optional, fallback when selector missing)
     }
     """
     print(f'[API] update_page_element_attribute called: {request.method} {request.path}')
     try:
         data = json.loads(request.body)
-        print(f'[API] update_page_element_attribute data: page_id={data.get("page_id")}, element_id={data.get("element_id")}, attr={data.get("attribute")}')
+        print(f'[API] update_page_element_attribute data: page_id={data.get("page_id")}, selector={data.get("selector")}, attr={data.get("attribute")}')
         page_id = data.get('page_id')
-        element_id = data.get('element_id')
+        selector = data.get('selector')
         attribute = data.get('attribute')
         value = data.get('value', '')
         old_value = data.get('old_value')
@@ -492,10 +520,10 @@ def update_page_element_attribute(request):
                 'error': 'Missing required parameters: page_id, attribute'
             }, status=400)
 
-        if not element_id and not old_value:
+        if not selector and not old_value:
             return JsonResponse({
                 'success': False,
-                'error': 'Missing element_id and no old_value fallback'
+                'error': 'Missing selector and no old_value fallback'
             }, status=400)
 
         try:
@@ -509,13 +537,10 @@ def update_page_element_attribute(request):
         # Parse HTML
         soup = BeautifulSoup(page.html_content, 'html.parser')
 
-        # Find element by data-element-id
+        # Find element by CSS selector
         element = None
-        if element_id:
-            element = soup.find(attrs={'data-element-id': element_id})
-            # Also try matching by id attribute (sections use id but not data-element-id)
-            if not element:
-                element = soup.find(attrs={'id': element_id})
+        if selector:
+            element = soup.select_one(selector)
 
         # Fallback: find by old attribute value + tag name
         if not element and old_value and tag_name:
@@ -524,7 +549,7 @@ def update_page_element_attribute(request):
         if not element:
             return JsonResponse({
                 'success': False,
-                'error': f'Element not found (element_id={element_id}, tag={tag_name})'
+                'error': f'Element not found (selector={selector}, tag={tag_name})'
             }, status=400)
 
         # Store old value
@@ -547,9 +572,9 @@ def update_page_element_attribute(request):
 
         return JsonResponse({
             'success': True,
-            'message': f'Element "{element_id}" attribute "{attribute}" updated',
+            'message': f'Element attribute "{attribute}" updated',
             'page_id': page.id,
-            'element_id': element_id,
+            'selector': selector,
             'attribute': attribute,
             'old_value': old_value,
             'new_value': value
@@ -842,8 +867,7 @@ def refine_element(request):
     Expected POST data:
     {
         "page_id": 1,
-        "section_name": "hero",
-        "element_id": "hero_cta_button",
+        "selector": "section[data-section='hero'] > div > a.btn",
         "instructions": "Make it larger with a gradient background",
         "conversation_history": [{"role": "user", "content": "..."}, ...],
         "session_id": null,
@@ -853,17 +877,16 @@ def refine_element(request):
     try:
         data = json.loads(request.body)
         page_id = data.get('page_id')
-        section_name = data.get('section_name')
-        element_id = data.get('element_id')
+        selector = data.get('selector')
         instructions = data.get('instructions', '').strip()
         conversation_history = data.get('conversation_history', [])
         model = data.get('model', 'gemini-flash')
         session_id = data.get('session_id')
 
-        if not page_id or not section_name or not element_id:
+        if not page_id or not selector:
             return JsonResponse({
                 'success': False,
-                'error': 'Missing page_id, section_name, or element_id'
+                'error': 'Missing page_id or selector'
             }, status=400)
 
         if not instructions:
@@ -888,7 +911,7 @@ def refine_element(request):
         if not session:
             session = RefinementSession(
                 page=page,
-                title=f'[{element_id}] {instructions[:60]}',
+                title=f'[element] {instructions[:60]}',
                 model_used=model,
                 created_by=request.user if request.user.is_authenticated else None,
             )
@@ -900,15 +923,14 @@ def refine_element(request):
         service = ContentGenerationService(model_name=model)
         result = service.refine_element_only(
             page_id=page_id,
-            section_name=section_name,
-            element_id=element_id,
+            selector=selector,
             instructions=instructions,
             conversation_history=conversation_history,
             model_override=model,
         )
 
         assistant_msg = result.get('assistant_message', 'Changes applied.')
-        session.add_assistant_message(assistant_msg, [f'{section_name}/{element_id}'])
+        session.add_assistant_message(assistant_msg, ['element'])
         session.save()
 
         return JsonResponse({
@@ -943,14 +965,13 @@ def refine_element(request):
 def save_ai_element(request):
     """
     Save an AI-refined element to the page in DB.
-    Finds the element by data-element-id and replaces it.
+    Finds the element by CSS selector and replaces it.
 
     Expected POST data:
     {
         "page_id": 1,
-        "section_name": "hero",
-        "element_id": "hero_cta_button",
-        "html_template": "<a data-element-id='hero_cta_button' ...>...</a>",
+        "selector": "section[data-section='hero'] > div > a.btn",
+        "html_template": "<a ...>...</a>",
         "content": {"translations": {"pt": {...}, "en": {...}}}
     }
     """
@@ -958,14 +979,14 @@ def save_ai_element(request):
         data = json.loads(request.body)
         page_id = data.get('page_id')
         section_name = data.get('section_name', '')
-        element_id = data.get('element_id')
+        selector = data.get('selector')
         html_template = data.get('html_template', '')
         content = data.get('content', {})
 
-        if not page_id or not element_id or not html_template:
+        if not page_id or not selector or not html_template:
             return JsonResponse({
                 'success': False,
-                'error': 'Missing page_id, element_id, or html_template'
+                'error': 'Missing page_id, selector, or html_template'
             }, status=400)
 
         try:
@@ -979,28 +1000,24 @@ def save_ai_element(request):
         # Create version for rollback
         page.create_version(
             user=request.user,
-            change_summary=f'AI refined element: {element_id} in {section_name}'
+            change_summary=f'AI refined element'
         )
 
-        # Parse current page HTML and find the target element (scoped to section if provided)
+        # Parse current page HTML and find the target element
         soup = BeautifulSoup(page.html_content, 'html.parser')
-        if section_name:
-            section_el = soup.find('section', attrs={'data-section': section_name})
-            old_element = section_el.find(attrs={'data-element-id': element_id}) if section_el else None
-        else:
-            old_element = None
-        if not old_element:
-            old_element = soup.find(attrs={'data-element-id': element_id})
+        old_element = soup.select_one(selector)
 
         if not old_element:
             return JsonResponse({
                 'success': False,
-                'error': f'Element "{element_id}" not found in page HTML'
+                'error': 'Element not found for selector'
             }, status=400)
 
-        # Parse the new element HTML
+        # Parse the new element HTML — find by data-target marker or use first child
         new_element_soup = BeautifulSoup(html_template, 'html.parser')
-        new_element = new_element_soup.find(attrs={'data-element-id': element_id})
+        new_element = new_element_soup.find(attrs={'data-target': 'true'})
+        if new_element:
+            del new_element['data-target']
         if not new_element:
             children = list(new_element_soup.children)
             new_element = children[0] if children else new_element_soup
@@ -1029,7 +1046,7 @@ def save_ai_element(request):
 
         return JsonResponse({
             'success': True,
-            'message': f'Element "{element_id}" saved successfully',
+            'message': 'Element saved successfully',
             'page_id': page.id,
         })
 
@@ -1057,7 +1074,7 @@ def refine_multi(request):
         page_id = data.get('page_id')
         scope = data.get('scope', 'section')
         section_name = data.get('section_name')
-        element_id = data.get('element_id')
+        selector = data.get('selector')
         instructions = data.get('instructions', '').strip()
         conversation_history = data.get('conversation_history', [])
         session_id = data.get('session_id')
@@ -1068,8 +1085,8 @@ def refine_multi(request):
             return JsonResponse({'success': False, 'error': 'Missing page_id or instructions'}, status=400)
 
         if mode != 'create':
-            if scope == 'element' and (not element_id or not section_name):
-                return JsonResponse({'success': False, 'error': 'Missing element_id or section_name for element scope'}, status=400)
+            if scope == 'element' and not selector:
+                return JsonResponse({'success': False, 'error': 'Missing selector for element scope'}, status=400)
             if scope == 'section' and not section_name:
                 return JsonResponse({'success': False, 'error': 'Missing section_name for section scope'}, status=400)
 
@@ -1087,7 +1104,7 @@ def refine_multi(request):
             if mode == 'create':
                 prefix = '[new section]'
             elif scope == 'element':
-                prefix = f'[{element_id}]'
+                prefix = '[element]'
             else:
                 prefix = f'[{section_name}]'
             session = RefinementSession(
@@ -1101,7 +1118,7 @@ def refine_multi(request):
         session.add_user_message(instructions)
 
         from ai.services import ContentGenerationService
-        service = ContentGenerationService(model_name='gemini-flash')
+        service = ContentGenerationService(model_name='gemini-pro')
 
         if mode == 'create':
             result = service.generate_section(
@@ -1113,8 +1130,7 @@ def refine_multi(request):
         elif scope == 'element':
             result = service.refine_element_only(
                 page_id=page_id,
-                section_name=section_name,
-                element_id=element_id,
+                selector=selector,
                 instructions=instructions,
                 conversation_history=conversation_history,
                 multi_option=True,
@@ -1132,7 +1148,7 @@ def refine_multi(request):
         if mode == 'create':
             target = f'new_after_{insert_after or "top"}'
         else:
-            target = f'{section_name}/{element_id}' if scope == 'element' else section_name
+            target = 'element' if scope == 'element' else section_name
         session.add_assistant_message(assistant_msg, [target])
         session.save()
 
@@ -1162,7 +1178,7 @@ def apply_option(request):
         page_id = data.get('page_id')
         scope = data.get('scope', 'section')
         section_name = data.get('section_name')
-        element_id = data.get('element_id')
+        selector = data.get('selector')
         html = data.get('html', '').strip()
         mode = data.get('mode', 'replace')
         insert_after = data.get('insert_after')
@@ -1219,18 +1235,17 @@ def apply_option(request):
                 new_html = new_html[12:-14]
             page.html_content = _sanitize_trans_vars(new_html)
 
-        elif scope == 'element' and element_id:
+        elif scope == 'element' and selector:
             # Surgical element replacement
             soup = BeautifulSoup(page.html_content, 'html.parser')
-            old_element = soup.find(attrs={'data-element-id': element_id})
+            old_element = soup.select_one(selector)
             if not old_element:
-                return JsonResponse({'success': False, 'error': f'Element "{element_id}" not found'}, status=400)
+                return JsonResponse({'success': False, 'error': 'Element not found for selector'}, status=400)
 
             new_soup = BeautifulSoup(html_template, 'html.parser')
-            new_element = new_soup.find(attrs={'data-element-id': element_id})
-            if not new_element:
-                children = list(new_soup.children)
-                new_element = children[0] if children else new_soup
+            # Templatized output won't match selector — use first element
+            children = list(new_soup.children)
+            new_element = children[0] if children else new_soup
 
             old_element.replace_with(new_element)
             new_html = str(soup)
@@ -1701,3 +1716,139 @@ def get_page_version(request, page_id, version_number):
             'created_at': version.created_at.isoformat(),
         }
     })
+
+
+@superuser_required
+@require_http_methods(["POST"])
+def remove_section(request):
+    """
+    Remove a section from a page by its data-section name.
+    Creates a version snapshot before modifying. Cleans up orphaned
+    translation keys that only appeared in the removed section.
+    """
+    try:
+        data = json.loads(request.body)
+        page_id = data.get('page_id')
+        section_name = data.get('section_name')
+
+        if not page_id or not section_name:
+            return JsonResponse({'success': False, 'error': 'Missing page_id or section_name'}, status=400)
+
+        page = Page.objects.get(pk=page_id)
+
+        soup = BeautifulSoup(page.html_content or '', 'html.parser')
+        section = soup.find('section', attrs={'data-section': section_name})
+        if not section:
+            return JsonResponse({'success': False, 'error': f'Section "{section_name}" not found'}, status=400)
+
+        # Collect trans vars used ONLY in this section so we can clean them up
+        section_html = str(section)
+        section_vars = set(re.findall(r'\{\{\s*trans\.(\w+)\s*\}\}', section_html))
+
+        # Create version for rollback
+        page.create_version(
+            user=request.user,
+            change_summary=f'Removed section "{section_name}"'
+        )
+
+        # Remove the section
+        section.decompose()
+        new_html = str(soup)
+        if new_html.startswith('<html><body>'):
+            new_html = new_html[12:-14]
+        page.html_content = new_html
+
+        # Find vars still used in remaining HTML
+        remaining_vars = set(re.findall(r'\{\{\s*trans\.(\w+)\s*\}\}', new_html))
+        orphaned_vars = section_vars - remaining_vars
+
+        # Remove orphaned translation keys
+        if orphaned_vars and page.content:
+            translations = page.content.get('translations', {})
+            for lang_code, lang_trans in translations.items():
+                for var in orphaned_vars:
+                    lang_trans.pop(var, None)
+            page.content = page.content  # mark dirty
+
+        page.save()
+
+        return JsonResponse({
+            'success': True,
+            'message': f'Section "{section_name}" removed',
+            'page_id': page.id,
+        })
+
+    except Page.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Page not found'}, status=400)
+    except json.JSONDecodeError:
+        return JsonResponse({'success': False, 'error': 'Invalid JSON'}, status=400)
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
+@superuser_required
+@require_http_methods(["POST"])
+def remove_element(request):
+    """
+    Remove an element from a page by CSS selector.
+    Creates a version snapshot before modifying. Cleans up orphaned
+    translation keys that only appeared in the removed element.
+    """
+    try:
+        data = json.loads(request.body)
+        page_id = data.get('page_id')
+        selector = data.get('selector')
+
+        if not page_id or not selector:
+            return JsonResponse({'success': False, 'error': 'Missing page_id or selector'}, status=400)
+
+        page = Page.objects.get(pk=page_id)
+
+        soup = BeautifulSoup(page.html_content or '', 'html.parser')
+        element = soup.select_one(selector)
+        if not element:
+            return JsonResponse({'success': False, 'error': 'Element not found for selector'}, status=400)
+
+        # Collect trans vars used ONLY in this element
+        element_html = str(element)
+        element_vars = set(re.findall(r'\{\{\s*trans\.(\w+)\s*\}\}', element_html))
+
+        # Create version for rollback
+        page.create_version(
+            user=request.user,
+            change_summary='Removed element'
+        )
+
+        # Remove the element
+        element.decompose()
+        new_html = str(soup)
+        if new_html.startswith('<html><body>'):
+            new_html = new_html[12:-14]
+        page.html_content = new_html
+
+        # Find vars still used in remaining HTML
+        remaining_vars = set(re.findall(r'\{\{\s*trans\.(\w+)\s*\}\}', new_html))
+        orphaned_vars = element_vars - remaining_vars
+
+        # Remove orphaned translation keys
+        if orphaned_vars and page.content:
+            translations = page.content.get('translations', {})
+            for lang_code, lang_trans in translations.items():
+                for var in orphaned_vars:
+                    lang_trans.pop(var, None)
+            page.content = page.content  # mark dirty
+
+        page.save()
+
+        return JsonResponse({
+            'success': True,
+            'message': 'Element removed',
+            'page_id': page.id,
+        })
+
+    except Page.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Page not found'}, status=400)
+    except json.JSONDecodeError:
+        return JsonResponse({'success': False, 'error': 'Invalid JSON'}, status=400)
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)

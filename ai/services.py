@@ -207,6 +207,11 @@ Return the complete, corrected JSON now:"""
 
         return re.sub(r'\{\{\s*trans\.(\w+)\s*\}\}', replace_var, html)
 
+    @staticmethod
+    def _strip_legacy_attrs(html: str) -> str:
+        """Strip legacy data-element-id attributes from HTML to save tokens."""
+        return re.sub(r'\s+data-element-id="[^"]*"', '', html)
+
     def _templatize_and_translate(self, html: str, languages: list, default_language: str, model: str) -> Dict:
         """
         Step 2: Ask LLM to extract text and translate, then do HTML replacement in Python.
@@ -1026,6 +1031,7 @@ Return the complete, corrected JSON now:"""
             clean_html = self._detemplatize_html(current_html, current_translations, default_language)
         else:
             clean_html = current_html
+        clean_html = self._strip_legacy_attrs(clean_html)
 
         # Build conversation history string for prompt
         history_text = ''
@@ -1211,6 +1217,7 @@ Return the complete, corrected JSON now:"""
             clean_html = self._detemplatize_html(current_html, current_translations, default_language)
         else:
             clean_html = current_html
+        clean_html = self._strip_legacy_attrs(clean_html)
 
         # Build conversation history string for prompt
         history_text = ''
@@ -1298,8 +1305,7 @@ Return the complete, corrected JSON now:"""
     def refine_element_only(
         self,
         page_id: int,
-        section_name: str,
-        element_id: str,
+        selector: str,
         instructions: str,
         conversation_history: list = None,
         multi_option: bool = False,
@@ -1313,7 +1319,7 @@ Return the complete, corrected JSON now:"""
         from bs4 import BeautifulSoup
 
         print(f"\n=== Refining Element Only ===")
-        print(f"Page ID: {page_id}, Section: {section_name}, Element: {element_id}")
+        print(f"Page ID: {page_id}, Selector: {selector}")
         print(f"Instructions: {instructions}")
 
         try:
@@ -1338,19 +1344,25 @@ Return the complete, corrected JSON now:"""
             clean_html = self._detemplatize_html(current_html, current_translations, default_language)
         else:
             clean_html = current_html
+        clean_html = self._strip_legacy_attrs(clean_html)
 
-        # Extract the parent section for context
+        # Find the target element by CSS selector
         soup = BeautifulSoup(clean_html, 'html.parser')
-        section_el = soup.find('section', attrs={'data-section': section_name})
-        if not section_el:
-            raise ValueError(f"Section '{section_name}' not found in page HTML")
-        section_html = str(section_el)
-
-        # Extract the target element
-        element_el = section_el.find(attrs={'data-element-id': element_id})
+        element_el = soup.select_one(selector)
         if not element_el:
-            raise ValueError(f"Element '{element_id}' not found in section '{section_name}'")
+            raise ValueError(f"Element not found for selector: {selector}")
+
+        # Extract parent section for context
+        section_el = element_el.find_parent('section', attrs={'data-section': True})
+        if not section_el:
+            raise ValueError("Element is not inside a data-section")
+        section_name = section_el['data-section']
+
+        # Mark the target element for the LLM, then extract HTML
+        element_el['data-target'] = 'true'
+        section_html = str(section_el)
         element_html = str(element_el)
+        del element_el['data-target']  # clean up the soup
 
         # Build conversation history string for prompt
         history_text = ''
@@ -1364,7 +1376,7 @@ Return the complete, corrected JSON now:"""
                     history_text += f"\nAssistant: {content}"
 
         # Step 1: Refine element HTML
-        print(f"\n--- Step 1: Refine element '{element_id}' in {default_language.upper()} ---")
+        print(f"\n--- Step 1: Refine element in {default_language.upper()} ---")
 
         system_prompt, user_prompt = PromptTemplates.get_element_refinement_prompt(
             site_name=site_name,
@@ -1373,7 +1385,6 @@ Return the complete, corrected JSON now:"""
             default_language=default_language,
             section_html=section_html,
             section_name=section_name,
-            element_id=element_id,
             element_html=element_html,
             user_request=instructions,
             design_guide=design_guide,
@@ -1396,14 +1407,14 @@ Return the complete, corrected JSON now:"""
                 system_prompt=system_prompt, user_prompt=user_prompt,
                 response_text=response.choices[0].message.content,
                 duration_ms=int((time.time() - t0) * 1000),
-                page=page, section_name=f'{section_name}/{element_id}', **usage,
+                page=page, section_name=section_name, **usage,
             )
         except Exception as e:
             log_ai_call(
                 action='refine_element', model_name=actual_model, provider=provider_str,
                 system_prompt=system_prompt, user_prompt=user_prompt,
                 duration_ms=int((time.time() - t0) * 1000),
-                page=page, section_name=f'{section_name}/{element_id}',
+                page=page, section_name=section_name,
                 success=False, error_message=str(e),
             )
             raise
@@ -1421,14 +1432,15 @@ Return the complete, corrected JSON now:"""
             validated = []
             for i, opt_html in enumerate(options):
                 opt_soup = BeautifulSoup(opt_html, 'html.parser')
-                opt_el = opt_soup.find(attrs={'data-element-id': element_id})
+                opt_el = opt_soup.find(attrs={'data-target': 'true'})
                 if opt_el:
+                    del opt_el['data-target']
                     validated.append({'html': str(opt_el)})
                 else:
                     validated.append({'html': opt_html})
                 print(f"  Option {i+1}: {len(validated[-1]['html'])} chars")
 
-            assistant_message = f"Here are {len(validated)} variations for the {element_id} element."
+            assistant_message = f"Here are {len(validated)} variations."
             return {
                 'options': validated,
                 'assistant_message': assistant_message,
@@ -1436,16 +1448,16 @@ Return the complete, corrected JSON now:"""
 
         # Verify the response contains the target element
         result_soup = BeautifulSoup(refined_html, 'html.parser')
-        target_el = result_soup.find(attrs={'data-element-id': element_id})
+        target_el = result_soup.find(attrs={'data-target': 'true'})
 
         if target_el:
+            del target_el['data-target']
             element_result_html = str(target_el)
         else:
-            # LLM returned the element without the wrapper or changed structure
-            print(f"WARNING: data-element-id='{element_id}' not found in response, using full response")
+            print("WARNING: data-target not found in response, using full response")
             element_result_html = refined_html
 
-        print(f"Element '{element_id}': {len(element_result_html)} chars")
+        print(f"Refined element: {len(element_result_html)} chars")
 
         # Step 2: Templatize + translate just the element
         # Skip templatization for elements with no visible text (e.g. <img> tags)
@@ -1461,7 +1473,7 @@ Return the complete, corrected JSON now:"""
                 'content': {'translations': {lang: {} for lang in languages}},
             }
 
-        assistant_message = f"I've updated the {element_id} element based on your instructions."
+        assistant_message = "I've updated the element based on your instructions."
 
         return {
             'html_template': element_data['html_content'],
@@ -1996,6 +2008,7 @@ Keep the translations natural and fluent — these are website UI strings.
             clean_html = self._detemplatize_html(current_html, current_translations, default_language)
         else:
             clean_html = current_html
+        clean_html = self._strip_legacy_attrs(clean_html)
 
         # Build library catalog (metadata only, no URLs)
         library_catalog = self._build_library_catalog(default_language)

@@ -1,5 +1,5 @@
 import { events } from '../lib/events.js';
-import { $, getContentWrapper, getElementId, isTextElement, getTransVar } from '../lib/dom.js';
+import { $, getContentWrapper, getCssSelector, isTextElement, getTransVar } from '../lib/dom.js';
 
 let handlers = {};
 let toolbar = null;
@@ -29,7 +29,7 @@ function startEdit(el) {
     el.setAttribute('contenteditable', 'true');
     el.focus();
     positionToolbar(el);
-    events.emit('inline-edit:start', { elementId: getElementId(el) });
+    events.emit('inline-edit:start', { selector: getCssSelector(el) });
 }
 
 function finishEdit(cancel) {
@@ -42,8 +42,8 @@ function finishEdit(cancel) {
         if (newText !== originalText) {
             events.emit('change:content', {
                 type: 'content',
-                elementId: getElementId(el),
-                fieldKey: getTransVar(el) || getElementId(el),
+                selector: getCssSelector(el),
+                fieldKey: getTransVar(el) || '',
                 value: newText,
                 oldValue: originalText,
             });

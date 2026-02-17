@@ -33,8 +33,8 @@ TOOL_DEFINITIONS = """
 ### Page-Level Tools (require active page)
 
 - `update_translations` — Change text content directly. Params: `{"updates": {"en": {"hero_title": "New Title"}, "pt": {"hero_title": "Novo Título"}}}`. Fastest way to change text — no AI call needed.
-- `update_element_styles` — Change CSS classes. Params: `{"element_id": "...", "new_classes": "text-4xl font-bold text-blue-600"}` or `{"section_name": "...", "new_classes": "..."}`.
-- `update_element_attribute` — Change href, src, etc. Params: `{"element_id": "...", "attribute": "href", "value": "/new-url/"}`.
+- `update_element_styles` — Change CSS classes. Params: `{"selector": "section[data-section='hero'] > div > h1", "new_classes": "text-4xl font-bold"}` or `{"section_name": "...", "new_classes": "..."}`.
+- `update_element_attribute` — Change href, src, etc. Params: `{"selector": "section[data-section='hero'] > a", "attribute": "href", "value": "/new-url/"}`.
 - `remove_section` — Delete a section. Params: `{"section_name": "..."}`.
 - `reorder_sections` — Reorder sections. Params: `{"order": ["hero", "features", "cta"]}`.
 - `refine_section` — AI-regenerate ONE section. Params: `{"section_name": "...", "instructions": "..."}`. Uses AI — slower and costlier. Use only when structural changes are needed.
@@ -118,16 +118,13 @@ def build_page_context(page):
                 extra = f' (+{len(trans) - 5} more)' if len(trans) > 5 else ''
                 lines.append(f"**{lang}**: {sample_str}{extra}")
 
-    # Editable elements
-    elements = soup.find_all(attrs={'data-element-id': True})
-    if elements:
-        lines.append("\n### Editable Elements")
-        for el in elements[:20]:
-            eid = el['data-element-id']
-            classes = ' '.join(el.get('class', []))[:60]
-            lines.append(f"- `{eid}` ({el.name}): classes=`{classes}`")
-        if len(elements) > 20:
-            lines.append(f"  ... and {len(elements) - 20} more elements")
+    # Page sections
+    sections = soup.find_all('section', attrs={'data-section': True})
+    if sections:
+        lines.append("\n### Page Sections")
+        for sec in sections:
+            sec_name = sec['data-section']
+            lines.append(f"- `{sec_name}`: {len(list(sec.descendants))} elements")
 
     return '\n'.join(lines) if lines else "Page has content but no structured sections found."
 

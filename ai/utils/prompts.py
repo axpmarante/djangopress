@@ -665,7 +665,6 @@ Generate a complete, professional web page as clean HTML with real text content 
 ## HTML Structure
 - Compose the page from multiple `<section>` blocks
 - Each `<section>` MUST have `data-section="name"` and `id="name"` attributes
-- Use `data-element-id="unique_id"` on editable text elements (headings, paragraphs, buttons, links)
 - Sections with `data-overlay="rgba(r,g,b,a)"` have a semi-transparent overlay applied via `background-image: linear-gradient(rgba, rgba)` in the style attribute. Preserve both the `data-overlay` attribute and the corresponding gradient. To darken: increase the alpha. To remove: delete both `data-overlay` and the gradient from style.
 - Sections may contain `<iframe data-bg-video="youtube">` as a direct child for background video. Preserve these elements exactly — do not remove or modify them unless explicitly asked.
 - Start with a hero section, add content sections, end with a CTA
@@ -777,7 +776,6 @@ Edit the provided HTML page by applying the requested changes. Return the comple
 - Use Tailwind CSS classes inline for all styling
 - Make responsive: `md:text-6xl`, `lg:grid-cols-3`, `sm:flex-row`
 - Each `<section>` MUST have `data-section="name"` and `id="name"` attributes
-- Use `data-element-id="unique_id"` on editable text elements
 - Sections with `data-overlay="rgba(r,g,b,a)"` have a semi-transparent overlay applied via `background-image: linear-gradient(rgba, rgba)` in the style attribute. Preserve both the `data-overlay` attribute and the corresponding gradient unless asked to change it.
 - Sections may contain `<iframe data-bg-video="youtube">` as a direct child for background video. Preserve these elements exactly — do not remove or modify them unless explicitly asked.
 - All text is in {lang_name} — keep it that way, do NOT use template variables
@@ -952,7 +950,9 @@ Return exactly 3 distinct variations of the section. Separate them with HTML com
 <!-- OPTION_3 -->
 (third variation — full <section> block)
 
-Make each variation meaningfully different: vary layout structure, visual emphasis, spacing, or content arrangement. All 3 must satisfy the user request and include the complete <section data-section="{section_name}"> wrapper."""
+Make each variation meaningfully different: vary layout structure, visual emphasis, spacing, or content arrangement. All 3 must satisfy the user request and include the complete <section data-section="{section_name}"> wrapper.
+
+IMPORTANT: Keep output concise to fit all 3 options. For SVG icons, use simple paths (< 3 lines each) or Heroicons-style minimal SVGs. Never use complex multi-path SVGs — they waste tokens and prevent generating all 3 options."""
 
         system_prompt = f"""You are a senior frontend designer specializing in Tailwind CSS. Your goal is to edit ONE specific section of a webpage.
 
@@ -963,7 +963,6 @@ Edit ONLY the `<section data-section="{section_name}">` section based on the use
 - Use Tailwind CSS classes inline for all styling
 - Make responsive: `md:text-6xl`, `lg:grid-cols-3`, `sm:flex-row`
 - The `<section>` MUST keep `data-section="{section_name}"` and `id="{section_name}"` attributes
-- Use `data-element-id="unique_id"` on editable text elements
 - Sections with `data-overlay="rgba(r,g,b,a)"` have a semi-transparent overlay applied via `background-image: linear-gradient(rgba, rgba)` in the style attribute. Preserve both the `data-overlay` attribute and the corresponding gradient unless asked to change it.
 - Sections may contain `<iframe data-bg-video="youtube">` as a direct child for background video. Preserve these elements exactly — do not remove or modify them unless explicitly asked.
 - All text is in {lang_name} — keep it that way, do NOT use template variables
@@ -1083,7 +1082,6 @@ Create a brand new section based on the user's description. The section will be 
 - Use Tailwind CSS classes inline for all styling
 - Make responsive: `md:text-6xl`, `lg:grid-cols-3`, `sm:flex-row`
 - The `<section>` MUST have `data-section="section_name"` and `id="section_name"` attributes — choose a descriptive snake_case name based on the section's purpose (e.g. `testimonials`, `pricing_plans`, `team_members`)
-- Use `data-element-id="unique_id"` on editable text elements (headings, paragraphs, buttons, links)
 - Match the visual style, colors, spacing, and typography of the existing page sections
 - All text must be in {lang_name} — do NOT use template variables
 
@@ -1102,6 +1100,8 @@ Return exactly 3 distinct variations of the new section. Separate them with HTML
 (third variation — full <section> block)
 
 Make each variation meaningfully different: vary layout structure, visual emphasis, spacing, or content arrangement. All 3 must satisfy the user request and include the complete `<section data-section="section_name">` wrapper with matching `id`.
+
+IMPORTANT: Keep output concise to fit all 3 options. For SVG icons, use simple paths (< 3 lines each) or Heroicons-style minimal SVGs. Never use complex multi-path SVGs — they waste tokens and prevent generating all 3 options.
 
 ## CRITICAL: Return ONLY the New Section Variations
 - Output ONLY the 3 `<section>` variations with their option markers
@@ -1176,7 +1176,6 @@ Return ONLY 3 variations of the new section, separated by <!-- OPTION_1 -->, <!-
         default_language: str,
         section_html: str,
         section_name: str,
-        element_id: str,
         element_html: str,
         user_request: str,
         design_guide: str = '',
@@ -1200,29 +1199,31 @@ Return ONLY 3 variations of the new section, separated by <!-- OPTION_1 -->, <!-
 
         multi_option_block = ""
         if multi_option:
-            multi_option_block = f"""
+            multi_option_block = """
 
 ## Multiple Options
 Return exactly 3 distinct variations of the element. Separate them with HTML comment markers on their own line:
 <!-- OPTION_1 -->
-(first variation — the element with data-element-id="{element_id}")
+(first variation — the element marked with data-target="true")
 <!-- OPTION_2 -->
 (second variation)
 <!-- OPTION_3 -->
 (third variation)
 
-Make each variation meaningfully different: vary styling, layout, or visual approach. All 3 must satisfy the user request and keep the data-element-id="{element_id}" attribute."""
+Make each variation meaningfully different: vary styling, layout, or visual approach. All 3 must satisfy the user request and keep the data-target="true" attribute.
+
+IMPORTANT: Keep output concise to fit all 3 options. For SVG icons, use simple paths (< 3 lines each) or Heroicons-style minimal SVGs. Never use complex multi-path SVGs."""
 
         system_prompt = f"""You are a senior frontend designer specializing in Tailwind CSS. Your goal is to edit ONE specific element within a webpage section.
 
 ## Your Task
-Edit ONLY the element with `data-element-id="{element_id}"` based on the user's instructions. Return ONLY that single element — nothing else.
+Edit ONLY the element marked with `data-target="true"` based on the user's instructions. Return ONLY that single element — nothing else.
 
 ## Technical Requirements
 - Use Tailwind CSS classes inline for all styling
 - Make responsive: `md:text-6xl`, `lg:grid-cols-3`, `sm:flex-row`
-- The element MUST keep its `data-element-id="{element_id}"` attribute
-- Preserve `data-element-id` on any editable child elements
+- The element MUST keep its `data-target="true"` attribute
+- Do NOT add `data-target` to any other elements
 - You may restructure the element's children freely
 - You may change/add/remove classes, attributes, and child elements
 - All text is in {lang_name} — keep it that way, do NOT use template variables
@@ -1232,7 +1233,7 @@ Edit ONLY the element with `data-element-id="{element_id}"` based on the user's 
 - When adding NEW images, use placeholder: `src="https://placehold.co/WIDTHxHEIGHT?text=Label"` with `data-image-prompt="description"` and `data-image-name="slug_name"`
 
 ## CRITICAL: Return ONLY the Target Element
-- Output ONLY the single element with `data-element-id="{element_id}"` and its children
+- Output ONLY the single element marked with `data-target="true"` and its children
 - Do NOT return the parent section or any sibling elements
 - Do NOT include `<html>`, `<head>`, `<body>`, `<section>`, `<header>`, `<nav>`, or `<footer>` tags
 - Do NOT include `<script>` or `<link>` tags
@@ -1270,7 +1271,7 @@ The element lives inside `<section data-section="{section_name}">`. Here is the 
 
 # ELEMENT TO EDIT
 
-The element with `data-element-id="{element_id}"`:
+The element marked with `data-target="true"`:
 
 ```html
 {element_html}
@@ -1280,7 +1281,7 @@ The element with `data-element-id="{element_id}"`:
 {history_block}
 # USER REQUEST
 
-Edit the element with `data-element-id="{element_id}"`:
+Edit the element marked with `data-target="true"`:
 
 {user_request}
 
@@ -1478,7 +1479,6 @@ Pick the single best matching image from the catalog. Return ONLY the JSON objec
 ## Variable Naming — CRITICAL
 - Variable names MUST use **snake_case** with ONLY letters, digits, and underscores
 - NO hyphens, NO dots, NO spaces, NO special characters in variable names
-- For elements with `data-element-id`, convert the ID to snake_case: `data-element-id="stack-heading"` → variable name `stack_heading`
 - Use descriptive names based on the `data-section` attribute and element role: `hero_title`, `hero_subtitle`, `features_card1_title`, `cta_button`
 - Examples: `hero_title`, `stack_heading`, `cta_button_text` (NEVER `hero-title`, `stack-heading`)
 

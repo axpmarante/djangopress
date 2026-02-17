@@ -3,12 +3,12 @@ import { api } from '../lib/api.js';
 import { shortcuts } from '../lib/shortcuts.js';
 
 // --- State ---
-let pending = new Map();   // key: "elementId:type:attribute?" -> change
+let pending = new Map();   // key: "selector:type:attribute?" -> change
 let undoStack = [];
 let redoStack = [];
 
 function changeKey(c) {
-    return `${c.elementId}:${c.type}:${c.attribute || ''}`;
+    return `${c.selector}:${c.type}:${c.attribute || ''}`;
 }
 
 function getConfig() {
@@ -18,12 +18,12 @@ function getConfig() {
 
 // --- DOM helpers ---
 
-function findElement(elementId) {
-    return document.querySelector(`[data-element-id="${elementId}"]`);
+function findElement(selector) {
+    return selector ? document.querySelector(selector) : null;
 }
 
 function applyToDOM(change) {
-    const el = findElement(change.elementId);
+    const el = findElement(change.selector);
     if (!el) return;
     if (change.type === 'content') {
         el.textContent = change.value;
@@ -135,28 +135,28 @@ async function save() {
 
     try {
         for (const c of contentChanges) {
-            console.log('[ev2] save content:', c.fieldKey, c.elementId);
+            console.log('[ev2] save content:', c.fieldKey);
             await api.post('/update-page-content/', {
                 page_id: pageId,
                 field_key: c.fieldKey,
-                element_id: c.elementId,
+                selector: c.selector,
                 language: language,
                 value: c.value,
             });
         }
         for (const c of classChanges) {
-            console.log('[ev2] save classes:', c.elementId);
+            console.log('[ev2] save classes:', c.selector);
             await api.post('/update-page-classes/', {
                 page_id: pageId,
-                element_id: c.elementId,
+                selector: c.selector,
                 new_classes: c.value,
             });
         }
         for (const c of attrChanges) {
-            console.log('[ev2] save attr:', c.elementId, c.attribute);
+            console.log('[ev2] save attr:', c.selector, c.attribute);
             await api.post('/update-page-attribute/', {
                 page_id: pageId,
-                element_id: c.elementId,
+                selector: c.selector,
                 attribute: c.attribute,
                 value: c.value,
                 old_value: c.oldValue,

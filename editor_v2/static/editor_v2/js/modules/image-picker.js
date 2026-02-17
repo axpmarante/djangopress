@@ -5,14 +5,14 @@
  */
 import { events } from '../lib/events.js';
 import { api } from '../lib/api.js';
-import { $, getElementId } from '../lib/dom.js';
+import { $, getCssSelector } from '../lib/dom.js';
 
 function esc(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
 let cache = null;
 let allImages = [];
 let currentEl = null;
-let currentElementId = null;
+let currentSelector = null;
 let currentMode = 'img'; // 'img' or 'background'
 let selectedImage = null;
 let selectedFile = null;
@@ -286,7 +286,7 @@ function applySelection() {
 }
 
 function applyImage(url, alt) {
-    if (!currentEl || !currentElementId) return;
+    if (!currentEl || !currentSelector) return;
 
     if (currentMode === 'background') {
         // Background image mode — preserve existing overlay if any
@@ -305,7 +305,7 @@ function applyImage(url, alt) {
         if (!currentEl.style.backgroundPosition) currentEl.style.backgroundPosition = 'center';
         const newStyle = currentEl.getAttribute('style') || '';
         events.emit('change:attribute', {
-            type: 'attribute', elementId: currentElementId,
+            type: 'attribute', selector: currentSelector,
             attribute: 'style', value: newStyle, oldValue: oldStyle,
             tagName: currentEl.tagName.toLowerCase(),
         });
@@ -316,11 +316,11 @@ function applyImage(url, alt) {
         currentEl.src = url;
         currentEl.alt = alt;
         events.emit('change:attribute', {
-            type: 'attribute', elementId: currentElementId,
+            type: 'attribute', selector: currentSelector,
             attribute: 'src', value: url, oldValue: oldSrc, tagName: 'img',
         });
         events.emit('change:attribute', {
-            type: 'attribute', elementId: currentElementId,
+            type: 'attribute', selector: currentSelector,
             attribute: 'alt', value: alt, oldValue: oldAlt, tagName: 'img',
         });
     }
@@ -350,7 +350,7 @@ function updateButtons() {
 
 function onSelectionChanged(element) {
     currentEl = element;
-    currentElementId = element ? getElementId(element) : null;
+    currentSelector = element ? getCssSelector(element) : null;
 }
 
 // --- Event binding ---
@@ -426,7 +426,7 @@ export function destroy() {
     cache = null;
     allImages = [];
     currentEl = null;
-    currentElementId = null;
+    currentSelector = null;
     currentMode = 'img';
     selectedImage = null;
     selectedFile = null;

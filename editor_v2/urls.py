@@ -26,6 +26,14 @@ urlpatterns = [
     path('api/refine-element/', api_views.refine_element, name='api_refine_element'),
     path('api/save-ai-element/', api_views.save_ai_element, name='api_save_ai_element'),
 
+    # AI multi-option refinement endpoints
+    path('api/refine-multi/', api_views.refine_multi, name='api_refine_multi'),
+    path('api/apply-option/', api_views.apply_option, name='api_apply_option'),
+
+    # Remove section/element endpoints
+    path('api/remove-section/', api_views.remove_section, name='api_remove_section'),
+    path('api/remove-element/', api_views.remove_element, name='api_remove_element'),
+
     # AI full-page refinement endpoints
     path('api/refine-page/', api_views.refine_page, name='api_refine_page'),
     path('api/save-ai-page/', api_views.save_ai_page, name='api_save_ai_page'),

@@ -1,6 +1,6 @@
 import { events } from '../lib/events.js';
 import { api } from '../lib/api.js';
-import { $, $$, getElementId, isTextElement, getTransVar, getSections, getTagLabel } from '../lib/dom.js';
+import { $, $$, getCssSelector, isTextElement, getTransVar, getSections, getTagLabel } from '../lib/dom.js';
 
 let activeTab = 'content';
 let selectedEl = null;
@@ -22,27 +22,26 @@ function renderContentTab() {
         return;
     }
     const tag = selectedEl.tagName;
-    const elId = getElementId(selectedEl);
+    const selector = getCssSelector(selectedEl) || '';
 
-    if (tag === 'IMG') renderImageFields(c, elId);
-    else if (tag === 'A') renderLinkFields(c, elId);
-    else if (isTextElement(selectedEl)) renderTextField(c, elId);
+    if (tag === 'IMG') renderImageFields(c, selector);
+    else if (tag === 'A') renderLinkFields(c, selector);
+    else if (isTextElement(selectedEl)) renderTextField(c, selector);
     else c.innerHTML = '<p class="ev2-placeholder ev2-empty-state">Select a text element to edit content</p>';
 }
 
-function renderTextField(container, elId) {
+function renderTextField(container, selector) {
     const transVar = getTransVar(selectedEl);
-    // Convert hyphens to underscores to match {{ trans.xxx_yyy }} template vars
-    const fieldKey = transVar || elId.replace(/-/g, '_');
-    const label = transVar ? `trans.${transVar}` : `trans.${fieldKey}`;
+    const fieldKey = transVar || '';
+    const label = transVar ? `trans.${transVar}` : selectedEl.tagName.toLowerCase();
     const text = selectedEl.textContent.trim();
     const isLong = text.length > 80;
 
     let html = `<div class="ev2-field"><label class="ev2-label">${esc(label)}</label>`;
     if (isLong) {
-        html += `<textarea class="ev2-textarea" data-field-key="${esc(fieldKey)}" data-element-id="${esc(elId)}">${esc(text)}</textarea>`;
+        html += `<textarea class="ev2-textarea" data-field-key="${esc(fieldKey)}" data-selector="${esc(selector)}">${esc(text)}</textarea>`;
     } else {
-        html += `<input class="ev2-input" type="text" data-field-key="${esc(fieldKey)}" data-element-id="${esc(elId)}" value="${esc(text)}" />`;
+        html += `<input class="ev2-input" type="text" data-field-key="${esc(fieldKey)}" data-selector="${esc(selector)}" value="${esc(text)}" />`;
     }
     if (transVar) html += `<p class="ev2-hint">Variable: {{ trans.${esc(transVar)} }}</p>`;
     html += '</div>';
@@ -51,7 +50,7 @@ function renderTextField(container, elId) {
     attachContentListeners(container);
 }
 
-function renderImageFields(container, elId) {
+function renderImageFields(container, selector) {
     const src = selectedEl.getAttribute('src') || '';
     const alt = selectedEl.getAttribute('alt') || '';
     container.innerHTML = `
@@ -62,26 +61,26 @@ function renderImageFields(container, elId) {
             <button type="button" class="ev2-btn-change-img" id="ev2-change-img-btn">Change Image</button>
         </div>
         <div class="ev2-field"><label class="ev2-label">Alt text</label>
-            <input class="ev2-input" type="text" data-attr="alt" data-element-id="${esc(elId)}" value="${esc(alt)}" /></div>
+            <input class="ev2-input" type="text" data-attr="alt" data-selector="${esc(selector)}" value="${esc(alt)}" /></div>
         <div class="ev2-field"><label class="ev2-label">Image URL</label>
-            <input class="ev2-input ev2-input-mono" type="text" data-attr="src" data-element-id="${esc(elId)}" value="${esc(src)}" /></div>`;
+            <input class="ev2-input ev2-input-mono" type="text" data-attr="src" data-selector="${esc(selector)}" value="${esc(src)}" /></div>`;
     attachContentListeners(container);
     const changeBtn = container.querySelector('#ev2-change-img-btn');
     if (changeBtn) changeBtn.addEventListener('click', () => events.emit('image-picker:open'));
 }
 
-function renderLinkFields(container, elId) {
+function renderLinkFields(container, selector) {
     const transVar = getTransVar(selectedEl);
-    const fieldKey = transVar || elId.replace(/-/g, '_');
-    const label = transVar ? `trans.${transVar}` : `trans.${fieldKey}`;
+    const fieldKey = transVar || '';
+    const label = transVar ? `trans.${transVar}` : selectedEl.tagName.toLowerCase();
     const text = selectedEl.textContent.trim();
     const href = selectedEl.getAttribute('href') || '';
     container.innerHTML = `
         <div class="ev2-field"><label class="ev2-label">${esc(label)}</label>
-            <input class="ev2-input" type="text" data-field-key="${esc(fieldKey)}" data-element-id="${esc(elId)}" value="${esc(text)}" />
+            <input class="ev2-input" type="text" data-field-key="${esc(fieldKey)}" data-selector="${esc(selector)}" value="${esc(text)}" />
             ${transVar ? `<p class="ev2-hint">Variable: {{ trans.${esc(transVar)} }}</p>` : ''}</div>
         <div class="ev2-field"><label class="ev2-label">Link URL</label>
-            <input class="ev2-input" type="text" data-attr="href" data-element-id="${esc(elId)}" value="${esc(href)}" /></div>`;
+            <input class="ev2-input" type="text" data-attr="href" data-selector="${esc(selector)}" value="${esc(href)}" /></div>`;
     attachContentListeners(container);
 }
 
@@ -92,7 +91,7 @@ function attachContentListeners(container) {
 }
 
 function onContentInput(input) {
-    const elId = input.dataset.elementId;
+    const selector = input.dataset.selector;
     const attr = input.dataset.attr;
     const fieldKey = input.dataset.fieldKey;
     const value = input.value;
@@ -101,14 +100,14 @@ function onContentInput(input) {
         const oldValue = selectedEl.getAttribute(attr) || '';
         selectedEl.setAttribute(attr, value);
         events.emit('change:attribute', {
-            type: 'attribute', elementId: elId, attribute: attr,
+            type: 'attribute', selector, attribute: attr,
             value, oldValue, tagName: selectedEl.tagName.toLowerCase(),
         });
-    } else if (fieldKey) {
+    } else {
         const oldValue = selectedEl.textContent;
         selectedEl.textContent = value;
         events.emit('change:content', {
-            type: 'content', elementId: elId, fieldKey, value, oldValue,
+            type: 'content', selector, fieldKey: fieldKey || '', value, oldValue,
         });
     }
 }
@@ -136,7 +135,7 @@ function renderDesignTab() {
         return;
     }
 
-    const elId = getElementId(selectedEl);
+    const selector = getCssSelector(selectedEl) || '';
     const tag = selectedEl.tagName.toLowerCase();
     const id = selectedEl.id || '';
     const classes = selectedEl.className.split(/\s+/).filter(c => !c.startsWith('ev2-')).join(' ');
@@ -235,7 +234,7 @@ function renderDesignTab() {
 
     // --- CSS Classes (always shown) ---
     html += `<div class="ev2-design-section"><label class="ev2-label">CSS Classes</label>
-        <textarea class="ev2-textarea" id="ev2-classes-input" data-element-id="${esc(elId)}">${esc(classes)}</textarea>
+        <textarea class="ev2-textarea" id="ev2-classes-input" data-selector="${esc(selector)}">${esc(classes)}</textarea>
         <p class="ev2-hint">Space-separated Tailwind classes</p></div>`;
 
     container.innerHTML = html;
@@ -249,7 +248,7 @@ function renderDesignTab() {
             const oldValue = selectedEl.className.split(/\s+/).filter(c => !c.startsWith('ev2-')).join(' ');
             selectedEl.className = [...ev2Classes, ...newClasses.split(/\s+/).filter(Boolean)].join(' ');
             events.emit('change:classes', {
-                type: 'classes', elementId: elId, value: newClasses, oldValue,
+                type: 'classes', selector, value: newClasses, oldValue,
             });
         });
     }
@@ -269,7 +268,7 @@ function renderDesignTab() {
         if (changeBtn) changeBtn.addEventListener('click', () => events.emit('image-picker:open', { mode: 'background' }));
         if (removeBtn) removeBtn.addEventListener('click', () => {
             const bg = parseBgImage(selectedEl.style.backgroundImage);
-            emitStyleChange(elId, () => {
+            emitStyleChange(selector, () => {
                 // Keep standalone overlay if present, remove just the image URL
                 if (bg.overlayOpacity > 0 && bg.overlayColor) {
                     selectedEl.style.backgroundImage = composeBgImage('', bg.overlayColor, bg.overlayOpacity);
@@ -286,15 +285,15 @@ function renderDesignTab() {
                 const bg = parseBgImage(selectedEl.style.backgroundImage);
                 const color = overlayColor ? overlayColor.value : (bg.overlayColor || '#000000');
                 const opacity = overlayOpacity ? parseInt(overlayOpacity.value) / 100 : (bg.overlayOpacity || 0);
-                emitStyleChange(elId, () => {
+                emitStyleChange(selector, () => {
                     selectedEl.style.backgroundImage = composeBgImage(bg.url, color, opacity);
                 });
                 // Set semantic data-overlay attribute for LLM readability
                 if (opacity > 0) {
                     const { r, g, b } = hexToRgb(color);
-                    emitAttrChange(elId, 'data-overlay', `rgba(${r}, ${g}, ${b}, ${opacity})`);
+                    emitAttrChange(selector, 'data-overlay', `rgba(${r}, ${g}, ${b}, ${opacity})`);
                 } else {
-                    emitAttrChange(elId, 'data-overlay', '');
+                    emitAttrChange(selector, 'data-overlay', '');
                 }
                 const valSpan = container.querySelector('#ev2-overlay-value');
                 if (valSpan) valSpan.textContent = `${Math.round(opacity * 100)}%`;
@@ -304,23 +303,23 @@ function renderDesignTab() {
         }
         if (overlayRemove) overlayRemove.addEventListener('click', () => {
             const bg = parseBgImage(selectedEl.style.backgroundImage);
-            emitStyleChange(elId, () => {
+            emitStyleChange(selector, () => {
                 selectedEl.style.backgroundImage = composeBgImage(bg.url, null, 0);
             });
-            emitAttrChange(elId, 'data-overlay', '');
+            emitAttrChange(selector, 'data-overlay', '');
             renderDesignTab();
         });
 
         // Background color controls
         if (colorInput) {
             colorInput.addEventListener('input', () => {
-                emitStyleChange(elId, () => { selectedEl.style.backgroundColor = colorInput.value; });
+                emitStyleChange(selector, () => { selectedEl.style.backgroundColor = colorInput.value; });
                 const valSpan = container.querySelector('#ev2-bg-color-value');
                 if (valSpan) valSpan.textContent = colorInput.value;
             });
         }
         if (colorRemove) colorRemove.addEventListener('click', () => {
-            emitStyleChange(elId, () => { selectedEl.style.backgroundColor = ''; });
+            emitStyleChange(selector, () => { selectedEl.style.backgroundColor = ''; });
             renderDesignTab();
         });
 
@@ -368,19 +367,19 @@ function renderDesignTab() {
     }
 }
 
-function emitStyleChange(elementId, applyFn) {
+function emitStyleChange(selector, applyFn) {
     const oldStyle = selectedEl.getAttribute('style') || '';
     applyFn();
     const newStyle = selectedEl.getAttribute('style') || '';
     if (oldStyle !== newStyle) {
         events.emit('change:attribute', {
-            type: 'attribute', elementId, attribute: 'style',
+            type: 'attribute', selector, attribute: 'style',
             value: newStyle, oldValue: oldStyle, tagName: selectedEl.tagName.toLowerCase(),
         });
     }
 }
 
-function emitAttrChange(elementId, attr, value) {
+function emitAttrChange(selector, attr, value) {
     const oldValue = selectedEl.getAttribute(attr) || '';
     if (value) {
         selectedEl.setAttribute(attr, value);
@@ -390,7 +389,7 @@ function emitAttrChange(elementId, attr, value) {
     const newValue = value || '';
     if (oldValue !== newValue) {
         events.emit('change:attribute', {
-            type: 'attribute', elementId, attribute: attr,
+            type: 'attribute', selector, attribute: attr,
             value: newValue, oldValue, tagName: selectedEl.tagName.toLowerCase(),
         });
     }
@@ -458,21 +457,21 @@ function renderStructureTab() {
         return;
     }
 
-    const selectedId = selectedEl ? getElementId(selectedEl) : null;
+    const selectedSel = selectedEl ? getCssSelector(selectedEl) : null;
     let html = '<div class="ev2-tree">';
 
     for (const section of sections) {
-        const sectionId = getElementId(section);
-        const isCurrent = sectionId === selectedId;
-        html += `<div class="ev2-tree-item${isCurrent ? ' current' : ''}" data-tree-id="${esc(sectionId)}">`;
+        const sectionSel = getCssSelector(section) || '';
+        const isCurrent = sectionSel === selectedSel;
+        html += `<div class="ev2-tree-item${isCurrent ? ' current' : ''}" data-tree-selector="${esc(sectionSel)}">`;
         html += `<strong>${esc(getTagLabel(section))}</strong></div>`;
 
         // Show direct children with editable content
         for (const child of section.children) {
-            const childId = getElementId(child);
-            const isChildCurrent = childId === selectedId;
+            const childSel = getCssSelector(child) || '';
+            const isChildCurrent = childSel === selectedSel;
             const label = getTagLabel(child);
-            html += `<div class="ev2-tree-item${isChildCurrent ? ' current' : ''}" data-tree-id="${esc(childId)}">`;
+            html += `<div class="ev2-tree-item${isChildCurrent ? ' current' : ''}" data-tree-selector="${esc(childSel)}">`;
             html += `<span class="ev2-tree-indent"></span>${esc(label)}`;
 
             // Show text preview for text elements
@@ -485,9 +484,9 @@ function renderStructureTab() {
             // One more level deep for key elements
             for (const grandchild of child.children) {
                 if (!isTextElement(grandchild) && grandchild.tagName !== 'IMG' && grandchild.tagName !== 'A') continue;
-                const gcId = getElementId(grandchild);
-                const isGcCurrent = gcId === selectedId;
-                html += `<div class="ev2-tree-item${isGcCurrent ? ' current' : ''}" data-tree-id="${esc(gcId)}">`;
+                const gcSel = getCssSelector(grandchild) || '';
+                const isGcCurrent = gcSel === selectedSel;
+                html += `<div class="ev2-tree-item${isGcCurrent ? ' current' : ''}" data-tree-selector="${esc(gcSel)}">`;
                 html += `<span class="ev2-tree-indent"></span><span class="ev2-tree-indent"></span>${esc(getTagLabel(grandchild))}`;
                 if (isTextElement(grandchild)) {
                     const preview = grandchild.textContent.trim().slice(0, 25);
@@ -507,9 +506,9 @@ function renderStructureTab() {
 function onTreeClick(e) {
     const item = e.target.closest('.ev2-tree-item');
     if (!item) return;
-    const id = item.dataset.treeId;
-    if (!id) return;
-    const el = document.querySelector(`[data-element-id="${id}"]`) || document.getElementById(id);
+    const sel = item.dataset.treeSelector;
+    if (!sel) return;
+    const el = document.querySelector(sel);
     if (el) {
         events.emit('selection:request', el);
         el.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -551,6 +550,7 @@ function onSwitchTab(tab) {
     btn.classList.add('active');
     activeTab = tab;
     renderActiveTab();
+    events.emit('sidebar:tab-changed', tab);
 }
 
 // --- Language bar ---

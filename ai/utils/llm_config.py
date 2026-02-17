@@ -110,13 +110,13 @@ MODEL_CONFIG = {
     'gpt-5': ModelConfig(
         provider=ModelProvider.OPENAI,
         model_name="gpt-5.2",
-        max_tokens=15000,
+        max_tokens=32000,
         temperature=1.0
     ),
     'gpt-5-mini': ModelConfig(
         provider=ModelProvider.OPENAI,
         model_name="gpt-5-mini-2025-08-07",
-        max_tokens=15000,
+        max_tokens=32000,
         temperature=1.0
     ),
 
@@ -124,7 +124,7 @@ MODEL_CONFIG = {
     'claude': ModelConfig(
         provider=ModelProvider.ANTHROPIC,
         model_name="claude-sonnet-4-5-20250929",
-        max_tokens=15000,
+        max_tokens=32000,
         temperature=0.3
     ),
 
@@ -132,7 +132,7 @@ MODEL_CONFIG = {
     'gemini-pro': ModelConfig(
         provider=ModelProvider.GOOGLE,
         model_name="gemini-3-pro-preview",
-        max_output_tokens=15000,
+        max_output_tokens=32000,
         temperature=0.3,
         provider_params={
             "generation_config": {
@@ -144,7 +144,7 @@ MODEL_CONFIG = {
     'gemini-flash': ModelConfig(
         provider=ModelProvider.GOOGLE,
         model_name="gemini-3-flash-preview",
-        max_output_tokens=15000,
+        max_output_tokens=32000,
         temperature=0.3,
         provider_params={
             "generation_config": {
@@ -156,7 +156,7 @@ MODEL_CONFIG = {
     'gemini-lite': ModelConfig(
         provider=ModelProvider.GOOGLE,
         model_name="gemini-2.5-flash-lite",
-        max_output_tokens=15000,
+        max_output_tokens=32000,
         temperature=0.3,
         provider_params={
             "generation_config": {
