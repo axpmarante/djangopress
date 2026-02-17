@@ -5,7 +5,7 @@ Uses Alpine.js (pre-loaded in base.html) for expand/collapse behavior.
 Uses x-show with x-transition for animation (x-collapse requires a separate plugin).
 """
 
-NAME = "alpine-accordion"
+NAME = "accordion"
 
 DESCRIPTION = "Alpine.js accordion/collapsible sections with smooth expand/collapse animation."
 

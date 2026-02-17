@@ -5,7 +5,7 @@ Uses Alpine.js (pre-loaded in base.html) for show/hide logic. Features overlay
 backdrop, z-index layering, and click-outside-to-close.
 """
 
-NAME = "alpine-modal"
+NAME = "modal"
 
 DESCRIPTION = "Alpine.js modal/dialog with backdrop overlay, transitions, and click-outside dismiss."
 

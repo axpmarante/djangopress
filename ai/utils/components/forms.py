@@ -7,7 +7,7 @@ notifications, and optional confirmation emails. Forms submit to
 `/forms/SLUG/submit/` and store data as JSON.
 """
 
-NAME = "dynamic-form"
+NAME = "forms"
 
 DESCRIPTION = "DynamicForm submission with CSRF, honeypot spam protection, and email notifications."
 

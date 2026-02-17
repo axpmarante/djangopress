@@ -5,7 +5,7 @@ Splide.js is pre-loaded in base.html (CSS + JS). Any element with class `splide`
 is automatically mounted on DOMContentLoaded — no inline <script> needed.
 """
 
-NAME = "splide"
+NAME = "carousel"
 
 DESCRIPTION = "Splide.js carousel/slider for image galleries, testimonials, logos, etc."
 

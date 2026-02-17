@@ -5,7 +5,7 @@ Uses Alpine.js (pre-loaded in base.html) for tab switching. Critical: panels
 must use absolute positioning to prevent layout flicker during transitions.
 """
 
-NAME = "alpine-tabs"
+NAME = "tabs"
 
 DESCRIPTION = "Alpine.js tabbed interface with fade transitions and absolute-positioned panels."
 
