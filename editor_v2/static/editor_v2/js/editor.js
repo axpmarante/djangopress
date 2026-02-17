@@ -15,6 +15,8 @@ import * as aiPanel       from './modules/ai-panel.js';
 import * as imagePicker   from './modules/image-picker.js';
 import * as versions         from './modules/versions.js';
 import * as sectionInserter  from './modules/section-inserter.js';
+import * as sectionModal     from './modules/section-modal.js';
+import * as processImages    from './modules/process-images.js';
 
 document.addEventListener('DOMContentLoaded', () => {
     changes.init();
@@ -27,6 +29,8 @@ document.addEventListener('DOMContentLoaded', () => {
     imagePicker.init();
     versions.init();
     sectionInserter.init();
+    sectionModal.init();
+    processImages.init();
 
     console.log('Editor v2 active');
 });

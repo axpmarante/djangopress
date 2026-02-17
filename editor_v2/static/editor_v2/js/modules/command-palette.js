@@ -14,6 +14,7 @@ const commands = [
   { label: 'Switch to Design tab', action: () => events.emit('sidebar:switch-tab', 'design') },
   { label: 'Switch to Structure tab', action: () => events.emit('sidebar:switch-tab', 'structure') },
   { label: 'Switch to AI tab', action: () => events.emit('sidebar:switch-tab', 'ai') },
+  { label: 'Process Images', action: () => events.emit('process-images:open', {}) },
 ];
 
 function getAllCommands() {

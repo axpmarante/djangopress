@@ -3,7 +3,6 @@
 <!-- Editor v2 Top Bar -->
 <div id="ev2-topbar" class="ev2-topbar">
   <div class="ev2-topbar-left">
-    <div id="ev2-breadcrumbs" class="ev2-breadcrumbs"></div>
   </div>
   <div class="ev2-topbar-right">
     <!-- Version Navigation -->
@@ -22,19 +21,14 @@
         </svg>
       </button>
     </div>
+    <button id="ev2-pimg-topbar-btn" class="ev2-topbar-btn" title="Process Images">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+        <circle cx="8.5" cy="8.5" r="1.5"/>
+        <polyline points="21 15 16 10 5 21"/>
+      </svg>
+    </button>
     <div class="ev2-topbar-sep"></div>
-    <button id="ev2-undo-btn" class="ev2-topbar-btn" title="Undo (Ctrl+Z)" disabled>
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <path d="M3 7v6h6"/>
-        <path d="M21 17a9 9 0 00-9-9 9 9 0 00-6 2.3L3 13"/>
-      </svg>
-    </button>
-    <button id="ev2-redo-btn" class="ev2-topbar-btn" title="Redo (Ctrl+Shift+Z)" disabled>
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <path d="M21 7v6h-6"/>
-        <path d="M3 17a9 9 0 019-9 9 9 0 016 2.3l3 2.7"/>
-      </svg>
-    </button>
     <button id="ev2-save-topbar-btn" class="ev2-topbar-btn ev2-topbar-save-btn" title="Save (Ctrl+S)" disabled>
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/>
@@ -107,6 +101,13 @@
   <div class="ev2-sidebar-footer">
     <button id="ev2-save-btn" class="ev2-btn ev2-btn-primary" disabled>Save</button>
     <button id="ev2-discard-btn" class="ev2-btn ev2-btn-secondary" disabled>Discard</button>
+    <button id="ev2-pimg-sidebar-btn" class="ev2-btn-icon" title="Process Images">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+        <circle cx="8.5" cy="8.5" r="1.5"/>
+        <polyline points="21 15 16 10 5 21"/>
+      </svg>
+    </button>
     <span id="ev2-status" class="ev2-status">No changes</span>
   </div>
 
@@ -175,6 +176,66 @@
         <button id="ev2-image-modal-cancel" class="ev2-btn ev2-btn-secondary">Cancel</button>
         <button id="ev2-image-modal-select" class="ev2-btn ev2-btn-primary" disabled>Select Image</button>
         <button id="ev2-image-modal-upload-btn" class="ev2-btn ev2-btn-primary" style="display:none;" disabled>Upload &amp; Select</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Section Modal -->
+<div id="ev2-section-modal" class="ev2-section-modal hidden">
+  <div class="ev2-section-modal-backdrop"></div>
+  <div class="ev2-section-modal-dialog">
+    <!-- Header -->
+    <div class="ev2-section-modal-header">
+      <h3>Add New Section</h3>
+      <button id="ev2-section-modal-close" class="ev2-image-modal-close" title="Close">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <!-- Body -->
+    <div class="ev2-section-modal-body">
+      <label class="ev2-label" for="ev2-section-modal-prompt">Describe the section</label>
+      <textarea id="ev2-section-modal-prompt" class="ev2-textarea" rows="3" placeholder="e.g. A testimonials carousel with 3 customer quotes and star ratings"></textarea>
+      <p class="ev2-hint">Press Enter to generate, Shift+Enter for new line</p>
+      <div id="ev2-section-modal-status" class="ev2-section-modal-status" style="display:none"></div>
+    </div>
+    <!-- Footer -->
+    <div class="ev2-section-modal-footer">
+      <div id="ev2-section-modal-tabs" class="ev2-option-tabs" style="display:none"></div>
+      <div class="ev2-section-modal-actions">
+        <button id="ev2-section-modal-generate" class="ev2-btn-primary">Generate</button>
+        <button id="ev2-section-modal-apply" class="ev2-btn-primary" style="display:none">Apply</button>
+        <button id="ev2-section-modal-discard" class="ev2-btn-secondary" style="display:none">Discard</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Process Images Modal -->
+<div id="ev2-process-images-modal" class="ev2-process-images-modal hidden">
+  <div class="ev2-process-images-backdrop"></div>
+  <div class="ev2-process-images-dialog">
+    <!-- Header -->
+    <div class="ev2-process-images-header">
+      <div class="ev2-process-images-title">
+        <h3>Process Images</h3>
+        <span id="ev2-pimg-scope-badge" class="ev2-pimg-scope-badge" style="display:none"></span>
+      </div>
+      <button id="ev2-pimg-close" class="ev2-image-modal-close" title="Close">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <!-- Body -->
+    <div id="ev2-pimg-body" class="ev2-process-images-body">
+      <div id="ev2-pimg-empty" class="ev2-image-modal-empty">No images found on this page.</div>
+      <div id="ev2-pimg-grid" class="ev2-pimg-grid"></div>
+    </div>
+    <!-- Footer -->
+    <div class="ev2-process-images-footer">
+      <span id="ev2-pimg-status" class="ev2-pimg-status"></span>
+      <div class="ev2-pimg-actions">
+        <button id="ev2-pimg-suggest" class="ev2-btn-secondary">AI Suggest</button>
+        <button id="ev2-pimg-process" class="ev2-btn-primary" disabled>Process Selected</button>
       </div>
     </div>
   </div>

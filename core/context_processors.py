@@ -1,5 +1,6 @@
 from django.utils.translation import get_language
 
+from ai.utils import unsplash
 from .models import SiteSettings, SiteImage, MenuItem, FormSubmission
 
 
@@ -178,4 +179,7 @@ def site_settings(request):
 
         # Forms
         'unread_form_submissions': FormSubmission.objects.filter(is_read=False).count() if request.user.is_staff else 0,
+
+        # Feature flags
+        'UNSPLASH_ENABLED': unsplash.is_configured(),
     }

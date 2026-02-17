@@ -27,7 +27,7 @@
     <!-- Custom site styles -->
     <link href="{% static 'css/lightbox.css' %}" rel="stylesheet">
     {% if edit_mode == 'v2' %}
-    <link href="{% static 'editor_v2/css/editor.css' %}?v=9" rel="stylesheet">
+    <link href="{% static 'editor_v2/css/editor.css' %}?v=15" rel="stylesheet">
     {% endif %}
     <style>[x-cloak] { display: none !important; }</style>
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
@@ -115,11 +115,12 @@
         languages: [{% for code, name in SITE_LANGUAGES %}'{{ code }}'{% if not forloop.last %}, {% endif %}{% endfor %}],
         languageNames: { {% for code, name in SITE_LANGUAGES %}'{{ code }}': '{{ name }}'{% if not forloop.last %}, {% endif %}{% endfor %} },
         aiEnabled: {{ user.is_superuser|yesno:"true,false" }},
+        unsplashEnabled: {{ UNSPLASH_ENABLED|yesno:"true,false" }},
         csrfToken: '{{ csrf_token }}',
         apiBase: '/editor-v2/api',
       };
     </script>
-    <script type="module" src="{% static 'editor_v2/js/editor.js' %}?v=14"></script>
+    <script type="module" src="{% static 'editor_v2/js/editor.js' %}?v=25"></script>
     {% endif %}
     {% block extra_js %}{% endblock %}
     {% if CUSTOM_BODY_CODE %}{{ CUSTOM_BODY_CODE|safe }}{% endif %}
