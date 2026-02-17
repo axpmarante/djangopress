@@ -22,7 +22,10 @@ export function getCssSelector(el) {
     while (current && current !== section) {
         const parent = current.parentElement;
         if (!parent) break;
-        const siblings = Array.from(parent.children);
+        // Exclude Splide cloned slides when computing nth-child index,
+        // so selectors match the original HTML stored in the database.
+        const siblings = Array.from(parent.children)
+            .filter(s => !s.classList.contains('splide__slide--clone'));
         const index = siblings.indexOf(current) + 1;
         parts.unshift(`${current.tagName.toLowerCase()}:nth-child(${index})`);
         current = parent;
@@ -73,6 +76,8 @@ export function isEditable(el) {
     if (!wrapper || !wrapper.contains(el)) return false;
     // Exclude admin toolbar and editor UI elements
     if (el.closest('#admin-toolbar, [id^="ev2-"]')) return false;
+    // Exclude Splide cloned slides (they don't exist in stored HTML)
+    if (el.closest('.splide__slide--clone')) return false;
     return true;
 }
 
