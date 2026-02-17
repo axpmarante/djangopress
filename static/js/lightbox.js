@@ -130,6 +130,7 @@ class Lightbox {
 // Initialize lightbox when DOM is ready
 document.addEventListener('DOMContentLoaded', () => {
     const lightbox = new Lightbox();
+    window.__lightbox = lightbox;
 
     // Attach to all gallery images
     document.querySelectorAll('[data-lightbox]').forEach((element) => {

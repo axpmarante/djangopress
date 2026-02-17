@@ -92,3 +92,32 @@ export function getTransVar(el) {
     const match = el.textContent.match(TRANS_RE);
     return match ? match[1] : null;
 }
+
+/**
+ * Re-initialize JS-driven components (Splide, lightbox) inside a container.
+ * Called after dynamically injecting HTML (e.g. section previews) since
+ * Splide and lightbox only auto-init on DOMContentLoaded.
+ */
+export function initDynamicComponents(container) {
+    if (window.Splide) {
+        container.querySelectorAll('.splide').forEach(el => {
+            new window.Splide(el).mount();
+        });
+    }
+
+    container.querySelectorAll('[data-lightbox]').forEach(el => {
+        el.addEventListener('click', (e) => {
+            e.preventDefault();
+            const group = el.dataset.lightbox;
+            const groupEls = Array.from(document.querySelectorAll(`[data-lightbox="${group}"]`));
+            const images = groupEls.map(a => ({
+                src: a.href || a.dataset.src || a.src,
+                alt: a.dataset.alt || '',
+            }));
+            const index = groupEls.indexOf(el);
+            if (window.__lightbox) {
+                window.__lightbox.open(images, Math.max(index, 0));
+            }
+        });
+    });
+}

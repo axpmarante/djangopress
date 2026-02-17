@@ -2,7 +2,7 @@
  * AI Panel — Unified chat with session switcher and scope selector.
  */
 import { events } from '../lib/events.js';
-import { $, getCssSelector, getElementLabel } from '../lib/dom.js';
+import { $, getCssSelector, getElementLabel, initDynamicComponents } from '../lib/dom.js';
 import { api } from '../lib/api.js';
 
 function esc(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
@@ -473,11 +473,17 @@ function showMultiPreview(index) {
         if (!el) return;
         if (!originalHtml) originalHtml = el.outerHTML;
         el.outerHTML = html;
+        // Re-init dynamic components in the replaced element's parent
+        const parent = document.querySelector(currentSelector)?.parentElement;
+        if (parent) initDynamicComponents(parent);
     } else if (pendingScope === 'section' && currentSection) {
         const sec = document.querySelector(`[data-section="${currentSection}"]`);
         if (!sec) return;
         if (!originalHtml) originalHtml = sec.outerHTML;
         sec.outerHTML = html;
+        // Re-init dynamic components in the new section
+        const newSec = document.querySelector(`[data-section="${currentSection}"]`);
+        if (newSec) initDynamicComponents(newSec);
     }
 }
 

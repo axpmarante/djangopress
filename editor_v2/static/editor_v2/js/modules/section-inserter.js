@@ -12,7 +12,7 @@
  */
 
 import { events } from '../lib/events.js';
-import { getContentWrapper, getSections } from '../lib/dom.js';
+import { getContentWrapper, getSections, initDynamicComponents } from '../lib/dom.js';
 
 // ---------------------------------------------------------------------------
 // Module state
@@ -111,6 +111,7 @@ export function previewInPlaceholder(html) {
     if (!placeholder) return;
     placeholder.classList.add('ev2-preview-active');
     placeholder.innerHTML = html;
+    initDynamicComponents(placeholder);
 }
 
 /** Reset placeholder back to its default prompt text. */
