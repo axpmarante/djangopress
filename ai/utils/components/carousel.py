@@ -25,7 +25,7 @@ automatically initialized on page load — do NOT add inline `<script>` tags.
 #### Basic Structure
 
 ```html
-<div class="splide" data-splide='{"type":"loop","perPage":3,"gap":"1.5rem","breakpoints":{"768":{"perPage":1},"1024":{"perPage":2}}}'>
+<div class="splide" data-media-collection="carousel" data-splide='{"type":"loop","perPage":3,"gap":"1.5rem","breakpoints":{"768":{"perPage":1},"1024":{"perPage":2}}}'>
   <div class="splide__track">
     <ul class="splide__list">
       <li class="splide__slide"><!-- slide content --></li>
@@ -46,6 +46,7 @@ These class names are mandatory — Splide will not work without them:
 | `splide__track` | Inner wrapper `<div>` | Viewport / clipping container |
 | `splide__list` | `<ul>` | Flex container that holds slides |
 | `splide__slide` | `<li>` | Individual slide |
+| `data-media-collection` | Outer wrapper `<div>` | Identifies the carousel as a media collection for the editor |
 
 #### Configuration via `data-splide`
 
@@ -99,7 +100,7 @@ Keys are pixel widths (as strings). Values override the parent options below tha
 <section data-section="gallery" id="gallery" class="py-16 bg-gray-50">
   <div class="max-w-6xl mx-auto px-4">
     <h2 class="text-3xl font-bold text-center mb-10">{{ trans.gallery_title }}</h2>
-    <div class="splide" data-splide='{"type":"loop","perPage":3,"gap":"1.5rem","breakpoints":{"768":{"perPage":1},"1024":{"perPage":2}}}'>
+    <div class="splide" data-media-collection="carousel" data-splide='{"type":"loop","perPage":3,"gap":"1.5rem","breakpoints":{"768":{"perPage":1},"1024":{"perPage":2}}}'>
       <div class="splide__track">
         <ul class="splide__list">
           <li class="splide__slide">
@@ -115,7 +116,7 @@ Keys are pixel widths (as strings). Values override the parent options below tha
 
 **Testimonials Carousel (single slide, autoplay):**
 ```html
-<div class="splide" data-splide='{"type":"loop","perPage":1,"autoplay":true,"interval":6000,"pauseOnHover":true,"arrows":false}'>
+<div class="splide" data-media-collection="carousel" data-splide='{"type":"loop","perPage":1,"autoplay":true,"interval":6000,"pauseOnHover":true,"arrows":false}'>
   <div class="splide__track">
     <ul class="splide__list">
       <li class="splide__slide">
@@ -131,7 +132,7 @@ Keys are pixel widths (as strings). Values override the parent options below tha
 
 **Logo Strip (many per page, no arrows or pagination):**
 ```html
-<div class="splide" data-splide='{"type":"loop","perPage":6,"gap":"2rem","autoplay":true,"interval":3000,"arrows":false,"pagination":false,"breakpoints":{"768":{"perPage":3},"480":{"perPage":2}}}'>
+<div class="splide" data-media-collection="carousel" data-splide='{"type":"loop","perPage":6,"gap":"2rem","autoplay":true,"interval":3000,"arrows":false,"pagination":false,"breakpoints":{"768":{"perPage":3},"480":{"perPage":2}}}'>
   <div class="splide__track">
     <ul class="splide__list">
       <li class="splide__slide flex items-center justify-center">
@@ -144,7 +145,7 @@ Keys are pixel widths (as strings). Values override the parent options below tha
 
 **Hero with Fade Transition:**
 ```html
-<div class="splide" data-splide='{"type":"fade","rewind":true,"autoplay":true,"interval":5000,"speed":1000,"arrows":false}'>
+<div class="splide" data-media-collection="carousel" data-splide='{"type":"fade","rewind":true,"autoplay":true,"interval":5000,"speed":1000,"arrows":false}'>
   <div class="splide__track">
     <ul class="splide__list">
       <li class="splide__slide">
@@ -169,6 +170,7 @@ Keys are pixel widths (as strings). Values override the parent options below tha
 - Use `type:"loop"` for most carousels (avoids dead ends)
 - Use `type:"fade"` for hero slideshows (single image at a time)
 - Set `perPage` and corresponding breakpoint overrides
+- Always add `data-media-collection="carousel"` on the `.splide` element
 - Wrap content in `<li class="splide__slide">` — not `<div>`
 
 **Don't:**
