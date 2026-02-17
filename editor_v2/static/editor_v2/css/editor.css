@@ -1611,14 +1611,15 @@ body.ev2-version-preview .editor-v2-content {
 }
 
 .ev2-option-tab:hover {
-  border-color: var(--ev2-accent);
+  border-color: var(--ev2-primary);
   color: var(--ev2-text);
+  background: var(--ev2-primary-light);
 }
 
 .ev2-option-tab.active {
-  background: var(--ev2-accent);
+  background: var(--ev2-primary);
   color: #fff;
-  border-color: var(--ev2-accent);
+  border-color: var(--ev2-primary);
 }
 
 /* --------------------------------------------------------------------------

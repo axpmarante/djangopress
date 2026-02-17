@@ -23,8 +23,6 @@ function buildItems(el) {
   if (isTextElement(el)) {
     items.push({ label: 'Edit Text', icon: '✎', hint: 'Dbl-click', action: () => events.emit('inline-edit:trigger', { element: el }) });
   }
-  items.push({ label: 'Edit Classes', icon: '◑', action: () => events.emit('sidebar:switch-tab', 'design') });
-
   if (section) {
     const name = section.getAttribute('data-section');
     const selector = getCssSelector(el);
