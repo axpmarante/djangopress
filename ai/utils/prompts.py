@@ -33,123 +33,6 @@ class PromptTemplates:
         return "\n".join(lines) + "\n"
 
     @staticmethod
-    def _get_components_reference():
-        """Return HTML patterns doc for interactive components pre-loaded in base.html."""
-        return """
-
-## Interactive Components (Available Libraries)
-
-The following JS libraries are pre-loaded and auto-initialize from HTML attributes. Use them when the user requests interactive elements.
-
-### Carousel / Slider (Splide.js)
-```html
-<div class="splide" data-splide='{"type":"loop","perPage":3,"gap":"1.5rem","breakpoints":{"768":{"perPage":1},"1024":{"perPage":2}}}'>
-  <div class="splide__track">
-    <ul class="splide__list">
-      <li class="splide__slide"><!-- slide content --></li>
-      <li class="splide__slide"><!-- slide content --></li>
-    </ul>
-  </div>
-</div>
-```
-Options: `type` (slide|loop|fade), `perPage`, `gap`, `autoplay`, `interval`, `breakpoints`, `arrows`, `pagination`.
-
-### Image Lightbox / Gallery
-```html
-<div class="grid grid-cols-3 gap-4">
-  <a href="/media/full-image.jpg" data-lightbox="gallery-name">
-    <img src="/media/thumb.jpg" alt="Description" class="rounded-lg">
-  </a>
-</div>
-```
-Use `data-lightbox="same-group-name"` on `<a>` wrapping each image. Images with the same group name become a navigable gallery.
-
-### Tabs (Alpine.js)
-```html
-<div x-data="{ tab: 'tab1' }">
-  <div class="flex border-b">
-    <button @click="tab = 'tab1'" :class="tab === 'tab1' ? 'border-b-2 border-blue-500 text-blue-600' : 'text-gray-500'" class="px-4 py-2 font-medium">Tab 1</button>
-    <button @click="tab = 'tab2'" :class="tab === 'tab2' ? 'border-b-2 border-blue-500 text-blue-600' : 'text-gray-500'" class="px-4 py-2 font-medium">Tab 2</button>
-  </div>
-  <div class="relative overflow-hidden min-h-[400px]">
-    <div class="absolute inset-0 p-6" x-show="tab === 'tab1'" x-transition:enter="transition ease-out duration-300" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100" x-transition:leave="transition ease-in duration-200" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0">Content 1</div>
-    <div class="absolute inset-0 p-6" x-show="tab === 'tab2'" x-cloak x-transition:enter="transition ease-out duration-300" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100" x-transition:leave="transition ease-in duration-200" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0">Content 2</div>
-  </div>
-</div>
-```
-CRITICAL for tabs: Each panel MUST use `absolute inset-0` so panels stack on top of each other — this prevents flicker from both panels being visible during transitions. The container needs `relative overflow-hidden min-h-[400px]` (adjust height as needed). Add `x-cloak` on initially-hidden panels. Move padding from the container to each panel (`p-6` or `p-8 md:p-12`).
-
-### Accordion (Alpine.js)
-```html
-<div x-data="{ open: null }" class="space-y-2">
-  <div class="border rounded-lg">
-    <button @click="open = open === 1 ? null : 1" class="w-full flex justify-between items-center p-4 font-medium">
-      <span>Question 1</span>
-      <svg :class="open === 1 && 'rotate-180'" class="w-5 h-5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
-    </button>
-    <div x-show="open === 1" x-collapse>
-      <div class="p-4 pt-0">Answer 1</div>
-    </div>
-  </div>
-</div>
-```
-
-### Modal (Alpine.js)
-```html
-<div x-data="{ open: false }">
-  <button @click="open = true" class="px-4 py-2 bg-blue-600 text-white rounded">Open Modal</button>
-  <div x-show="open" x-transition.opacity class="fixed inset-0 bg-black/50 z-40" @click="open = false"></div>
-  <div x-show="open" x-transition class="fixed inset-0 z-50 flex items-center justify-center p-4" @click.self="open = false">
-    <div class="bg-white rounded-xl shadow-xl max-w-lg w-full p-6">
-      <h3 class="text-xl font-bold mb-4">Modal Title</h3>
-      <p>Modal content here.</p>
-      <button @click="open = false" class="mt-4 px-4 py-2 bg-gray-200 rounded">Close</button>
-    </div>
-  </div>
-</div>
-```
-
-### Form Submission (Dynamic Forms)
-Forms are handled by the DynamicForm system. Each form has a **slug** and a submission endpoint at `/forms/SLUG/submit/`.
-
-**How it works:**
-1. A `DynamicForm` record must exist in the database with a matching slug (e.g. slug=`contact`)
-2. The HTML form's `action` points to `/forms/SLUG/submit/`
-3. On submit, all form fields are saved as JSON and the site owner gets an email notification
-4. Common slugs: `contact`, `quote-request`, `booking`, `newsletter`
-
-```html
-<form action="/forms/contact/submit/" method="post" class="space-y-6">
-  {{% csrf_token %}}
-  <!-- Honeypot - do NOT remove -->
-  <div style="position:absolute;left:-9999px;" aria-hidden="true">
-    <input type="text" name="website_url" tabindex="-1" autocomplete="off">
-  </div>
-  <input type="text" name="name" required placeholder="..." class="w-full px-4 py-3 border rounded-lg">
-  <input type="email" name="email" required placeholder="..." class="w-full px-4 py-3 border rounded-lg">
-  <textarea name="message" rows="5" required placeholder="..." class="w-full px-4 py-3 border rounded-lg"></textarea>
-  <button type="submit" class="...">{{{{ trans.form_submit }}}}</button>
-</form>
-```
-
-**Rules:**
-- The `action` MUST be `/forms/SLUG/submit/` where SLUG matches a DynamicForm slug
-- Always include `{{% csrf_token %}}`
-- Input `name` attributes are fixed identifiers (not translated) — they become the JSON keys in the submission
-- Use `{{{{ trans.xxx }}}}` for visible text: labels, placeholders, and button text
-- For checkbox fields use `<input type="checkbox" name="consent">`
-- Always include the honeypot field exactly as shown (the hidden `website_url` input). Do not change the field name `website_url`
-- The form slug MUST correspond to an existing DynamicForm record — if no form exists for that slug, submissions will fail
-
-**Rules:**
-- Always use the exact class names shown (e.g. `splide`, `splide__track`, `splide__list`, `splide__slide`)
-- Splide options go in the `data-splide` JSON attribute — do NOT add inline `<script>` tags
-- Lightbox uses `data-lightbox` on `<a>` tags wrapping images
-- Alpine.js components use `x-data`, `x-show`, `x-transition`, `x-collapse`, `@click`
-- All components are responsive — use Tailwind breakpoint classes and Splide `breakpoints` option
-"""
-
-    @staticmethod
     def get_global_section_refinement_prompt(
         site_name: str,
         site_description: str,
@@ -640,7 +523,8 @@ Return a JSON object:
         design_guide: str = '',
         pages: list = None,
         languages: list = None,
-        outline: list = None
+        outline: list = None,
+        component_references: str = '',
     ) -> tuple:
         """
         Generate prompt for Step 1: create clean HTML with real text in the default language.
@@ -649,6 +533,9 @@ Return a JSON object:
         Returns:
             Tuple of (system_prompt, user_prompt)
         """
+        from ai.utils.components import ComponentRegistry
+        component_index = ComponentRegistry.get_index()
+
         lang_name = {'pt': 'Portuguese', 'en': 'English', 'es': 'Spanish', 'fr': 'French', 'de': 'German', 'it': 'Italian'}.get(default_language, default_language.upper())
 
         system_prompt = f"""You are a senior frontend designer creating complete web pages using Tailwind CSS.
@@ -677,7 +564,10 @@ Generate a complete, professional web page as clean HTML with real text content 
 - The header and footer are managed separately as global site components
 - Your output is ONLY the page body content — a series of `<section>` blocks
 - Do NOT include `<script>` or `<link>` tags for Tailwind/Alpine — they are already loaded
-{PromptTemplates._get_components_reference()}
+
+{component_index}
+{component_references}
+
 ## Important
 - Write ALL text in {lang_name} — real words, real sentences
 - Do NOT use `{{{{ trans.xxx }}}}` or any template variables for text
@@ -751,7 +641,8 @@ Return ONLY the raw HTML for this page. All text must be real content in {lang_n
         has_reference_images: bool = False,
         handle_images: bool = False,
         pages: list = None,
-        languages: list = None
+        languages: list = None,
+        component_references: str = '',
     ) -> tuple:
         """
         Generate prompt for Step 1 of refinement: edit clean HTML with real text.
@@ -760,6 +651,9 @@ Return ONLY the raw HTML for this page. All text must be real content in {lang_n
         Returns:
             Tuple of (system_prompt, user_prompt)
         """
+        from ai.utils.components import ComponentRegistry
+        component_index = ComponentRegistry.get_index()
+
         lang_name = {'pt': 'Portuguese', 'en': 'English', 'es': 'Spanish', 'fr': 'French', 'de': 'German', 'it': 'Italian'}.get(default_language, default_language.upper())
 
         # Build design guidelines
@@ -800,7 +694,9 @@ Edit the provided HTML page by applying the requested changes. Return the comple
   - Background images: use a CSS background-color as fallback and add a child `<img>` with `class="absolute inset-0 w-full h-full object-cover"` using the same placeholder pattern
   - Choose appropriate dimensions: hero 1200x600, cards 600x400, avatars 400x400, etc.
   - Write rich, specific prompts in data-image-prompt (style, subject, mood, setting){design_guidelines}
-{PromptTemplates._get_components_reference()}"""
+
+{component_index}
+{component_references}"""
 
         if has_reference_images:
             system_prompt += """
@@ -922,6 +818,7 @@ Do NOT undo any of these previous changes unless specifically asked to.
         pages: list = None,
         languages: list = None,
         multi_option: bool = False,
+        component_references: str = '',
     ) -> tuple:
         """
         Generate prompt for section-only refinement.
@@ -931,6 +828,9 @@ Do NOT undo any of these previous changes unless specifically asked to.
         Returns:
             Tuple of (system_prompt, user_prompt)
         """
+        from ai.utils.components import ComponentRegistry
+        component_index = ComponentRegistry.get_index()
+
         lang_name = {'pt': 'Portuguese', 'en': 'English', 'es': 'Spanish', 'fr': 'French', 'de': 'German', 'it': 'Italian'}.get(default_language, default_language.upper())
 
         design_guidelines = ""
@@ -984,7 +884,9 @@ Edit ONLY the `<section data-section="{section_name}">` section based on the use
 - Do NOT use `{{{{ trans.xxx }}}}` or any template variables
 - Do NOT wrap the output in JSON
 - No markdown code blocks, no explanations{multi_option_block}{design_guidelines}
-{PromptTemplates._get_components_reference()}"""
+
+{component_index}
+{component_references}"""
 
         pages_info = PromptTemplates._format_pages_info(pages, languages or [])
 
@@ -1053,6 +955,7 @@ Return ONLY the updated `<section data-section="{section_name}">...</section>` b
         conversation_history: str = '',
         pages: list = None,
         languages: list = None,
+        component_references: str = '',
     ) -> tuple:
         """
         Generate prompt for creating a brand new section on a page.
@@ -1062,6 +965,9 @@ Return ONLY the updated `<section data-section="{section_name}">...</section>` b
         Returns:
             Tuple of (system_prompt, user_prompt)
         """
+        from ai.utils.components import ComponentRegistry
+        component_index = ComponentRegistry.get_index()
+
         lang_name = {'pt': 'Portuguese', 'en': 'English', 'es': 'Spanish', 'fr': 'French', 'de': 'German', 'it': 'Italian'}.get(default_language, default_language.upper())
 
         if insert_after:
@@ -1114,7 +1020,9 @@ IMPORTANT: Keep output concise to fit all 3 options. For SVG icons, use simple p
 - Do NOT use `{{{{ trans.xxx }}}}` or any template variables
 - Do NOT wrap the output in JSON
 - No markdown code blocks, no explanations{design_guidelines}
-{PromptTemplates._get_components_reference()}"""
+
+{component_index}
+{component_references}"""
 
         pages_info = PromptTemplates._format_pages_info(pages, languages or [])
 
@@ -1181,6 +1089,7 @@ Return ONLY 3 variations of the new section, separated by <!-- OPTION_1 -->, <!-
         design_guide: str = '',
         conversation_history: str = '',
         multi_option: bool = False,
+        component_references: str = '',
     ) -> tuple:
         """
         Generate prompt for element-level refinement.
@@ -1190,6 +1099,9 @@ Return ONLY 3 variations of the new section, separated by <!-- OPTION_1 -->, <!-
         Returns:
             Tuple of (system_prompt, user_prompt)
         """
+        from ai.utils.components import ComponentRegistry
+        component_index = ComponentRegistry.get_index()
+
         lang_name = {'pt': 'Portuguese', 'en': 'English', 'es': 'Spanish', 'fr': 'French', 'de': 'German', 'it': 'Italian'}.get(default_language, default_language.upper())
 
         design_guidelines = ""
@@ -1243,7 +1155,9 @@ Edit ONLY the element marked with `data-target="true"` based on the user's instr
 - Do NOT use `{{{{{{ trans.xxx }}}}}}` or any template variables
 - Do NOT wrap the output in JSON
 - No markdown code blocks, no explanations{multi_option_block}{design_guidelines}
-{PromptTemplates._get_components_reference()}"""
+
+{component_index}
+{component_references}"""
 
         history_block = ""
         if conversation_history:
