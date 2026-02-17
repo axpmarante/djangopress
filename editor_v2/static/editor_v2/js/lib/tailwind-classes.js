@@ -134,6 +134,34 @@ export const CATEGORIES = [
     },
 ];
 
+// --- Hover state categories (shown for buttons/links) ---
+
+export const HOVER_CATEGORIES = [
+    {
+        group: 'Hover',
+        items: [
+            {
+                label: 'Text Color',
+                prefixes: ['hover:text'],
+                type: 'color',
+                variant: 'hover',
+            },
+            {
+                label: 'Background',
+                prefixes: ['hover:bg'],
+                type: 'color',
+                variant: 'hover',
+            },
+            {
+                label: 'Border Color',
+                prefixes: ['hover:border'],
+                type: 'color',
+                variant: 'hover',
+            },
+        ],
+    },
+];
+
 // --- Lookup sets for disambiguation ---
 
 /** Font size values — used to distinguish text-lg (size) from text-red-500 (color). */

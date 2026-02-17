@@ -3,7 +3,7 @@
  */
 
 import {
-    CATEGORIES, COLOR_FAMILIES, COLOR_SHADES, COLOR_KEYWORDS,
+    CATEGORIES, HOVER_CATEGORIES, COLOR_FAMILIES, COLOR_SHADES, COLOR_KEYWORDS,
     FONT_SIZE_VALUES, TEXT_ALIGN_VALUES, DISPLAY_VALUES,
 } from './tailwind-classes.js';
 
@@ -41,13 +41,19 @@ function parseColorClass(prefix, cls) {
  *   { matched: Map<categoryKey, { prefix, value, color? }>, unmatched: string[] }
  *
  * categoryKey = "group:label", e.g. "Typography:Font Size"
+ *
+ * @param {string} classString
+ * @param {object} [options]
+ * @param {Array} [options.extraCategories] — additional category groups to parse (e.g. HOVER_CATEGORIES)
  */
-export function parseClasses(classString) {
+export function parseClasses(classString, { extraCategories = [] } = {}) {
     const tokens = classString.split(/\s+/).filter(Boolean);
     const matched = new Map();
     const claimed = new Set();
 
-    for (const group of CATEGORIES) {
+    const allCategories = [...CATEGORIES, ...extraCategories];
+
+    for (const group of allCategories) {
         for (const cat of group.items) {
             const key = `${group.group}:${cat.label}`;
 
@@ -113,16 +119,19 @@ export function parseClasses(classString) {
  *
  * @param {Map<string, { prefix, value, color? }>} matched
  * @param {string[]} unmatched
+ * @param {object} [options]
+ * @param {Array} [options.extraCategories] — additional category groups (e.g. HOVER_CATEGORIES)
  * @returns {string}
  */
-export function buildClassString(matched, unmatched) {
+export function buildClassString(matched, unmatched, { extraCategories = [] } = {}) {
     const parts = [...unmatched];
+    const allCategories = [...CATEGORIES, ...extraCategories];
 
     for (const [key, entry] of matched) {
         if (!entry) continue;
 
         const [groupName, catLabel] = key.split(':');
-        const group = CATEGORIES.find(g => g.group === groupName);
+        const group = allCategories.find(g => g.group === groupName);
         const cat = group?.items.find(i => i.label === catLabel);
 
         if (cat?.exact) {

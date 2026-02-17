@@ -1,7 +1,7 @@
 import { events } from '../lib/events.js';
 import { api } from '../lib/api.js';
 import { $, $$, getCssSelector, isTextElement, getTransVar, getSections, getTagLabel } from '../lib/dom.js';
-import { CATEGORIES, COLOR_FAMILIES, COLOR_SHADES, COLOR_KEYWORDS } from '../lib/tailwind-classes.js';
+import { CATEGORIES, HOVER_CATEGORIES, COLOR_FAMILIES, COLOR_SHADES, COLOR_KEYWORDS } from '../lib/tailwind-classes.js';
 import { parseClasses, buildClassString } from '../lib/class-parser.js';
 
 let activeTab = 'content';
@@ -16,11 +16,13 @@ function esc(str) {
 
 // --- Tailwind class dropdowns ---
 
-function renderClassDropdowns(classes) {
-    const { matched } = parseClasses(classes);
+function renderClassDropdowns(classes, extraCategories = []) {
+    const { matched } = parseClasses(classes, { extraCategories });
     let html = '';
 
-    for (const group of CATEGORIES) {
+    const allCategories = [...CATEGORIES, ...extraCategories];
+
+    for (const group of allCategories) {
         html += `<div class="ev2-class-group">`;
         html += `<div class="ev2-class-group-label">${esc(group.group)}</div>`;
 
@@ -378,8 +380,10 @@ function renderDesignTab() {
     }
 
     // --- Tailwind class dropdowns ---
+    const isInteractive = tag === 'a' || tag === 'button';
+    const extraCats = isInteractive ? HOVER_CATEGORIES : [];
     html += '<div class="ev2-design-section" id="ev2-class-dropdowns">';
-    html += renderClassDropdowns(classes);
+    html += renderClassDropdowns(classes, extraCats);
     html += '</div>';
 
     // --- CSS Classes (always shown) ---
@@ -404,7 +408,7 @@ function renderDesignTab() {
             });
             // Sync dropdowns
             if (dropdownContainer) {
-                dropdownContainer.innerHTML = renderClassDropdowns(newClasses);
+                dropdownContainer.innerHTML = renderClassDropdowns(newClasses, extraCats);
             }
         });
     }
@@ -416,7 +420,7 @@ function renderDesignTab() {
             if (!select) return;
 
             const currentClasses = selectedEl.className.split(/\s+/).filter(c => !c.startsWith('ev2-')).join(' ');
-            const { matched, unmatched } = parseClasses(currentClasses);
+            const { matched, unmatched } = parseClasses(currentClasses, { extraCategories: extraCats });
 
             const catKey = select.dataset.cat;
             const colorRole = select.dataset.color;
@@ -457,7 +461,7 @@ function renderDesignTab() {
                 }
             }
 
-            const newClasses = buildClassString(matched, unmatched);
+            const newClasses = buildClassString(matched, unmatched, { extraCategories: extraCats });
             const ev2Classes = selectedEl.className.split(/\s+/).filter(c => c.startsWith('ev2-'));
             const oldValue = currentClasses;
             selectedEl.className = [...ev2Classes, ...newClasses.split(/\s+/).filter(Boolean)].join(' ');
