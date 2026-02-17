@@ -12,6 +12,74 @@ function esc(str) {
     return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
+// --- Media collection detection ---
+
+function findMediaCollection(el) {
+    let current = el;
+    const section = el.closest('[data-section]');
+    const boundary = section || el.closest('.editor-v2-content') || document.body;
+    while (current && current !== boundary.parentElement) {
+        if (current.hasAttribute && current.hasAttribute('data-media-collection')) {
+            return current;
+        }
+        current = current.parentElement;
+    }
+    return null;
+}
+
+function renderMediaCollection(container, collectionEl) {
+    const type = collectionEl.getAttribute('data-media-collection') || 'media';
+    const section = collectionEl.closest('[data-section]');
+    const sectionName = section ? section.getAttribute('data-section') : null;
+    const imgs = Array.from(collectionEl.querySelectorAll('img'));
+
+    let html = '<div class="ev2-media-collection-header">';
+    html += `<h4>${imgs.length} image${imgs.length !== 1 ? 's' : ''}</h4>`;
+    html += `<span class="ev2-media-collection-badge">${esc(type)}</span>`;
+    html += '</div>';
+
+    if (imgs.length > 0) {
+        html += '<div class="ev2-media-grid">';
+        imgs.forEach((img, i) => {
+            const src = img.getAttribute('src') || '';
+            const alt = img.getAttribute('alt') || '';
+            const sel = getCssSelector(img) || '';
+            html += `<div class="ev2-media-thumb" data-media-select="${esc(sel)}" title="${esc(alt || `Image ${i + 1}`)}">`;
+            html += `<img src="${esc(src)}" alt="${esc(alt)}" />`;
+            html += `<span class="ev2-media-thumb-index">${i + 1}</span>`;
+            html += '</div>';
+        });
+        html += '</div>';
+    }
+
+    if (sectionName) {
+        html += '<button type="button" class="ev2-btn-change-img" id="ev2-media-process-btn">Process Section Images</button>';
+    }
+
+    html += '<p class="ev2-media-hint">Click a thumbnail to edit individually</p>';
+
+    container.innerHTML = html;
+
+    for (const thumb of container.querySelectorAll('.ev2-media-thumb')) {
+        thumb.addEventListener('click', () => {
+            const sel = thumb.dataset.mediaSelect;
+            if (!sel) return;
+            const imgEl = document.querySelector(sel);
+            if (imgEl) {
+                events.emit('selection:request', imgEl);
+                imgEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+        });
+    }
+
+    const processBtn = container.querySelector('#ev2-media-process-btn');
+    if (processBtn && sectionName) {
+        processBtn.addEventListener('click', () => {
+            events.emit('process-images:open', { section: sectionName });
+        });
+    }
+}
+
 // --- Content tab ---
 
 function renderContentTab() {
@@ -27,7 +95,11 @@ function renderContentTab() {
     if (tag === 'IMG') renderImageFields(c, selector);
     else if (tag === 'A') renderLinkFields(c, selector);
     else if (isTextElement(selectedEl)) renderTextField(c, selector);
-    else c.innerHTML = '<p class="ev2-placeholder ev2-empty-state">Select a text element to edit content</p>';
+    else {
+        const collectionEl = findMediaCollection(selectedEl);
+        if (collectionEl) renderMediaCollection(c, collectionEl);
+        else c.innerHTML = '<p class="ev2-placeholder ev2-empty-state">Select a text element to edit content</p>';
+    }
 }
 
 function renderTextField(container, selector) {
