@@ -1,6 +1,8 @@
 import { events } from '../lib/events.js';
 import { api } from '../lib/api.js';
 import { $, $$, getCssSelector, isTextElement, getTransVar, getSections, getTagLabel } from '../lib/dom.js';
+import { CATEGORIES, COLOR_FAMILIES, COLOR_SHADES, COLOR_KEYWORDS } from '../lib/tailwind-classes.js';
+import { parseClasses, buildClassString } from '../lib/class-parser.js';
 
 let activeTab = 'content';
 let selectedEl = null;
@@ -10,6 +12,75 @@ const handlers = {};
 
 function esc(str) {
     return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+// --- Tailwind class dropdowns ---
+
+function renderClassDropdowns(classes) {
+    const { matched } = parseClasses(classes);
+    let html = '';
+
+    for (const group of CATEGORIES) {
+        html += `<div class="ev2-class-group">`;
+        html += `<div class="ev2-class-group-label">${esc(group.group)}</div>`;
+
+        for (const cat of group.items) {
+            const key = `${group.group}:${cat.label}`;
+            const entry = matched.get(key);
+
+            html += `<div class="ev2-class-row">`;
+            html += `<label>${esc(cat.label)}</label>`;
+
+            if (cat.type === 'color') {
+                const family = entry?.color?.family || '';
+                const shade = entry?.color?.shade || '';
+                const prefix = cat.prefixes[0];
+                const isKeyword = ['white', 'black', 'transparent', 'current'].includes(family);
+
+                html += `<div class="ev2-color-selects">`;
+                html += `<select class="ev2-class-select" data-cat="${esc(key)}" data-color="family" data-prefix="${esc(prefix)}">`;
+                html += `<option value="">None</option>`;
+                for (const kw of COLOR_KEYWORDS) {
+                    html += `<option value="${kw}"${family === kw ? ' selected' : ''}>${kw}</option>`;
+                }
+                for (const f of COLOR_FAMILIES) {
+                    html += `<option value="${f}"${family === f ? ' selected' : ''}>${f}</option>`;
+                }
+                html += `</select>`;
+                html += `<select class="ev2-class-select" data-cat="${esc(key)}" data-color="shade" data-prefix="${esc(prefix)}"${isKeyword || !family ? ' disabled' : ''}>`;
+                html += `<option value="">—</option>`;
+                for (const s of COLOR_SHADES) {
+                    html += `<option value="${s}"${shade === s ? ' selected' : ''}>${s}</option>`;
+                }
+                html += `</select>`;
+                html += `</div>`;
+            } else if (cat.exact) {
+                const current = entry?.value || '';
+                html += `<select class="ev2-class-select" data-cat="${esc(key)}" data-exact="true">`;
+                html += `<option value="">None</option>`;
+                for (const v of cat.values) {
+                    html += `<option value="${v}"${current === v ? ' selected' : ''}>${v}</option>`;
+                }
+                html += `</select>`;
+            } else {
+                const current = entry?.value ?? '';
+                const hasMatch = !!entry;
+                html += `<select class="ev2-class-select" data-cat="${esc(key)}" data-prefix="${esc(cat.prefixes[0])}">`;
+                html += `<option value="__none__"${!hasMatch ? ' selected' : ''}>None</option>`;
+                for (const v of cat.values) {
+                    const display = v === '' ? `${cat.prefixes[0]}` : `${cat.prefixes[0]}-${v}`;
+                    html += `<option value="${v}"${hasMatch && current === v ? ' selected' : ''}>${display}</option>`;
+                }
+                html += `</select>`;
+            }
+
+            html += `</div>`;
+        }
+
+        html += `</div>`;
+    }
+
+    return html;
 }
 
 // --- Media collection detection ---
@@ -306,6 +377,11 @@ function renderDesignTab() {
         html += '</div>';
     }
 
+    // --- Tailwind class dropdowns ---
+    html += '<div class="ev2-design-section" id="ev2-class-dropdowns">';
+    html += renderClassDropdowns(classes);
+    html += '</div>';
+
     // --- CSS Classes (always shown) ---
     html += `<div class="ev2-design-section"><label class="ev2-label">CSS Classes</label>
         <textarea class="ev2-textarea" id="ev2-classes-input" data-selector="${esc(selector)}">${esc(classes)}</textarea>
@@ -315,12 +391,79 @@ function renderDesignTab() {
 
     // --- Bind class editor ---
     const textarea = $('#ev2-classes-input', container);
+    const dropdownContainer = container.querySelector('#ev2-class-dropdowns');
+
     if (textarea) {
         textarea.addEventListener('input', () => {
             const newClasses = textarea.value;
             const ev2Classes = selectedEl.className.split(/\s+/).filter(c => c.startsWith('ev2-'));
             const oldValue = selectedEl.className.split(/\s+/).filter(c => !c.startsWith('ev2-')).join(' ');
             selectedEl.className = [...ev2Classes, ...newClasses.split(/\s+/).filter(Boolean)].join(' ');
+            events.emit('change:classes', {
+                type: 'classes', selector, value: newClasses, oldValue,
+            });
+            // Sync dropdowns
+            if (dropdownContainer) {
+                dropdownContainer.innerHTML = renderClassDropdowns(newClasses);
+            }
+        });
+    }
+
+    // --- Bind class dropdowns ---
+    if (dropdownContainer) {
+        dropdownContainer.addEventListener('change', (e) => {
+            const select = e.target.closest('.ev2-class-select');
+            if (!select) return;
+
+            const currentClasses = selectedEl.className.split(/\s+/).filter(c => !c.startsWith('ev2-')).join(' ');
+            const { matched, unmatched } = parseClasses(currentClasses);
+
+            const catKey = select.dataset.cat;
+            const colorRole = select.dataset.color;
+
+            if (colorRole) {
+                const prefix = select.dataset.prefix;
+                const row = select.closest('.ev2-class-row');
+                const familySel = row.querySelector('[data-color="family"]');
+                const shadeSel = row.querySelector('[data-color="shade"]');
+                const family = familySel.value;
+                const shade = shadeSel.value;
+                const isKeyword = ['white', 'black', 'transparent', 'current'].includes(family);
+
+                shadeSel.disabled = !family || isKeyword;
+
+                if (!family) {
+                    matched.delete(catKey);
+                } else {
+                    matched.set(catKey, {
+                        prefix,
+                        value: isKeyword ? `${prefix}-${family}` : `${prefix}-${family}-${shade || '500'}`,
+                        color: { family, shade: isKeyword ? '' : (shade || '500') },
+                    });
+                    if (!isKeyword && !shade) shadeSel.value = '500';
+                }
+            } else {
+                const val = select.value;
+                if (val === '__none__' || val === '') {
+                    matched.delete(catKey);
+                } else {
+                    const prefix = select.dataset.prefix || '';
+                    const isExact = select.dataset.exact === 'true';
+                    if (isExact) {
+                        matched.set(catKey, { prefix: '', value: val });
+                    } else {
+                        matched.set(catKey, { prefix, value: val, fullClass: val === '' ? prefix : `${prefix}-${val}` });
+                    }
+                }
+            }
+
+            const newClasses = buildClassString(matched, unmatched);
+            const ev2Classes = selectedEl.className.split(/\s+/).filter(c => c.startsWith('ev2-'));
+            const oldValue = currentClasses;
+            selectedEl.className = [...ev2Classes, ...newClasses.split(/\s+/).filter(Boolean)].join(' ');
+
+            if (textarea) textarea.value = newClasses;
+
             events.emit('change:classes', {
                 type: 'classes', selector, value: newClasses, oldValue,
             });
