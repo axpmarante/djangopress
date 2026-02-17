@@ -1,26 +1,34 @@
 """
-Component skill: Splide.js Carousel / Slider.
+Component skill: Splide.js Carousel (multi-item).
 
-Splide.js is pre-loaded in base.html (CSS + JS). Any element with class `splide`
-is automatically mounted on DOMContentLoaded — no inline <script> needed.
+Multi-item scrolling carousels: image gallery grids, logo strips, team member
+cards, product cards. Uses Splide.js with perPage > 1.
+Splide is pre-loaded in base.html (CSS + JS) and auto-mounts — no inline <script> needed.
 """
 
 NAME = "carousel"
 
-DESCRIPTION = "Splide.js carousel/slider for image galleries, testimonials, logos, etc."
+DESCRIPTION = "Multi-item Splide.js carousel for image galleries, logo strips, team cards, etc."
 
 INDEX_ENTRY = (
-    "Carousel / slider (Splide.js). Use for any sliding/scrolling content: "
-    "image sliders, testimonial carousels, logo strips, team member cards. "
+    "Multi-item carousel (Splide.js). Use for scrolling through multiple visible items: "
+    "image gallery grids, logo strips, team member cards, product cards. "
     "`.splide` container with `data-splide` JSON config, "
-    "`.splide__track > .splide__list > .splide__slide` structure."
+    "`.splide__track > .splide__list > .splide__slide` structure. "
+    "NOT for single-image slideshows or hero banners (use slider instead)."
 )
 
 FULL_REFERENCE = """\
-### Carousel / Slider (Splide.js)
+### Carousel (Splide.js — Multi-Item)
 
 Splide.js is pre-loaded in `base.html`. Every element with class `splide` is
 automatically initialized on page load — do NOT add inline `<script>` tags.
+
+Use the **carousel** component for multi-item scrolling where several items are
+visible at once: image gallery grids, logo strips, team member cards, product cards.
+
+For single-item presentations (hero sliders, photo slideshows, testimonial rotators),
+use the **slider** component instead.
 
 #### Basic Structure
 
@@ -114,22 +122,6 @@ Keys are pixel widths (as strings). Values override the parent options below tha
 </section>
 ```
 
-**Testimonials Carousel (single slide, autoplay):**
-```html
-<div class="splide" data-media-collection="carousel" data-splide='{"type":"loop","perPage":1,"autoplay":true,"interval":6000,"pauseOnHover":true,"arrows":false}'>
-  <div class="splide__track">
-    <ul class="splide__list">
-      <li class="splide__slide">
-        <div class="text-center max-w-2xl mx-auto px-8 py-6">
-          <p class="text-lg italic mb-4">{{ trans.testimonial_1_quote }}</p>
-          <p class="font-semibold">{{ trans.testimonial_1_author }}</p>
-        </div>
-      </li>
-    </ul>
-  </div>
-</div>
-```
-
 **Logo Strip (many per page, no arrows or pagination):**
 ```html
 <div class="splide" data-media-collection="carousel" data-splide='{"type":"loop","perPage":6,"gap":"2rem","autoplay":true,"interval":3000,"arrows":false,"pagination":false,"breakpoints":{"768":{"perPage":3},"480":{"perPage":2}}}'>
@@ -143,24 +135,6 @@ Keys are pixel widths (as strings). Values override the parent options below tha
 </div>
 ```
 
-**Hero with Fade Transition:**
-```html
-<div class="splide" data-media-collection="carousel" data-splide='{"type":"fade","rewind":true,"autoplay":true,"interval":5000,"speed":1000,"arrows":false}'>
-  <div class="splide__track">
-    <ul class="splide__list">
-      <li class="splide__slide">
-        <div class="relative h-[500px]">
-          <img src="..." alt="" class="absolute inset-0 w-full h-full object-cover">
-          <div class="absolute inset-0 bg-black/40 flex items-center justify-center">
-            <h2 class="text-white text-4xl font-bold">{{ trans.slide_1_title }}</h2>
-          </div>
-        </div>
-      </li>
-    </ul>
-  </div>
-</div>
-```
-
 #### Do's and Don'ts
 
 **Do:**
@@ -168,8 +142,7 @@ Keys are pixel widths (as strings). Values override the parent options below tha
 - Put all options in the `data-splide` JSON attribute
 - Use `breakpoints` for responsive behavior
 - Use `type:"loop"` for most carousels (avoids dead ends)
-- Use `type:"fade"` for hero slideshows (single image at a time)
-- Set `perPage` and corresponding breakpoint overrides
+- Set `perPage` > 1 and use `breakpoints` for responsive overrides
 - Always add `data-media-collection="carousel"` on the `.splide` element
 - Wrap content in `<li class="splide__slide">` — not `<div>`
 
@@ -177,7 +150,8 @@ Keys are pixel widths (as strings). Values override the parent options below tha
 - Do NOT add inline `<script>` tags to initialize Splide — it auto-mounts
 - Do NOT use `<div>` for slides — they must be `<li>` inside a `<ul>`
 - Do NOT put `data-splide` on anything other than the `.splide` element
-- Do NOT use `type:"fade"` with `perPage` > 1 (fade only works with single slides)
+- Do NOT use `type:"fade"` — fade only works with `perPage:1`, which is a slider pattern. Use the slider component instead.
+- Do NOT use `perPage:1` — single-item presentations belong in the slider component
 - Do NOT forget the `.splide__track` wrapper — without it, Splide breaks
 - Do NOT use CSS `overflow-hidden` on the `.splide` element (Splide handles this internally)
 
@@ -186,6 +160,6 @@ Keys are pixel widths (as strings). Values override the parent options below tha
 1. **Missing `.splide__track` wrapper** — Slides won't render. The structure must be `.splide > .splide__track > .splide__list > .splide__slide`.
 2. **Invalid JSON in `data-splide`** — Use double quotes for all keys and string values. Single quotes cause a parse error.
 3. **Using `<div>` instead of `<ul>/<li>`** — The list must be `<ul class="splide__list">` with `<li class="splide__slide">` children.
-4. **Setting `type:"fade"` with `perPage:3`** — Fade mode only works with one slide visible at a time.
+4. **Using `perPage:1` or `type:"fade"`** — Single-item presentations are sliders, not carousels. Use the **slider** component for hero banners, photo slideshows, and testimonial rotators.
 5. **Adding Splide JS initialization scripts** — The auto-init in `base.html` handles this. Adding another `new Splide()` call causes double-initialization bugs.
 """
