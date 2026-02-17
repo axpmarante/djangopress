@@ -7,6 +7,19 @@ export function $$(selector, context = document) {
 }
 
 /**
+ * Check if an element was injected by Splide at runtime and doesn't exist
+ * in the stored HTML. Covers: cloned slides, arrow buttons, pagination,
+ * and screen-reader-only elements.
+ */
+function isSplideInjected(el) {
+    const cls = el.classList;
+    return cls.contains('splide__slide--clone')
+        || cls.contains('splide__arrows')
+        || cls.contains('splide__pagination')
+        || cls.contains('splide__sr');
+}
+
+/**
  * Generate a CSS selector path from el up to its nearest section ancestor.
  * Returns null if el is outside a section.
  * Example: section[data-section="hero"] > div:nth-child(1) > h1:nth-child(1)
@@ -22,10 +35,11 @@ export function getCssSelector(el) {
     while (current && current !== section) {
         const parent = current.parentElement;
         if (!parent) break;
-        // Exclude Splide cloned slides when computing nth-child index,
-        // so selectors match the original HTML stored in the database.
+        // Exclude elements injected by Splide at runtime (cloned slides,
+        // arrows, pagination, sr-only) so nth-child indices match the
+        // original HTML stored in the database.
         const siblings = Array.from(parent.children)
-            .filter(s => !s.classList.contains('splide__slide--clone'));
+            .filter(s => !isSplideInjected(s));
         const index = siblings.indexOf(current) + 1;
         parts.unshift(`${current.tagName.toLowerCase()}:nth-child(${index})`);
         current = parent;
@@ -76,8 +90,8 @@ export function isEditable(el) {
     if (!wrapper || !wrapper.contains(el)) return false;
     // Exclude admin toolbar and editor UI elements
     if (el.closest('#admin-toolbar, [id^="ev2-"]')) return false;
-    // Exclude Splide cloned slides (they don't exist in stored HTML)
-    if (el.closest('.splide__slide--clone')) return false;
+    // Exclude Splide-injected elements (they don't exist in stored HTML)
+    if (el.closest('.splide__slide--clone, .splide__arrows, .splide__pagination, .splide__sr')) return false;
     return true;
 }
 
