@@ -136,6 +136,7 @@ DjangoPress ships with Claude Code skills (`.claude/skills/`) that automate comm
 | `/create-briefing` | `/create-briefing O Moinho` | **Interactive briefing generator.** Researches the client online (website, social media, reviews), asks targeted questions to fill gaps, and writes a complete `briefings/<slug>.md` file ready for `/generate-site`. Accepts a client name or URL as argument. |
 | `/generate-site` | `/generate-site briefings/my-site.md` | **Full site generation from a markdown briefing.** Reads the briefing, configures SiteSettings, generates all pages, header/footer, menu items, processes images. Claude Code reviews quality and fixes issues. Also available as `python manage.py generate_site` for batch use. |
 | `/deploy-site` | `/deploy-site my-project` | **Deploy to Railway.** Creates Railway project + Postgres, sets env vars, deploys code, migrates data from local SQLite to remote Postgres, generates domain. Handles redeployments (code, data, or both). |
+| `/sync-data` | `/sync-data` | **Push local DB to production.** Syncs pages, settings, forms, media records, header/footer, and menu items to a deployed Railway site via the `push_data` management command. Handles SYNC_SECRET setup and endpoint verification. |
 
 ### Auto-Loaded Skills (Claude uses automatically)
 
@@ -162,6 +163,9 @@ DjangoPress ships with Claude Code skills (`.claude/skills/`) that automate comm
 2. cd ../my-project && source venv/bin/activate
 3. /generate-site briefings/my-site.md
 4. /deploy-site my-project        ← deploy to Railway
+
+# After making local changes to a deployed site:
+/sync-data                        ← push local DB content to Railway
 ```
 
 ---
@@ -478,6 +482,8 @@ python manage.py generate_site briefings/my-site.md --dry-run      # Preview pla
 python manage.py generate_site briefings/my-site.md --skip-images  # Skip image processing
 ./scripts/new_site.sh my-project                       # Create new project from template
 ./scripts/new_site.sh my-project briefings/my-site.md  # Create + copy briefing
+python manage.py push_data https://my-site.railway.app             # Push local DB to production
+python manage.py push_data https://my-site.railway.app --dry-run   # Preview without sending
 railway up -d                                          # Redeploy code to Railway
 railway logs -f                                        # Stream Railway deployment logs
 railway run python manage.py shell                     # Django shell on Railway Postgres
