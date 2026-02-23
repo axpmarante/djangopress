@@ -131,7 +131,7 @@ MODEL_CONFIG = {
     # ===== GOOGLE MODELS =====
     'gemini-pro': ModelConfig(
         provider=ModelProvider.GOOGLE,
-        model_name="gemini-3-pro-preview",
+        model_name="gemini-3.1-pro-preview",
         max_output_tokens=32000,
         temperature=0.3,
         provider_params={
