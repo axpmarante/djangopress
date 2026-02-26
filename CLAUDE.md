@@ -348,7 +348,7 @@ Configured in `ai/utils/llm_config.py`. Supports OpenAI, Anthropic, and Google (
 ### Two-Step Generation Flow
 
 1. **Step 1 (HTML):** LLM generates clean HTML with real text in the default language. No `{{ trans.xxx }}` variables — just plain readable HTML.
-2. **Step 2 (Templatize + Translate):** A second LLM call extracts all visible text, assigns variable names, and translates to all enabled languages. Python replaces text in HTML with `{{ trans.var }}` variables.
+2. **Step 2 (Templatize + Translate):** Python extracts all visible text via BeautifulSoup and assigns variable names, then a LLM call translates to all enabled languages. Python replaces text in HTML with `{{ trans.var }}` variables.
 3. **Step 3 (Metadata):** A third LLM call suggests `title_i18n` and `slug_i18n` from the brief. The user can override these or leave them blank to use the AI suggestions.
 
 This avoids the LLM needing to output valid JSON-wrapped HTML, which was error-prone.

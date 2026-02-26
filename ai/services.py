@@ -16,7 +16,7 @@ from .models import log_ai_call
 class ContentGenerationService:
     """Service for generating CMS content using LLM"""
 
-    def __init__(self, model_name: str = 'gemini-pro', use_v2_templatize: bool = None):
+    def __init__(self, model_name: str = 'gemini-pro'):
         """
         Initialize the content generation service
 
@@ -24,16 +24,9 @@ class ContentGenerationService:
             model_name: Name of the LLM model to use (from MODEL_CONFIG)
                        Options: 'gpt-5', 'gpt-5-mini', 'claude', 'gemini-pro', 'gemini-flash', 'gemini-lite'
                        Default: 'gemini-pro' (high quality, balanced speed)
-            use_v2_templatize: Use Python-based text extraction (v2) instead of LLM (v1).
-                              None = read from settings.USE_V2_TEMPLATIZE (default True).
         """
         self.llm = LLMBase()
         self.model_name = model_name
-        if use_v2_templatize is not None:
-            self.use_v2_templatize = use_v2_templatize
-        else:
-            from django.conf import settings
-            self.use_v2_templatize = getattr(settings, 'USE_V2_TEMPLATIZE', True)
 
     @staticmethod
     def _get_model_info(tool_name: str) -> tuple:
@@ -221,11 +214,6 @@ Return the complete, corrected JSON now:"""
         """Strip legacy data-element-id attributes from HTML to save tokens."""
         return re.sub(r'\s+data-element-id="[^"]*"', '', html)
 
-    def _run_templatize(self, html: str, languages: list, default_language: str, model: str) -> Dict:
-        """Dispatch to v1 or v2 templatization based on the instance flag."""
-        if self.use_v2_templatize:
-            return self._templatize_and_translate_v2(html, languages, default_language, model)
-        return self._templatize_and_translate(html, languages, default_language, model)
 
     @staticmethod
     def _extract_text_from_html(html: str) -> list:
@@ -329,229 +317,10 @@ Return the complete, corrected JSON now:"""
 
     def _templatize_and_translate(self, html: str, languages: list, default_language: str, model: str) -> Dict:
         """
-        Step 2: Ask LLM to extract text and translate, then do HTML replacement in Python.
+        Step 2: Python-based text extraction + translation-only LLM call.
 
-        The LLM returns a compact array of {var, original, translations} objects.
-        We replace the original text in the HTML with {{ trans.var }} ourselves,
-        avoiding the need for the LLM to return the entire HTML back.
-
-        Args:
-            html: Clean HTML with real text in the default language
-            languages: List of language codes
-            default_language: The language the HTML text is written in
-            model: LLM model name to use
-
-        Returns:
-            Dict with 'html_content' (templatized) and 'content' (with translations)
-
-        Raises:
-            ValueError: If templatization fails
-        """
-        print(f"\n--- Step 2: Templatize + Translate ---")
-
-        # Always use gemini-flash for templatization — fast and reliable for text extraction/translation
-        model = 'gemini-flash'
-
-        # Protect Django template tags from being corrupted by the LLM.
-        # Step 1 may generate HTML with {% csrf_token %}, {% url ... %}, {{ SITE_NAME }}, etc.
-        # These must be preserved exactly — the LLM should never see or extract them.
-        protected_tags = {}
-        protected_html = html
-
-        # Normalize double-brace template tags that LLMs sometimes generate.
-        # LLMs may output {{% csrf_token %}} or {{{{ trans.xxx }}}} (double-escaped)
-        # because they mimic f-string escaping from the prompt source code.
-        protected_html = re.sub(r'\{\{(%.*?%)\}\}', r'{\1}', protected_html)
-        protected_html = re.sub(r'\{\{\{\{(.*?)\}\}\}\}', r'{{\1}}', protected_html)
-
-        def protect_tag(match):
-            # Use HTML comment format — the LLM prompt explicitly says to skip HTML comments
-            placeholder = f'<!-- PROTECTED_DJANGO_TAG_{len(protected_tags)} -->'
-            protected_tags[placeholder] = match.group(0)
-            return placeholder
-
-        # Protect {% ... %} tags (csrf_token, url, if, for, load, etc.)
-        protected_html = re.sub(r'\{%.*?%\}', protect_tag, protected_html, flags=re.DOTALL)
-        # Protect {{ ... }} context variables (SITE_NAME, LOGO.url, etc.) already in the HTML
-        protected_html = re.sub(r'\{\{.*?\}\}', protect_tag, protected_html, flags=re.DOTALL)
-
-        if protected_tags:
-            print(f"Protected {len(protected_tags)} Django template tags from templatization")
-
-        system_prompt, user_prompt = PromptTemplates.get_templatize_and_translate_prompt(
-            html=protected_html,
-            languages=languages,
-            default_language=default_language
-        )
-
-        # Debug output
-        system_token_estimate = len(system_prompt.split()) * 1.3
-        user_token_estimate = len(user_prompt.split()) * 1.3
-        total_token_estimate = system_token_estimate + user_token_estimate
-
-        print(f"TEMPLATIZE PROMPT (≈{int(total_token_estimate)} tokens)")
-
-        messages = [
-            {'role': 'system', 'content': system_prompt},
-            {'role': 'user', 'content': user_prompt}
-        ]
-
-        actual_model, provider = self._get_model_info(model)
-        t0 = time.time()
-        try:
-            response = self.llm.get_completion(messages, tool_name=model)
-            usage = self._extract_usage(response)
-            log_ai_call(
-                action='templatize', model_name=actual_model, provider=provider,
-                system_prompt=system_prompt, user_prompt=user_prompt,
-                response_text=response.choices[0].message.content,
-                duration_ms=int((time.time() - t0) * 1000), **usage,
-            )
-        except Exception as e:
-            log_ai_call(
-                action='templatize', model_name=actual_model, provider=provider,
-                system_prompt=system_prompt, user_prompt=user_prompt,
-                duration_ms=int((time.time() - t0) * 1000),
-                success=False, error_message=str(e),
-            )
-            raise
-
-        content = response.choices[0].message.content
-        mappings = self._extract_json_from_response(content)
-
-        # Handle if LLM returns an object with a wrapper key
-        if isinstance(mappings, dict):
-            # Try common wrapper keys first, then any key with a list value
-            for key in ('mappings', 'variables', 'texts', 'items'):
-                if key in mappings and isinstance(mappings[key], list):
-                    mappings = mappings[key]
-                    break
-            else:
-                # Fallback: find any key whose value is a list of dicts
-                for key, value in mappings.items():
-                    if isinstance(value, list) and len(value) > 0 and isinstance(value[0], dict):
-                        print(f"Found mappings under unexpected key: '{key}'")
-                        mappings = value
-                        break
-                else:
-                    raise ValueError("Templatize step returned an object instead of an array")
-
-        if not isinstance(mappings, list):
-            raise ValueError("Templatize step returned invalid mappings (expected a list)")
-
-        # No translatable text found (e.g. iframe-only content) — return HTML as-is
-        if len(mappings) == 0:
-            print("No translatable text found — returning HTML as-is with empty translations")
-            # Restore protected Django tags
-            final_html = protected_html
-            for placeholder, original_tag in protected_tags.items():
-                final_html = final_html.replace(placeholder, original_tag)
-            return {
-                'html_content': final_html,
-                'content': {'translations': {lang: {} for lang in languages}},
-            }
-
-        # Build translations dict and do HTML replacements
-        translations = {lang: {} for lang in languages}
-        templatized_html = protected_html
-
-        # Sort by length of original text (longest first) to avoid partial replacements
-        mappings.sort(key=lambda m: len(m.get('original', '')), reverse=True)
-
-        replaced_count = 0
-        for mapping in mappings:
-            var_name = mapping.get('var', '')
-            original_text = mapping.get('original', '')
-            trans = mapping.get('translations', {})
-
-            if not var_name or not original_text:
-                continue
-
-            # Skip if the original text is or contains a protected placeholder
-            if 'PROTECTED_DJANGO_TAG' in original_text:
-                print(f"  Skipping mapping '{var_name}' — original text contains a protected placeholder")
-                continue
-
-            # Sanitize variable name: Django template variables must be valid
-            # Python identifiers (no hyphens, spaces, or special chars)
-            var_name = re.sub(r'[^a-zA-Z0-9_]', '_', var_name)
-            var_name = re.sub(r'_+', '_', var_name).strip('_')
-
-            # Replace original text in HTML with {{ trans.var_name }}
-            template_var = '{{ trans.' + var_name + ' }}'
-            if original_text in templatized_html:
-                templatized_html = templatized_html.replace(original_text, template_var, 1)
-                replaced_count += 1
-
-            # Build translations dict
-            for lang in languages:
-                if lang in trans:
-                    translations[lang][var_name] = trans[lang]
-
-        print(f"Replaced {replaced_count}/{len(mappings)} text strings with template variables")
-
-        # Validate translations completeness
-        trans_vars = set(re.findall(r'\{\{\s*trans\.(\w+)\s*\}\}', templatized_html))
-        if trans_vars:
-            missing_vars = {}
-            for lang in languages:
-                lang_trans = translations.get(lang, {})
-                missing_in_lang = trans_vars - set(lang_trans.keys())
-                if missing_in_lang:
-                    missing_vars[lang] = list(missing_in_lang)
-            if missing_vars:
-                print(f"WARNING: Missing translations after templatization:")
-                for lang, vars_list in missing_vars.items():
-                    print(f"  - {lang.upper()}: {', '.join(vars_list)}")
-
-        print(f"Templatized HTML with {len(trans_vars)} translation variables")
-
-        # Restore protected Django template tags
-        if protected_tags:
-            restored_count = 0
-            for placeholder, original_tag in protected_tags.items():
-                if placeholder in templatized_html:
-                    templatized_html = templatized_html.replace(placeholder, original_tag)
-                    restored_count += 1
-                else:
-                    print(f"WARNING: Placeholder {placeholder} was consumed during templatization — re-inserting is not possible")
-                    print(f"  Original tag was: {original_tag}")
-            print(f"Restored {restored_count}/{len(protected_tags)} protected Django template tags")
-
-        # Validate template syntax before returning
-        from django.template import Template, TemplateSyntaxError
-        try:
-            Template(templatized_html)
-        except TemplateSyntaxError as e:
-            print(f"ERROR: Templatized HTML has broken template syntax: {e}")
-            print("Attempting auto-fix of broken template tags...")
-            # Fix common issues: nested {{ inside {{ trans.xxx }}
-            templatized_html = re.sub(
-                r'\{\{\s*trans\.(\w+)\s+\{\{[^}]*\}\}\s*\}\}',
-                r'{{ trans.\1 }}',
-                templatized_html
-            )
-            # Verify fix worked
-            try:
-                Template(templatized_html)
-                print("Auto-fix successful")
-            except TemplateSyntaxError as e2:
-                raise ValueError(f"Templatized HTML has invalid template syntax that could not be auto-fixed: {e2}")
-
-        return {
-            'html_content': templatized_html,
-            'content': {
-                'translations': translations
-            }
-        }
-
-    def _templatize_and_translate_v2(self, html: str, languages: list, default_language: str, model: str) -> Dict:
-        """
-        Step 2 (v2): Python-based text extraction + translation-only LLM call.
-
-        Same signature and return format as _templatize_and_translate (v1) — drop-in replacement.
-        Instead of sending the full HTML to the LLM, extracts text in Python with BeautifulSoup
-        and only sends the text strings for translation. ~10x fewer tokens.
+        Extracts text in Python with BeautifulSoup and only sends the text strings
+        for translation. ~10x fewer tokens than sending full HTML to the LLM.
 
         Args:
             html: Clean HTML with real text in the default language
@@ -925,10 +694,10 @@ Return the complete, corrected JSON now:"""
 
         # --- Step 2 + Step 3: Run in parallel ---
         # Step 2 (templatize) and Step 3 (metadata) are independent — run concurrently
-        print(f"\nRunning Step 2 (templatize v2) and Step 3 (metadata) in parallel...")
+        print(f"\nRunning Step 2 (templatize) and Step 3 (metadata) in parallel...")
         with ThreadPoolExecutor(max_workers=2) as pool:
             future_templatize = pool.submit(
-                self._run_templatize, raw_html, languages, default_language, model
+                self._templatize_and_translate, raw_html, languages, default_language, model
             )
             future_metadata = pool.submit(
                 self._generate_page_metadata, brief, languages, model
@@ -1315,7 +1084,7 @@ Return the complete, corrected JSON now:"""
         print(f"Step 1 produced {len(refined_html)} chars of refined HTML")
 
         # --- Step 2: Templatize + Translate ---
-        refined_data = self._run_templatize(refined_html, languages, default_language, model)
+        refined_data = self._templatize_and_translate(refined_html, languages, default_language, model)
 
         print(f"Successfully refined page (two-step)")
         return refined_data

@@ -1223,7 +1223,7 @@ def apply_option(request):
         languages = site_settings.get_language_codes() if site_settings else ['pt', 'en']
 
         service = ContentGenerationService(model_name='gemini-flash')
-        templatized = service._run_templatize(html, languages, default_language, 'gemini-flash')
+        templatized = service._templatize_and_translate(html, languages, default_language, 'gemini-flash')
 
         html_template = templatized['html_content']
         content = templatized['content']
