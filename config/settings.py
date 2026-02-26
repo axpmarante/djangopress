@@ -133,6 +133,10 @@ if ENVIRONMENT == 'development':
 else:
     STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
+# Session: keep login alive for 30 days, persist across browser restarts
+SESSION_COOKIE_AGE = 60 * 60 * 24 * 30  # 30 days in seconds
+SESSION_SAVE_EVERY_REQUEST = True  # Reset expiry on each request (sliding window)
+
 # Production-only security settings
 if ENVIRONMENT != 'development':
     SESSION_COOKIE_SECURE = True
