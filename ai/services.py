@@ -322,8 +322,20 @@ Return the complete, corrected JSON now:"""
                 else:
                     raise ValueError("Templatize step returned an object instead of an array")
 
-        if not isinstance(mappings, list) or len(mappings) == 0:
-            raise ValueError("Templatize step returned empty or invalid mappings")
+        if not isinstance(mappings, list):
+            raise ValueError("Templatize step returned invalid mappings (expected a list)")
+
+        # No translatable text found (e.g. iframe-only content) — return HTML as-is
+        if len(mappings) == 0:
+            print("No translatable text found — returning HTML as-is with empty translations")
+            # Restore protected Django tags
+            final_html = protected_html
+            for placeholder, original_tag in protected_tags.items():
+                final_html = final_html.replace(placeholder, original_tag)
+            return {
+                'html_content': final_html,
+                'content': {'translations': {lang: {} for lang in languages}},
+            }
 
         # Build translations dict and do HTML replacements
         translations = {lang: {} for lang in languages}
