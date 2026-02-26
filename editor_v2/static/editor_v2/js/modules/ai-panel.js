@@ -416,6 +416,9 @@ async function applyResult() {
     if (applyBtn) { applyBtn.textContent = 'Saving...'; applyBtn.disabled = true; }
     if (discardBtn) discardBtn.disabled = true;
 
+    // Show overlay to block editor interaction during save + templatize
+    setLoading(true);
+
     try {
         if (options.length > 0 && pendingScope) {
             // Multi-option: send chosen option to apply-option endpoint
@@ -438,6 +441,7 @@ async function applyResult() {
                 });
             }
         } else {
+            setLoading(false);
             return;
         }
         pendingResult = null;
@@ -451,6 +455,7 @@ async function applyResult() {
         }
         setTimeout(() => window.location.reload(), 600);
     } catch (err) {
+        setLoading(false);
         if (applyBtn) { applyBtn.textContent = 'Apply'; applyBtn.disabled = false; }
         if (discardBtn) discardBtn.disabled = false;
         messages.push({ role: 'assistant', content: 'Save failed: ' + (err.message || err), scope: '' });
