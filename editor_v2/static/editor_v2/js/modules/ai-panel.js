@@ -25,6 +25,7 @@ let sessionLoaded = false;
 let freshChat = false;            // true when context menu triggers a new chat
 let options = [];               // multi-option: array of {html} objects
 let activeOption = 0;           // which option tab is active (0, 1, 2)
+let multiOption = true;         // true = 3 variations, false = single (faster)
 let lockedSection = null;       // snapshot of currentSection at send() time
 let lockedSelector = null;      // snapshot of currentSelector at send() time
 let lockedScope = null;         // snapshot of activeScope at send() time
@@ -148,6 +149,10 @@ function render() {
         <div class="ev2-style-actions">
             <button class="ev2-style-action" id="ev2-enhance-btn">Enhance</button>
             <button class="ev2-style-action" id="ev2-suggest-btn">Suggest</button>
+            ${activeScope !== 'page' ? `<label class="ev2-style-action ev2-multi-toggle" title="Generate 3 design variations to choose from">
+                <input type="checkbox" id="ev2-multi-toggle" ${multiOption ? 'checked' : ''}>
+                <span>3 options</span>
+            </label>` : ''}
         </div>`;
 
     renderMessages();
@@ -170,6 +175,9 @@ function render() {
             container.querySelectorAll('.ev2-option-tab').forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
         });
+    });
+    $('#ev2-multi-toggle')?.addEventListener('change', (e) => {
+        multiOption = e.target.checked;
     });
     bindSessionBar();
     bindScopeSelect();
@@ -316,6 +324,7 @@ async function send() {
                 instructions: text,
                 conversation_history: history,
                 session_id: sessionId,
+                multi_option: multiOption,
             });
         } else {
             res = await api.post('/refine-multi/', {
@@ -325,6 +334,7 @@ async function send() {
                 instructions: text,
                 conversation_history: history,
                 session_id: sessionId,
+                multi_option: multiOption,
             });
         }
 

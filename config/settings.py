@@ -233,6 +233,12 @@ DEFAULT_FROM_EMAIL = env('DEFAULT_FROM_EMAIL', default='noreply@sendermail.io')
 
 # Unsplash API (for stock photos in Process Images)
 UNSPLASH_ACCESS_KEY = env('UNSPLASH_ACCESS_KEY', default='')
+
+# AI templatization: True = v2 (Python extraction + translate-only LLM), False = v1 (full HTML to LLM)
+USE_V2_TEMPLATIZE = env('USE_V2_TEMPLATIZE', default='True') == 'True'
+
+# Refinement agent: True = use agentic router (gemini-flash analyzes request, picks model/context)
+USE_REFINEMENT_AGENT = env('USE_REFINEMENT_AGENT', default='True') == 'True'
 SERVER_EMAIL = DEFAULT_FROM_EMAIL
 
 # Default primary key field type

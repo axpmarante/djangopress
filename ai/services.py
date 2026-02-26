@@ -5,6 +5,7 @@ Main service layer for generating and refining pages and global sections (header
 import json
 import re
 import time
+from concurrent.futures import ThreadPoolExecutor
 from typing import Dict, List, Any, Optional, Union
 from .utils.llm_config import LLMBase, MODEL_CONFIG
 from .utils.prompts import PromptTemplates
@@ -15,7 +16,7 @@ from .models import log_ai_call
 class ContentGenerationService:
     """Service for generating CMS content using LLM"""
 
-    def __init__(self, model_name: str = 'gemini-pro'):
+    def __init__(self, model_name: str = 'gemini-pro', use_v2_templatize: bool = None):
         """
         Initialize the content generation service
 
@@ -23,9 +24,16 @@ class ContentGenerationService:
             model_name: Name of the LLM model to use (from MODEL_CONFIG)
                        Options: 'gpt-5', 'gpt-5-mini', 'claude', 'gemini-pro', 'gemini-flash', 'gemini-lite'
                        Default: 'gemini-pro' (high quality, balanced speed)
+            use_v2_templatize: Use Python-based text extraction (v2) instead of LLM (v1).
+                              None = read from settings.USE_V2_TEMPLATIZE (default True).
         """
         self.llm = LLMBase()
         self.model_name = model_name
+        if use_v2_templatize is not None:
+            self.use_v2_templatize = use_v2_templatize
+        else:
+            from django.conf import settings
+            self.use_v2_templatize = getattr(settings, 'USE_V2_TEMPLATIZE', True)
 
     @staticmethod
     def _get_model_info(tool_name: str) -> tuple:
@@ -212,6 +220,112 @@ Return the complete, corrected JSON now:"""
     def _strip_legacy_attrs(html: str) -> str:
         """Strip legacy data-element-id attributes from HTML to save tokens."""
         return re.sub(r'\s+data-element-id="[^"]*"', '', html)
+
+    def _run_templatize(self, html: str, languages: list, default_language: str, model: str) -> Dict:
+        """Dispatch to v1 or v2 templatization based on the instance flag."""
+        if self.use_v2_templatize:
+            return self._templatize_and_translate_v2(html, languages, default_language, model)
+        return self._templatize_and_translate(html, languages, default_language, model)
+
+    @staticmethod
+    def _extract_text_from_html(html: str) -> list:
+        """
+        Extract translatable text strings from HTML using BeautifulSoup.
+
+        Walks all NavigableString nodes, filters out non-translatable content,
+        and generates variable names based on section context and element role.
+
+        Args:
+            html: HTML string (with Django tags already protected as comments)
+
+        Returns:
+            List of dicts: [{"var": "hero_title", "original": "Welcome"}, ...]
+        """
+        from bs4 import BeautifulSoup, NavigableString, Comment
+
+        soup = BeautifulSoup(html, 'html.parser')
+
+        # Tags whose text content should never be extracted
+        skip_tags = {'script', 'style', 'svg', 'code', 'pre', 'noscript'}
+
+        # Map parent tag to a role suffix for variable naming
+        tag_role_map = {
+            'h1': 'title', 'h2': 'heading', 'h3': 'heading', 'h4': 'heading',
+            'h5': 'heading', 'h6': 'heading',
+            'p': 'text', 'a': 'link', 'button': 'button', 'span': 'label',
+            'li': 'item', 'th': 'header', 'td': 'cell', 'label': 'label',
+            'figcaption': 'caption', 'blockquote': 'quote', 'cite': 'cite',
+            'dt': 'term', 'dd': 'definition', 'legend': 'legend',
+            'option': 'option', 'summary': 'summary', 'strong': 'text',
+            'em': 'text', 'b': 'text', 'i': 'text', 'small': 'text',
+        }
+
+        results = []
+        # Track counters per base name to avoid duplicates
+        name_counters = {}
+
+        for text_node in soup.descendants:
+            # Only process text nodes
+            if not isinstance(text_node, NavigableString):
+                continue
+            # Skip comments and CDATA
+            if isinstance(text_node, Comment):
+                continue
+
+            text = text_node.strip()
+            if not text or len(text) < 2:
+                continue
+
+            # Skip protected Django tag placeholders
+            if 'PROTECTED_DJANGO_TAG' in text:
+                continue
+
+            # Skip if inside a skip tag
+            parent = text_node.parent
+            if parent is None:
+                continue
+            in_skip_tag = False
+            for ancestor in [parent] + list(parent.parents):
+                if ancestor.name in skip_tags:
+                    in_skip_tag = True
+                    break
+            if in_skip_tag:
+                continue
+
+            # Find nearest <section data-section="X"> ancestor for section prefix
+            section_name = None
+            for ancestor in [parent] + list(parent.parents):
+                if ancestor.name == 'section' and ancestor.get('data-section'):
+                    section_name = ancestor['data-section']
+                    break
+
+            # Determine role from parent tag
+            role = tag_role_map.get(parent.name, 'text')
+
+            # Build base variable name
+            if section_name:
+                # Sanitize section name to snake_case
+                section_prefix = re.sub(r'[^a-zA-Z0-9]', '_', section_name).strip('_').lower()
+                base_name = f"{section_prefix}_{role}"
+            else:
+                base_name = role
+
+            # Handle duplicate names with counters
+            if base_name not in name_counters:
+                name_counters[base_name] = 0
+            name_counters[base_name] += 1
+
+            if name_counters[base_name] == 1:
+                var_name = base_name
+            else:
+                var_name = f"{base_name}_{name_counters[base_name]}"
+
+            results.append({
+                'var': var_name,
+                'original': text,
+            })
+
+        return results
 
     def _templatize_and_translate(self, html: str, languages: list, default_language: str, model: str) -> Dict:
         """
@@ -431,6 +545,201 @@ Return the complete, corrected JSON now:"""
             }
         }
 
+    def _templatize_and_translate_v2(self, html: str, languages: list, default_language: str, model: str) -> Dict:
+        """
+        Step 2 (v2): Python-based text extraction + translation-only LLM call.
+
+        Same signature and return format as _templatize_and_translate (v1) — drop-in replacement.
+        Instead of sending the full HTML to the LLM, extracts text in Python with BeautifulSoup
+        and only sends the text strings for translation. ~10x fewer tokens.
+
+        Args:
+            html: Clean HTML with real text in the default language
+            languages: List of language codes
+            default_language: The language the HTML text is written in
+            model: LLM model name to use
+
+        Returns:
+            Dict with 'html_content' (templatized) and 'content' (with translations)
+
+        Raises:
+            ValueError: If templatization fails
+        """
+        print(f"\n--- Step 2 (v2): Python Extract + Translate ---")
+
+        # Always use gemini-flash for translation
+        model = 'gemini-flash'
+
+        # --- Phase A: Protect Django template tags ---
+        protected_tags = {}
+        protected_html = html
+
+        # Normalize double-brace template tags that LLMs sometimes generate
+        protected_html = re.sub(r'\{\{(%.*?%)\}\}', r'{\1}', protected_html)
+        protected_html = re.sub(r'\{\{\{\{(.*?)\}\}\}\}', r'{{\1}}', protected_html)
+
+        def protect_tag(match):
+            placeholder = f'<!-- PROTECTED_DJANGO_TAG_{len(protected_tags)} -->'
+            protected_tags[placeholder] = match.group(0)
+            return placeholder
+
+        # Protect {% ... %} tags
+        protected_html = re.sub(r'\{%.*?%\}', protect_tag, protected_html, flags=re.DOTALL)
+        # Protect {{ ... }} context variables
+        protected_html = re.sub(r'\{\{.*?\}\}', protect_tag, protected_html, flags=re.DOTALL)
+
+        if protected_tags:
+            print(f"Protected {len(protected_tags)} Django template tags from templatization")
+
+        # --- Phase B: Python text extraction ---
+        extracted = self._extract_text_from_html(protected_html)
+
+        if not extracted:
+            print("No translatable text found — returning HTML as-is with empty translations")
+            final_html = protected_html
+            for placeholder, original_tag in protected_tags.items():
+                final_html = final_html.replace(placeholder, original_tag)
+            return {
+                'html_content': final_html,
+                'content': {'translations': {lang: {} for lang in languages}},
+            }
+
+        print(f"Extracted {len(extracted)} text strings from HTML")
+
+        # Build the text dict for the LLM: {var_name: "original text"}
+        text_dict = {item['var']: item['original'] for item in extracted}
+
+        # --- Phase C: Send ONLY text strings to LLM for translation ---
+        system_prompt, user_prompt = PromptTemplates.get_translate_only_prompt(
+            text_dict=text_dict,
+            languages=languages,
+            default_language=default_language
+        )
+
+        # Debug output
+        system_token_estimate = len(system_prompt.split()) * 1.3
+        user_token_estimate = len(user_prompt.split()) * 1.3
+        total_token_estimate = system_token_estimate + user_token_estimate
+        print(f"TRANSLATE PROMPT (≈{int(total_token_estimate)} tokens)")
+
+        messages = [
+            {'role': 'system', 'content': system_prompt},
+            {'role': 'user', 'content': user_prompt}
+        ]
+
+        actual_model, provider = self._get_model_info(model)
+        t0 = time.time()
+        try:
+            response = self.llm.get_completion(messages, tool_name=model)
+            usage = self._extract_usage(response)
+            log_ai_call(
+                action='templatize_v2', model_name=actual_model, provider=provider,
+                system_prompt=system_prompt, user_prompt=user_prompt,
+                response_text=response.choices[0].message.content,
+                duration_ms=int((time.time() - t0) * 1000), **usage,
+            )
+        except Exception as e:
+            log_ai_call(
+                action='templatize_v2', model_name=actual_model, provider=provider,
+                system_prompt=system_prompt, user_prompt=user_prompt,
+                duration_ms=int((time.time() - t0) * 1000),
+                success=False, error_message=str(e),
+            )
+            raise
+
+        content = response.choices[0].message.content
+        translations_response = self._extract_json_from_response(content)
+
+        # The LLM returns {lang_code: {var: text, ...}, ...}
+        if not isinstance(translations_response, dict):
+            raise ValueError("Translation step returned invalid data (expected a dict)")
+
+        # Build translations dict — ensure all vars are present for all languages
+        translations = {lang: {} for lang in languages}
+        for lang in languages:
+            lang_trans = translations_response.get(lang, {})
+            for item in extracted:
+                var = item['var']
+                if lang == default_language:
+                    # Default language always uses the original text
+                    translations[lang][var] = item['original']
+                elif var in lang_trans:
+                    translations[lang][var] = lang_trans[var]
+                else:
+                    # Fallback to original if translation missing
+                    translations[lang][var] = item['original']
+                    print(f"  WARNING: Missing {lang.upper()} translation for '{var}', using original")
+
+        # --- Phase D: HTML replacement + validation ---
+        templatized_html = protected_html
+
+        # Sort by length of original text (longest first) to avoid partial replacements
+        sorted_extracted = sorted(extracted, key=lambda m: len(m['original']), reverse=True)
+
+        replaced_count = 0
+        for item in sorted_extracted:
+            var_name = item['var']
+            original_text = item['original']
+            template_var = '{{ trans.' + var_name + ' }}'
+            if original_text in templatized_html:
+                templatized_html = templatized_html.replace(original_text, template_var, 1)
+                replaced_count += 1
+
+        print(f"Replaced {replaced_count}/{len(extracted)} text strings with template variables")
+
+        # Validate translations completeness
+        trans_vars = set(re.findall(r'\{\{\s*trans\.(\w+)\s*\}\}', templatized_html))
+        if trans_vars:
+            missing_vars = {}
+            for lang in languages:
+                lang_trans = translations.get(lang, {})
+                missing_in_lang = trans_vars - set(lang_trans.keys())
+                if missing_in_lang:
+                    missing_vars[lang] = list(missing_in_lang)
+            if missing_vars:
+                print(f"WARNING: Missing translations after templatization:")
+                for lang, vars_list in missing_vars.items():
+                    print(f"  - {lang.upper()}: {', '.join(vars_list)}")
+
+        print(f"Templatized HTML with {len(trans_vars)} translation variables")
+
+        # Restore protected Django template tags
+        if protected_tags:
+            restored_count = 0
+            for placeholder, original_tag in protected_tags.items():
+                if placeholder in templatized_html:
+                    templatized_html = templatized_html.replace(placeholder, original_tag)
+                    restored_count += 1
+                else:
+                    print(f"WARNING: Placeholder {placeholder} was consumed during templatization — re-inserting is not possible")
+                    print(f"  Original tag was: {original_tag}")
+            print(f"Restored {restored_count}/{len(protected_tags)} protected Django template tags")
+
+        # Validate template syntax before returning
+        from django.template import Template, TemplateSyntaxError
+        try:
+            Template(templatized_html)
+        except TemplateSyntaxError as e:
+            print(f"ERROR: Templatized HTML has broken template syntax: {e}")
+            print("Attempting auto-fix of broken template tags...")
+            templatized_html = re.sub(
+                r'\{\{\s*trans\.(\w+)\s+\{\{[^}]*\}\}\s*\}\}',
+                r'{{ trans.\1 }}',
+                templatized_html
+            )
+            try:
+                Template(templatized_html)
+                print("Auto-fix successful")
+            except TemplateSyntaxError as e2:
+                raise ValueError(f"Templatized HTML has invalid template syntax that could not be auto-fixed: {e2}")
+
+        return {
+            'html_content': templatized_html,
+            'content': {
+                'translations': translations
+            }
+        }
+
     def _generate_page_metadata(self, brief: str, languages: list, model: str) -> Dict:
         """
         Ask LLM to suggest title_i18n and slug_i18n from the page brief.
@@ -614,15 +923,23 @@ Return the complete, corrected JSON now:"""
 
         print(f"Step 1 produced {len(raw_html)} chars of HTML")
 
-        # --- Step 2: Templatize + Translate ---
-        page_data = self._templatize_and_translate(raw_html, languages, default_language, model)
+        # --- Step 2 + Step 3: Run in parallel ---
+        # Step 2 (templatize) and Step 3 (metadata) are independent — run concurrently
+        print(f"\nRunning Step 2 (templatize v2) and Step 3 (metadata) in parallel...")
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            future_templatize = pool.submit(
+                self._run_templatize, raw_html, languages, default_language, model
+            )
+            future_metadata = pool.submit(
+                self._generate_page_metadata, brief, languages, model
+            )
+            page_data = future_templatize.result()
+            metadata = future_metadata.result()
 
-        # --- Step 3: Generate suggested title/slug ---
-        metadata = self._generate_page_metadata(brief, languages, model)
         page_data['title_i18n'] = metadata.get('title_i18n', {})
         page_data['slug_i18n'] = metadata.get('slug_i18n', {})
 
-        print(f"Successfully generated page (two-step)")
+        print(f"Successfully generated page (two-step, parallel)")
         return page_data
 
     def refine_global_section(
@@ -998,7 +1315,7 @@ Return the complete, corrected JSON now:"""
         print(f"Step 1 produced {len(refined_html)} chars of refined HTML")
 
         # --- Step 2: Templatize + Translate ---
-        refined_data = self._templatize_and_translate(refined_html, languages, default_language, model)
+        refined_data = self._run_templatize(refined_html, languages, default_language, model)
 
         print(f"Successfully refined page (two-step)")
         return refined_data
@@ -1010,7 +1327,11 @@ Return the complete, corrected JSON now:"""
         instructions: str,
         conversation_history: list = None,
         multi_option: bool = False,
-        model_override: str = None
+        model_override: str = None,
+        skip_component_selection: bool = False,
+        skip_briefing: bool = False,
+        skip_pages_list: bool = False,
+        skip_design_guide: bool = False,
     ) -> Dict:
         """
         Refine a single section without saving to DB.
@@ -1042,9 +1363,9 @@ Return the complete, corrected JSON now:"""
         default_language = site_settings.get_default_language() if site_settings else 'pt'
         site_name = site_settings.get_site_name(default_language) if site_settings else 'Website'
         site_description = site_settings.get_site_description(default_language) if site_settings else ''
-        project_briefing = site_settings.get_project_briefing() if site_settings else ''
+        project_briefing = '' if skip_briefing else (site_settings.get_project_briefing() if site_settings else '')
         languages = site_settings.get_language_codes() if site_settings else ['pt', 'en']
-        design_guide = site_settings.design_guide if site_settings else ''
+        design_guide = '' if skip_design_guide else (site_settings.design_guide if site_settings else '')
         model = model_override or self.model_name
 
         page_title = page.default_title
@@ -1052,8 +1373,9 @@ Return the complete, corrected JSON now:"""
 
         # Build pages list for inter-page linking context
         pages_data = []
-        for p in Page.objects.filter(is_active=True).order_by('id'):
-            pages_data.append({'title': p.title_i18n or {}, 'slug': p.slug_i18n or {}})
+        if not skip_pages_list:
+            for p in Page.objects.filter(is_active=True).order_by('id'):
+                pages_data.append({'title': p.title_i18n or {}, 'slug': p.slug_i18n or {}})
 
         # De-templatize full page HTML
         current_html = page.html_content or ''
@@ -1080,12 +1402,14 @@ Return the complete, corrected JSON now:"""
         print(f"\n--- Step 1: Refine section '{section_name}' in {default_language.upper()} ---")
 
         # Pass 1: Select relevant component skills
-        selected_components = ComponentRegistry.select_components(
-            user_request=instructions,
-            existing_html=clean_html,
-            llm=self.llm,
-        )
-        component_references = ComponentRegistry.get_references(selected_components)
+        component_references = ''
+        if not skip_component_selection:
+            selected_components = ComponentRegistry.select_components(
+                user_request=instructions,
+                existing_html=clean_html,
+                llm=self.llm,
+            )
+            component_references = ComponentRegistry.get_references(selected_components)
 
         system_prompt, user_prompt = PromptTemplates.get_section_refinement_prompt(
             site_name=site_name,
@@ -1103,6 +1427,7 @@ Return the complete, corrected JSON now:"""
             languages=languages,
             multi_option=multi_option,
             component_references=component_references,
+            include_component_index=not skip_component_selection,
         )
 
         messages = [
@@ -1160,21 +1485,18 @@ Return the complete, corrected JSON now:"""
                 'assistant_message': assistant_message,
             }
 
-        # Verify the response contains the target section
+        # Single option — validate and return as 1-element options list
+        # (templatize happens in apply-option, keeping the flow consistent)
         soup = BeautifulSoup(refined_html, 'html.parser')
         section_el = soup.find('section', attrs={'data-section': section_name})
 
         if section_el:
-            # LLM returned proper section — use it
             section_html = str(section_el)
         else:
-            # LLM might have returned the section content without the wrapper,
-            # or the entire page. Try to extract just the section.
             all_sections = soup.find_all('section')
             if len(all_sections) == 1:
                 section_html = str(all_sections[0])
             elif len(all_sections) > 1:
-                # LLM returned multiple sections despite instructions — extract target
                 print(f"WARNING: LLM returned {len(all_sections)} sections, extracting target")
                 target = soup.find('section', attrs={'data-section': section_name})
                 if target:
@@ -1182,21 +1504,13 @@ Return the complete, corrected JSON now:"""
                 else:
                     raise ValueError(f"Section '{section_name}' not found in AI response with {len(all_sections)} sections")
             else:
-                # No section tags — wrap the response
                 section_html = refined_html
 
         print(f"Section '{section_name}': {len(section_html)} chars")
 
-        # Step 2: Templatize + translate just the section
-        section_data = self._templatize_and_translate(section_html, languages, default_language, model)
-
-        # Build assistant message for chat display
-        assistant_message = f"I've updated the {section_name} section based on your instructions."
-
         return {
-            'html_template': section_data['html_content'],
-            'content': section_data['content'],
-            'assistant_message': assistant_message,
+            'options': [{'html': section_html}],
+            'assistant_message': f"Here is the refined {section_name} section.",
         }
 
     def generate_section(
@@ -1359,7 +1673,11 @@ Return the complete, corrected JSON now:"""
         instructions: str,
         conversation_history: list = None,
         multi_option: bool = False,
-        model_override: str = None
+        model_override: str = None,
+        skip_component_selection: bool = False,
+        skip_briefing: bool = False,
+        skip_pages_list: bool = False,
+        skip_design_guide: bool = False,
     ) -> Dict:
         """
         Refine a single element within a section without saving to DB.
@@ -1381,9 +1699,9 @@ Return the complete, corrected JSON now:"""
         default_language = site_settings.get_default_language() if site_settings else 'pt'
         site_name = site_settings.get_site_name(default_language) if site_settings else 'Website'
         site_description = site_settings.get_site_description(default_language) if site_settings else ''
-        project_briefing = site_settings.get_project_briefing() if site_settings else ''
+        project_briefing = '' if skip_briefing else (site_settings.get_project_briefing() if site_settings else '')
         languages = site_settings.get_language_codes() if site_settings else ['pt', 'en']
-        design_guide = site_settings.design_guide if site_settings else ''
+        design_guide = '' if skip_design_guide else (site_settings.design_guide if site_settings else '')
         model = model_override or self.model_name
 
         # De-templatize full page HTML, then extract parent section
@@ -1429,12 +1747,14 @@ Return the complete, corrected JSON now:"""
         print(f"\n--- Step 1: Refine element in {default_language.upper()} ---")
 
         # Pass 1: Select relevant component skills
-        selected_components = ComponentRegistry.select_components(
-            user_request=instructions,
-            existing_html=clean_html,
-            llm=self.llm,
-        )
-        component_references = ComponentRegistry.get_references(selected_components)
+        component_references = ''
+        if not skip_component_selection:
+            selected_components = ComponentRegistry.select_components(
+                user_request=instructions,
+                existing_html=clean_html,
+                llm=self.llm,
+            )
+            component_references = ComponentRegistry.get_references(selected_components)
 
         system_prompt, user_prompt = PromptTemplates.get_element_refinement_prompt(
             site_name=site_name,
@@ -1449,6 +1769,7 @@ Return the complete, corrected JSON now:"""
             conversation_history=history_text,
             multi_option=multi_option,
             component_references=component_references,
+            include_component_index=not skip_component_selection,
         )
 
         messages = [
@@ -1505,7 +1826,8 @@ Return the complete, corrected JSON now:"""
                 'assistant_message': assistant_message,
             }
 
-        # Verify the response contains the target element
+        # Single option — validate and return as 1-element options list
+        # (templatize happens in apply-option, keeping the flow consistent)
         result_soup = BeautifulSoup(refined_html, 'html.parser')
         target_el = result_soup.find(attrs={'data-target': 'true'})
 
@@ -1518,26 +1840,9 @@ Return the complete, corrected JSON now:"""
 
         print(f"Refined element: {len(element_result_html)} chars")
 
-        # Step 2: Templatize + translate just the element
-        # Skip templatization for elements with no visible text (e.g. <img> tags)
-        check_soup = BeautifulSoup(element_result_html, 'html.parser')
-        has_text = bool(check_soup.get_text(strip=True))
-
-        if has_text:
-            element_data = self._templatize_and_translate(element_result_html, languages, default_language, model)
-        else:
-            print("No visible text in element — skipping templatization")
-            element_data = {
-                'html_content': element_result_html,
-                'content': {'translations': {lang: {} for lang in languages}},
-            }
-
-        assistant_message = "I've updated the element based on your instructions."
-
         return {
-            'html_template': element_data['html_content'],
-            'content': element_data['content'],
-            'assistant_message': assistant_message,
+            'options': [{'html': element_result_html}],
+            'assistant_message': "Here is the refined element.",
         }
 
     def process_page_images(

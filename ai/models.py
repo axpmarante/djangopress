@@ -21,6 +21,8 @@ ACTION_CHOICES = [
     ('suggest_sections', 'Suggest Sections'),
     ('fill_section', 'Fill Section'),
     ('select_components', 'Select Components'),
+    ('refine_element', 'Refine Element'),
+    ('templatize_v2', 'Templatize V2'),
 ]
 
 
@@ -48,6 +50,8 @@ class AICallLog(models.Model):
     duration_ms = models.IntegerField(default=0)
     success = models.BooleanField(default=True)
     error_message = models.TextField(blank=True, default='')
+    routing_tier = models.CharField(max_length=20, blank=True, default='')
+    routing_ms = models.IntegerField(default=0)
 
     class Meta:
         ordering = ['-created_at']
@@ -60,7 +64,8 @@ class AICallLog(models.Model):
 def log_ai_call(action, model_name, provider, system_prompt='', user_prompt='',
                 response_text='', prompt_tokens=0, completion_tokens=0,
                 total_tokens=0, duration_ms=0, success=True, error_message='',
-                page=None, section_name='', user=None):
+                page=None, section_name='', user=None,
+                routing_tier='', routing_ms=0):
     """Log an AI API call to the database."""
     try:
         AICallLog.objects.create(
@@ -79,6 +84,8 @@ def log_ai_call(action, model_name, provider, system_prompt='', user_prompt='',
             page=page,
             section_name=section_name or '',
             user=user,
+            routing_tier=routing_tier,
+            routing_ms=routing_ms,
         )
     except Exception:
         traceback.print_exc()

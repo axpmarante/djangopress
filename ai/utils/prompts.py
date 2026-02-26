@@ -821,6 +821,7 @@ Do NOT undo any of these previous changes unless specifically asked to.
         languages: list = None,
         multi_option: bool = False,
         component_references: str = '',
+        include_component_index: bool = True,
     ) -> tuple:
         """
         Generate prompt for section-only refinement.
@@ -830,8 +831,11 @@ Do NOT undo any of these previous changes unless specifically asked to.
         Returns:
             Tuple of (system_prompt, user_prompt)
         """
-        from ai.utils.components import ComponentRegistry
-        component_index = ComponentRegistry.get_index()
+        if include_component_index:
+            from ai.utils.components import ComponentRegistry
+            component_index = ComponentRegistry.get_index()
+        else:
+            component_index = ''
 
         lang_name = {'pt': 'Portuguese', 'en': 'English', 'es': 'Spanish', 'fr': 'French', 'de': 'German', 'it': 'Italian'}.get(default_language, default_language.upper())
 
@@ -1092,6 +1096,7 @@ Return ONLY 3 variations of the new section, separated by <!-- OPTION_1 -->, <!-
         conversation_history: str = '',
         multi_option: bool = False,
         component_references: str = '',
+        include_component_index: bool = True,
     ) -> tuple:
         """
         Generate prompt for element-level refinement.
@@ -1101,8 +1106,11 @@ Return ONLY 3 variations of the new section, separated by <!-- OPTION_1 -->, <!-
         Returns:
             Tuple of (system_prompt, user_prompt)
         """
-        from ai.utils.components import ComponentRegistry
-        component_index = ComponentRegistry.get_index()
+        if include_component_index:
+            from ai.utils.components import ComponentRegistry
+            component_index = ComponentRegistry.get_index()
+        else:
+            component_index = ''
 
         lang_name = {'pt': 'Portuguese', 'en': 'English', 'es': 'Spanish', 'fr': 'French', 'de': 'German', 'it': 'Italian'}.get(default_language, default_language.upper())
 
@@ -1437,5 +1445,64 @@ Return a JSON **array** of objects. Each object maps one text string:
 - `translations` must include ALL languages: {langs_display}
 - The {default_language.upper()} translation must match `original` exactly
 - Do NOT include alt attributes, title attributes, or meta content — only visible body text"""
+
+        return (system_prompt, user_prompt)
+
+    @staticmethod
+    def get_translate_only_prompt(
+        text_dict: dict,
+        languages: list,
+        default_language: str
+    ) -> tuple:
+        """
+        Generate prompt for v2 templatization: translate pre-extracted text strings.
+        Python has already extracted the text and assigned variable names —
+        the LLM only needs to translate.
+
+        Args:
+            text_dict: Dict of {var_name: "original text in default language"}
+            languages: List of language codes
+            default_language: Language code the original text is in
+
+        Returns:
+            Tuple of (system_prompt, user_prompt)
+        """
+        langs_display = ' and '.join([lang.upper() for lang in languages])
+        other_languages = [l for l in languages if l != default_language]
+        other_langs_display = ' and '.join([l.upper() for l in other_languages])
+        lang_name = {
+            'pt': 'Portuguese', 'en': 'English', 'es': 'Spanish',
+            'fr': 'French', 'de': 'German', 'it': 'Italian',
+        }.get(default_language, default_language.upper())
+
+        text_json = json.dumps(text_dict, indent=2, ensure_ascii=False)
+
+        system_prompt = f"""You are a professional translator. Translate the provided text strings from {lang_name} to {other_langs_display}.
+
+## Rules
+- Translate naturally and fluently — not word-for-word
+- Preserve the tone and style of the original
+- Keep proper nouns, brand names, and technical terms unchanged
+- The {default_language.upper()} value is always the original text — copy it exactly
+- Return ONLY the JSON object, no markdown, no explanations"""
+
+        user_prompt = f"""Translate these text strings to ALL languages: {langs_display}
+
+The original text is in {lang_name} ({default_language.upper()}).
+
+```json
+{text_json}
+```
+
+Return a JSON object where each key is a language code, and each value is an object mapping variable names to translations:
+
+```json
+{{
+  "{default_language}": {{"var_name": "original text", ...}},
+  "{other_languages[0] if other_languages else 'en'}": {{"var_name": "translated text", ...}}
+}}
+```
+
+Every variable must appear in every language. The {default_language.upper()} values must match the originals exactly."""
 
         return (system_prompt, user_prompt)

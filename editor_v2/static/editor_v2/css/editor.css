@@ -1539,6 +1539,13 @@ body[data-edit-mode="v2"] #admin-toolbar {
 }
 .ev2-style-action:hover { text-decoration: underline; }
 .ev2-style-action:disabled { opacity: 0.5; cursor: default; text-decoration: none; }
+.ev2-multi-toggle {
+  display: inline-flex; align-items: center; gap: 3px;
+  margin-left: auto; cursor: pointer; text-decoration: none !important;
+  color: var(--ev2-text-faint);
+}
+.ev2-multi-toggle input { margin: 0; accent-color: var(--ev2-accent); }
+.ev2-multi-toggle:has(input:checked) { color: var(--ev2-accent); }
 
 /* ── Session bar ── */
 .ev2-session-bar {

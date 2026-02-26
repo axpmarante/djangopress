@@ -1080,6 +1080,7 @@ def refine_multi(request):
         session_id = data.get('session_id')
         mode = data.get('mode', 'refine')
         insert_after = data.get('insert_after')
+        multi_option = data.get('multi_option', True)
 
         if not page_id or not instructions:
             return JsonResponse({'success': False, 'error': 'Missing page_id or instructions'}, status=400)
@@ -1117,32 +1118,58 @@ def refine_multi(request):
 
         session.add_user_message(instructions)
 
-        from ai.services import ContentGenerationService
-        service = ContentGenerationService(model_name='gemini-pro')
+        # Route through refinement agent if enabled
+        from django.conf import settings as django_settings
+        use_agent = getattr(django_settings, 'USE_REFINEMENT_AGENT', True)
 
-        if mode == 'create':
-            result = service.generate_section(
-                page_id=page_id,
-                insert_after=insert_after,
-                instructions=instructions,
-                conversation_history=conversation_history,
-            )
-        elif scope == 'element':
-            result = service.refine_element_only(
-                page_id=page_id,
-                selector=selector,
-                instructions=instructions,
-                conversation_history=conversation_history,
-                multi_option=True,
-            )
-        else:
-            result = service.refine_section_only(
-                page_id=page_id,
-                section_name=section_name,
-                instructions=instructions,
-                conversation_history=conversation_history,
-                multi_option=True,
-            )
+        if use_agent and mode != 'create':
+            try:
+                from ai.refinement_agent.agent import RefinementAgent
+                agent = RefinementAgent()
+                result = agent.handle(
+                    instruction=instructions,
+                    scope=scope,
+                    target_name=section_name if scope == 'section' else selector,
+                    page=page,
+                    conversation_history=conversation_history,
+                    multi_option=multi_option,
+                    mode=mode,
+                    insert_after=insert_after,
+                )
+            except Exception as e:
+                # Agent failed — fall back to direct pipeline
+                print(f"Agent error, falling back to direct pipeline: {e}")
+                import traceback
+                traceback.print_exc()
+                use_agent = False
+
+        if not use_agent or mode == 'create':
+            from ai.services import ContentGenerationService
+            service = ContentGenerationService(model_name='gemini-pro')
+
+            if mode == 'create':
+                result = service.generate_section(
+                    page_id=page_id,
+                    insert_after=insert_after,
+                    instructions=instructions,
+                    conversation_history=conversation_history,
+                )
+            elif scope == 'element':
+                result = service.refine_element_only(
+                    page_id=page_id,
+                    selector=selector,
+                    instructions=instructions,
+                    conversation_history=conversation_history,
+                    multi_option=multi_option,
+                )
+            else:
+                result = service.refine_section_only(
+                    page_id=page_id,
+                    section_name=section_name,
+                    instructions=instructions,
+                    conversation_history=conversation_history,
+                    multi_option=multi_option,
+                )
 
         assistant_msg = result.get('assistant_message', 'Here are 3 variations.')
         if mode == 'create':
@@ -1196,7 +1223,7 @@ def apply_option(request):
         languages = site_settings.get_language_codes() if site_settings else ['pt', 'en']
 
         service = ContentGenerationService(model_name='gemini-flash')
-        templatized = service._templatize_and_translate(html, languages, default_language, 'gemini-flash')
+        templatized = service._run_templatize(html, languages, default_language, 'gemini-flash')
 
         html_template = templatized['html_content']
         content = templatized['content']
