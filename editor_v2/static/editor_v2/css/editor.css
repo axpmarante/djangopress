@@ -2268,6 +2268,38 @@ body.ev2-version-preview .editor-v2-content {
   to { transform: rotate(360deg); }
 }
 
+/* AI processing overlay — blocks content interaction during refinement */
+.ev2-ai-overlay {
+  position: fixed;
+  top: var(--ev2-topbar-height);
+  left: var(--ev2-sidebar-width);
+  right: 0;
+  bottom: 0;
+  background: rgba(255, 255, 255, 0.7);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.ev2-ai-overlay-spinner {
+  display: inline-block;
+  width: 32px;
+  height: 32px;
+  border: 3px solid var(--ev2-border);
+  border-top-color: var(--ev2-primary);
+  border-radius: 50%;
+  animation: ev2-spin 0.6s linear infinite;
+}
+
+.ev2-ai-overlay-label {
+  font-size: 14px;
+  color: var(--ev2-text-faint);
+  font-weight: 500;
+}
+
 .ev2-pimg-sub-panel {
   margin-top: 4px;
 }

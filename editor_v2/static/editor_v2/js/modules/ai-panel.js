@@ -25,6 +25,9 @@ let sessionLoaded = false;
 let freshChat = false;            // true when context menu triggers a new chat
 let options = [];               // multi-option: array of {html} objects
 let activeOption = 0;           // which option tab is active (0, 1, 2)
+let lockedSection = null;       // snapshot of currentSection at send() time
+let lockedSelector = null;      // snapshot of currentSelector at send() time
+let lockedScope = null;         // snapshot of activeScope at send() time
 
 function detemplatize(html, translations, lang) {
     const trans = translations?.[lang] || {};
@@ -281,6 +284,11 @@ async function send() {
     pendingResult = null;
     pendingScope = null;
 
+    // Lock target identity so selection changes during processing don't matter
+    lockedSection = currentSection;
+    lockedSelector = currentSelector;
+    lockedScope = activeScope;
+
     let scopeLabel = 'page';
     if (activeScope === 'section') scopeLabel = currentSection;
     if (activeScope === 'element') scopeLabel = 'element';
@@ -329,12 +337,12 @@ async function send() {
                 // Multi-option response
                 options = res.options;
                 activeOption = 0;
-                pendingScope = activeScope;
+                pendingScope = lockedScope;
                 if (options.length > 0) showMultiPreview(0);
             } else {
                 // Single-option response (page scope)
                 pendingResult = res.page || res.section || res.element;
-                pendingScope = activeScope;
+                pendingScope = lockedScope;
                 options = [];
                 if (pendingResult) showPreview();
             }
@@ -374,6 +382,20 @@ function setLoading(loading) {
     const btn = $('#ev2-ai-send');
     if (input) input.disabled = loading;
     if (btn) btn.disabled = loading;
+
+    // Content overlay — blocks page interaction during AI processing
+    const overlayId = 'ev2-ai-processing-overlay';
+    if (loading && lockedScope !== 'page') {
+        if (!document.getElementById(overlayId)) {
+            const overlay = document.createElement('div');
+            overlay.id = overlayId;
+            overlay.className = 'ev2-ai-overlay';
+            overlay.innerHTML = '<div class="ev2-ai-overlay-spinner"></div><div class="ev2-ai-overlay-label">Refining...</div>';
+            document.body.appendChild(overlay);
+        }
+    } else {
+        document.getElementById(overlayId)?.remove();
+    }
 }
 
 // ── Apply / Discard ──
@@ -392,8 +414,8 @@ async function applyResult() {
             await api.post('/apply-option/', {
                 page_id: config().pageId,
                 scope: pendingScope,
-                section_name: currentSection,
-                selector: currentSelector,
+                section_name: lockedSection,
+                selector: lockedSelector,
                 html: chosen.html,
             });
         } else if (pendingResult && pendingScope) {
@@ -432,6 +454,9 @@ function discardResult() {
     pendingScope = null;
     options = [];
     activeOption = 0;
+    lockedSection = null;
+    lockedSelector = null;
+    lockedScope = null;
     render();
 }
 
@@ -448,13 +473,13 @@ function showPreview() {
         if (!wrapper) return;
         if (!originalHtml) originalHtml = wrapper.innerHTML;
         wrapper.innerHTML = previewHtml;
-    } else if (pendingScope === 'element' && currentSelector) {
-        const el = document.querySelector(currentSelector);
+    } else if (pendingScope === 'element' && lockedSelector) {
+        const el = document.querySelector(lockedSelector);
         if (!el) return;
         if (!originalHtml) originalHtml = el.outerHTML;
         el.outerHTML = previewHtml;
-    } else if (pendingScope === 'section' && currentSection) {
-        const sec = document.querySelector(`[data-section="${currentSection}"]`);
+    } else if (pendingScope === 'section' && lockedSection) {
+        const sec = document.querySelector(`[data-section="${lockedSection}"]`);
         if (!sec) return;
         if (!originalHtml) originalHtml = sec.outerHTML;
         sec.outerHTML = previewHtml;
@@ -468,21 +493,21 @@ function showMultiPreview(index) {
     // Restore before switching
     if (originalHtml) restorePreview();
 
-    if (pendingScope === 'element' && currentSelector) {
-        const el = document.querySelector(currentSelector);
+    if (pendingScope === 'element' && lockedSelector) {
+        const el = document.querySelector(lockedSelector);
         if (!el) return;
         if (!originalHtml) originalHtml = el.outerHTML;
         el.outerHTML = html;
         // Re-init dynamic components in the replaced element's parent
-        const parent = document.querySelector(currentSelector)?.parentElement;
+        const parent = document.querySelector(lockedSelector)?.parentElement;
         if (parent) initDynamicComponents(parent);
-    } else if (pendingScope === 'section' && currentSection) {
-        const sec = document.querySelector(`[data-section="${currentSection}"]`);
+    } else if (pendingScope === 'section' && lockedSection) {
+        const sec = document.querySelector(`[data-section="${lockedSection}"]`);
         if (!sec) return;
         if (!originalHtml) originalHtml = sec.outerHTML;
         sec.outerHTML = html;
         // Re-init dynamic components in the new section
-        const newSec = document.querySelector(`[data-section="${currentSection}"]`);
+        const newSec = document.querySelector(`[data-section="${lockedSection}"]`);
         if (newSec) initDynamicComponents(newSec);
     }
 }
@@ -492,11 +517,11 @@ function restorePreview() {
     if (pendingScope === 'page') {
         const wrapper = document.querySelector('.editor-v2-content');
         if (wrapper) wrapper.innerHTML = originalHtml;
-    } else if (pendingScope === 'element' && currentSelector) {
-        const el = document.querySelector(currentSelector);
+    } else if (pendingScope === 'element' && lockedSelector) {
+        const el = document.querySelector(lockedSelector);
         if (el) el.outerHTML = originalHtml;
-    } else if (pendingScope === 'section' && currentSection) {
-        const sec = document.querySelector(`[data-section="${currentSection}"]`);
+    } else if (pendingScope === 'section' && lockedSection) {
+        const sec = document.querySelector(`[data-section="${lockedSection}"]`);
         if (sec) sec.outerHTML = originalHtml;
     }
     originalHtml = null;
