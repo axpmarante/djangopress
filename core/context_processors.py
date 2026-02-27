@@ -1,3 +1,4 @@
+from django.conf import settings as django_settings
 from django.utils.translation import get_language
 
 from ai.utils import unsplash
@@ -64,6 +65,7 @@ def site_settings(request):
     )
 
     return {
+        'DJANGOPRESS_VERSION': django_settings.DJANGOPRESS_VERSION,
         'FAVICON': settings.favicon if settings.favicon else None,
         'MENU_ITEMS': menu_items,
 

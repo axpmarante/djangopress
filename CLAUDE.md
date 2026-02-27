@@ -486,6 +486,10 @@ python manage.py push_data https://my-site.railway.app             # Push local 
 python manage.py push_data https://my-site.railway.app --dry-run   # Preview without sending
 python manage.py pull_data https://my-site.railway.app             # Pull remote DB to local
 python manage.py pull_data https://my-site.railway.app --dry-run   # Preview without loading
+python manage.py bump_version                              # Show current version
+python manage.py bump_version patch                        # 1.0.0 → 1.0.1 (bug fix)
+python manage.py bump_version minor                        # 1.0.1 → 1.1.0 (new feature)
+python manage.py bump_version major                        # 1.1.0 → 2.0.0 (breaking change)
 railway up -d                                          # Redeploy code to Railway
 railway logs -f                                        # Stream Railway deployment logs
 railway run python manage.py shell                     # Django shell on Railway Postgres
