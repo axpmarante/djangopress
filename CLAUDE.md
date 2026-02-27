@@ -484,6 +484,8 @@ python manage.py generate_site briefings/my-site.md --skip-images  # Skip image 
 ./scripts/new_site.sh my-project briefings/my-site.md  # Create + copy briefing
 python manage.py push_data https://my-site.railway.app             # Push local DB to production
 python manage.py push_data https://my-site.railway.app --dry-run   # Preview without sending
+python manage.py pull_data https://my-site.railway.app             # Pull remote DB to local
+python manage.py pull_data https://my-site.railway.app --dry-run   # Preview without loading
 railway up -d                                          # Redeploy code to Railway
 railway logs -f                                        # Stream Railway deployment logs
 railway run python manage.py shell                     # Django shell on Railway Postgres

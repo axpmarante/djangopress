@@ -82,4 +82,8 @@ urlpatterns = [
 
     # Version Management
     path('version/page/<int:version_id>/restore/', views.restore_page_version, name='restore_page_version'),
+
+    # Data Sync API (no staff_member_required — uses SYNC_SECRET Bearer auth)
+    path('api/data-sync/', api_views.data_sync_receive, name='api_data_sync'),
+    path('api/data-sync-export/', api_views.data_sync_export, name='api_data_sync_export'),
 ]

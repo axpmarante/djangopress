@@ -1,15 +1,24 @@
 ---
 name: sync-data
-description: Use when pushing local database content to a deployed Railway site. Handles SYNC_SECRET setup, code deployment, and data push via the push_data management command.
-argument-hint: [project-url-or-name]
+description: Sync database content between local and a deployed Railway site. Push local → remote via push_data, or pull remote → local via pull_data. Handles SYNC_SECRET setup, code deployment, and data transfer.
+argument-hint: [push|pull] [project-url-or-name]
 allowed-tools: Bash, Read, Edit, Grep, Glob, AskUserQuestion
 ---
 
-# Sync Local Data to Railway
+# Sync Data with Railway
 
-Push local database content (pages, settings, media records, forms, header/footer) to a deployed Railway site using the `push_data` management command.
+Sync database content (pages, settings, media records, forms, header/footer, menu items) between local and a deployed Railway site.
+
+**Two directions:**
+- **Push** (`push_data`): local → remote — overwrite production with local content
+- **Pull** (`pull_data`): remote → local — overwrite local with production content
 
 The argument provided is: `$ARGUMENTS`
+
+Parse `$ARGUMENTS` to determine direction and target:
+- If it contains "pull", use pull direction
+- If it contains "push" or no direction keyword, use push direction
+- Extract the URL if provided (anything starting with `https://`)
 
 ---
 
@@ -36,13 +45,14 @@ railway variables --json 2>&1 | python -c "import sys,json; v=json.load(sys.stdi
 
 Store as `TARGET_URL` for later use.
 
-### Verify push_data command exists
+### Verify commands exist
 
 ```bash
 python manage.py push_data --help 2>&1 | head -5
+python manage.py pull_data --help 2>&1 | head -5
 ```
 
-If the command doesn't exist, the project needs the data sync API. Tell the user:
+If the commands don't exist, the project needs the data sync API. Tell the user:
 
 ```
 This project doesn't have the data sync API yet.
@@ -50,14 +60,6 @@ You need to pull the latest changes from the djangopress template:
 
     git fetch upstream && git merge upstream/main
 ```
-
-### Check local content
-
-```bash
-python manage.py push_data https://example.com --dry-run 2>&1
-```
-
-This shows what would be synced without sending anything. If 0 objects, warn that there's nothing to push.
 
 ---
 
@@ -97,15 +99,18 @@ railway variables --set "SYNC_SECRET=<same-value-as-local>"
 
 ---
 
-## Phase 3: Ensure Endpoint is Deployed
+## Phase 3: Ensure Endpoints are Deployed
 
-Check if the remote endpoint exists:
+Check if the remote endpoints exist:
 
 ```bash
+# Check push endpoint (POST-only, so GET returns 405)
 curl -s -o /dev/null -w "%{http_code}" https://<TARGET_URL>/backoffice/api/data-sync/
+# Check pull endpoint (GET-only, so should return 401 without auth)
+curl -s -o /dev/null -w "%{http_code}" https://<TARGET_URL>/backoffice/api/data-sync-export/
 ```
 
-- **405** (Method Not Allowed) = endpoint exists and is live. Continue to Phase 4.
+- **405** or **401** = endpoint exists and is live. Continue to Phase 4.
 - **404** = endpoint not deployed yet. Deploy first:
 
 ```bash
@@ -127,11 +132,15 @@ railway logs --lines 30
 
 ---
 
-## Phase 4: Push Data
+## Phase 4a: Push Data (local → remote)
+
+### Dry run first
+
+```bash
+python manage.py push_data https://<TARGET_URL> --dry-run
+```
 
 ### Confirm with user
-
-Before pushing, show the dry-run summary and ask for confirmation:
 
 ```
 AskUserQuestion:
@@ -158,13 +167,41 @@ A `302` or `200` means the site is serving content.
 
 ---
 
+## Phase 4b: Pull Data (remote → local)
+
+### Dry run first
+
+```bash
+python manage.py pull_data https://<TARGET_URL> --dry-run
+```
+
+### Confirm with user
+
+```
+AskUserQuestion:
+Question: "Ready to pull data from <TARGET_URL>? This will REPLACE local pages, settings, forms, media records, header/footer, and menu items with production content. Local users and AI data are preserved."
+Options:
+- "Pull now" — Replace local content with remote data
+- "Dry run only" — Just show what would be fetched
+- "Cancel" — Don't pull anything
+```
+
+### Execute pull
+
+```bash
+echo "yes" | python manage.py pull_data https://<TARGET_URL>
+```
+
+---
+
 ## Phase 5: Summary
 
 ```
 Data sync complete!
 
+Direction: <push|pull>
 Target: https://<TARGET_URL>/
-Objects pushed: <count from output>
+Objects synced: <count from output>
 Payload size: <size from output>
 
 What was synced:
@@ -175,7 +212,7 @@ What was synced:
   - SiteImages (media library records — files live in GCS)
   - DynamicForms + submissions
 
-What was NOT synced (preserved on remote):
+What was NOT synced (preserved on target):
   - Users / superuser credentials
   - AI refinement sessions
   - News posts
@@ -190,9 +227,9 @@ Backoffice: https://<TARGET_URL>/backoffice/
 
 ## Error Handling
 
-- **HTTP 401/403 on push:** SYNC_SECRET mismatch between local and Railway. Verify both match.
-- **HTTP 500 "SYNC_SECRET is not configured":** The secret is not set on Railway. Run `railway variables --set "SYNC_SECRET=<value>"` and redeploy.
-- **HTTP 404:** The data sync endpoint isn't deployed. Run `railway up -d` and wait for deployment.
+- **HTTP 401/403:** SYNC_SECRET mismatch between local and Railway. Verify both match.
+- **HTTP 500 "SYNC_SECRET is not configured":** The secret is not set on the target. Run `railway variables --set "SYNC_SECRET=<value>"` and redeploy.
+- **HTTP 404:** The data sync endpoints aren't deployed. Run `railway up -d` and wait for deployment.
 - **Connection refused / timeout:** Railway site might be sleeping or deploying. Wait and retry.
 - **"dumpdata failed":** Check that all models exist (run `python manage.py migrate` first).
 - **Large payload (>50MB):** The site has many images in the media library. The 50MB limit is set in `DATA_UPLOAD_MAX_MEMORY_SIZE` in settings.py — increase if needed on both local and remote.
