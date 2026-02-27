@@ -1834,6 +1834,17 @@ Return the complete, corrected JSON now:"""
                 else:
                     failed.append({'image_name': image_name, 'error': 'Image tag not found in HTML'})
 
+                # Also replace matching URLs in background-image inline styles
+                if new_url and image_src:
+                    bg_pattern = re.compile(
+                        r'(background-image\s*:\s*[^;]*?)url\(\s*["\']?' + re.escape(image_src) + r'["\']?\s*\)',
+                        re.DOTALL
+                    )
+                    html = bg_pattern.sub(
+                        lambda m: m.group(1) + f'url("{new_url}")',
+                        html
+                    )
+
             except SiteImage.DoesNotExist:
                 failed.append({'image_name': image_name, 'error': 'Library image not found'})
             except Exception as e:

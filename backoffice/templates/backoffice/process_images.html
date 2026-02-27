@@ -250,6 +250,35 @@ async function scanImages() {
             });
         }
 
+        // Also detect background-image URLs in inline styles
+        const bgRegex = /background-image\s*:\s*[^;]*?url\(\s*["']?([^"')]+)["']?\s*\)/gi;
+        while ((match = bgRegex.exec(html)) !== null) {
+            const bgUrl = match[1];
+            // Skip if already detected as an <img> src (avoid duplicates)
+            if (detectedImages.some(img => img.src === bgUrl)) continue;
+            // Extract data-image-prompt/name from the parent element if present
+            const surroundingStart = Math.max(0, match.index - 500);
+            const surrounding = html.substring(surroundingStart, match.index + match[0].length + 200);
+            const bgPromptMatch = surrounding.match(/data-image-prompt="([^"]*)"/);
+            const bgNameMatch = surrounding.match(/data-image-name="([^"]*)"/);
+            detectedImages.push({
+                index: idx++,
+                prompt: bgPromptMatch ? bgPromptMatch[1] : '',
+                name: bgNameMatch ? bgNameMatch[1] : '',
+                src: bgUrl,
+                alt: 'Background image',
+                selected: true,
+                action: 'generate',
+                aspect_ratio: '16:9',
+                library_image_id: null,
+                library_suggestions: [],
+                unsplash_photo_id: null,
+                unsplash_url: null,
+                photographer: null,
+                is_background: true,
+            });
+        }
+
         if (detectedImages.length === 0) {
             showEmpty();
             return;
@@ -297,6 +326,7 @@ function renderCards() {
                         <div class="flex items-center gap-2 mb-1">
                             <span class="font-semibold text-gray-900">${escapeHtml(label)}</span>
                             <span class="text-xs text-gray-400">#${i + 1}</span>
+                            ${img.is_background ? '<span class="text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded font-medium">BG</span>' : ''}
                         </div>
                         ${img.src ? `<p class="text-xs text-gray-400 truncate" title="${escapeHtml(img.src)}">${escapeHtml(truncatedSrc)}</p>` : ''}
                         ${img.alt ? `<p class="text-xs text-gray-500">alt: ${escapeHtml(img.alt)}</p>` : ''}
@@ -575,7 +605,8 @@ async function processSelected() {
     }
 
     // Delegate to Alpine modal component
-    const modal = document.getElementById('processModal').__x.$data;
+    const modalEl = document.getElementById('processModal');
+    const modal = Alpine.$data(modalEl);
     modal.startProcessing(selected);
 }
 

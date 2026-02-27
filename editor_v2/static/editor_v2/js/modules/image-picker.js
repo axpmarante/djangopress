@@ -293,7 +293,7 @@ function applyImage(url, alt) {
         const oldStyle = currentEl.getAttribute('style') || '';
         const oldBg = currentEl.style.backgroundImage || '';
         // Check for existing overlay gradient
-        const gradMatch = oldBg.match(/linear-gradient\(\s*rgba\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*([\d.]+)\s*\)[^)]*\)/);
+        const gradMatch = oldBg.match(/linear-gradient\(\s*rgba\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*([\d.]+)\s*\)[^)]*\)\)/);
         if (gradMatch) {
             // Preserve the overlay gradient with the new image URL
             currentEl.style.backgroundImage = `${gradMatch[0]}, url('${url}')`;
