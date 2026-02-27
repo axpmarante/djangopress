@@ -302,16 +302,16 @@ class SiteSettings(models.Model):
     ])
 
     # Button Settings - Primary Button Colors
-    primary_button_bg = models.CharField("Primary Button Background", max_length=7, default="#1e3a8a", help_text="Background color for primary buttons")
-    primary_button_text = models.CharField("Primary Button Text", max_length=7, default="#ffffff", help_text="Text color for primary buttons")
-    primary_button_border = models.CharField("Primary Button Border", max_length=7, default="#1e3a8a", help_text="Border color for primary buttons")
-    primary_button_hover = models.CharField("Primary Button Hover", max_length=7, default="#1e40af", help_text="Hover background color for primary buttons")
+    primary_button_bg = models.CharField("Primary Button Background", max_length=20, default="#1e3a8a", help_text="Background color for primary buttons")
+    primary_button_text = models.CharField("Primary Button Text", max_length=20, default="#ffffff", help_text="Text color for primary buttons")
+    primary_button_border = models.CharField("Primary Button Border", max_length=20, default="#1e3a8a", help_text="Border color for primary buttons")
+    primary_button_hover = models.CharField("Primary Button Hover", max_length=20, default="#1e40af", help_text="Hover background color for primary buttons")
 
     # Button Settings - Secondary Button Colors
-    secondary_button_bg = models.CharField("Secondary Button Background", max_length=7, default="#64748b", help_text="Background color for secondary buttons")
-    secondary_button_text = models.CharField("Secondary Button Text", max_length=7, default="#ffffff", help_text="Text color for secondary buttons")
-    secondary_button_border = models.CharField("Secondary Button Border", max_length=7, default="#64748b", help_text="Border color for secondary buttons")
-    secondary_button_hover = models.CharField("Secondary Button Hover", max_length=7, default="#475569", help_text="Hover background color for secondary buttons")
+    secondary_button_bg = models.CharField("Secondary Button Background", max_length=20, default="#64748b", help_text="Background color for secondary buttons")
+    secondary_button_text = models.CharField("Secondary Button Text", max_length=20, default="#ffffff", help_text="Text color for secondary buttons")
+    secondary_button_border = models.CharField("Secondary Button Border", max_length=20, default="#64748b", help_text="Border color for secondary buttons")
+    secondary_button_hover = models.CharField("Secondary Button Hover", max_length=20, default="#475569", help_text="Hover background color for secondary buttons")
 
     # Button Settings - Border Width
     button_border_width = models.CharField("Button Border Width", max_length=10, default="0", choices=[
