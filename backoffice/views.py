@@ -2,8 +2,11 @@ import json
 
 from django.views.generic import TemplateView, ListView, CreateView
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.contrib.auth import authenticate, login
 from django.contrib.auth.decorators import login_required
 from core.decorators import SuperuserRequiredMixin
+from django.http import HttpResponseForbidden
+from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 from django.contrib import messages
 from django.shortcuts import redirect
@@ -1615,3 +1618,19 @@ class SubmissionDetailView(LoginRequiredMixin, TemplateView):
             context['submission'] = None
             context['fields'] = []
         return context
+
+
+@csrf_exempt
+def auto_login(request):
+    """Auto-login endpoint for the DjangoPress Manager dashboard."""
+    if request.method != 'POST':
+        return redirect('backoffice:login')
+    if request.META.get('REMOTE_ADDR') not in ('127.0.0.1', '::1'):
+        return HttpResponseForbidden('Local access only')
+    username = request.POST.get('username', '')
+    password = request.POST.get('password', '')
+    user = authenticate(request, username=username, password=password)
+    if user:
+        login(request, user)
+        return redirect('backoffice:dashboard')
+    return redirect('backoffice:login')

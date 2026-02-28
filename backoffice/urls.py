@@ -9,6 +9,7 @@ urlpatterns = [
     # Authentication
     path('login/', auth_views.LoginView.as_view(template_name='backoffice/login.html'), name='login'),
     path('logout/', auth_views.LogoutView.as_view(), name='logout'),
+    path('auto-login/', views.auto_login, name='auto_login'),
 
     # Dashboard
     path('', views.DashboardView.as_view(), name='dashboard'),
