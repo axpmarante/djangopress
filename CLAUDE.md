@@ -451,7 +451,7 @@ The API key is never exposed to the frontend — searches are proxied via `/ai/a
 - **Cache in dev:** `LocMemCache` is per-process. Restart server to see GlobalSection changes, or set `DummyCache`.
 - **Home page slug must be `home` in all languages** — PageView defaults to this slug for root URL.
 - **GCS storage:** When `GS_BUCKET_NAME` is set in `.env`, media files are stored in Google Cloud Storage under a domain-based folder (from `SiteSettings.domain`).
-- **Server log:** When the dev server is started by DjangoPress Manager, its stdout/stderr is written to `.server.log` in the project root. Read this file to see Django startup output, HTTP request logs, errors, and print statements.
+- **Server log:** When the dev server is started by DjangoPress Manager, its stdout/stderr is written to `.server.log` in the project root. Read this file to see Django startup output, HTTP request logs, errors, and print statements. Previous sessions are kept as `.server.log.1` and `.server.log.2` (3 sessions total).
 
 ## Syncing Template Updates to Child Projects
 
