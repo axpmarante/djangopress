@@ -581,7 +581,8 @@ Return the complete, corrected JSON now:"""
         language: str = 'pt',
         model_override: str = None,
         reference_images: list = None,
-        outline: list = None
+        outline: list = None,
+        on_progress=None
     ) -> Dict:
         """
         Generate a complete page as a single HTML document with translations
@@ -597,6 +598,10 @@ Return the complete, corrected JSON now:"""
         Raises:
             ValueError: If generation fails or returns invalid data
         """
+        def notify(step, status, **extra):
+            if on_progress:
+                on_progress({"step": step, "status": status, **extra})
+
         print(f"\n=== Generating Page (Two-Step) ===")
         print(f"Brief: {brief}")
         print(f"Language: {language}")
@@ -622,12 +627,14 @@ Return the complete, corrected JSON now:"""
             pages_data.append({'title': p.title_i18n or {}, 'slug': p.slug_i18n or {}})
 
         # Pass 1: Select relevant component skills
+        notify("component_selection", "running")
         selected_components = ComponentRegistry.select_components(
             user_request=brief,
             existing_html="",
             llm=self.llm,
         )
         component_references = ComponentRegistry.get_references(selected_components)
+        notify("component_selection", "done")
 
         system_prompt, user_prompt = PromptTemplates.get_page_generation_html_prompt(
             site_name=site_name,
@@ -650,6 +657,7 @@ Return the complete, corrected JSON now:"""
 
         print(f"GENERATION PROMPT (≈{int(total_token_estimate)} tokens)")
 
+        notify("html_generation", "running", model=model)
         actual_model, provider = self._get_model_info(model)
         t0 = time.time()
         try:
@@ -691,9 +699,11 @@ Return the complete, corrected JSON now:"""
             raise ValueError("Step 1 returned empty or too-short HTML")
 
         print(f"Step 1 produced {len(raw_html)} chars of HTML")
+        notify("html_generation", "done", chars=len(raw_html))
 
         # --- Step 2 + Step 3: Run in parallel ---
         # Step 2 (templatize) and Step 3 (metadata) are independent — run concurrently
+        notify("templatize_translate", "running")
         print(f"\nRunning Step 2 (templatize) and Step 3 (metadata) in parallel...")
         with ThreadPoolExecutor(max_workers=2) as pool:
             future_templatize = pool.submit(
@@ -707,8 +717,10 @@ Return the complete, corrected JSON now:"""
 
         page_data['title_i18n'] = metadata.get('title_i18n', {})
         page_data['slug_i18n'] = metadata.get('slug_i18n', {})
+        notify("templatize_translate", "done")
 
         print(f"Successfully generated page (two-step, parallel)")
+        notify("complete", "done")
         return page_data
 
     def refine_global_section(
