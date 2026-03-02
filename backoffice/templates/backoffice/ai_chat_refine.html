@@ -93,14 +93,18 @@
                 {% endif %}
             </div>
 
-            <!-- Typing indicator (hidden by default) -->
+            <!-- Typing/Progress Indicator -->
             <div id="typingIndicator" class="hidden bg-white border-x border-gray-200 px-4 pb-2">
-                <div class="flex justify-start">
-                    <div class="bg-gray-100 rounded-lg px-4 py-3">
-                        <div class="flex items-center space-x-1">
-                            <div class="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style="animation-delay:0ms"></div>
-                            <div class="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style="animation-delay:150ms"></div>
-                            <div class="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style="animation-delay:300ms"></div>
+                <div class="flex items-start gap-3 max-w-2xl">
+                    <div class="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center flex-shrink-0">
+                        <svg class="w-4 h-4 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                        </svg>
+                    </div>
+                    <div class="bg-gray-100 rounded-lg px-4 py-3 text-sm text-gray-600">
+                        <div id="chatStepText" class="flex items-center gap-2">
+                            <svg class="animate-spin h-4 w-4 text-purple-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
+                            <span id="chatStepLabel">Processing...</span>
                         </div>
                     </div>
                 </div>
@@ -265,6 +269,7 @@
     </div>
 </div>
 
+<script src="{% static 'backoffice/js/sse-client.js' %}"></script>
 <script>
 const PAGE_ID = {{ page.id }};
 let currentSessionId = {{ active_session.id|default:"null" }};
@@ -368,75 +373,66 @@ async function sendMessage(event) {
 
     // Show typing indicator
     document.getElementById('typingIndicator').classList.remove('hidden');
+    document.getElementById('chatStepLabel').textContent = 'Processing...';
     document.getElementById('sendButton').disabled = true;
 
-    try {
-        let fetchOptions;
-        if (selectedFiles.length > 0) {
-            const fd = new FormData();
-            fd.append('page_id', PAGE_ID);
-            fd.append('message', message);
-            fd.append('model', model);
-            if (currentSessionId) fd.append('session_id', currentSessionId);
-            selectedFiles.forEach(f => fd.append('reference_images', f));
-            fetchOptions = {
-                method: 'POST',
-                headers: { 'X-CSRFToken': getCookie('csrftoken') },
-                body: fd
-            };
-        } else {
-            const payload = {
-                page_id: PAGE_ID,
-                message: message,
-                model: model,
-            };
-            if (currentSessionId) payload.session_id = currentSessionId;
-            fetchOptions = {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': getCookie('csrftoken')
-                },
-                body: JSON.stringify(payload)
-            };
-        }
+    const STEP_LABELS = {
+        prepare: 'Preparing page...',
+        component_selection: 'Analyzing components...',
+        refine_html: 'Refining HTML...',
+        templatize_translate: 'Updating translations...',
+    };
 
-        const response = await fetch('/ai/api/chat-refine-page/', fetchOptions);
-        const result = await response.json();
+    // Build request body
+    const fd = new FormData();
+    fd.append('page_id', PAGE_ID);
+    fd.append('message', message);
+    fd.append('model', model);
+    if (currentSessionId) fd.append('session_id', currentSessionId);
+    selectedFiles.forEach(f => fd.append('reference_images', f));
 
-        document.getElementById('typingIndicator').classList.add('hidden');
-        document.getElementById('sendButton').disabled = false;
+    const sse = new SSEClient("{% url 'ai:chat_refine_page_stream' %}", {
+        csrfToken: getCookie('csrftoken'),
+        onProgress: function(data) {
+            const label = STEP_LABELS[data.step] || data.status || 'Processing...';
+            document.getElementById('chatStepLabel').textContent = label;
+        },
+        onComplete: function(result) {
+            document.getElementById('typingIndicator').classList.add('hidden');
+            document.getElementById('sendButton').disabled = false;
 
-        if (result.success) {
-            currentSessionId = result.session_id;
-            // Update session selector
-            updateSessionSelector(result.session_id, message);
+            if (result.success) {
+                currentSessionId = result.session_id;
+                updateSessionSelector(result.session_id, message);
+                renderMessage({
+                    role: 'assistant',
+                    content: result.assistant_message,
+                    timestamp: new Date().toISOString(),
+                    sections_changed: result.sections_changed
+                });
+                checkForImagePlaceholders();
+            } else {
+                renderMessage({
+                    role: 'assistant',
+                    content: 'Error: ' + (result.error || 'Unknown error'),
+                    timestamp: new Date().toISOString(),
+                    sections_changed: []
+                });
+            }
+        },
+        onError: function(data) {
+            document.getElementById('typingIndicator').classList.add('hidden');
+            document.getElementById('sendButton').disabled = false;
             renderMessage({
                 role: 'assistant',
-                content: result.assistant_message,
-                timestamp: new Date().toISOString(),
-                sections_changed: result.sections_changed
-            });
-            // Check for image placeholders
-            checkForImagePlaceholders();
-        } else {
-            renderMessage({
-                role: 'assistant',
-                content: 'Error: ' + (result.error || 'Unknown error'),
+                content: 'Error: ' + (data.error || 'Unknown error'),
                 timestamp: new Date().toISOString(),
                 sections_changed: []
             });
         }
-    } catch (error) {
-        document.getElementById('typingIndicator').classList.add('hidden');
-        document.getElementById('sendButton').disabled = false;
-        renderMessage({
-            role: 'assistant',
-            content: 'Error: ' + error.message,
-            timestamp: new Date().toISOString(),
-            sections_changed: []
-        });
-    }
+    });
+
+    sse.start(fd);
 
     // Clear images after send
     selectedFiles = [];
