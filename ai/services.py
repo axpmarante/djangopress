@@ -600,7 +600,10 @@ Return the complete, corrected JSON now:"""
         """
         def notify(step, status, **extra):
             if on_progress:
-                on_progress({"step": step, "status": status, **extra})
+                try:
+                    on_progress({"step": step, "status": status, **extra})
+                except Exception:
+                    pass
 
         print(f"\n=== Generating Page (Two-Step) ===")
         print(f"Brief: {brief}")
@@ -748,7 +751,10 @@ Return the complete, corrected JSON now:"""
         """
         def notify(step, status, **extra):
             if on_progress:
-                on_progress({"step": step, "status": status, **extra})
+                try:
+                    on_progress({"step": step, "status": status, **extra})
+                except Exception:
+                    pass
 
         print(f"\n=== Refining Global Section ===")
         print(f"Section Key: {section_key}")
@@ -965,7 +971,10 @@ Return the complete, corrected JSON now:"""
         """
         def notify(step, status, **extra):
             if on_progress:
-                on_progress({"step": step, "status": status, **extra})
+                try:
+                    on_progress({"step": step, "status": status, **extra})
+                except Exception:
+                    pass
 
         print(f"\n=== Refining Page (Two-Step) ===")
         print(f"Page ID: {page_id}")
