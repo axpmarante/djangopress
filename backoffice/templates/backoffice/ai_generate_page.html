@@ -202,9 +202,25 @@
                     </svg>
                 </div>
                 <p class="mt-6 text-lg font-semibold text-gray-900">Generating your page...</p>
-                <p class="mt-2 text-sm text-gray-600 text-center">This may take 15-30 seconds as we create multiple sections</p>
+                <div class="mt-4 w-full space-y-2">
+                    <div data-step="component_selection" class="flex items-center gap-2 text-gray-400">
+                        <span class="step-icon w-5 h-5 flex items-center justify-center text-xs">&#9675;</span>
+                        <span>Selecting components</span>
+                        <span class="step-time ml-auto text-xs"></span>
+                    </div>
+                    <div data-step="html_generation" class="flex items-center gap-2 text-gray-400">
+                        <span class="step-icon w-5 h-5 flex items-center justify-center text-xs">&#9675;</span>
+                        <span>Generating HTML</span>
+                        <span class="step-time ml-auto text-xs"></span>
+                    </div>
+                    <div data-step="templatize_translate" class="flex items-center gap-2 text-gray-400">
+                        <span class="step-icon w-5 h-5 flex items-center justify-center text-xs">&#9675;</span>
+                        <span>Extracting &amp; translating text</span>
+                        <span class="step-time ml-auto text-xs"></span>
+                    </div>
+                </div>
                 <div class="mt-4 w-full bg-gray-200 rounded-full h-2">
-                    <div id="progressBar" class="bg-purple-600 h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
+                    <div id="progressFill" class="bg-purple-600 h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
                 </div>
             </div>
         </div>
@@ -248,6 +264,7 @@
     </div>
 </div>
 
+<script src="{% static 'backoffice/js/sse-client.js' %}"></script>
 <script>
 let generatedPageData = null;
 let pageTitle = null;
@@ -394,8 +411,6 @@ document.getElementById('generatePageForm').addEventListener('submit', async fun
     e.preventDefault();
 
     const rawFormData = new FormData(this);
-    const brief = rawFormData.get('brief');
-    const model = rawFormData.get('model');
 
     const titleI18n = {};
     const slugI18n = {};
@@ -410,77 +425,78 @@ document.getElementById('generatePageForm').addEventListener('submit', async fun
     pageSlug = Object.keys(slugI18n).length > 0 ? slugI18n : null;
 
     showLoading();
-    simulateProgress();
 
-    try {
-        let fetchOptions;
+    const formData = new FormData();
+    formData.append('brief', rawFormData.get('brief'));
+    formData.append('model', rawFormData.get('model'));
+    if (blueprintPageId) formData.append('blueprint_page_id', blueprintPageId);
+    selectedFiles.forEach(f => formData.append('reference_images', f));
 
-        if (selectedFiles.length > 0) {
-            // Use FormData for multipart upload with images
-            const fd = new FormData();
-            fd.append('brief', brief);
-            fd.append('model', model);
-            if (blueprintPageId) fd.append('blueprint_page_id', blueprintPageId);
-            selectedFiles.forEach(f => fd.append('reference_images', f));
-            fetchOptions = {
-                method: 'POST',
-                headers: { 'X-CSRFToken': getCookie('csrftoken') },
-                body: fd
-            };
-        } else {
-            // Use JSON body when no images
-            const payload = { brief, model };
-            if (blueprintPageId) payload.blueprint_page_id = blueprintPageId;
-            fetchOptions = {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': getCookie('csrftoken')
-                },
-                body: JSON.stringify(payload)
-            };
-        }
+    const stepTimers = {};
 
-        const response = await fetch('/ai/api/generate-page/', fetchOptions);
+    const STEP_PROGRESS = {
+        component_selection: 15,
+        html_generation: 70,
+        templatize_translate: 100,
+    };
 
-        const result = await response.json();
-        hideLoading();
+    const sse = new SSEClient("{% url 'ai:generate_page_stream' %}", {
+        csrfToken: '{{ csrf_token }}',
+        onProgress: (data) => {
+            const stepEl = document.querySelector('[data-step="' + data.step + '"]');
+            if (!stepEl) return;
 
-        if (result.success) {
-            generatedPageData = result.page_data;
-            if (result.title_i18n) suggestedTitle = result.title_i18n;
-            if (result.slug_i18n) suggestedSlug = result.slug_i18n;
-            displayResults(result.page_data);
-        } else {
-            alert('Error: ' + result.error);
-        }
-    } catch (error) {
-        hideLoading();
-        alert('Error generating page: ' + error.message);
-    }
+            if (data.status === 'running') {
+                stepEl.classList.remove('text-gray-400');
+                stepEl.classList.add('text-purple-700', 'font-medium');
+                stepEl.querySelector('.step-icon').innerHTML = '<svg class="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>';
+                stepTimers[data.step] = Date.now();
+            } else if (data.status === 'done') {
+                stepEl.classList.remove('text-purple-700');
+                stepEl.classList.add('text-green-600');
+                stepEl.querySelector('.step-icon').innerHTML = '&#10003;';
+                if (stepTimers[data.step]) {
+                    const elapsed = ((Date.now() - stepTimers[data.step]) / 1000).toFixed(1);
+                    stepEl.querySelector('.step-time').textContent = elapsed + 's';
+                }
+                const fill = document.getElementById('progressFill');
+                if (fill) fill.style.width = (STEP_PROGRESS[data.step] || 0) + '%';
+            }
+        },
+        onComplete: (data) => {
+            const fill = document.getElementById('progressFill');
+            if (fill) fill.style.width = '100%';
+            hideLoading();
+            if (data.success && data.page_data) {
+                generatedPageData = data.page_data;
+                window.generatedPageData = data.page_data;
+                if (data.title_i18n) suggestedTitle = data.title_i18n;
+                if (data.slug_i18n) suggestedSlug = data.slug_i18n;
+                displayResults(data.page_data);
+            }
+        },
+        onError: (data) => {
+            hideLoading();
+            alert('Generation failed: ' + (data.error || 'Unknown error'));
+        },
+    });
+
+    sse.start(formData);
 });
-
-function simulateProgress() {
-    const progressBar = document.getElementById('progressBar');
-    let width = 0;
-    const interval = setInterval(() => {
-        if (width >= 90) {
-            clearInterval(interval);
-        } else {
-            width += Math.random() * 10;
-            progressBar.style.width = Math.min(width, 90) + '%';
-        }
-    }, 500);
-}
 
 function showLoading() {
     document.getElementById('loadingModal').classList.remove('hidden');
-    document.getElementById('progressBar').style.width = '0%';
+    document.getElementById('progressFill').style.width = '0%';
+    // Reset step indicators
+    document.querySelectorAll('[data-step]').forEach(el => {
+        el.className = 'flex items-center gap-2 text-gray-400';
+        el.querySelector('.step-icon').innerHTML = '&#9675;';
+        el.querySelector('.step-time').textContent = '';
+    });
 }
 
 function hideLoading() {
     document.getElementById('loadingModal').classList.add('hidden');
-    document.getElementById('progressBar').style.width = '100%';
 }
 
 function displayResults(pageData) {
