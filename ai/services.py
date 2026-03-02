@@ -728,7 +728,8 @@ Return the complete, corrected JSON now:"""
         section_key: str,
         refinement_instructions: str,
         model_override: str = None,
-        prompt_version: str = 'v2'
+        prompt_version: str = 'v2',
+        on_progress=None
     ) -> Dict:
         """
         Refine a GlobalSection (header/footer) based on user instructions
@@ -745,11 +746,16 @@ Return the complete, corrected JSON now:"""
         Raises:
             ValueError: If section not found or generation fails
         """
+        def notify(step, status, **extra):
+            if on_progress:
+                on_progress({"step": step, "status": status, **extra})
+
         print(f"\n=== Refining Global Section ===")
         print(f"Section Key: {section_key}")
         print(f"Instructions: {refinement_instructions}")
 
         # Get existing GlobalSection
+        notify("load_section", "running")
         try:
             from core.models import GlobalSection
             section = GlobalSection.objects.get(key=section_key)
@@ -764,6 +770,7 @@ Return the complete, corrected JSON now:"""
             'content': section.content,
             'name': section.name,
         }
+        notify("load_section", "done")
 
         # Get site context
         from core.models import SiteSettings, Page
@@ -804,6 +811,7 @@ Return the complete, corrected JSON now:"""
             menu_items_data.append(item_data)
 
         # Build prompt for global section
+        notify("build_prompt", "running")
         system_prompt, user_prompt = PromptTemplates.get_global_section_refinement_prompt(
             site_name=site_name,
             site_description=site_description,
@@ -816,6 +824,7 @@ Return the complete, corrected JSON now:"""
             design_guide=design_guide,
             menu_items=menu_items_data
         )
+        notify("build_prompt", "done")
 
         # Print prompts for debugging
         system_token_estimate = len(system_prompt.split()) * 1.3
@@ -841,6 +850,7 @@ Return the complete, corrected JSON now:"""
 
         # Get LLM completion with higher max_tokens for complete HTML templates
         model = model_override or self.model_name
+        notify("refine_html", "running", model=model)
 
         from .utils.llm_config import ModelProvider
         config = MODEL_CONFIG.get(model)
@@ -875,8 +885,10 @@ Return the complete, corrected JSON now:"""
                 success=False, error_message=str(e),
             )
             raise
+        notify("refine_html", "done")
 
         # Extract and parse response
+        notify("templatize_translate", "running")
         content = response.choices[0].message.content
         refined_data = self._extract_json_from_response(content)
 
@@ -914,8 +926,10 @@ Return the complete, corrected JSON now:"""
                 for lang, vars in missing_vars.items():
                     print(f"  - {lang.upper()}: {', '.join(vars)}")
                 print(f"  The {section.section_type} may render with blank text for these variables.")
+        notify("templatize_translate", "done")
 
         print(f"✓ Successfully refined global section: {section_key}")
+        notify("complete", "done")
         return refined_data
 
     def refine_page_with_html(
