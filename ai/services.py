@@ -941,7 +941,8 @@ Return the complete, corrected JSON now:"""
         model_override: str = None,
         reference_images: list = None,
         conversation_history: str = None,
-        handle_images: bool = False
+        handle_images: bool = False,
+        on_progress=None
     ) -> Dict:
         """
         Refine a page's HTML content based on user instructions.
@@ -962,6 +963,10 @@ Return the complete, corrected JSON now:"""
         Raises:
             ValueError: If refinement fails
         """
+        def notify(step, status, **extra):
+            if on_progress:
+                on_progress({"step": step, "status": status, **extra})
+
         print(f"\n=== Refining Page (Two-Step) ===")
         print(f"Page ID: {page_id}")
         print(f"Instructions: {instructions}")
@@ -969,6 +974,7 @@ Return the complete, corrected JSON now:"""
         print(f"Language: {language}")
 
         # Get page
+        notify("prepare", "running")
         from core.models import Page, SiteSettings
         try:
             page = Page.objects.get(id=page_id)
@@ -1009,17 +1015,20 @@ Return the complete, corrected JSON now:"""
         else:
             clean_html = current_html
             print(f"No {default_language.upper()} translations found, using HTML as-is")
+        notify("prepare", "done")
 
         # --- Step 1: Refine the clean HTML ---
         print(f"\n--- Step 1: Refine HTML in {default_language.upper()} ---")
 
         # Pass 1: Select relevant component skills
+        notify("component_selection", "running")
         selected_components = ComponentRegistry.select_components(
             user_request=targeted_instructions,
             existing_html=clean_html,
             llm=self.llm,
         )
         component_references = ComponentRegistry.get_references(selected_components)
+        notify("component_selection", "done")
 
         if conversation_history:
             system_prompt, user_prompt = PromptTemplates.get_chat_refinement_html_prompt(
@@ -1064,6 +1073,7 @@ Return the complete, corrected JSON now:"""
 
         print(f"REFINEMENT PROMPT (≈{int(total_token_estimate)} tokens)")
 
+        notify("refine_html", "running", model=model)
         actual_model, provider_str = self._get_model_info(model)
         log_action = 'chat_refine' if conversation_history else 'refine_page'
         t0 = time.time()
@@ -1108,11 +1118,15 @@ Return the complete, corrected JSON now:"""
             raise ValueError("Step 1 returned empty or too-short HTML")
 
         print(f"Step 1 produced {len(refined_html)} chars of refined HTML")
+        notify("refine_html", "done", chars=len(refined_html))
 
         # --- Step 2: Templatize + Translate ---
+        notify("templatize_translate", "running")
         refined_data = self._templatize_and_translate(refined_html, languages, default_language, model)
+        notify("templatize_translate", "done")
 
         print(f"Successfully refined page (two-step)")
+        notify("complete", "done")
         return refined_data
 
     def refine_section_only(
