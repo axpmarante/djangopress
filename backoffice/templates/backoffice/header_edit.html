@@ -325,6 +325,7 @@
     {% endif %}
 </div>
 
+<script src="{% static 'backoffice/js/sse-client.js' %}"></script>
 <script>
 // Tab Management
 function showTab(tabName) {
@@ -413,55 +414,54 @@ async function refineHeader() {
     closeAIModal();
     showLoading();
 
-    try {
-        let fetchOptions;
+    const stepLabels = {
+        load_section: 'Loading current header...',
+        build_prompt: 'Building refinement prompt...',
+        refine_html: 'Refining HTML with AI...',
+        templatize_translate: 'Updating translations...',
+    };
 
-        if (refFiles.length > 0) {
-            const fd = new FormData();
-            fd.append('instructions', instructions);
-            fd.append('model', model);
-            refFiles.forEach(f => fd.append('reference_images', f));
-            fetchOptions = {
-                method: 'POST',
-                headers: { 'X-CSRFToken': getCSRFToken() },
-                body: fd
-            };
-        } else {
-            fetchOptions = {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': getCSRFToken()
-                },
-                body: JSON.stringify({
-                    instructions: instructions,
-                    model: model
-                })
-            };
-        }
+    let body;
+    if (refFiles.length > 0) {
+        body = new FormData();
+        body.append('instructions', instructions);
+        body.append('model', model);
+        refFiles.forEach(f => body.append('reference_images', f));
+    } else {
+        body = { instructions: instructions, model: model };
+    }
 
-        const response = await fetch('/ai/api/refine-header/', fetchOptions);
-        const result = await response.json();
-        hideLoading();
-
-        if (result.success) {
-            displayResults({
-                success: true,
-                message: 'Header refined successfully!'
-            });
-        } else {
+    const sse = new SSEClient("{% url 'ai:refine_header_stream' %}", {
+        csrfToken: getCSRFToken(),
+        onProgress: (data) => {
+            if (data.status === 'running' && stepLabels[data.step]) {
+                const progressEl = document.getElementById('progressText');
+                if (progressEl) progressEl.textContent = stepLabels[data.step];
+            }
+        },
+        onComplete: (data) => {
+            hideLoading();
+            if (data.success) {
+                displayResults({
+                    success: true,
+                    message: 'Header refined successfully!'
+                });
+            } else {
+                displayResults({
+                    success: false,
+                    error: data.error || 'Unknown error occurred'
+                });
+            }
+        },
+        onError: (data) => {
+            hideLoading();
             displayResults({
                 success: false,
-                error: result.error || 'Unknown error occurred'
+                error: data.error || 'Unknown error occurred'
             });
-        }
-    } catch (error) {
-        hideLoading();
-        displayResults({
-            success: false,
-            error: error.message
-        });
-    }
+        },
+    });
+    sse.start(body);
 }
 
 function showLoading() {
