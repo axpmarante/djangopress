@@ -16,6 +16,12 @@ urlpatterns = [
     path('api/refine-header/', views.refine_header_api, name='refine_header'),
     path('api/refine-footer/', views.refine_footer_api, name='refine_footer'),
 
+    # SSE streaming endpoints
+    path('api/generate-page/stream/', views.generate_page_stream, name='generate_page_stream'),
+    path('api/chat-refine-page/stream/', views.chat_refine_page_stream, name='chat_refine_page_stream'),
+    path('api/refine-header/stream/', views.refine_header_stream, name='refine_header_stream'),
+    path('api/refine-footer/stream/', views.refine_footer_stream, name='refine_footer_stream'),
+
     # Bulk page analysis
     path('api/analyze-bulk-pages/', views.analyze_bulk_pages_api, name='analyze_bulk_pages'),
 

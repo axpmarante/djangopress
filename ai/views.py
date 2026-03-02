@@ -2,6 +2,8 @@
 AI Content Generation Views
 """
 import json
+import queue
+import threading
 import time
 from django.shortcuts import render
 from django.http import JsonResponse
@@ -11,6 +13,7 @@ from django.views.decorators.csrf import csrf_exempt
 from core.models import Page
 from .services import ContentGenerationService
 from .models import log_ai_call
+from .utils.sse import run_with_progress, sse_response, sse_event
 
 
 def _get_model_info(tool_name):
@@ -109,6 +112,66 @@ def generate_page_api(request):
             'success': False,
             'error': str(e)
         }, status=500)
+
+
+@superuser_required
+@require_http_methods(["POST"])
+def generate_page_stream(request):
+    """
+    SSE streaming endpoint for page generation.
+
+    POST /ai/api/generate-page/stream/
+    Same inputs as generate_page_api (multipart or JSON).
+    Returns Server-Sent Events with progress updates followed by the final result.
+    """
+    try:
+        # Support both multipart (with images) and JSON body
+        if request.content_type and 'multipart' in request.content_type:
+            brief = request.POST.get('brief')
+            language = request.POST.get('language', 'pt')
+            model = request.POST.get('model', 'gemini-pro')
+            blueprint_page_id = request.POST.get('blueprint_page_id')
+            reference_images = []
+            for f in request.FILES.getlist('reference_images'):
+                reference_images.append({'bytes': f.read(), 'mime_type': f.content_type})
+        else:
+            data = json.loads(request.body)
+            brief = data.get('brief')
+            language = data.get('language', 'pt')
+            model = data.get('model', 'gemini-pro')
+            blueprint_page_id = data.get('blueprint_page_id')
+            reference_images = []
+
+        if not brief:
+            return sse_response(iter([
+                sse_event({'error': 'Brief is required'}, event='error')
+            ]))
+
+        # Load blueprint outline if provided
+        outline = None
+        if blueprint_page_id:
+            try:
+                from core.models import BlueprintPage
+                bp_page = BlueprintPage.objects.get(pk=int(blueprint_page_id))
+                if bp_page.sections:
+                    outline = bp_page.sections
+            except (BlueprintPage.DoesNotExist, ValueError):
+                pass
+
+        service = ContentGenerationService()
+        kwargs = dict(
+            brief=brief,
+            language=language,
+            model_override=model,
+            reference_images=reference_images or None,
+            outline=outline,
+        )
+        return sse_response(run_with_progress(service.generate_page, kwargs))
+
+    except Exception as e:
+        return sse_response(iter([
+            sse_event({'error': str(e)}, event='error')
+        ]))
 
 
 @superuser_required
@@ -752,6 +815,334 @@ def list_refinement_sessions_api(request, page_id):
         })
 
     return JsonResponse({'success': True, 'sessions': data})
+
+
+@superuser_required
+@require_http_methods(["POST"])
+def chat_refine_page_stream(request):
+    """
+    SSE streaming endpoint for chat-based page refinement.
+
+    POST /ai/api/chat-refine-page/stream/
+    Same inputs as chat_refine_page_api (multipart or JSON).
+    Returns Server-Sent Events with progress updates followed by the final result
+    including session_id, assistant_message, sections_changed, html_content, content.
+    """
+    try:
+        from .models import RefinementSession
+        from .utils.diff_utils import compute_section_changes, build_change_summary
+
+        # Parse input -- dual-mode (same pattern as chat_refine_page_api)
+        if request.content_type and 'multipart' in request.content_type:
+            page_id = request.POST.get('page_id')
+            if page_id:
+                page_id = int(page_id)
+            message = request.POST.get('message')
+            session_id = request.POST.get('session_id')
+            if session_id:
+                session_id = int(session_id)
+            model = request.POST.get('model', 'gemini-pro')
+            handle_images = request.POST.get('handle_images') in ('true', '1', 'on')
+            reference_images = []
+            for f in request.FILES.getlist('reference_images'):
+                reference_images.append({'bytes': f.read(), 'mime_type': f.content_type})
+        else:
+            data = json.loads(request.body)
+            page_id = data.get('page_id')
+            message = data.get('message')
+            session_id = data.get('session_id')
+            model = data.get('model', 'gemini-pro')
+            handle_images = bool(data.get('handle_images', False))
+            reference_images = []
+
+        if not page_id or not message:
+            return sse_response(iter([
+                sse_event({'error': 'page_id and message are required'}, event='error')
+            ]))
+
+        # Load the page
+        try:
+            page = Page.objects.get(id=page_id)
+        except Page.DoesNotExist:
+            return sse_response(iter([
+                sse_event({'error': f'Page with id {page_id} not found'}, event='error')
+            ]))
+
+        # Load or create session
+        if session_id:
+            try:
+                session = RefinementSession.objects.get(id=session_id, page=page)
+            except RefinementSession.DoesNotExist:
+                return sse_response(iter([
+                    sse_event({'error': f'Session {session_id} not found'}, event='error')
+                ]))
+        else:
+            session = RefinementSession(
+                page=page,
+                title=message[:80],
+                model_used=model,
+                created_by=request.user if request.user.is_authenticated else None,
+            )
+            session.save()
+
+        # Capture old HTML for diff
+        old_html = page.html_content or ''
+
+        # Append user message to session
+        session.add_user_message(message, reference_images_count=len(reference_images))
+
+        # Build history from previous completed turns (excludes current message)
+        history = session.get_history_for_prompt()
+
+        # Create version snapshot
+        page.create_version(
+            user=request.user,
+            change_summary=f'Before chat refine: {message[:100]}'
+        )
+
+        # Custom worker thread with post-processing
+        q = queue.Queue()
+        sentinel = object()
+
+        def on_progress(event_data):
+            q.put(('progress', event_data))
+
+        def worker():
+            try:
+                service = ContentGenerationService()
+                refined_data = service.refine_page_with_html(
+                    page_id=page_id,
+                    instructions=message,
+                    model_override=model,
+                    reference_images=reference_images or None,
+                    conversation_history=history or None,
+                    handle_images=handle_images,
+                    on_progress=on_progress,
+                )
+
+                # Post-processing: save page
+                page.html_content = refined_data.get('html_content', page.html_content)
+                page.content = refined_data.get('content', page.content)
+                page.save()
+
+                # Compute section changes
+                new_html = page.html_content or ''
+                added, removed, modified = compute_section_changes(old_html, new_html)
+                change_summary = build_change_summary(added, removed, modified)
+                sections_changed = added + modified
+
+                # Append assistant message and save session
+                session.add_assistant_message(change_summary, sections_changed)
+                session.save()
+
+                q.put(('complete', {
+                    'success': True,
+                    'session_id': session.id,
+                    'assistant_message': change_summary,
+                    'sections_changed': sections_changed,
+                    'html_content': page.html_content,
+                    'content': page.content,
+                    'page_id': page.id,
+                }))
+            except Exception as e:
+                q.put(('error', str(e)))
+            finally:
+                q.put(sentinel)
+
+        thread = threading.Thread(target=worker, daemon=True)
+        thread.start()
+
+        def generate():
+            while True:
+                try:
+                    item = q.get(timeout=300)
+                except queue.Empty:
+                    yield sse_event({'error': 'Refinement timed out'}, event='error')
+                    return
+
+                if item is sentinel:
+                    return
+
+                event_type, payload = item
+                if event_type == 'progress':
+                    yield sse_event(payload, event='progress')
+                elif event_type == 'complete':
+                    yield sse_event(payload, event='complete')
+                elif event_type == 'error':
+                    yield sse_event({'error': payload}, event='error')
+
+        return sse_response(generate())
+
+    except Exception as e:
+        return sse_response(iter([
+            sse_event({'error': str(e)}, event='error')
+        ]))
+
+
+@superuser_required
+@require_http_methods(["POST"])
+def refine_header_stream(request):
+    """
+    SSE streaming endpoint for header refinement.
+
+    POST /ai/api/refine-header/stream/
+    Body: { "instructions": "...", "model": "gemini-pro" }
+    Returns Server-Sent Events with progress updates followed by the final result.
+    """
+    try:
+        data = json.loads(request.body)
+        instructions = data.get('instructions')
+        model = data.get('model', 'gemini-pro')
+
+        if not instructions:
+            return sse_response(iter([
+                sse_event({'error': 'instructions are required'}, event='error')
+            ]))
+
+        # Custom worker thread with post-processing (save to GlobalSection)
+        q = queue.Queue()
+        sentinel = object()
+
+        def on_progress(event_data):
+            q.put(('progress', event_data))
+
+        def worker():
+            try:
+                service = ContentGenerationService()
+                section_data = service.refine_global_section(
+                    section_key='main-header',
+                    refinement_instructions=instructions,
+                    model_override=model,
+                    on_progress=on_progress,
+                )
+
+                # Save the refined header to the database
+                from core.models import GlobalSection
+                section = GlobalSection.objects.get(key='main-header')
+                section.html_template = section_data.get('html_template', '')
+                section.content = section_data.get('content', {})
+                section.save()
+
+                q.put(('complete', {
+                    'success': True,
+                    'section': section_data,
+                }))
+            except Exception as e:
+                q.put(('error', str(e)))
+            finally:
+                q.put(sentinel)
+
+        thread = threading.Thread(target=worker, daemon=True)
+        thread.start()
+
+        def generate():
+            while True:
+                try:
+                    item = q.get(timeout=300)
+                except queue.Empty:
+                    yield sse_event({'error': 'Header refinement timed out'}, event='error')
+                    return
+
+                if item is sentinel:
+                    return
+
+                event_type, payload = item
+                if event_type == 'progress':
+                    yield sse_event(payload, event='progress')
+                elif event_type == 'complete':
+                    yield sse_event(payload, event='complete')
+                elif event_type == 'error':
+                    yield sse_event({'error': payload}, event='error')
+
+        return sse_response(generate())
+
+    except Exception as e:
+        return sse_response(iter([
+            sse_event({'error': str(e)}, event='error')
+        ]))
+
+
+@superuser_required
+@require_http_methods(["POST"])
+def refine_footer_stream(request):
+    """
+    SSE streaming endpoint for footer refinement.
+
+    POST /ai/api/refine-footer/stream/
+    Body: { "instructions": "...", "model": "gemini-pro" }
+    Returns Server-Sent Events with progress updates followed by the final result.
+    """
+    try:
+        data = json.loads(request.body)
+        instructions = data.get('instructions')
+        model = data.get('model', 'gemini-pro')
+
+        if not instructions:
+            return sse_response(iter([
+                sse_event({'error': 'instructions are required'}, event='error')
+            ]))
+
+        # Custom worker thread with post-processing (save to GlobalSection)
+        q = queue.Queue()
+        sentinel = object()
+
+        def on_progress(event_data):
+            q.put(('progress', event_data))
+
+        def worker():
+            try:
+                service = ContentGenerationService()
+                section_data = service.refine_global_section(
+                    section_key='main-footer',
+                    refinement_instructions=instructions,
+                    model_override=model,
+                    on_progress=on_progress,
+                )
+
+                # Save the refined footer to the database
+                from core.models import GlobalSection
+                section = GlobalSection.objects.get(key='main-footer')
+                section.html_template = section_data.get('html_template', '')
+                section.content = section_data.get('content', {})
+                section.save()
+
+                q.put(('complete', {
+                    'success': True,
+                    'section': section_data,
+                }))
+            except Exception as e:
+                q.put(('error', str(e)))
+            finally:
+                q.put(sentinel)
+
+        thread = threading.Thread(target=worker, daemon=True)
+        thread.start()
+
+        def generate():
+            while True:
+                try:
+                    item = q.get(timeout=300)
+                except queue.Empty:
+                    yield sse_event({'error': 'Footer refinement timed out'}, event='error')
+                    return
+
+                if item is sentinel:
+                    return
+
+                event_type, payload = item
+                if event_type == 'progress':
+                    yield sse_event(payload, event='progress')
+                elif event_type == 'complete':
+                    yield sse_event(payload, event='complete')
+                elif event_type == 'error':
+                    yield sse_event({'error': payload}, event='error')
+
+        return sse_response(generate())
+
+    except Exception as e:
+        return sse_response(iter([
+            sse_event({'error': str(e)}, event='error')
+        ]))
 
 
 @superuser_required
