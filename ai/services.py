@@ -1150,6 +1150,7 @@ Return the complete, corrected JSON now:"""
         skip_briefing: bool = False,
         skip_pages_list: bool = False,
         skip_design_guide: bool = False,
+        on_progress=None,
     ) -> Dict:
         """
         Refine a single section without saving to DB.
@@ -1161,10 +1162,18 @@ Return the complete, corrected JSON now:"""
             instructions: User's refinement instructions
             conversation_history: List of {role, content} dicts for chat context
             model_override: Override the default model
+            on_progress: Optional callback for progress events
 
         Returns:
             Dict with 'html_template', 'content', and 'assistant_message'
         """
+        def notify(step, status, **extra):
+            if on_progress:
+                try:
+                    on_progress({"step": step, "status": status, **extra})
+                except Exception:
+                    pass
+
         from core.models import Page, SiteSettings
         from bs4 import BeautifulSoup
 
@@ -1172,6 +1181,7 @@ Return the complete, corrected JSON now:"""
         print(f"Page ID: {page_id}, Section: {section_name}")
         print(f"Instructions: {instructions}")
 
+        notify("prepare", "running")
         try:
             page = Page.objects.get(id=page_id)
         except Page.DoesNotExist:
@@ -1204,6 +1214,7 @@ Return the complete, corrected JSON now:"""
         else:
             clean_html = current_html
         clean_html = self._strip_legacy_attrs(clean_html)
+        notify("prepare", "done")
 
         # Build conversation history string for prompt
         history_text = ''
@@ -1220,6 +1231,7 @@ Return the complete, corrected JSON now:"""
         print(f"\n--- Step 1: Refine section '{section_name}' in {default_language.upper()} ---")
 
         # Pass 1: Select relevant component skills
+        notify("component_selection", "running")
         component_references = ''
         if not skip_component_selection:
             selected_components = ComponentRegistry.select_components(
@@ -1228,6 +1240,7 @@ Return the complete, corrected JSON now:"""
                 llm=self.llm,
             )
             component_references = ComponentRegistry.get_references(selected_components)
+        notify("component_selection", "done")
 
         system_prompt, user_prompt = PromptTemplates.get_section_refinement_prompt(
             site_name=site_name,
@@ -1253,6 +1266,7 @@ Return the complete, corrected JSON now:"""
             {'role': 'user', 'content': user_prompt}
         ]
 
+        notify("refine_html", "running", model=model)
         actual_model, provider_str = self._get_model_info(model)
         t0 = time.time()
         try:
@@ -1281,9 +1295,11 @@ Return the complete, corrected JSON now:"""
             raise ValueError("Step 1 returned empty or too-short HTML")
 
         print(f"Step 1 produced {len(refined_html)} chars of refined section HTML")
+        notify("refine_html", "done", chars=len(refined_html))
 
         if multi_option:
             # Multi-option: split into options, skip templatize, return raw HTML
+            notify("processing_options", "running")
             options = self._split_multi_options(refined_html)
             validated = []
             for i, opt_html in enumerate(options):
@@ -1297,6 +1313,8 @@ Return the complete, corrected JSON now:"""
                     validated.append({'html': opt_html})
                 print(f"  Option {i+1}: {len(validated[-1]['html'])} chars")
 
+            notify("processing_options", "done")
+            notify("complete", "done")
             assistant_message = f"Here are {len(validated)} variations for the {section_name} section."
             return {
                 'options': validated,
@@ -1326,6 +1344,7 @@ Return the complete, corrected JSON now:"""
 
         print(f"Section '{section_name}': {len(section_html)} chars")
 
+        notify("complete", "done")
         return {
             'options': [{'html': section_html}],
             'assistant_message': f"Here is the refined {section_name} section.",
@@ -1496,11 +1515,19 @@ Return the complete, corrected JSON now:"""
         skip_briefing: bool = False,
         skip_pages_list: bool = False,
         skip_design_guide: bool = False,
+        on_progress=None,
     ) -> Dict:
         """
         Refine a single element within a section without saving to DB.
         Returns the element's html_template and content (translations).
         """
+        def notify(step, status, **extra):
+            if on_progress:
+                try:
+                    on_progress({"step": step, "status": status, **extra})
+                except Exception:
+                    pass
+
         from core.models import Page, SiteSettings
         from bs4 import BeautifulSoup
 
@@ -1508,6 +1535,7 @@ Return the complete, corrected JSON now:"""
         print(f"Page ID: {page_id}, Selector: {selector}")
         print(f"Instructions: {instructions}")
 
+        notify("prepare", "running")
         try:
             page = Page.objects.get(id=page_id)
         except Page.DoesNotExist:
@@ -1531,6 +1559,7 @@ Return the complete, corrected JSON now:"""
         else:
             clean_html = current_html
         clean_html = self._strip_legacy_attrs(clean_html)
+        notify("prepare", "done")
 
         # Find the target element by CSS selector
         soup = BeautifulSoup(clean_html, 'html.parser')
@@ -1565,6 +1594,7 @@ Return the complete, corrected JSON now:"""
         print(f"\n--- Step 1: Refine element in {default_language.upper()} ---")
 
         # Pass 1: Select relevant component skills
+        notify("component_selection", "running")
         component_references = ''
         if not skip_component_selection:
             selected_components = ComponentRegistry.select_components(
@@ -1573,6 +1603,7 @@ Return the complete, corrected JSON now:"""
                 llm=self.llm,
             )
             component_references = ComponentRegistry.get_references(selected_components)
+        notify("component_selection", "done")
 
         system_prompt, user_prompt = PromptTemplates.get_element_refinement_prompt(
             site_name=site_name,
@@ -1595,6 +1626,7 @@ Return the complete, corrected JSON now:"""
             {'role': 'user', 'content': user_prompt}
         ]
 
+        notify("refine_html", "running", model=model)
         actual_model, provider_str = self._get_model_info(model)
         t0 = time.time()
         try:
@@ -1623,9 +1655,11 @@ Return the complete, corrected JSON now:"""
             raise ValueError("Step 1 returned empty or too-short HTML")
 
         print(f"Step 1 produced {len(refined_html)} chars of refined element HTML")
+        notify("refine_html", "done", chars=len(refined_html))
 
         if multi_option:
             # Multi-option: split into options, skip templatize, return raw HTML
+            notify("processing_options", "running")
             options = self._split_multi_options(refined_html)
             validated = []
             for i, opt_html in enumerate(options):
@@ -1638,6 +1672,8 @@ Return the complete, corrected JSON now:"""
                     validated.append({'html': opt_html})
                 print(f"  Option {i+1}: {len(validated[-1]['html'])} chars")
 
+            notify("processing_options", "done")
+            notify("complete", "done")
             assistant_message = f"Here are {len(validated)} variations."
             return {
                 'options': validated,
@@ -1658,6 +1694,7 @@ Return the complete, corrected JSON now:"""
 
         print(f"Refined element: {len(element_result_html)} chars")
 
+        notify("complete", "done")
         return {
             'options': [{'html': element_result_html}],
             'assistant_message': "Here is the refined element.",

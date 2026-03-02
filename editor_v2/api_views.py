@@ -5,6 +5,8 @@ These endpoints allow staff users to edit page content directly from the fronten
 
 import json
 import re
+import queue
+import threading
 from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
 from django.contrib.admin.views.decorators import staff_member_required
@@ -12,6 +14,7 @@ from core.decorators import superuser_required
 from django.views.decorators.csrf import csrf_exempt
 from core.models import Page, PageVersion, SiteImage
 from ai.models import RefinementSession
+from ai.utils.sse import sse_event, sse_response
 from bs4 import BeautifulSoup
 
 
@@ -1879,3 +1882,324 @@ def remove_element(request):
         return JsonResponse({'success': False, 'error': 'Invalid JSON'}, status=400)
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
+# ---------------------------------------------------------------------------
+# SSE streaming endpoints for editor AI refinement
+# ---------------------------------------------------------------------------
+
+@superuser_required
+@require_http_methods(["POST"])
+def refine_page_stream(request):
+    """
+    SSE streaming endpoint for full-page refinement in the editor.
+
+    POST /editor-v2/api/refine-page/stream/
+    Same inputs as refine_page. Returns SSE events with progress updates
+    followed by the final result.
+    """
+    try:
+        data = json.loads(request.body)
+        page_id = data.get('page_id')
+        instructions = data.get('instructions', '').strip()
+        conversation_history = data.get('conversation_history', [])
+        session_id = data.get('session_id')
+
+        if not page_id:
+            return sse_response(iter([
+                sse_event({'error': 'Missing page_id'}, event='error')
+            ]))
+        if not instructions:
+            return sse_response(iter([
+                sse_event({'error': 'Missing instructions'}, event='error')
+            ]))
+
+        try:
+            page = Page.objects.get(id=page_id)
+        except Page.DoesNotExist:
+            return sse_response(iter([
+                sse_event({'error': f'Page {page_id} not found'}, event='error')
+            ]))
+
+        # Enrich instructions with cross-page context if needed
+        instructions = _enrich_instructions(instructions, page)
+
+        # Load or create session
+        if session_id:
+            try:
+                session = RefinementSession.objects.get(id=session_id, page=page)
+            except RefinementSession.DoesNotExist:
+                session = None
+        else:
+            session = None
+
+        if not session:
+            session = RefinementSession(
+                page=page,
+                title=instructions[:80],
+                model_used='gemini-pro',
+                created_by=request.user if request.user.is_authenticated else None,
+            )
+            session.save()
+
+        session.add_user_message(instructions)
+        history = session.get_history_for_prompt()
+
+        # Create version for rollback
+        page.create_version(
+            user=request.user,
+            change_summary=f'Before editor refine-page: {instructions[:100]}'
+        )
+
+        q = queue.Queue()
+        sentinel = object()
+
+        def on_progress(event_data):
+            q.put(('progress', event_data))
+
+        def worker():
+            try:
+                from ai.services import ContentGenerationService
+                service = ContentGenerationService()
+                result = service.refine_page_with_html(
+                    page_id=page_id,
+                    instructions=instructions,
+                    model_override='gemini-pro',
+                    conversation_history=history or None,
+                    on_progress=on_progress,
+                )
+
+                assistant_msg = "I've refined the page based on your instructions."
+                session.add_assistant_message(assistant_msg, ['full-page'])
+                session.save()
+
+                q.put(('complete', {
+                    'success': True,
+                    'page': {
+                        'html_template': result.get('html_content', ''),
+                        'content': result.get('content', {}),
+                    },
+                    'assistant_message': assistant_msg,
+                    'session_id': session.id,
+                }))
+            except Exception as e:
+                q.put(('error', str(e)))
+            finally:
+                q.put(sentinel)
+
+        thread = threading.Thread(target=worker, daemon=True)
+        thread.start()
+
+        def generate():
+            while True:
+                try:
+                    item = q.get(timeout=300)
+                except queue.Empty:
+                    yield sse_event({'error': 'Refinement timed out'}, event='error')
+                    return
+
+                if item is sentinel:
+                    return
+
+                event_type, payload = item
+                if event_type == 'progress':
+                    yield sse_event(payload, event='progress')
+                elif event_type == 'complete':
+                    yield sse_event(payload, event='complete')
+                elif event_type == 'error':
+                    yield sse_event({'error': payload}, event='error')
+
+        return sse_response(generate())
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return sse_response(iter([
+            sse_event({'error': str(e)}, event='error')
+        ]))
+
+
+@superuser_required
+@require_http_methods(["POST"])
+def refine_multi_stream(request):
+    """
+    SSE streaming endpoint for section/element refinement in the editor.
+
+    POST /editor-v2/api/refine-multi/stream/
+    Same inputs as refine_multi. Returns SSE events with progress updates
+    followed by the final result with options.
+    """
+    try:
+        data = json.loads(request.body)
+        page_id = data.get('page_id')
+        scope = data.get('scope', 'section')
+        section_name = data.get('section_name')
+        selector = data.get('selector')
+        instructions = data.get('instructions', '').strip()
+        conversation_history = data.get('conversation_history', [])
+        session_id = data.get('session_id')
+        mode = data.get('mode', 'refine')
+        insert_after = data.get('insert_after')
+        multi_option = data.get('multi_option', True)
+
+        if not page_id or not instructions:
+            return sse_response(iter([
+                sse_event({'error': 'Missing page_id or instructions'}, event='error')
+            ]))
+
+        if mode != 'create':
+            if scope == 'element' and not selector:
+                return sse_response(iter([
+                    sse_event({'error': 'Missing selector for element scope'}, event='error')
+                ]))
+            if scope == 'section' and not section_name:
+                return sse_response(iter([
+                    sse_event({'error': 'Missing section_name for section scope'}, event='error')
+                ]))
+
+        try:
+            page = Page.objects.get(pk=page_id)
+        except Page.DoesNotExist:
+            return sse_response(iter([
+                sse_event({'error': 'Page not found'}, event='error')
+            ]))
+
+        # Load or create RefinementSession
+        session = None
+        if session_id:
+            try:
+                session = RefinementSession.objects.get(id=session_id, page=page)
+            except RefinementSession.DoesNotExist:
+                session = None
+
+        if not session:
+            if mode == 'create':
+                prefix = '[new section]'
+            elif scope == 'element':
+                prefix = '[element]'
+            else:
+                prefix = f'[{section_name}]'
+            session = RefinementSession(
+                page=page,
+                title=f'{prefix} {instructions[:60]}',
+                model_used='gemini-flash',
+                created_by=request.user if request.user.is_authenticated else None,
+            )
+            session.save()
+
+        session.add_user_message(instructions)
+
+        q = queue.Queue()
+        sentinel = object()
+
+        def on_progress(event_data):
+            q.put(('progress', event_data))
+
+        def worker():
+            try:
+                # Route through refinement agent if enabled
+                from django.conf import settings as django_settings
+                use_agent = getattr(django_settings, 'USE_REFINEMENT_AGENT', True)
+                result = None
+
+                if use_agent and mode != 'create':
+                    try:
+                        from ai.refinement_agent.agent import RefinementAgent
+                        agent = RefinementAgent()
+                        result = agent.handle(
+                            instruction=instructions,
+                            scope=scope,
+                            target_name=section_name if scope == 'section' else selector,
+                            page=page,
+                            conversation_history=conversation_history,
+                            multi_option=multi_option,
+                            mode=mode,
+                            insert_after=insert_after,
+                        )
+                    except Exception as e:
+                        print(f"Agent error, falling back to direct pipeline: {e}")
+                        import traceback
+                        traceback.print_exc()
+                        use_agent = False
+
+                if result is None:
+                    from ai.services import ContentGenerationService
+                    service = ContentGenerationService(model_name='gemini-pro')
+
+                    if mode == 'create':
+                        result = service.generate_section(
+                            page_id=page_id,
+                            insert_after=insert_after,
+                            instructions=instructions,
+                            conversation_history=conversation_history,
+                        )
+                    elif scope == 'element':
+                        result = service.refine_element_only(
+                            page_id=page_id,
+                            selector=selector,
+                            instructions=instructions,
+                            conversation_history=conversation_history,
+                            multi_option=multi_option,
+                            on_progress=on_progress,
+                        )
+                    else:
+                        result = service.refine_section_only(
+                            page_id=page_id,
+                            section_name=section_name,
+                            instructions=instructions,
+                            conversation_history=conversation_history,
+                            multi_option=multi_option,
+                            on_progress=on_progress,
+                        )
+
+                assistant_msg = result.get('assistant_message', 'Here are the variations.')
+                if mode == 'create':
+                    target = f'new_after_{insert_after or "top"}'
+                else:
+                    target = 'element' if scope == 'element' else section_name
+                session.add_assistant_message(assistant_msg, [target])
+                session.save()
+
+                q.put(('complete', {
+                    'success': True,
+                    'options': result.get('options', []),
+                    'assistant_message': assistant_msg,
+                    'session_id': session.id,
+                }))
+            except Exception as e:
+                q.put(('error', str(e)))
+            finally:
+                q.put(sentinel)
+
+        thread = threading.Thread(target=worker, daemon=True)
+        thread.start()
+
+        def generate():
+            while True:
+                try:
+                    item = q.get(timeout=300)
+                except queue.Empty:
+                    yield sse_event({'error': 'Refinement timed out'}, event='error')
+                    return
+
+                if item is sentinel:
+                    return
+
+                event_type, payload = item
+                if event_type == 'progress':
+                    yield sse_event(payload, event='progress')
+                elif event_type == 'complete':
+                    yield sse_event(payload, event='complete')
+                elif event_type == 'error':
+                    yield sse_event({'error': payload}, event='error')
+
+        return sse_response(generate())
+
+    except json.JSONDecodeError:
+        return sse_response(iter([
+            sse_event({'error': 'Invalid JSON'}, event='error')
+        ]))
+    except Exception as e:
+        return sse_response(iter([
+            sse_event({'error': str(e)}, event='error')
+        ]))

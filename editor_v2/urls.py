@@ -28,6 +28,7 @@ urlpatterns = [
 
     # AI multi-option refinement endpoints
     path('api/refine-multi/', api_views.refine_multi, name='api_refine_multi'),
+    path('api/refine-multi/stream/', api_views.refine_multi_stream, name='api_refine_multi_stream'),
     path('api/apply-option/', api_views.apply_option, name='api_apply_option'),
 
     # Remove section/element endpoints
@@ -36,6 +37,7 @@ urlpatterns = [
 
     # AI full-page refinement endpoints
     path('api/refine-page/', api_views.refine_page, name='api_refine_page'),
+    path('api/refine-page/stream/', api_views.refine_page_stream, name='api_refine_page_stream'),
     path('api/save-ai-page/', api_views.save_ai_page, name='api_save_ai_page'),
 
     # Session history endpoint

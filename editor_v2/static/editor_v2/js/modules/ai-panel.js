@@ -1,14 +1,26 @@
 /**
  * AI Panel — Unified chat with session switcher and scope selector.
+ * Uses SSE streaming for real-time progress during AI refinement.
  */
 import { events } from '../lib/events.js';
 import { $, getCssSelector, getElementLabel, initDynamicComponents } from '../lib/dom.js';
 import { api } from '../lib/api.js';
+import { SSEClient } from '../lib/sse-client.js';
 
 function esc(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
 const config = () => window.EDITOR_CONFIG || {};
 let unsubs = [];
+
+// Step label mapping for progress events
+const STEP_LABELS = {
+    prepare: 'Preparing...',
+    component_selection: 'Selecting components...',
+    refine_html: 'Generating HTML...',
+    templatize_translate: 'Translating...',
+    processing_options: 'Processing options...',
+    complete: 'Finishing up...',
+};
 
 // State
 let activeScope = 'page';        // 'page' | 'section' | 'element'
@@ -29,6 +41,7 @@ let multiOption = true;         // true = 3 variations, false = single (faster)
 let lockedSection = null;       // snapshot of currentSection at send() time
 let lockedSelector = null;      // snapshot of currentSelector at send() time
 let lockedScope = null;         // snapshot of activeScope at send() time
+let activeSSE = null;           // current SSEClient instance (for abort)
 
 function detemplatize(html, translations, lang) {
     const trans = translations?.[lang] || {};
@@ -79,6 +92,7 @@ export function init() {
 export function destroy() {
     unsubs.forEach(u => u());
     unsubs = [];
+    if (activeSSE) { activeSSE.abort(); activeSSE = null; }
     restorePreview();
     activeScope = 'page'; currentSection = null; currentSelector = null;
     sessionId = null; sessionsList = []; messages = [];
@@ -277,7 +291,7 @@ function renderMessages() {
     list.scrollTop = list.scrollHeight;
 }
 
-// ── Send ──
+// ── Send (SSE streaming) ──
 
 async function send() {
     const input = $('#ev2-ai-input');
@@ -305,66 +319,90 @@ async function send() {
     renderMessages();
     setLoading(true);
 
-    try {
-        const history = messages.filter(m => m.role !== 'system').slice(0, -1).map(m => ({ role: m.role, content: m.content }));
-        let res;
+    const history = messages.filter(m => m.role !== 'system').slice(0, -1).map(m => ({ role: m.role, content: m.content }));
+    const apiBase = config().apiBase || '/editor-v2/api';
 
-        if (activeScope === 'page') {
-            res = await api.post('/refine-page/', {
-                page_id: config().pageId,
-                instructions: text,
-                conversation_history: history,
-                session_id: sessionId,
-            });
-        } else if (activeScope === 'element') {
-            res = await api.post('/refine-multi/', {
-                page_id: config().pageId,
-                scope: 'element',
-                selector: currentSelector,
-                instructions: text,
-                conversation_history: history,
-                session_id: sessionId,
-                multi_option: multiOption,
-            });
-        } else {
-            res = await api.post('/refine-multi/', {
-                page_id: config().pageId,
-                scope: 'section',
-                section_name: currentSection,
-                instructions: text,
-                conversation_history: history,
-                session_id: sessionId,
-                multi_option: multiOption,
-            });
-        }
+    let url, body;
 
-        if (res.success) {
-            sessionId = res.session_id || sessionId;
-            const msg = res.assistant_message || 'Changes ready to apply.';
-            messages.push({ role: 'assistant', content: msg, scope: scopeLabel });
-
-            if (res.options) {
-                // Multi-option response
-                options = res.options;
-                activeOption = 0;
-                pendingScope = lockedScope;
-                if (options.length > 0) showMultiPreview(0);
-            } else {
-                // Single-option response (page scope)
-                pendingResult = res.page || res.section || res.element;
-                pendingScope = lockedScope;
-                options = [];
-                if (pendingResult) showPreview();
-            }
-            refreshSessionsList();
-        } else {
-            messages.push({ role: 'assistant', content: 'Error: ' + (res.error || 'Unknown error'), scope: scopeLabel });
-        }
-    } catch (err) {
-        messages.push({ role: 'assistant', content: 'Request failed: ' + (err.message || err), scope: scopeLabel });
+    if (activeScope === 'page') {
+        url = `${apiBase}/refine-page/stream/`;
+        body = {
+            page_id: config().pageId,
+            instructions: text,
+            conversation_history: history,
+            session_id: sessionId,
+        };
+    } else if (activeScope === 'element') {
+        url = `${apiBase}/refine-multi/stream/`;
+        body = {
+            page_id: config().pageId,
+            scope: 'element',
+            selector: currentSelector,
+            instructions: text,
+            conversation_history: history,
+            session_id: sessionId,
+            multi_option: multiOption,
+        };
+    } else {
+        url = `${apiBase}/refine-multi/stream/`;
+        body = {
+            page_id: config().pageId,
+            scope: 'section',
+            section_name: currentSection,
+            instructions: text,
+            conversation_history: history,
+            session_id: sessionId,
+            multi_option: multiOption,
+        };
     }
-    setLoading(false);
-    render();
+
+    activeSSE = new SSEClient(url, {
+        csrfToken: config().csrfToken,
+        onProgress: (data) => {
+            // Update the thinking indicator with the current step label
+            if (data.step) {
+                const label = STEP_LABELS[data.step] || data.step;
+                const statusSuffix = data.status === 'done' ? ' Done.' : '';
+                updateThinkingLabel(label + statusSuffix);
+            }
+        },
+        onComplete: (res) => {
+            activeSSE = null;
+            if (res.success) {
+                sessionId = res.session_id || sessionId;
+                const msg = res.assistant_message || 'Changes ready to apply.';
+                messages.push({ role: 'assistant', content: msg, scope: scopeLabel });
+
+                if (res.options) {
+                    // Multi-option response (section/element)
+                    options = res.options;
+                    activeOption = 0;
+                    pendingScope = lockedScope;
+                    if (options.length > 0) showMultiPreview(0);
+                } else if (res.page || res.page_data?.page) {
+                    // Single-option response (page scope)
+                    // page_data wrapping comes from run_with_progress; direct complete has .page
+                    pendingResult = res.page || res.page_data?.page;
+                    pendingScope = lockedScope;
+                    options = [];
+                    if (pendingResult) showPreview();
+                }
+                refreshSessionsList();
+            } else {
+                messages.push({ role: 'assistant', content: 'Error: ' + (res.error || 'Unknown error'), scope: scopeLabel });
+            }
+            setLoading(false);
+            render();
+        },
+        onError: (data) => {
+            activeSSE = null;
+            messages.push({ role: 'assistant', content: 'Error: ' + (data.error || 'Request failed'), scope: scopeLabel });
+            setLoading(false);
+            render();
+        },
+    });
+
+    await activeSSE.start(body);
 }
 
 async function refreshSessionsList() {
@@ -405,6 +443,24 @@ function setLoading(loading) {
         }
     } else {
         document.getElementById(overlayId)?.remove();
+    }
+}
+
+/**
+ * Update the thinking indicator text with the current step label.
+ * Also updates the overlay label if visible.
+ */
+function updateThinkingLabel(label) {
+    const thinking = document.querySelector('.ev2-ai-thinking');
+    if (thinking) {
+        thinking.textContent = label;
+        const list = thinking.parentElement;
+        if (list) list.scrollTop = list.scrollHeight;
+    }
+    // Also update overlay label if present
+    const overlayLabel = document.querySelector('#ev2-ai-processing-overlay .ev2-ai-overlay-label');
+    if (overlayLabel) {
+        overlayLabel.textContent = label;
     }
 }
 
