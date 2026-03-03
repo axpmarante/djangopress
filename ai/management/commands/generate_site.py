@@ -48,8 +48,8 @@ class Command(BaseCommand):
         parser.add_argument(
             '--delay',
             type=int,
-            default=2,
-            help='Delay in seconds between LLM calls to avoid rate limits (default: 2)',
+            default=1,
+            help='Delay in seconds between LLM calls to avoid rate limits (default: 1)',
         )
 
     def handle(self, *args, **options):

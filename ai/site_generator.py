@@ -10,6 +10,7 @@ import json
 import logging
 import re
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
@@ -613,9 +614,12 @@ BUTTONS:
         return None
 
     def generate_pages(self, plan: Dict):
-        """Generate all pages from the plan."""
+        """Generate all pages from the plan (home first, then rest in parallel)."""
         from ai.services import ContentGenerationService
         from core.models import Page, SiteSettings
+
+        import django
+        django.setup()
 
         service = ContentGenerationService(model_name=self.model)
         settings = SiteSettings.objects.first()
@@ -633,22 +637,24 @@ BUTTONS:
         if home_idx is not None and home_idx != 0:
             pages.insert(0, pages.pop(home_idx))
 
-        for i, page_spec in enumerate(pages):
+        def _generate_single_page(i, page_spec):
+            """Generate a single page — safe to call from a thread."""
+            from ai.services import ContentGenerationService
+            from core.models import Page
+
+            thread_service = ContentGenerationService(model_name=self.model)
             page_name = page_spec['name']
             page_desc = page_spec['description']
 
             self.log(f"\n  [{i+1}/{len(pages)}] Generating: {page_name}")
-
-            # Build an enriched brief
             brief = self._build_page_brief(page_spec, plan)
 
             try:
-                result = service.generate_page(
+                result = thread_service.generate_page(
                     brief=brief,
                     language=default_lang,
                 )
 
-                # Build slug — home page must be 'home' in all languages
                 if page_name.lower() in ('home', 'homepage', 'home page', 'inicio'):
                     slug_i18n = {lang: 'home' for lang in language_codes}
                 else:
@@ -665,19 +671,18 @@ BUTTONS:
                     sort_order=i * 10,
                 )
 
-                self.generated_pages.append(page)
                 self.log(f"    Saved: {page.default_title} (/{page.default_slug}/)")
                 self.log(f"    HTML: {len(result['html_content'])} chars")
+                return page
 
             except Exception as e:
-                self.log(f"    ERROR: {e}")
+                self.log(f"    ERROR generating {page_name}: {e}")
                 self.errors.append({'page': page_name, 'error': str(e)})
 
-                # Retry once with simplified brief
                 try:
-                    self.log(f"    Retrying with simplified brief...")
+                    self.log(f"    Retrying {page_name} with simplified brief...")
                     simple_brief = f"Create a {page_name} page. {page_desc}"
-                    result = service.generate_page(
+                    result = thread_service.generate_page(
                         brief=simple_brief,
                         language=default_lang,
                     )
@@ -695,16 +700,32 @@ BUTTONS:
                         is_active=True,
                         sort_order=i * 10,
                     )
-                    self.generated_pages.append(page)
-                    self.errors.pop()  # Remove the error since retry succeeded
+                    self.errors.pop()
                     self.log(f"    Retry succeeded: {page.default_title}")
+                    return page
                 except Exception as retry_e:
-                    self.log(f"    Retry also failed: {retry_e}")
+                    self.log(f"    Retry also failed for {page_name}: {retry_e}")
                     self.errors.append({'page': f'{page_name} (retry)', 'error': str(retry_e)})
+                    return None
 
-            # Delay between LLM calls to avoid rate limits
-            if i < len(pages) - 1 and self.delay > 0:
-                time.sleep(self.delay)
+        # Generate home page first (needs to exist before others for inter-page linking)
+        home_page = _generate_single_page(0, pages[0])
+        if home_page:
+            self.generated_pages.append(home_page)
+
+        # Generate remaining pages in parallel
+        remaining = pages[1:]
+        if remaining:
+            self.log(f"\n  Generating {len(remaining)} remaining pages in parallel...")
+            with ThreadPoolExecutor(max_workers=3) as pool:
+                futures = {
+                    pool.submit(_generate_single_page, i + 1, page_spec): (i + 1, page_spec)
+                    for i, page_spec in enumerate(remaining)
+                }
+                for future in as_completed(futures):
+                    page = future.result()
+                    if page:
+                        self.generated_pages.append(page)
 
     def _build_page_brief(self, page_spec: Dict, plan: Dict) -> str:
         """Build an enriched generation brief for a page."""

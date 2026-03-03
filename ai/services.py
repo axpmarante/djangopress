@@ -523,8 +523,8 @@ Return the complete, corrected JSON now:"""
         """
         print(f"\n--- Generating page metadata (title/slug) ---")
 
-        # Always use gemini-flash for metadata — fast and reliable for title/slug generation
-        model = 'gemini-flash'
+        # Always use gemini-lite for metadata — title/slug generation is a trivial task
+        model = 'gemini-lite'
 
         system_prompt, user_prompt = PromptTemplates.get_page_metadata_prompt(
             brief=brief,
@@ -1713,6 +1713,8 @@ Return the complete, corrected JSON now:"""
         media library or generate a new one via the LLM, then replace the
         placeholder src in the page HTML and remove the data-image-* attributes.
 
+        Image generation is parallelized (up to 3 concurrent) for performance.
+
         Args:
             page_id: ID of the page to process
             image_decisions: List of dicts, each containing:
@@ -1726,8 +1728,9 @@ Return the complete, corrected JSON now:"""
         Returns:
             Dict with 'processed', 'failed', and 'report' keys
         """
+        from concurrent.futures import ThreadPoolExecutor, as_completed
         from core.models import Page, SiteImage, SiteSettings
-        from .utils.llm_config import optimize_generated_image
+        from .utils.llm_config import optimize_generated_image, LLMService
         from django.core.files.base import ContentFile
         from django.utils.text import slugify
 
@@ -1748,6 +1751,13 @@ Return the complete, corrected JSON now:"""
         processed = []
         failed = []
 
+        # --- Phase 1: Resolve all images (parallel for 'generate' actions) ---
+        # Each entry will hold: (decision, new_url) or (decision, error)
+        resolved = []
+
+        # Separate decisions by type for optimal parallelism
+        generate_decisions = []
+        other_decisions = []
         for decision in image_decisions:
             image_name = decision.get('image_name', '')
             image_src = decision.get('image_src', '')
@@ -1757,13 +1767,82 @@ Return the complete, corrected JSON now:"""
                 failed.append({'image_name': image_name or image_src, 'error': 'Missing identifier or action'})
                 continue
 
+            if action == 'generate':
+                generate_decisions.append(decision)
+            else:
+                other_decisions.append(decision)
+
+        def _generate_single_image(decision):
+            """Generate a single image in a thread — returns (decision, url) or (decision, None, error)."""
+            from .utils.llm_config import LLMService, optimize_generated_image
+            from core.models import SiteImage
+            from django.core.files.base import ContentFile
+            from django.utils.text import slugify
+
+            image_name = decision.get('image_name', '')
+            image_src = decision.get('image_src', '')
+            prompt = decision.get('prompt', '')
+            aspect_ratio = decision.get('aspect_ratio', '16:9')
+
+            if not prompt:
+                return (decision, None, 'Missing prompt')
+
+            image_label = image_name or image_src.split('/')[-1] or 'image'
+            print(f"Generating image for '{image_label}': {prompt[:80]}...")
+
+            thread_llm = LLMService()
+            result = thread_llm.generate_image(prompt=prompt, aspect_ratio=aspect_ratio)
+
+            if not result.success:
+                return (decision, None, result.error or 'Generation failed')
+
+            optimized_bytes = optimize_generated_image(result.image_bytes, max_width=1200, quality=85)
+
+            file_slug = slugify(image_name or image_src.split('/')[-1]) or 'ai-image'
+            base_key = f"ai-{file_slug}"
+            key = base_key
+            counter = 1
+            while SiteImage.objects.filter(key=key).exists():
+                key = f"{base_key}-{counter}"
+                counter += 1
+
+            title_text = (image_name or file_slug).replace('-', ' ').replace('_', ' ').title()
+            site_image = SiteImage(
+                key=key,
+                title_i18n={lang: title_text for lang in languages},
+                alt_text_i18n={lang: prompt[:200] for lang in languages},
+                tags='ai-generated',
+                is_active=True,
+            )
+            filename = f"{file_slug}.jpg"
+            site_image.image.save(filename, ContentFile(optimized_bytes), save=True)
+            print(f"Saved generated image: {key} -> {site_image.image.url}")
+            return (decision, site_image.image.url, None)
+
+        # Process 'generate' decisions in parallel
+        if generate_decisions:
+            print(f"Generating {len(generate_decisions)} images in parallel (max 3 workers)...")
+            with ThreadPoolExecutor(max_workers=3) as pool:
+                futures = {pool.submit(_generate_single_image, d): d for d in generate_decisions}
+                for future in as_completed(futures):
+                    decision, new_url, error = future.result()
+                    if error:
+                        failed.append({'image_name': decision.get('image_name', ''), 'error': error})
+                    else:
+                        resolved.append((decision, new_url))
+
+        # Process non-generate decisions sequentially (library, unsplash — usually fast)
+        for decision in other_decisions:
+            image_name = decision.get('image_name', '')
+            image_src = decision.get('image_src', '')
+            action = decision.get('action', '')
+
             try:
                 new_url = None
 
                 if action == 'library':
                     library_image_id = decision.get('library_image_id')
                     if not library_image_id:
-                        # Auto-match: use AI to pick the best library image
                         print(f"Auto-matching library image for '{image_name or image_src}'...")
                         site_settings_obj = SiteSettings.objects.first()
                         default_lang = site_settings_obj.get_default_language() if site_settings_obj else 'pt'
@@ -1771,7 +1850,6 @@ Return the complete, corrected JSON now:"""
                         if not library_catalog:
                             failed.append({'image_name': image_name, 'error': 'Library is empty — cannot auto-match'})
                             continue
-                        # De-templatize page HTML for context
                         page_translations = (page.content or {}).get('translations', {})
                         if page_translations.get(default_lang):
                             page_context = self._detemplatize_html(html, page_translations, default_lang)
@@ -1795,47 +1873,6 @@ Return the complete, corrected JSON now:"""
                     site_image = SiteImage.objects.get(id=library_image_id)
                     new_url = site_image.image.url
 
-                elif action == 'generate':
-                    prompt = decision.get('prompt', '')
-                    aspect_ratio = decision.get('aspect_ratio', '16:9')
-                    if not prompt:
-                        failed.append({'image_name': image_name, 'error': 'Missing prompt'})
-                        continue
-
-                    image_label = image_name or image_src.split('/')[-1] or 'image'
-                    print(f"Generating image for '{image_label}': {prompt[:80]}...")
-                    result = self.llm.generate_image(prompt=prompt, aspect_ratio=aspect_ratio)
-
-                    if not result.success:
-                        failed.append({'image_name': image_name, 'error': result.error or 'Generation failed'})
-                        continue
-
-                    # Optimize the generated image
-                    optimized_bytes = optimize_generated_image(result.image_bytes, max_width=1200, quality=85)
-
-                    # Save as SiteImage
-                    file_slug = slugify(image_name or image_src.split('/')[-1]) or 'ai-image'
-                    # Ensure unique key
-                    base_key = f"ai-{file_slug}"
-                    key = base_key
-                    counter = 1
-                    while SiteImage.objects.filter(key=key).exists():
-                        key = f"{base_key}-{counter}"
-                        counter += 1
-
-                    title_text = (image_name or file_slug).replace('-', ' ').replace('_', ' ').title()
-                    site_image = SiteImage(
-                        key=key,
-                        title_i18n={lang: title_text for lang in languages},
-                        alt_text_i18n={lang: prompt[:200] for lang in languages},
-                        tags='ai-generated',
-                        is_active=True,
-                    )
-                    filename = f"{file_slug}.jpg"
-                    site_image.image.save(filename, ContentFile(optimized_bytes), save=True)
-                    new_url = site_image.image.url
-                    print(f"Saved generated image: {key} -> {new_url}")
-
                 elif action == 'unsplash':
                     from .utils.unsplash import download_photo
 
@@ -1854,10 +1891,8 @@ Return the complete, corrected JSON now:"""
                         failed.append({'image_name': image_name, 'error': 'Failed to download Unsplash photo'})
                         continue
 
-                    # Optimize the downloaded image
                     optimized_bytes = optimize_generated_image(image_bytes, max_width=1200, quality=85)
 
-                    # Save as SiteImage
                     file_slug = slugify(image_name or image_src.split('/')[-1]) or 'unsplash-image'
                     base_key = f"unsplash-{file_slug}"
                     key = base_key
@@ -1886,55 +1921,57 @@ Return the complete, corrected JSON now:"""
                     failed.append({'image_name': image_name, 'error': f'Unknown action: {action}'})
                     continue
 
-                # Replace in HTML: find img tag and update src
-                # First try matching by data-image-name
-                match = None
-                if image_name:
-                    pattern = re.compile(
-                        r'(<img\b[^>]*?\bdata-image-name="' + re.escape(image_name) + r'"[^>]*?)(/?>)',
-                        re.DOTALL
-                    )
-                    match = pattern.search(html)
-
-                # Fallback: match by src attribute
-                if not match and image_src:
-                    pattern2 = re.compile(
-                        r'(<img\b[^>]*?\bsrc="' + re.escape(image_src) + r'"[^>]*?)(/?>)',
-                        re.DOTALL
-                    )
-                    match = pattern2.search(html)
-
-                if match:
-                    tag_content = match.group(1)
-                    tag_close = match.group(2)
-
-                    # Replace src attribute
-                    tag_content = re.sub(r'\bsrc="[^"]*"', f'src="{new_url}"', tag_content)
-
-                    # Remove data-image-prompt and data-image-name attributes
-                    tag_content = re.sub(r'\s*data-image-prompt="[^"]*"', '', tag_content)
-                    tag_content = re.sub(r'\s*data-image-name="[^"]*"', '', tag_content)
-
-                    html = html[:match.start()] + tag_content + tag_close + html[match.end():]
-                    processed.append({'image_name': image_name, 'new_url': new_url, 'action': action})
-                else:
-                    failed.append({'image_name': image_name, 'error': 'Image tag not found in HTML'})
-
-                # Also replace matching URLs in background-image inline styles
-                if new_url and image_src:
-                    bg_pattern = re.compile(
-                        r'(background-image\s*:\s*[^;]*?)url\(\s*["\']?' + re.escape(image_src) + r'["\']?\s*\)',
-                        re.DOTALL
-                    )
-                    html = bg_pattern.sub(
-                        lambda m: m.group(1) + f'url("{new_url}")',
-                        html
-                    )
+                if new_url:
+                    resolved.append((decision, new_url))
 
             except SiteImage.DoesNotExist:
                 failed.append({'image_name': image_name, 'error': 'Library image not found'})
             except Exception as e:
                 failed.append({'image_name': image_name, 'error': str(e)})
+
+        # --- Phase 2: Apply all HTML replacements sequentially ---
+        for decision, new_url in resolved:
+            image_name = decision.get('image_name', '')
+            image_src = decision.get('image_src', '')
+            action = decision.get('action', '')
+
+            match = None
+            if image_name:
+                pattern = re.compile(
+                    r'(<img\b[^>]*?\bdata-image-name="' + re.escape(image_name) + r'"[^>]*?)(/?>)',
+                    re.DOTALL
+                )
+                match = pattern.search(html)
+
+            if not match and image_src:
+                pattern2 = re.compile(
+                    r'(<img\b[^>]*?\bsrc="' + re.escape(image_src) + r'"[^>]*?)(/?>)',
+                    re.DOTALL
+                )
+                match = pattern2.search(html)
+
+            if match:
+                tag_content = match.group(1)
+                tag_close = match.group(2)
+
+                tag_content = re.sub(r'\bsrc="[^"]*"', f'src="{new_url}"', tag_content)
+                tag_content = re.sub(r'\s*data-image-prompt="[^"]*"', '', tag_content)
+                tag_content = re.sub(r'\s*data-image-name="[^"]*"', '', tag_content)
+
+                html = html[:match.start()] + tag_content + tag_close + html[match.end():]
+                processed.append({'image_name': image_name, 'new_url': new_url, 'action': action})
+            else:
+                failed.append({'image_name': image_name, 'error': 'Image tag not found in HTML'})
+
+            if new_url and image_src:
+                bg_pattern = re.compile(
+                    r'(background-image\s*:\s*[^;]*?)url\(\s*["\']?' + re.escape(image_src) + r'["\']?\s*\)',
+                    re.DOTALL
+                )
+                html = bg_pattern.sub(
+                    lambda m: m.group(1) + f'url("{new_url}")',
+                    html
+                )
 
         # Save updated HTML
         page.html_content = html
@@ -2256,7 +2293,8 @@ Keep the translations natural and fluent — these are website UI strings.
             library_catalog=library_catalog,
         )
 
-        model = model_override or self.model_name
+        # Always use gemini-flash for image analysis — fast and sufficient for prompt suggestions
+        model = 'gemini-flash'
         messages = [
             {'role': 'system', 'content': system_prompt},
             {'role': 'user', 'content': user_prompt}
