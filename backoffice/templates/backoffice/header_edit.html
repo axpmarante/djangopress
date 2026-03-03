@@ -4,6 +4,10 @@
 
 {% block title %}Edit Header{% endblock %}
 
+{% block chat_context %}
+<script>window.__chatContext = {section: "header_edit"};</script>
+{% endblock %}
+
 {% block content %}
 <div class="max-w-7xl mx-auto space-y-6">
     <!-- Header -->
@@ -434,8 +438,10 @@ async function refineHeader() {
     const sse = new SSEClient("{% url 'ai:refine_header_stream' %}", {
         csrfToken: getCSRFToken(),
         onProgress: (data) => {
-            if (data.status === 'running' && stepLabels[data.step]) {
-                const progressEl = document.getElementById('progressText');
+            const progressEl = document.getElementById('progressText');
+            if (data.status === 'streaming' && data.chars) {
+                if (progressEl) progressEl.textContent = 'Generating... ' + data.chars.toLocaleString() + ' chars';
+            } else if (data.status === 'running' && stepLabels[data.step]) {
                 if (progressEl) progressEl.textContent = stepLabels[data.step];
             }
         },

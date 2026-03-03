@@ -3,12 +3,16 @@
 
 {% block title %}Chat Refine — {{ page.default_title }} — AI Content Studio{% endblock %}
 
+{% block chat_context %}
+<script>window.__chatContext = {pageId: {{ page.id }}, section: "chat_refine", pageTitle: "{{ page.default_title|escapejs }}"};</script>
+{% endblock %}
+
 {% block content %}
 <div class="space-y-6">
     <!-- Breadcrumb -->
     <nav class="flex" aria-label="Breadcrumb">
         <ol class="flex items-center space-x-2 text-sm text-gray-500">
-            <li><a href="{% url 'backoffice:ai_management' %}" class="hover:text-gray-700">AI Content Studio</a></li>
+            <li><a href="{% url 'backoffice:dashboard' %}" class="hover:text-gray-700">Dashboard</a></li>
             <li>
                 <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
                     <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
@@ -394,8 +398,13 @@ async function sendMessage(event) {
     const sse = new SSEClient("{% url 'ai:chat_refine_page_stream' %}", {
         csrfToken: getCookie('csrftoken'),
         onProgress: function(data) {
-            const label = STEP_LABELS[data.step] || data.status || 'Processing...';
-            document.getElementById('chatStepLabel').textContent = label;
+            if (data.status === 'streaming' && data.chars) {
+                document.getElementById('chatStepLabel').textContent =
+                    'Refining HTML... ' + data.chars.toLocaleString() + ' chars';
+            } else {
+                const label = STEP_LABELS[data.step] || data.status || 'Processing...';
+                document.getElementById('chatStepLabel').textContent = label;
+            }
         },
         onComplete: function(result) {
             document.getElementById('typingIndicator').classList.add('hidden');
