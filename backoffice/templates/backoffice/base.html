@@ -44,6 +44,13 @@
         </div>
     </div>
 
+    {% if user.is_superuser %}
+    {% block chat_context %}
+    <script>window.__chatContext = {};</script>
+    {% endblock %}
+    {% include 'backoffice/includes/chat_widget.html' %}
+    {% endif %}
+
     {% block extra_js %}{% endblock %}
 </body>
 </html>
