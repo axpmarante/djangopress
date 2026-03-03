@@ -44,19 +44,36 @@ Store whatever you have: `business_name` (if known) and `website_url` (if provid
 
 Research is the #1 value of this skill — don't ask the user for info that's on their website.
 
-### 2a. Fetch the client website
+### 2a. Fetch and crawl the client website
 
-Use `WebFetch` on the main URL. Extract:
+**Step 1: Fetch the homepage.** Use `WebFetch` on the main URL. Extract:
 - Business name and tagline
 - What they do — services, products, specialties
 - Contact info: email, phone, address
 - Social media links (check header, footer, contact page)
-- Current page structure (nav links → what pages they have)
 - Visual style observations: colors, mood, typography, imagery style
 - Any awards, certifications, press mentions
 - Opening hours (if applicable)
 
-If the site has distinct subpages visible in the nav (e.g. `/about`, `/services`, `/menu`, `/contact`), fetch 2-3 key ones for more detail.
+**Step 2: Extract all internal links.** From the homepage, collect every link from:
+- **Navigation bar** (including dropdown/submenu items)
+- **CTA buttons** and prominent links in the hero/header area
+- **Footer links** (quick links, service pages, legal pages)
+
+Filter to internal links only (same domain). Deduplicate and ignore anchors (`#`), mailto, tel, and file downloads.
+
+**Step 3: Fetch each page.** Use `WebFetch` on every internal link found. For each page extract:
+- Page title and URL
+- Main content summary (what the page is about, key sections)
+- Specific services, products, or info listed
+- Forms (contact, booking, quote request)
+- Gallery or portfolio items
+- Testimonials or reviews
+- Any data not found on the homepage
+
+Fetch pages in parallel where possible. If a page fails, note it and move on.
+
+**Step 4: Build a complete site map.** Compile all findings into a structured overview of every page and its content. This becomes the foundation for the Pages section in the briefing.
 
 ### 2b. Fetch social media profiles
 
@@ -88,9 +105,14 @@ Here's what I found about [Business Name]:
 **Location:** [address]
 **Contact:** [email, phone]
 **Social Media:** [links found]
-**Current Pages:** [list of pages on their existing site]
 **Visual Style:** [observations about their current branding]
 **Notable:** [awards, reviews, press]
+
+**Site Map** (X pages crawled):
+- **Home** (/) — [brief summary of content]
+- **About** (/about) — [brief summary]
+- **Services** (/services) — [brief summary]
+- ... [every page found]
 
 Does this look right? Anything to correct or add?
 ```
