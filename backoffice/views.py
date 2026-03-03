@@ -44,7 +44,10 @@ class MediaDetailView(LoginRequiredMixin, TemplateView):
 
         # File info
         try:
-            if image.image and image.image.storage.exists(image.image.name):
+            if image.is_pdf and image.file and image.file.storage.exists(image.file.name):
+                context['file_size'] = image.file.size
+                context['dimensions'] = None
+            elif image.image and image.image.storage.exists(image.image.name):
                 context['file_size'] = image.image.size
                 try:
                     img = PILImage.open(image.image)
@@ -59,12 +62,12 @@ class MediaDetailView(LoginRequiredMixin, TemplateView):
             context['file_size'] = 0
             context['dimensions'] = 'Unknown'
 
-        # Usage count: scan pages for this image URL
+        # Usage count: scan pages for this media URL
         usage_count = 0
-        if image.image:
-            url = image.image.url
+        media_url = image.url
+        if media_url:
             for page in Page.objects.exclude(html_content=''):
-                if url in page.html_content:
+                if media_url in page.html_content:
                     usage_count += 1
         context['usage_count'] = usage_count
 
@@ -119,8 +122,10 @@ class MediaDetailView(LoginRequiredMixin, TemplateView):
         image.description = request.POST.get('description', '').strip()
         image.is_active = 'is_active' in request.POST
 
-        # Replace image file
-        if 'image' in request.FILES:
+        # Replace file
+        if 'file' in request.FILES:
+            image.file = request.FILES['file']
+        elif 'image' in request.FILES:
             image.image = request.FILES['image']
 
         try:
@@ -172,14 +177,25 @@ class DashboardView(LoginRequiredMixin, TemplateView):
 
 
 class MediaView(LoginRequiredMixin, ListView):
-    """Media library management - list all site images"""
+    """Media library management - list all site media (images and documents)"""
     model = SiteImage
     template_name = 'backoffice/media.html'
     context_object_name = 'images'
     paginate_by = 24
 
     def get_queryset(self):
-        return SiteImage.objects.order_by('-id')
+        qs = SiteImage.objects.order_by('-id')
+        file_type = self.request.GET.get('type')
+        if file_type == 'images':
+            qs = qs.filter(file_type='image')
+        elif file_type == 'documents':
+            qs = qs.filter(file_type='document')
+        return qs
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['current_type'] = self.request.GET.get('type', 'all')
+        return context
 
 
 class MediaUploadView(LoginRequiredMixin, CreateView):
@@ -201,27 +217,41 @@ class MediaUploadView(LoginRequiredMixin, CreateView):
 
 
 class MediaBulkUploadView(LoginRequiredMixin, TemplateView):
-    """Bulk upload multiple images to media library"""
+    """Bulk upload multiple files (images and PDFs) to media library"""
     template_name = 'backoffice/media_bulk_upload.html'
 
-    def post(self, request, *args, **kwargs):
-        images = request.FILES.getlist('images')
+    ALLOWED_PDF_TYPES = ['application/pdf']
+    ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp']
+    MAX_PDF_SIZE = 20 * 1024 * 1024  # 20MB
 
-        if not images:
-            messages.error(request, 'No images were uploaded. Please try again.')
+    def post(self, request, *args, **kwargs):
+        files = request.FILES.getlist('images')
+
+        if not files:
+            messages.error(request, 'No files were uploaded. Please try again.')
             return redirect('backoffice:media_bulk_upload')
 
         uploaded_count = 0
         optimized_count = 0
         skipped_count = 0
+        lang_codes = SiteSettings.load().get_language_codes()
 
-        for idx, image in enumerate(images):
+        for uploaded_file in files:
             try:
-                # Get file size in KB
-                image_size_kb = image.size / 1024
+                content_type = uploaded_file.content_type
+                is_pdf = content_type in self.ALLOWED_PDF_TYPES
+                is_image = content_type in self.ALLOWED_IMAGE_TYPES
+
+                if not is_pdf and not is_image:
+                    messages.error(request, f"Skipped {uploaded_file.name}: unsupported file type ({content_type})")
+                    continue
+
+                if is_pdf and uploaded_file.size > self.MAX_PDF_SIZE:
+                    messages.error(request, f"Skipped {uploaded_file.name}: exceeds 20MB limit")
+                    continue
 
                 # Auto-generate title and key from filename
-                filename_without_ext = image.name.rsplit('.', 1)[0]
+                filename_without_ext = uploaded_file.name.rsplit('.', 1)[0]
                 title = filename_without_ext.replace('_', ' ').replace('-', ' ').title()
                 base_key = slugify(filename_without_ext)
 
@@ -232,34 +262,32 @@ class MediaBulkUploadView(LoginRequiredMixin, TemplateView):
                     key = f"{base_key}-{counter}"
                     counter += 1
 
-                # Check if image needs optimization (larger than 400KB)
-                if image_size_kb > 400:
-                    print(f"\n📊 Image '{image.name}' is {image_size_kb:.2f} KB - optimizing...")
-                    processed_image = resize_and_compress_image(image)
-                    optimized_count += 1
-                else:
-                    print(f"\n✅ Image '{image.name}' is {image_size_kb:.2f} KB - skipping optimization")
-                    processed_image = image
-                    skipped_count += 1
-
-                # Create SiteImage object
                 site_image = SiteImage(
-                    title=title,
+                    title_i18n={lang: title for lang in lang_codes},
+                    alt_text_i18n={lang: title for lang in lang_codes},
                     key=key,
-                    alt_text=title,
-                    is_active=True
+                    is_active=True,
+                    file_type='document' if is_pdf else 'image',
                 )
-                site_image.image.save(image.name, processed_image, save=False)
-                site_image.save()
 
+                if is_pdf:
+                    site_image.file.save(uploaded_file.name, uploaded_file, save=False)
+                    skipped_count += 1
+                else:
+                    image_size_kb = uploaded_file.size / 1024
+                    if image_size_kb > 400:
+                        processed = resize_and_compress_image(uploaded_file)
+                        optimized_count += 1
+                    else:
+                        processed = uploaded_file
+                        skipped_count += 1
+                    site_image.image.save(uploaded_file.name, processed, save=False)
+
+                site_image.save()
                 uploaded_count += 1
 
             except Exception as e:
-                print(f"❌ Error uploading {image.name}: {str(e)}")
-                messages.error(
-                    request,
-                    f"Error uploading {image.name}: {str(e)}"
-                )
+                messages.error(request, f"Error uploading {uploaded_file.name}: {str(e)}")
 
         # Success message with details
         if uploaded_count > 0:
@@ -270,15 +298,9 @@ class MediaBulkUploadView(LoginRequiredMixin, TemplateView):
                 details.append(f"{skipped_count} kept original")
 
             detail_text = f" ({', '.join(details)})" if details else ""
-            messages.success(
-                request,
-                f"Successfully uploaded {uploaded_count} image(s){detail_text}!"
-            )
+            messages.success(request, f"Successfully uploaded {uploaded_count} file(s){detail_text}!")
         else:
-            messages.error(
-                request,
-                "No images were uploaded. Please try again."
-            )
+            messages.error(request, "No files were uploaded. Please try again.")
 
         return redirect('backoffice:media')
 

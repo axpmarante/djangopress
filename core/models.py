@@ -607,7 +607,12 @@ class FormSubmission(models.Model):
 
 
 class SiteImage(models.Model):
-    """Model for managing all images across the site"""
+    """Model for managing all media across the site (images and documents)"""
+
+    FILE_TYPE_CHOICES = [
+        ('image', 'Image'),
+        ('document', 'Document'),
+    ]
 
     # OLD FIELDS (will be removed after migration)
     title = models.CharField('Title (OLD)', max_length=100, null=True, blank=True)
@@ -628,7 +633,11 @@ class SiteImage(models.Model):
     )
 
     key = models.SlugField('Key', unique=True, blank=True, help_text='Optional unique identifier to reference this image in templates')
-    image = models.ImageField('Image', upload_to='site_images/')
+    image = models.ImageField('Image', upload_to='site_images/', blank=True)
+    file = models.FileField('File', upload_to='site_files/', blank=True, null=True,
+        help_text='For non-image files (PDFs). Images use the image field above.')
+    file_type = models.CharField('File Type', max_length=20, choices=FILE_TYPE_CHOICES,
+        default='image', db_index=True)
     tags = models.CharField('Tags', max_length=200, blank=True, default='', help_text='Comma-separated tags for filtering (e.g., construction, villa, pool)')
     description = models.TextField('AI Description', blank=True, default='', help_text='AI-generated semantic description for intelligent image matching')
     is_active = models.BooleanField('Active', default=True)
@@ -663,6 +672,19 @@ class SiteImage(models.Model):
         if self.tags:
             return [tag.strip() for tag in self.tags.split(',')]
         return []
+
+    @property
+    def is_pdf(self):
+        return self.file_type == 'document'
+
+    @property
+    def url(self):
+        """Return the URL for this media item (image or file)."""
+        if self.file:
+            return self.file.url
+        if self.image:
+            return self.image.url
+        return ''
 
 
 class Page(models.Model):

@@ -99,8 +99,9 @@ def get_media_library(request):
                 'id': img.id,
                 'key': img.key,
                 'title': img.title,
-                'url': img.image.url,
+                'url': img.url,
                 'alt_text': img.alt_text,
+                'file_type': img.file_type,
             })
 
         return JsonResponse({
@@ -119,7 +120,7 @@ def get_media_library(request):
 @require_http_methods(["POST"])
 def upload_images(request):
     """
-    Upload multiple images to the media library.
+    Upload multiple files (images and PDFs) to the media library.
 
     Expected POST data:
     - Multiple files with key 'images'
@@ -131,32 +132,44 @@ def upload_images(request):
         "optimized_count": 2,
         "skipped_count": 1,
         "uploaded_images": [
-            {"id": 1, "title": "Image 1", "url": "/media/site_images/image1.jpg"},
+            {"id": 1, "title": "Image 1", "url": "/media/site_images/image1.jpg", "file_type": "image"},
             ...
         ]
     }
     """
-    try:
-        images = request.FILES.getlist('images')
+    ALLOWED_PDF_TYPES = ['application/pdf']
+    ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp']
+    MAX_PDF_SIZE = 20 * 1024 * 1024  # 20MB
 
-        if not images:
+    try:
+        files = request.FILES.getlist('images')
+
+        if not files:
             return JsonResponse({
                 'success': False,
-                'error': 'No images provided'
+                'error': 'No files provided'
             }, status=400)
 
         uploaded_count = 0
         optimized_count = 0
         skipped_count = 0
         uploaded_images = []
+        lang_codes = SiteSettings.load().get_language_codes()
 
-        for image in images:
+        for uploaded_file in files:
             try:
-                # Get file size in KB
-                image_size_kb = image.size / 1024
+                content_type = uploaded_file.content_type
+                is_pdf = content_type in ALLOWED_PDF_TYPES
+                is_image = content_type in ALLOWED_IMAGE_TYPES
+
+                if not is_pdf and not is_image:
+                    continue
+
+                if is_pdf and uploaded_file.size > MAX_PDF_SIZE:
+                    continue
 
                 # Auto-generate title and key from filename
-                filename_without_ext = image.name.rsplit('.', 1)[0]
+                filename_without_ext = uploaded_file.name.rsplit('.', 1)[0]
                 title = filename_without_ext.replace('_', ' ').replace('-', ' ').title()
                 base_key = slugify(filename_without_ext)
 
@@ -167,40 +180,47 @@ def upload_images(request):
                     key = f"{base_key}-{counter}"
                     counter += 1
 
-                # Check if image needs optimization (larger than 400KB)
-                if image_size_kb > 400:
-                    processed_image = resize_and_compress_image(image)
-                    optimized_count += 1
-                else:
-                    processed_image = image
-                    skipped_count += 1
-
                 site_image = SiteImage(
-                    title=title,
+                    title_i18n={lang: title for lang in lang_codes},
+                    alt_text_i18n={lang: title for lang in lang_codes},
                     key=key,
-                    alt_text=title,
-                    is_active=True
+                    is_active=True,
+                    file_type='document' if is_pdf else 'image',
                 )
-                site_image.image.save(image.name, processed_image, save=False)
+
+                if is_pdf:
+                    site_image.file.save(uploaded_file.name, uploaded_file, save=False)
+                    skipped_count += 1
+                else:
+                    image_size_kb = uploaded_file.size / 1024
+                    if image_size_kb > 400:
+                        processed = resize_and_compress_image(uploaded_file)
+                        optimized_count += 1
+                    else:
+                        processed = uploaded_file
+                        skipped_count += 1
+                    site_image.image.save(uploaded_file.name, processed, save=False)
+
                 site_image.save()
 
                 uploaded_images.append({
                     'id': site_image.id,
-                    'title': site_image.title,
-                    'url': site_image.image.url,
-                    'key': site_image.key
+                    'title': title,
+                    'url': site_image.url,
+                    'key': site_image.key,
+                    'file_type': site_image.file_type,
                 })
 
                 uploaded_count += 1
 
             except Exception as e:
-                print(f"❌ Error uploading {image.name}: {str(e)}")
+                print(f"Error uploading {uploaded_file.name}: {str(e)}")
                 continue
 
         if uploaded_count == 0:
             return JsonResponse({
                 'success': False,
-                'error': 'Failed to upload any images'
+                'error': 'Failed to upload any files'
             }, status=500)
 
         return JsonResponse({

@@ -8,7 +8,7 @@
     <div class="flex items-center justify-between">
         <div>
             <h2 class="text-3xl font-bold text-gray-900">Media Library</h2>
-            <p class="text-gray-600 mt-1">Manage all your site images</p>
+            <p class="text-gray-600 mt-1">Manage all your site media</p>
         </div>
         <div class="flex space-x-3">
             {% if images %}
@@ -39,13 +39,36 @@
         </div>
     </div>
 
-    <!-- Images Grid -->
+    <!-- Filter Tabs -->
+    <div class="flex space-x-1 bg-gray-100 rounded-lg p-1 w-fit">
+        <a href="{% url 'backoffice:media' %}"
+           class="px-4 py-2 text-sm font-medium rounded-md {% if current_type == 'all' %}bg-white shadow text-gray-900{% else %}text-gray-600 hover:text-gray-900{% endif %}">
+            All
+        </a>
+        <a href="{% url 'backoffice:media' %}?type=images"
+           class="px-4 py-2 text-sm font-medium rounded-md {% if current_type == 'images' %}bg-white shadow text-gray-900{% else %}text-gray-600 hover:text-gray-900{% endif %}">
+            Images
+        </a>
+        <a href="{% url 'backoffice:media' %}?type=documents"
+           class="px-4 py-2 text-sm font-medium rounded-md {% if current_type == 'documents' %}bg-white shadow text-gray-900{% else %}text-gray-600 hover:text-gray-900{% endif %}">
+            Documents
+        </a>
+    </div>
+
+    <!-- Media Grid -->
     {% if images %}
     <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
         {% for image in images %}
         <a href="{% url 'backoffice:media_detail' pk=image.pk %}" class="block bg-white rounded-lg shadow overflow-hidden hover:shadow-lg transition-shadow">
             <div class="aspect-square bg-gray-100 relative">
-                {% if image.image %}
+                {% if image.is_pdf %}
+                <div class="w-full h-full flex flex-col items-center justify-center bg-red-50">
+                    <svg class="w-16 h-16 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"/>
+                    </svg>
+                    <span class="mt-1 text-xs font-bold text-red-600">PDF</span>
+                </div>
+                {% elif image.image %}
                 <img src="{{ image.image.url }}" alt="{{ image.alt_text|default:image.title }}"
                      class="w-full h-full object-cover">
                 {% else %}
@@ -72,17 +95,17 @@
     {% if is_paginated %}
     <div class="flex items-center justify-between bg-white px-6 py-3 rounded-lg shadow">
         <div class="text-sm text-gray-700">
-            Showing {{ page_obj.start_index }} to {{ page_obj.end_index }} of {{ page_obj.paginator.count }} images
+            Showing {{ page_obj.start_index }} to {{ page_obj.end_index }} of {{ page_obj.paginator.count }} items
         </div>
         <div class="flex space-x-2">
             {% if page_obj.has_previous %}
-            <a href="?page={{ page_obj.previous_page_number }}"
+            <a href="?page={{ page_obj.previous_page_number }}{% if current_type != 'all' %}&type={{ current_type }}{% endif %}"
                class="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50">
                 Previous
             </a>
             {% endif %}
             {% if page_obj.has_next %}
-            <a href="?page={{ page_obj.next_page_number }}"
+            <a href="?page={{ page_obj.next_page_number }}{% if current_type != 'all' %}&type={{ current_type }}{% endif %}"
                class="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50">
                 Next
             </a>
@@ -97,8 +120,8 @@
         <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
         </svg>
-        <h3 class="mt-2 text-sm font-medium text-gray-900">No images</h3>
-        <p class="mt-1 text-sm text-gray-500">Get started by uploading your first image.</p>
+        <h3 class="mt-2 text-sm font-medium text-gray-900">No media items</h3>
+        <p class="mt-1 text-sm text-gray-500">Get started by uploading your first file.</p>
         <div class="mt-6">
             <a href="{% url 'backoffice:media_upload' %}"
                class="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700">
@@ -220,13 +243,13 @@
 <!-- Image data for Alpine -->
 <script>
 window.__imageData = [
-    {% for image in images %}
+    {% for image in images %}{% if not image.is_pdf %}
     {
         id: {{ image.pk }},
         title: "{{ image|escapejs }}",
         hasDesc: {% if image.description %}true{% else %}false{% endif %},
         thumb: "{% if image.image %}{{ image.image.url|escapejs }}{% endif %}"
-    }{% if not forloop.last %},{% endif %}
+    },{% endif %}
     {% endfor %}
 ];
 

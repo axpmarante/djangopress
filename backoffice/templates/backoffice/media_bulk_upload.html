@@ -1,12 +1,12 @@
 {% extends 'backoffice/base.html' %}
 
-{% block title %}Bulk Upload Images{% endblock %}
+{% block title %}Bulk Upload Files{% endblock %}
 
 {% block content %}
 <div class="max-w-4xl mx-auto">
     <div class="mb-6">
-        <h2 class="text-3xl font-bold text-gray-900">Bulk Upload Images</h2>
-        <p class="text-gray-600 mt-1">Upload multiple images at once with automatic optimization</p>
+        <h2 class="text-3xl font-bold text-gray-900">Bulk Upload Files</h2>
+        <p class="text-gray-600 mt-1">Upload multiple images and PDFs at once with automatic optimization</p>
     </div>
 
     <div class="bg-white rounded-lg shadow p-6">
@@ -20,7 +20,7 @@
                        id="imageInput"
                        name="images"
                        multiple
-                       accept="image/*"
+                       accept="image/*,.pdf"
                        class="hidden">
 
                 <svg class="mx-auto h-16 w-16 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -29,16 +29,16 @@
                 </svg>
 
                 <h3 class="mt-4 text-lg font-medium text-gray-900">
-                    Drag and drop images here
+                    Drag and drop files here
                 </h3>
                 <p class="mt-2 text-sm text-gray-600">
                     or <span class="text-blue-600 hover:text-blue-700 font-medium">browse files</span>
                 </p>
                 <p class="mt-2 text-xs text-gray-500">
-                    PNG, JPG, GIF, WEBP - Images will be automatically optimized (max 1920px, 80% quality)
+                    PNG, JPG, GIF, WEBP, PDF - Images will be automatically optimized (max 1920px, 80% quality)
                 </p>
                 <p class="mt-1 text-xs text-gray-500">
-                    Images under 400KB will not be compressed
+                    Images under 400KB will not be compressed. PDFs are stored as-is (max 20MB).
                 </p>
             </div>
 
@@ -74,7 +74,7 @@
                             id="uploadButton"
                             disabled
                             class="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed">
-                        Upload Images
+                        Upload Files
                     </button>
                 </div>
             </div>
@@ -134,14 +134,15 @@ imageInput.addEventListener('change', (e) => {
 });
 
 function handleFiles(files) {
-    const imageFiles = Array.from(files).filter(file => file.type.startsWith('image/'));
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf'];
+    const validFiles = Array.from(files).filter(file => allowedTypes.includes(file.type));
 
-    if (imageFiles.length === 0) {
-        alert('Please select valid image files');
+    if (validFiles.length === 0) {
+        alert('Please select valid image or PDF files');
         return;
     }
 
-    selectedFiles = imageFiles;
+    selectedFiles = validFiles;
     updatePreview();
     updateFileCount();
     uploadButton.disabled = false;
@@ -152,21 +153,16 @@ function updatePreview() {
     previewGrid.classList.remove('hidden');
 
     selectedFiles.forEach((file, index) => {
-        const reader = new FileReader();
+        const div = document.createElement('div');
+        div.className = 'relative bg-white border border-gray-200 rounded-lg overflow-hidden group';
+        const fileSize = (file.size / 1024).toFixed(0);
+        const isPdf = file.type === 'application/pdf';
 
-        reader.onload = (e) => {
-            const div = document.createElement('div');
-            div.className = 'relative bg-white border border-gray-200 rounded-lg overflow-hidden group';
-
-            const fileSize = (file.size / 1024).toFixed(0);
-            const willOptimize = file.size > 400 * 1024; // 400KB threshold
-
+        function buildCard(imgHtml, badgeHtml) {
             div.innerHTML = `
                 <div class="aspect-square bg-gray-100 relative">
-                    <img src="${e.target.result}"
-                         alt="${file.name}"
-                         class="w-full h-full object-cover">
-                    ${willOptimize ? '<div class="absolute top-2 left-2"><span class="px-2 py-1 text-xs font-semibold text-white bg-blue-600 rounded">Will optimize</span></div>' : '<div class="absolute top-2 left-2"><span class="px-2 py-1 text-xs font-semibold text-white bg-green-600 rounded">No optimization</span></div>'}
+                    ${imgHtml}
+                    ${badgeHtml}
                 </div>
                 <div class="p-2">
                     <p class="text-xs font-medium text-gray-900 truncate">${file.name}</p>
@@ -180,11 +176,28 @@ function updatePreview() {
                     </svg>
                 </button>
             `;
-
             previewGrid.appendChild(div);
-        };
+        }
 
-        reader.readAsDataURL(file);
+        if (isPdf) {
+            const pdfIcon = `<div class="w-full h-full flex flex-col items-center justify-center bg-red-50">
+                <svg class="w-16 h-16 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"/>
+                </svg>
+                <span class="mt-1 text-xs font-bold text-red-600">PDF</span>
+            </div>`;
+            buildCard(pdfIcon, '<div class="absolute top-2 left-2"><span class="px-2 py-1 text-xs font-semibold text-white bg-red-600 rounded">PDF</span></div>');
+        } else {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const willOptimize = file.size > 400 * 1024;
+                const badge = willOptimize
+                    ? '<div class="absolute top-2 left-2"><span class="px-2 py-1 text-xs font-semibold text-white bg-blue-600 rounded">Will optimize</span></div>'
+                    : '<div class="absolute top-2 left-2"><span class="px-2 py-1 text-xs font-semibold text-white bg-green-600 rounded">No optimization</span></div>';
+                buildCard(`<img src="${e.target.result}" alt="${file.name}" class="w-full h-full object-cover">`, badge);
+            };
+            reader.readAsDataURL(file);
+        }
     });
 }
 
@@ -204,7 +217,7 @@ function updateFileCount() {
     if (selectedFiles.length > 0) {
         const totalSize = selectedFiles.reduce((sum, file) => sum + file.size, 0);
         const totalSizeMB = (totalSize / 1024 / 1024).toFixed(2);
-        fileCount.textContent = `${selectedFiles.length} image${selectedFiles.length > 1 ? 's' : ''} selected (${totalSizeMB} MB)`;
+        fileCount.textContent = `${selectedFiles.length} file${selectedFiles.length > 1 ? 's' : ''} selected (${totalSizeMB} MB)`;
     } else {
         fileCount.textContent = '';
     }
