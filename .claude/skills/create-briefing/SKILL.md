@@ -94,36 +94,98 @@ Use `WebSearch` for `"<business name>" <city/location>` to find:
 - Additional social profiles not found on the website
 - Competitor context
 
-### 2d. Present findings
+### 2d. Write the site audit document
 
-Show the user everything you found, organized clearly:
+**Only for migration sites (when a URL was provided).** Write a comprehensive audit to `briefings/<slug>-audit.md` capturing everything found. This document is the raw research — keep it detailed and factual.
+
+Use the `Write` tool to create the file with this structure:
+
+```markdown
+# <Business Name> — Site Audit
+
+> Auto-generated from crawling <URL> on <date>
+
+## Business Overview
+[What the business does, tagline, specialties]
+
+## Contact Information
+- Email: [email]
+- Phone: [phone]
+- Address: [address]
+- Google Maps: [link if found]
+
+## Social Media
+- Instagram: [url]
+- Facebook: [url]
+- [other platforms]
+
+## Site Map
+
+### Navigation Structure
+[Exact nav items as they appear, including dropdowns]
+
+### Pages Crawled
+
+#### Home (/)
+**Sections:**
+1. [Hero — description, heading text, CTA button text]
+2. [Section name — what content it contains]
+3. [Section name — what content it contains]
+...
+
+**Images:** [notable images, hero background, etc.]
+**Forms:** [any forms on this page]
+
+#### About (/about)
+**Sections:**
+1. [Section — content summary]
+...
+
+[Repeat for every page crawled]
+
+### Footer Structure
+[Columns, links, contact info, social icons, newsletter signup, etc.]
+
+## Design Observations
+- **Colors:** [primary, secondary, accent colors observed]
+- **Typography:** [font families, heading styles]
+- **Layout:** [grid patterns, spacing, visual density]
+- **Mood:** [elegant, playful, corporate, warm, etc.]
+- **Image style:** [photography style, illustrations, icons]
+
+## Notable
+- [Awards, certifications, press mentions]
+- [Google reviews/rating if found]
+- [Unique features or content worth preserving]
+```
+
+Adapt sections as needed — skip what doesn't apply, add what's relevant.
+
+### 2e. Present findings
+
+Show the user a summary of what you found and that the audit has been saved:
 
 ```
-Here's what I found about [Business Name]:
+Audit saved to `briefings/<slug>-audit.md`
+
+Here's the overview:
 
 **Business:** [summary]
 **Location:** [address]
 **Contact:** [email, phone]
-**Social Media:** [links found]
-**Visual Style:** [observations about their current branding]
-**Notable:** [awards, reviews, press]
+**Pages found:** [count] — [list page names]
+**Design mood:** [observations]
 
-**Site Map** (X pages crawled):
-- **Home** (/) — [brief summary of content]
-- **About** (/about) — [brief summary]
-- **Services** (/services) — [brief summary]
-- ... [every page found]
-
-Does this look right? Anything to correct or add?
+Does this look right? Anything to correct?
 ```
 
 Use `AskUserQuestion` to confirm:
 ```
-Question: "Is this information accurate? Anything to correct?"
+Question: "Is the audit accurate? Anything to correct?"
 Options: "Looks good — continue", "I'll make corrections" (Other)
 ```
 
-If the user provides corrections, incorporate them.
+If the user provides corrections, update the audit file and confirm.
 
 ---
 
@@ -249,6 +311,8 @@ Options:
 ---
 
 ## Phase 4: Write the Briefing
+
+**For migration sites:** Use `briefings/<slug>-audit.md` as your primary source. The audit contains the detailed page-by-page content, design observations, and site structure. Draw from it heavily — the briefing should reflect what the existing site has, enhanced by the user's answers from Phase 3.
 
 Compile all gathered information into the **exact format** that `BriefingParser` expects. Read the template first:
 
