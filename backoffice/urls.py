@@ -81,6 +81,14 @@ urlpatterns = [
     path('ai/chat/refine/<int:page_id>/', views.AIChatRefineView.as_view(), name='ai_chat_refine'),
     path('ai/logs/', views.AICallLogsView.as_view(), name='ai_call_logs'),
 
+    # Benchmarks
+    path('benchmarks/', views.BenchmarkListView.as_view(), name='benchmarks'),
+    path('benchmarks/compare/', views.BenchmarkCompareView.as_view(), name='benchmark_compare'),
+    path('benchmarks/<str:filename>/', views.BenchmarkDetailView.as_view(), name='benchmark_detail'),
+    path('api/run-benchmark/', api_views.run_benchmark, name='api_run_benchmark'),
+    path('api/benchmark-status/', api_views.benchmark_status, name='api_benchmark_status'),
+    path('api/cancel-benchmark/', api_views.cancel_benchmark, name='api_cancel_benchmark'),
+
     # Version Management
     path('version/page/<int:version_id>/restore/', views.restore_page_version, name='restore_page_version'),
 

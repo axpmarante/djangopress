@@ -6,6 +6,9 @@ These endpoints allow staff users to update content directly from the frontend.
 import hmac
 import json
 import os
+import signal
+import subprocess
+import sys
 from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
 from django.contrib.admin.views.decorators import staff_member_required
@@ -16,6 +19,7 @@ from django.utils.text import slugify
 from django.db import connection
 from core.models import SiteSettings, SiteImage, Page, MenuItem, Blueprint, BlueprintPage
 from core.utils import resize_and_compress_image
+from core.decorators import superuser_required
 
 
 @staff_member_required
@@ -890,6 +894,150 @@ def create_pages_from_blueprint(request):
         return JsonResponse({'success': False, 'error': 'Invalid JSON'}, status=400)
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
+# === Benchmark API ===
+
+# Module-level state for the single benchmark subprocess
+_benchmark_process = None
+_benchmark_output_file = None
+
+
+@superuser_required
+@require_http_methods(["POST"])
+def run_benchmark(request):
+    """
+    Start a benchmark as a subprocess.
+
+    POST data: {"model": "gemini-pro", "briefing": "briefings/benchmark.md", "skip_images": true}
+    Returns: {"success": true, "pid": 12345}
+    """
+    global _benchmark_process, _benchmark_output_file
+
+    if _benchmark_process and _benchmark_process.poll() is None:
+        return JsonResponse({
+            'success': False,
+            'error': 'A benchmark is already running',
+            'pid': _benchmark_process.pid,
+        }, status=409)
+
+    try:
+        data = json.loads(request.body)
+    except (json.JSONDecodeError, ValueError):
+        data = {}
+
+    model = data.get('model', 'gemini-pro')
+    briefing = data.get('briefing', 'briefings/benchmark.md')
+    skip_images = data.get('skip_images', True)
+
+    # Build command
+    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    script_path = os.path.join(project_root, 'scripts', 'benchmark_generate.py')
+    briefing_path = os.path.join(project_root, briefing)
+
+    if not os.path.isfile(script_path):
+        return JsonResponse({'success': False, 'error': 'Benchmark script not found'}, status=404)
+    if not os.path.isfile(briefing_path):
+        return JsonResponse({'success': False, 'error': f'Briefing file not found: {briefing}'}, status=404)
+
+    cmd = [sys.executable, script_path, briefing, '--model', model, '--delay', '0']
+    if not skip_images:
+        cmd.append('--with-images')
+
+    # Open a temp file for combined stdout/stderr
+    import tempfile
+    _benchmark_output_file = tempfile.NamedTemporaryFile(
+        mode='w', prefix='bench_', suffix='.log', delete=False
+    )
+
+    _benchmark_process = subprocess.Popen(
+        cmd,
+        stdout=_benchmark_output_file,
+        stderr=subprocess.STDOUT,
+        cwd=project_root,
+    )
+
+    return JsonResponse({
+        'success': True,
+        'pid': _benchmark_process.pid,
+    })
+
+
+@superuser_required
+@require_http_methods(["GET"])
+def benchmark_status(request):
+    """
+    Check the status of the running benchmark.
+
+    Returns: {"running": true/false, "pid": ..., "exit_code": ..., "output_tail": "..."}
+    """
+    global _benchmark_process, _benchmark_output_file
+
+    if _benchmark_process is None:
+        return JsonResponse({'running': False, 'pid': None, 'exit_code': None, 'output_tail': ''})
+
+    poll = _benchmark_process.poll()
+    running = poll is None
+
+    # Read tail of output file
+    output_tail = ''
+    if _benchmark_output_file and os.path.isfile(_benchmark_output_file.name):
+        try:
+            with open(_benchmark_output_file.name, 'r') as f:
+                lines = f.readlines()
+                output_tail = ''.join(lines[-30:])  # last 30 lines
+        except Exception:
+            pass
+
+    result = {
+        'running': running,
+        'pid': _benchmark_process.pid,
+        'exit_code': poll,
+        'output_tail': output_tail,
+    }
+
+    # Clean up if process finished
+    if not running:
+        if _benchmark_output_file:
+            try:
+                _benchmark_output_file.close()
+                os.unlink(_benchmark_output_file.name)
+            except Exception:
+                pass
+            _benchmark_output_file = None
+
+    return JsonResponse(result)
+
+
+@superuser_required
+@require_http_methods(["POST"])
+def cancel_benchmark(request):
+    """
+    Cancel the running benchmark subprocess.
+    """
+    global _benchmark_process, _benchmark_output_file
+
+    if _benchmark_process is None or _benchmark_process.poll() is not None:
+        return JsonResponse({'success': False, 'error': 'No benchmark running'}, status=400)
+
+    try:
+        _benchmark_process.send_signal(signal.SIGTERM)
+        _benchmark_process.wait(timeout=10)
+    except subprocess.TimeoutExpired:
+        _benchmark_process.kill()
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+    if _benchmark_output_file:
+        try:
+            _benchmark_output_file.close()
+            os.unlink(_benchmark_output_file.name)
+        except Exception:
+            pass
+        _benchmark_output_file = None
+    _benchmark_process = None
+
+    return JsonResponse({'success': True, 'message': 'Benchmark cancelled'})
 
 
 # === Data Sync API ===

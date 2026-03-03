@@ -81,6 +81,9 @@ Thumbs.db
 # Test/scratch files
 ai/TEST_README.md
 
+# Benchmark reports (local data)
+benchmarks/
+
 # Testing
 .coverage
 .pytest_cache/

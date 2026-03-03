@@ -1,0 +1,358 @@
+{% extends 'backoffice/base.html' %}
+
+{% block title %}Compare Benchmarks{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <!-- Breadcrumb -->
+    <nav class="text-sm text-gray-500">
+        <a href="{% url 'backoffice:benchmarks' %}" class="hover:text-gray-700">Benchmarks</a>
+        <span class="mx-1">/</span>
+        <span class="text-gray-900">Compare</span>
+    </nav>
+
+    {% if error %}
+    <!-- Error State -->
+    <div class="bg-red-50 border-l-4 border-red-500 text-red-700 p-6 rounded">
+        <div class="flex items-center">
+            <svg class="w-6 h-6 mr-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"/>
+            </svg>
+            <div>
+                <h3 class="font-semibold">Could not load reports</h3>
+                <p class="mt-1">{{ error }}</p>
+            </div>
+        </div>
+        <a href="{% url 'backoffice:benchmarks' %}" class="inline-block mt-4 text-sm text-red-800 underline hover:text-red-900">Back to Benchmarks</a>
+    </div>
+
+    {% else %}
+
+    <!-- Headline: % Change -->
+    {% if is_faster %}
+    <div class="text-center py-8">
+        <div class="text-5xl font-bold text-green-600">{{ change_pct|floatformat:1 }}%</div>
+        <div class="text-lg text-green-700 mt-2 font-medium uppercase tracking-wide">Faster</div>
+    </div>
+    {% else %}
+    <div class="text-center py-8">
+        <div class="text-5xl font-bold text-red-600">+{{ change_pct|floatformat:1 }}%</div>
+        <div class="text-lg text-red-700 mt-2 font-medium uppercase tracking-wide">Slower</div>
+    </div>
+    {% endif %}
+
+    <!-- Meta Comparison: Baseline vs Current -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <!-- Baseline -->
+        <div class="bg-white rounded-lg shadow p-6">
+            <h3 class="text-sm font-medium text-gray-500 uppercase tracking-wider mb-4">Baseline (A)</h3>
+            <p class="text-sm font-mono text-blue-600 mb-3 truncate" title="{{ file_a }}">{{ file_a }}</p>
+            <dl class="space-y-2 text-sm">
+                <div class="flex justify-between">
+                    <dt class="text-gray-500">Model</dt>
+                    <dd class="text-gray-900 font-medium">{{ meta_a.model|default:"-" }}</dd>
+                </div>
+                <div class="flex justify-between">
+                    <dt class="text-gray-500">Date</dt>
+                    <dd class="text-gray-900">{{ meta_a.date|default:"-" }}</dd>
+                </div>
+                <div class="flex justify-between">
+                    <dt class="text-gray-500">Total Time</dt>
+                    <dd class="text-gray-900 font-mono" data-seconds="{{ meta_a.total_time_s|default:'0' }}"></dd>
+                </div>
+                <div class="flex justify-between">
+                    <dt class="text-gray-500">Pages</dt>
+                    <dd class="text-gray-900 font-mono">{{ summary_a.pages_created|default:"0" }}</dd>
+                </div>
+                <div class="flex justify-between">
+                    <dt class="text-gray-500">LLM Calls</dt>
+                    <dd class="text-gray-900 font-mono">{{ summary_a.total_llm_calls|default:"0" }}</dd>
+                </div>
+                {% if meta_a.skip_images != None %}
+                <div class="flex justify-between">
+                    <dt class="text-gray-500">Images</dt>
+                    <dd class="text-gray-900">{% if meta_a.skip_images %}Skipped{% else %}Processed{% endif %}</dd>
+                </div>
+                {% endif %}
+                {% if meta_a.briefing %}
+                <div class="flex justify-between">
+                    <dt class="text-gray-500">Briefing</dt>
+                    <dd class="text-gray-900 truncate max-w-[200px]" title="{{ meta_a.briefing }}">{{ meta_a.briefing }}</dd>
+                </div>
+                {% endif %}
+            </dl>
+        </div>
+
+        <!-- Current -->
+        <div class="bg-white rounded-lg shadow p-6">
+            <h3 class="text-sm font-medium text-gray-500 uppercase tracking-wider mb-4">Current (B)</h3>
+            <p class="text-sm font-mono text-indigo-600 mb-3 truncate" title="{{ file_b }}">{{ file_b }}</p>
+            <dl class="space-y-2 text-sm">
+                <div class="flex justify-between">
+                    <dt class="text-gray-500">Model</dt>
+                    <dd class="text-gray-900 font-medium">{{ meta_b.model|default:"-" }}</dd>
+                </div>
+                <div class="flex justify-between">
+                    <dt class="text-gray-500">Date</dt>
+                    <dd class="text-gray-900">{{ meta_b.date|default:"-" }}</dd>
+                </div>
+                <div class="flex justify-between">
+                    <dt class="text-gray-500">Total Time</dt>
+                    <dd class="text-gray-900 font-mono" data-seconds="{{ meta_b.total_time_s|default:'0' }}"></dd>
+                </div>
+                <div class="flex justify-between">
+                    <dt class="text-gray-500">Pages</dt>
+                    <dd class="text-gray-900 font-mono">{{ summary_b.pages_created|default:"0" }}</dd>
+                </div>
+                <div class="flex justify-between">
+                    <dt class="text-gray-500">LLM Calls</dt>
+                    <dd class="text-gray-900 font-mono">{{ summary_b.total_llm_calls|default:"0" }}</dd>
+                </div>
+                {% if meta_b.skip_images != None %}
+                <div class="flex justify-between">
+                    <dt class="text-gray-500">Images</dt>
+                    <dd class="text-gray-900">{% if meta_b.skip_images %}Skipped{% else %}Processed{% endif %}</dd>
+                </div>
+                {% endif %}
+                {% if meta_b.briefing %}
+                <div class="flex justify-between">
+                    <dt class="text-gray-500">Briefing</dt>
+                    <dd class="text-gray-900 truncate max-w-[200px]" title="{{ meta_b.briefing }}">{{ meta_b.briefing }}</dd>
+                </div>
+                {% endif %}
+            </dl>
+        </div>
+    </div>
+
+    {% if step_comparison %}
+    <!-- Pipeline Steps Comparison -->
+    <div class="bg-white rounded-lg shadow overflow-hidden">
+        <div class="px-6 py-4 border-b border-gray-200">
+            <h3 class="text-lg font-semibold text-gray-900">Pipeline Steps</h3>
+            <p class="text-sm text-gray-500 mt-1">Time per generation pipeline step</p>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200 text-sm">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Step</th>
+                        <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Baseline</th>
+                        <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Current</th>
+                        <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Delta</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[200px]"></th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-100">
+                    {% for step in step_comparison %}
+                    <tr class="hover:bg-gray-50">
+                        <td class="px-6 py-3 text-gray-900 font-medium">{{ step.name }}</td>
+                        <td class="px-6 py-3 text-right text-gray-700 font-mono" data-seconds="{{ step.a|default:'0' }}"></td>
+                        <td class="px-6 py-3 text-right text-gray-700 font-mono" data-seconds="{{ step.b|default:'0' }}"></td>
+                        <td class="px-6 py-3 text-right">
+                            {% if step.delta.has_data %}
+                            <span class="{% if step.delta.improved %}text-green-600{% else %}text-red-600{% endif %} font-medium">
+                                {% if step.delta.diff > 0 %}+{% endif %}{{ step.delta.diff|floatformat:1 }}s
+                                ({% if step.delta.pct > 0 %}+{% endif %}{{ step.delta.pct|floatformat:0 }}%)
+                            </span>
+                            {% else %}
+                            <span class="text-gray-400">&mdash;</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-6 py-3">
+                            <div class="flex items-center space-x-1 h-5">
+                                {% if step.a %}
+                                <div class="bg-blue-400 rounded-sm h-3 step-bar" data-value="{{ step.a }}" data-group="steps" title="Baseline: {{ step.a|floatformat:1 }}s"></div>
+                                {% endif %}
+                                {% if step.b %}
+                                <div class="bg-indigo-500 rounded-sm h-3 step-bar" data-value="{{ step.b }}" data-group="steps" title="Current: {{ step.b|floatformat:1 }}s"></div>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if page_comparison %}
+    <!-- Per-Page Comparison -->
+    <div class="bg-white rounded-lg shadow overflow-hidden">
+        <div class="px-6 py-4 border-b border-gray-200">
+            <h3 class="text-lg font-semibold text-gray-900">Per-Page Timing</h3>
+            <p class="text-sm text-gray-500 mt-1">Total generation time per page</p>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200 text-sm">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Page</th>
+                        <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Baseline</th>
+                        <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Current</th>
+                        <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Delta</th>
+                        <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Delta %</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-100">
+                    {% for page in page_comparison %}
+                    <tr class="hover:bg-gray-50">
+                        <td class="px-6 py-3 text-gray-900 font-medium">{{ page.name }}</td>
+                        <td class="px-6 py-3 text-right text-gray-700 font-mono" data-seconds="{{ page.a|default:'0' }}"></td>
+                        <td class="px-6 py-3 text-right text-gray-700 font-mono" data-seconds="{{ page.b|default:'0' }}"></td>
+                        <td class="px-6 py-3 text-right">
+                            {% if page.delta.has_data %}
+                            <span class="{% if page.delta.improved %}text-green-600{% else %}text-red-600{% endif %} font-medium font-mono">
+                                {% if page.delta.diff > 0 %}+{% endif %}{{ page.delta.diff|floatformat:1 }}s
+                            </span>
+                            {% else %}
+                            <span class="text-gray-400">&mdash;</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-6 py-3 text-right">
+                            {% if page.delta.has_data %}
+                            <span class="{% if page.delta.improved %}text-green-600{% else %}text-red-600{% endif %} font-medium">
+                                {% if page.delta.pct > 0 %}+{% endif %}{{ page.delta.pct|floatformat:0 }}%
+                            </span>
+                            {% else %}
+                            <span class="text-gray-400">&mdash;</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if metric_comparison %}
+    <!-- Key Metrics Comparison -->
+    <div class="bg-white rounded-lg shadow overflow-hidden">
+        <div class="px-6 py-4 border-b border-gray-200">
+            <h3 class="text-lg font-semibold text-gray-900">Key Metrics</h3>
+            <p class="text-sm text-gray-500 mt-1">Aggregate timing metrics</p>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200 text-sm">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Metric</th>
+                        <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Baseline</th>
+                        <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Current</th>
+                        <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Delta</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-100">
+                    {% for metric in metric_comparison %}
+                    <tr class="hover:bg-gray-50">
+                        <td class="px-6 py-3 text-gray-900 font-medium">{{ metric.label }}</td>
+                        <td class="px-6 py-3 text-right text-gray-700 font-mono" data-seconds="{{ metric.a|default:'0' }}"></td>
+                        <td class="px-6 py-3 text-right text-gray-700 font-mono" data-seconds="{{ metric.b|default:'0' }}"></td>
+                        <td class="px-6 py-3 text-right">
+                            {% if metric.delta.has_data %}
+                            <span class="{% if metric.delta.improved %}text-green-600{% else %}text-red-600{% endif %} font-medium">
+                                {% if metric.delta.diff > 0 %}+{% endif %}{{ metric.delta.diff|floatformat:1 }}s
+                                ({% if metric.delta.pct > 0 %}+{% endif %}{{ metric.delta.pct|floatformat:0 }}%)
+                            </span>
+                            {% else %}
+                            <span class="text-gray-400">&mdash;</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if count_comparison %}
+    <!-- Count Metrics -->
+    <div class="bg-white rounded-lg shadow overflow-hidden">
+        <div class="px-6 py-4 border-b border-gray-200">
+            <h3 class="text-lg font-semibold text-gray-900">Count Metrics</h3>
+            <p class="text-sm text-gray-500 mt-1">Non-timing comparisons</p>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200 text-sm">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Metric</th>
+                        <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Baseline</th>
+                        <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Current</th>
+                        <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Diff</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-100">
+                    {% for count in count_comparison %}
+                    <tr class="hover:bg-gray-50">
+                        <td class="px-6 py-3 text-gray-900 font-medium">{{ count.label }}</td>
+                        <td class="px-6 py-3 text-right text-gray-700 font-mono">{{ count.a }}</td>
+                        <td class="px-6 py-3 text-right text-gray-700 font-mono">{{ count.b }}</td>
+                        <td class="px-6 py-3 text-right font-mono">
+                            {% if count.diff > 0 %}
+                            <span class="text-red-600 font-medium">+{{ count.diff }}</span>
+                            {% elif count.diff < 0 %}
+                            <span class="text-green-600 font-medium">{{ count.diff }}</span>
+                            {% else %}
+                            <span class="text-gray-400">0</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Back link -->
+    <div class="pt-2">
+        <a href="{% url 'backoffice:benchmarks' %}" class="text-sm text-gray-500 hover:text-gray-700 inline-flex items-center">
+            <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+            </svg>
+            Back to Benchmarks
+        </a>
+    </div>
+    {% endif %}
+</div>
+
+<script>
+// Format seconds as human-readable time
+function fmtTime(s) {
+    if (!s || s === 0) return '-';
+    if (s < 60) return s.toFixed(1) + 's';
+    return Math.floor(s / 60) + 'm ' + (s % 60).toFixed(0) + 's';
+}
+
+// Populate all [data-seconds] elements with formatted time
+document.querySelectorAll('[data-seconds]').forEach(el => {
+    const val = parseFloat(el.dataset.seconds);
+    el.textContent = fmtTime(val);
+});
+
+// Scale mini-bars relative to the max value in their group
+document.addEventListener('DOMContentLoaded', () => {
+    const groups = {};
+    document.querySelectorAll('.step-bar').forEach(bar => {
+        const group = bar.dataset.group || 'default';
+        const val = parseFloat(bar.dataset.value) || 0;
+        if (!groups[group]) groups[group] = { max: 0, bars: [] };
+        if (val > groups[group].max) groups[group].max = val;
+        groups[group].bars.push({ el: bar, val: val });
+    });
+
+    Object.values(groups).forEach(g => {
+        if (g.max === 0) return;
+        g.bars.forEach(b => {
+            const pct = Math.max((b.val / g.max) * 100, 4);
+            b.el.style.width = pct + 'px';
+            b.el.style.minWidth = '4px';
+            b.el.style.maxWidth = '100px';
+        });
+    });
+});
+</script>
+{% endblock %}

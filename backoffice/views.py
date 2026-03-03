@@ -1642,6 +1642,286 @@ class SubmissionDetailView(LoginRequiredMixin, TemplateView):
         return context
 
 
+class BenchmarkListView(SuperuserRequiredMixin, TemplateView):
+    template_name = 'backoffice/benchmarks.html'
+
+    def get_context_data(self, **kwargs):
+        import os
+        from django.conf import settings
+        context = super().get_context_data(**kwargs)
+        benchmarks_dir = os.path.join(settings.BASE_DIR, 'benchmarks')
+        reports = []
+
+        if os.path.isdir(benchmarks_dir):
+            for fname in sorted(os.listdir(benchmarks_dir), reverse=True):
+                if not fname.endswith('.json'):
+                    continue
+                filepath = os.path.join(benchmarks_dir, fname)
+                try:
+                    with open(filepath) as f:
+                        data = json.load(f)
+                    reports.append({
+                        'filename': fname,
+                        'meta': data.get('meta', {}),
+                        'summary': data.get('summary', {}),
+                    })
+                except (json.JSONDecodeError, IOError):
+                    continue
+
+        # Summary stats
+        if reports:
+            times = [r['meta'].get('total_time_s', 0) for r in reports if r['meta'].get('total_time_s')]
+            context['best_time'] = min(times) if times else 0
+            context['avg_page_time'] = round(
+                sum(r['summary'].get('avg_page_time_s', 0) for r in reports) / len(reports), 1
+            ) if reports else 0
+        else:
+            context['best_time'] = 0
+            context['avg_page_time'] = 0
+
+        context['reports'] = reports
+
+        # Available models for run benchmark
+        from ai.utils.llm_config import MODEL_CONFIG
+        context['available_models'] = list(MODEL_CONFIG.keys())
+
+        # Available briefings
+        briefings_dir = os.path.join(settings.BASE_DIR, 'briefings')
+        context['available_briefings'] = []
+        if os.path.isdir(briefings_dir):
+            context['available_briefings'] = sorted([
+                f for f in os.listdir(briefings_dir) if f.endswith('.md')
+            ])
+
+        return context
+
+
+class BenchmarkDetailView(SuperuserRequiredMixin, TemplateView):
+    template_name = 'backoffice/benchmark_detail.html'
+
+    def get_context_data(self, **kwargs):
+        import os
+        from django.conf import settings
+        from django.http import Http404
+        context = super().get_context_data(**kwargs)
+        filename = kwargs['filename']
+
+        # Security: only allow .json files, no path traversal
+        if not filename.endswith('.json') or '/' in filename or '\\' in filename:
+            raise Http404
+
+        filepath = os.path.join(settings.BASE_DIR, 'benchmarks', filename)
+        if not os.path.exists(filepath):
+            raise Http404
+
+        with open(filepath) as f:
+            report = json.load(f)
+
+        context['filename'] = filename
+        context['report'] = report
+        context['meta'] = report.get('meta', {})
+        context['summary'] = report.get('summary', {})
+        context['llm_calls'] = report.get('llm_calls', [])
+
+        # Pipeline step bars with percentages
+        steps = report.get('steps', {})
+        total = report['meta'].get('total_time_s', 1) or 1
+        step_colors = {
+            'plan': 'bg-gray-400',
+            'configure_settings': 'bg-blue-500',
+            'generate_pages': 'bg-indigo-500',
+            'generate_design_guide': 'bg-purple-500',
+            'create_menu_items': 'bg-gray-400',
+            'generate_header': 'bg-teal-500',
+            'generate_footer': 'bg-cyan-500',
+            'process_images': 'bg-green-500',
+            'ensure_contact_form': 'bg-gray-400',
+        }
+        context['step_bars'] = [
+            {
+                'name': name.replace('_', ' ').title(),
+                'key': name,
+                'time': time_val,
+                'pct': round((time_val / total) * 100, 1) if total else 0,
+                'color': step_colors.get(name, 'bg-gray-400'),
+            }
+            for name, time_val in steps.items()
+            if time_val > 0.01  # skip near-zero steps
+        ]
+
+        # Per-page data with sub-step percentages
+        pages = report.get('pages', {})
+        page_list = []
+        for name, pdata in pages.items():
+            page_entry = {
+                'name': name,
+                'elapsed_s': pdata.get('elapsed_s', 0),
+                'llm_calls': pdata.get('llm_calls', 0),
+                'llm_time_s': pdata.get('llm_time_s', 0),
+                'html_chars': pdata.get('html_chars', 0),
+                'error': pdata.get('error'),
+                'sub_steps': [],
+            }
+            sub_steps = pdata.get('sub_steps', {})
+            page_total = pdata.get('llm_time_s', 1) or 1
+            sub_step_colors = {
+                'component_selection': 'bg-blue-400',
+                'html_generation': 'bg-indigo-500',
+                'metadata': 'bg-gray-400',
+                'templatization': 'bg-purple-500',
+            }
+            for sname, sdata in sub_steps.items():
+                page_entry['sub_steps'].append({
+                    'name': sname.replace('_', ' ').title(),
+                    'key': sname,
+                    'elapsed_s': sdata.get('elapsed_s', 0),
+                    'model': sdata.get('model', ''),
+                    'tokens': sdata.get('tokens', 0),
+                    'pct': round((sdata.get('elapsed_s', 0) / page_total) * 100, 1),
+                    'color': sub_step_colors.get(sname, 'bg-gray-400'),
+                })
+            page_list.append(page_entry)
+        context['pages'] = page_list
+
+        return context
+
+
+class BenchmarkCompareView(SuperuserRequiredMixin, TemplateView):
+    template_name = 'backoffice/benchmark_compare.html'
+
+    def _load_report(self, filename):
+        import os
+        from django.conf import settings
+        if not filename or not filename.endswith('.json') or '/' in filename:
+            return None
+        filepath = os.path.join(settings.BASE_DIR, 'benchmarks', filename)
+        if not os.path.exists(filepath):
+            return None
+        try:
+            with open(filepath) as f:
+                return json.load(f)
+        except (json.JSONDecodeError, IOError):
+            return None
+
+    def _delta(self, old, new):
+        if old is None or new is None or old == 0:
+            return {'diff': 0, 'pct': 0, 'improved': False, 'has_data': False}
+        diff = round(new - old, 1)
+        pct = round((diff / old) * 100, 1)
+        return {'diff': diff, 'pct': pct, 'improved': diff < 0, 'has_data': True}
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        file_a = self.request.GET.get('a', '')
+        file_b = self.request.GET.get('b', '')
+
+        report_a = self._load_report(file_a)
+        report_b = self._load_report(file_b)
+
+        if not report_a or not report_b:
+            context['error'] = 'Both reports must be valid JSON files.'
+            return context
+
+        context['file_a'] = file_a
+        context['file_b'] = file_b
+        context['meta_a'] = report_a.get('meta', {})
+        context['meta_b'] = report_b.get('meta', {})
+        context['summary_a'] = report_a.get('summary', {})
+        context['summary_b'] = report_b.get('summary', {})
+
+        # Headline
+        ta = report_a['meta'].get('total_time_s', 0)
+        tb = report_b['meta'].get('total_time_s', 0)
+        if ta and tb:
+            context['change_pct'] = round(((tb - ta) / ta) * 100, 1)
+            context['is_faster'] = context['change_pct'] < 0
+        else:
+            context['change_pct'] = 0
+            context['is_faster'] = False
+
+        # Step comparison
+        all_steps = list(dict.fromkeys(
+            list(report_a.get('steps', {}).keys()) + list(report_b.get('steps', {}).keys())
+        ))
+        step_comparison = []
+        for step in all_steps:
+            a_val = report_a.get('steps', {}).get(step)
+            b_val = report_b.get('steps', {}).get(step)
+            step_comparison.append({
+                'name': step.replace('_', ' ').title(),
+                'a': a_val,
+                'b': b_val,
+                'delta': self._delta(a_val, b_val),
+            })
+        context['step_comparison'] = step_comparison
+
+        # Page comparison
+        all_pages = list(dict.fromkeys(
+            list(report_a.get('pages', {}).keys()) + list(report_b.get('pages', {}).keys())
+        ))
+        page_comparison = []
+        for page in all_pages:
+            a_val = report_a.get('pages', {}).get(page, {}).get('elapsed_s')
+            b_val = report_b.get('pages', {}).get(page, {}).get('elapsed_s')
+            page_comparison.append({
+                'name': page,
+                'a': a_val,
+                'b': b_val,
+                'delta': self._delta(a_val, b_val),
+            })
+        context['page_comparison'] = page_comparison
+
+        # Key metrics comparison
+        metrics = [
+            ('Total Time', 'total_time_s', 'meta'),
+            ('Total LLM Time', 'total_llm_time_s', 'summary'),
+            ('Avg Per LLM Call', 'avg_llm_call_s', 'summary'),
+            ('Avg Per Page', 'avg_page_time_s', 'summary'),
+            ('Text Gen Avg', 'text_llm_avg_s', 'summary'),
+            ('Image Gen Avg', 'image_gen_avg_s', 'summary'),
+            ('Overhead', 'overhead_time_s', 'summary'),
+        ]
+        metric_comparison = []
+        for label, key, source in metrics:
+            if source == 'meta':
+                a_val = report_a.get('meta', {}).get(key)
+                b_val = report_b.get('meta', {}).get(key)
+            else:
+                a_val = report_a.get('summary', {}).get(key)
+                b_val = report_b.get('summary', {}).get(key)
+            if a_val is None and b_val is None:
+                continue
+            metric_comparison.append({
+                'label': label,
+                'a': a_val,
+                'b': b_val,
+                'delta': self._delta(a_val, b_val),
+            })
+        context['metric_comparison'] = metric_comparison
+
+        # Count metrics
+        count_metrics = [
+            ('Total LLM Calls', 'total_llm_calls'),
+            ('Pages Created', 'pages_created'),
+            ('Fallbacks', 'fallback_count'),
+            ('Failed Calls', 'failed_count'),
+        ]
+        count_comparison = []
+        for label, key in count_metrics:
+            a_val = report_a.get('summary', {}).get(key, 0)
+            b_val = report_b.get('summary', {}).get(key, 0)
+            diff = b_val - a_val
+            count_comparison.append({
+                'label': label,
+                'a': a_val,
+                'b': b_val,
+                'diff': diff,
+            })
+        context['count_comparison'] = count_comparison
+
+        return context
+
+
 @csrf_exempt
 def auto_login(request):
     """Auto-login endpoint for the DjangoPress Manager dashboard."""

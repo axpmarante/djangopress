@@ -1,0 +1,279 @@
+{% extends "backoffice/base.html" %}
+
+{% block title %}Benchmark: {{ filename }}{% endblock %}
+
+{% block content %}
+<div class="p-6">
+    <!-- Breadcrumb -->
+    <div class="mb-6">
+        <div class="flex items-center gap-2 text-sm text-gray-500 mb-1">
+            <a href="{% url 'backoffice:benchmarks' %}" class="hover:text-blue-600">Benchmarks</a>
+            <span>/</span>
+            <span>{{ filename }}</span>
+        </div>
+        <h1 class="text-2xl font-bold text-gray-900">{{ filename }}</h1>
+        {% if meta.date %}
+        <p class="text-sm text-gray-500 mt-1">{{ meta.date }}</p>
+        {% endif %}
+    </div>
+
+    <!-- Meta Cards -->
+    <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-8">
+        <div class="bg-white rounded-lg shadow p-4">
+            <div class="text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">Total Time</div>
+            <div class="text-xl font-bold text-gray-900" x-data x-text="fmtDuration({{ meta.total_time_s|default:'0' }})"></div>
+        </div>
+        <div class="bg-white rounded-lg shadow p-4">
+            <div class="text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">Pages Generated</div>
+            <div class="text-xl font-bold text-gray-900">{{ summary.pages_created }}</div>
+        </div>
+        <div class="bg-white rounded-lg shadow p-4">
+            <div class="text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">Model</div>
+            <div class="text-lg font-semibold text-gray-900 truncate" title="{{ meta.model }}">{{ meta.model }}</div>
+        </div>
+        <div class="bg-white rounded-lg shadow p-4">
+            <div class="text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">LLM Calls</div>
+            <div class="text-xl font-bold text-gray-900">{{ summary.total_llm_calls }}</div>
+        </div>
+        <div class="bg-white rounded-lg shadow p-4">
+            <div class="text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">Avg Per Page</div>
+            <div class="text-xl font-bold text-gray-900" x-data x-text="fmtDuration({{ summary.avg_page_time_s|default:'0' }})"></div>
+        </div>
+        <div class="bg-white rounded-lg shadow p-4">
+            <div class="text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">Avg LLM Call</div>
+            <div class="text-xl font-bold text-gray-900" x-data x-text="fmtDuration({{ summary.avg_llm_call_s|default:'0' }})"></div>
+        </div>
+    </div>
+
+    <!-- Secondary Meta -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+        <div class="bg-white rounded-lg shadow p-4">
+            <div class="text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">LLM Time</div>
+            <div class="text-lg font-semibold text-gray-900" x-data x-text="fmtDuration({{ summary.total_llm_time_s|default:'0' }})"></div>
+        </div>
+        <div class="bg-white rounded-lg shadow p-4">
+            <div class="text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">Overhead</div>
+            <div class="text-lg font-semibold text-gray-900" x-data x-text="fmtDuration({{ summary.overhead_time_s|default:'0' }})"></div>
+        </div>
+        <div class="bg-white rounded-lg shadow p-4">
+            <div class="text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">Fallbacks</div>
+            <div class="text-lg font-semibold {% if summary.fallback_count %}text-yellow-600{% else %}text-gray-900{% endif %}">{{ summary.fallback_count|default:"0" }}</div>
+        </div>
+        <div class="bg-white rounded-lg shadow p-4">
+            <div class="text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">Failures</div>
+            <div class="text-lg font-semibold {% if summary.failed_count %}text-red-600{% else %}text-gray-900{% endif %}">{{ summary.failed_count|default:"0" }}</div>
+        </div>
+    </div>
+
+    <!-- Config Info -->
+    {% if meta.briefing or meta.skip_images or meta.skip_design_guide or meta.delay %}
+    <div class="bg-white rounded-lg shadow p-6 mb-8">
+        <h2 class="text-lg font-semibold text-gray-900 mb-3">Configuration</h2>
+        <div class="flex flex-wrap gap-3 text-sm">
+            {% if meta.briefing %}
+            <span class="inline-flex items-center gap-1.5 bg-blue-50 text-blue-700 px-3 py-1 rounded-full">
+                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                {{ meta.briefing }}
+            </span>
+            {% endif %}
+            {% if meta.skip_images %}
+            <span class="inline-flex items-center gap-1.5 bg-yellow-50 text-yellow-700 px-3 py-1 rounded-full">
+                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"/></svg>
+                Images skipped
+            </span>
+            {% endif %}
+            {% if meta.skip_design_guide %}
+            <span class="inline-flex items-center gap-1.5 bg-yellow-50 text-yellow-700 px-3 py-1 rounded-full">
+                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"/></svg>
+                Design guide skipped
+            </span>
+            {% endif %}
+            {% if meta.delay %}
+            <span class="inline-flex items-center gap-1.5 bg-gray-100 text-gray-700 px-3 py-1 rounded-full">
+                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                {{ meta.delay }}s delay between calls
+            </span>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Pipeline Step Timeline -->
+    <div class="bg-white rounded-lg shadow p-6 mb-8">
+        <h2 class="text-lg font-semibold text-gray-900 mb-4">Pipeline Step Timeline</h2>
+        {% for bar in step_bars %}
+        <div class="flex items-center gap-3 mb-2">
+            <span class="w-44 text-sm text-gray-600 text-right truncate" title="{{ bar.name }}">{{ bar.name }}</span>
+            <div class="flex-1 bg-gray-100 rounded-full h-7 relative overflow-hidden">
+                <div class="h-7 rounded-full {{ bar.color }} flex items-center px-2 transition-all duration-300"
+                     style="width: {{ bar.pct }}%; min-width: 2rem;">
+                    <span class="text-xs text-white font-medium whitespace-nowrap">{{ bar.pct|floatformat:1 }}%</span>
+                </div>
+            </div>
+            <span class="w-20 text-sm text-gray-700 font-mono text-right" x-data x-text="fmtDuration({{ bar.time|floatformat:1 }})"></span>
+        </div>
+        {% empty %}
+        <p class="text-sm text-gray-500">No pipeline step data available.</p>
+        {% endfor %}
+    </div>
+
+    <!-- Per-Page Breakdown -->
+    <div class="bg-white rounded-lg shadow p-6 mb-8">
+        <h2 class="text-lg font-semibold text-gray-900 mb-4">Per-Page Breakdown</h2>
+
+        <!-- Table Header -->
+        <div class="hidden md:grid grid-cols-12 gap-2 px-4 py-2 text-xs font-medium text-gray-500 uppercase tracking-wider border-b">
+            <div class="col-span-4">Page</div>
+            <div class="col-span-2 text-right">Total Time</div>
+            <div class="col-span-1 text-right">LLM Calls</div>
+            <div class="col-span-2 text-right">LLM Time</div>
+            <div class="col-span-2 text-right">HTML Chars</div>
+            <div class="col-span-1 text-center">Status</div>
+        </div>
+
+        {% for page in pages %}
+        <div x-data="{ open: false }" class="border-b border-gray-100 last:border-0">
+            <!-- Main Row -->
+            <div @click="open = !open" class="grid grid-cols-1 md:grid-cols-12 gap-2 px-4 py-3 cursor-pointer hover:bg-gray-50 transition-colors items-center">
+                <div class="col-span-4 flex items-center gap-2">
+                    <svg :class="{ 'rotate-90': open }" class="w-4 h-4 text-gray-400 transform transition-transform flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                    </svg>
+                    <span class="text-sm font-medium text-gray-900 truncate" title="{{ page.name }}">{{ page.name }}</span>
+                </div>
+                <div class="col-span-2 text-right">
+                    <span class="text-sm font-mono text-gray-700" x-text="fmtDuration({{ page.elapsed_s|floatformat:1 }})"></span>
+                </div>
+                <div class="col-span-1 text-right">
+                    <span class="text-sm text-gray-600">{{ page.llm_calls }}</span>
+                </div>
+                <div class="col-span-2 text-right">
+                    <span class="text-sm font-mono text-gray-700" x-text="fmtDuration({{ page.llm_time_s|floatformat:1 }})"></span>
+                </div>
+                <div class="col-span-2 text-right">
+                    <span class="text-sm text-gray-600">{{ page.html_chars|default:"-" }}</span>
+                </div>
+                <div class="col-span-1 text-center">
+                    {% if page.error %}
+                    <span class="inline-flex items-center justify-center w-6 h-6 rounded-full bg-red-100" title="{{ page.error }}">
+                        <svg class="w-4 h-4 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                        </svg>
+                    </span>
+                    {% else %}
+                    <span class="inline-flex items-center justify-center w-6 h-6 rounded-full bg-green-100">
+                        <svg class="w-4 h-4 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                        </svg>
+                    </span>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Expanded Sub-Steps -->
+            <div x-show="open" x-collapse class="bg-gray-50 px-4 py-3 border-t border-gray-100">
+                {% if page.error %}
+                <div class="mb-3 px-3 py-2 bg-red-50 border border-red-200 rounded text-sm text-red-700">
+                    <span class="font-medium">Error:</span> {{ page.error }}
+                </div>
+                {% endif %}
+                {% for sub in page.sub_steps %}
+                <div class="flex items-center gap-3 py-1.5">
+                    <span class="w-40 text-xs text-gray-600 text-right truncate" title="{{ sub.name }}">{{ sub.name }}</span>
+                    <div class="flex-1 bg-gray-200 rounded-full h-4 relative overflow-hidden">
+                        <div class="{{ sub.color }} h-4 rounded-full transition-all duration-300" style="width: {{ sub.pct }}%; min-width: {% if sub.pct > 0 %}0.5rem{% else %}0{% endif %};"></div>
+                    </div>
+                    <span class="w-16 text-xs font-mono text-gray-700 text-right" x-text="fmtDuration({{ sub.elapsed_s|floatformat:2 }})"></span>
+                    {% if sub.model %}
+                    <span class="text-xs bg-white border border-gray-200 text-gray-600 px-2 py-0.5 rounded whitespace-nowrap">{{ sub.model }}</span>
+                    {% endif %}
+                    {% if sub.tokens %}
+                    <span class="w-20 text-xs text-gray-500 text-right whitespace-nowrap">{{ sub.tokens }} tok</span>
+                    {% endif %}
+                </div>
+                {% empty %}
+                <p class="text-xs text-gray-500 py-2">No sub-step data available.</p>
+                {% endfor %}
+            </div>
+        </div>
+        {% empty %}
+        <div class="px-4 py-8 text-center text-gray-500">No page data available.</div>
+        {% endfor %}
+    </div>
+
+    <!-- LLM Calls Detail -->
+    <div class="bg-white rounded-lg shadow p-6 mb-8" x-data="{ showCalls: false }">
+        <div class="flex items-center justify-between mb-4">
+            <h2 class="text-lg font-semibold text-gray-900">LLM Calls</h2>
+            <button @click="showCalls = !showCalls"
+                    class="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors">
+                <svg :class="{ 'rotate-180': showCalls }" class="w-4 h-4 transform transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                </svg>
+                <span x-text="showCalls ? 'Hide' : 'Show'" class="hidden sm:inline"></span>
+                All {{ llm_calls|length }} Calls
+            </button>
+        </div>
+
+        <div x-show="showCalls" x-collapse>
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm">
+                    <thead>
+                        <tr class="border-b border-gray-200">
+                            <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">#</th>
+                            <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Step</th>
+                            <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Model</th>
+                            <th class="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Time</th>
+                            <th class="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Prompt Tokens</th>
+                            <th class="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Completion Tokens</th>
+                            <th class="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Response Len</th>
+                            <th class="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-100">
+                        {% for call in llm_calls %}
+                        <tr class="hover:bg-gray-50 transition-colors {% if not call.success %}bg-red-50{% endif %}">
+                            <td class="px-3 py-2 text-gray-500 font-mono text-xs">{{ forloop.counter }}</td>
+                            <td class="px-3 py-2 text-gray-900">{{ call.step }}</td>
+                            <td class="px-3 py-2">
+                                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-indigo-50 text-indigo-700 border border-indigo-200">{{ call.tool_name }}</span>
+                            </td>
+                            <td class="px-3 py-2 text-right font-mono text-gray-700" x-data x-text="fmtDuration({{ call.elapsed_s|floatformat:2 }})"></td>
+                            <td class="px-3 py-2 text-right text-gray-600">{{ call.prompt_tokens|default:"-" }}</td>
+                            <td class="px-3 py-2 text-right text-gray-600">{{ call.completion_tokens|default:"-" }}</td>
+                            <td class="px-3 py-2 text-right text-gray-600 font-mono">{{ call.response_len|default:"-" }}</td>
+                            <td class="px-3 py-2 text-center">
+                                {% if call.success %}
+                                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-700">OK</span>
+                                {% else %}
+                                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-700">FAIL</span>
+                                {% endif %}
+                                {% if call.fallback_used %}
+                                <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-700 ml-1">FB</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="8" class="px-3 py-8 text-center text-gray-500">No LLM call data available.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function fmtDuration(s) {
+    if (!s && s !== 0) return '-';
+    if (s < 60) return s.toFixed(1) + 's';
+    const m = Math.floor(s / 60);
+    const sec = (s % 60).toFixed(1);
+    return m + 'm ' + sec + 's';
+}
+</script>
+{% endblock %}
