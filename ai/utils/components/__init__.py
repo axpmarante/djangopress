@@ -147,8 +147,8 @@ class ComponentRegistry:
         user_prompt = "\n".join(user_prompt_parts)
 
         from ai.utils.llm_config import MODEL_CONFIG
-        config = MODEL_CONFIG.get('gemini-flash')
-        model_name = config.model_name if config else 'gemini-flash'
+        config = MODEL_CONFIG.get('gemini-lite')
+        model_name = config.model_name if config else 'gemini-lite'
 
         messages = [
             {'role': 'system', 'content': system_prompt},
@@ -157,7 +157,7 @@ class ComponentRegistry:
 
         start_ms = int(time.time() * 1000)
         try:
-            response = llm.get_completion(messages, tool_name='gemini-flash')
+            response = llm.get_completion(messages, tool_name='gemini-lite')
 
             response_text = response.choices[0].message.content
             prompt_tokens = getattr(response.usage, 'prompt_tokens', 0)

@@ -32,7 +32,7 @@ class Command(BaseCommand):
         parser.add_argument(
             '--skip-design-guide',
             action='store_true',
-            help='Skip design guide generation after home page',
+            help='Skip design guide generation',
         )
         parser.add_argument(
             '--model',

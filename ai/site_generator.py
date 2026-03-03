@@ -240,14 +240,15 @@ class SiteGenerator:
             return plan
 
         self.configure_settings(plan)
+
+        # Generate design guide BEFORE pages so all pages benefit from it
+        if not self.skip_design_guide:
+            self.generate_design_guide(plan)
+
+        # Generate pages with header/footer in parallel after home
         self.generate_pages(plan)
 
-        if not self.skip_design_guide and len(self.generated_pages) > 0:
-            self.generate_design_guide()
-
         self.create_menu_items()
-        self.generate_header(plan)
-        self.generate_footer(plan)
 
         if not self.skip_images:
             self.process_all_images()
@@ -713,19 +714,49 @@ BUTTONS:
         if home_page:
             self.generated_pages.append(home_page)
 
-        # Generate remaining pages in parallel
+        # Generate remaining pages + header + footer in parallel
         remaining = pages[1:]
-        if remaining:
-            self.log(f"\n  Generating {len(remaining)} remaining pages in parallel...")
-            with ThreadPoolExecutor(max_workers=3) as pool:
-                futures = {
-                    pool.submit(_generate_single_page, i + 1, page_spec): (i + 1, page_spec)
-                    for i, page_spec in enumerate(remaining)
-                }
-                for future in as_completed(futures):
+        self.log(f"\n  Generating {len(remaining)} remaining pages + header + footer in parallel...")
+
+        def _generate_header_task():
+            """Generate header in the parallel pool."""
+            try:
+                self.generate_header(plan)
+                return ('header', True)
+            except Exception as e:
+                self.log(f"  Header generation failed in parallel: {e}")
+                return ('header', False)
+
+        def _generate_footer_task():
+            """Generate footer in the parallel pool."""
+            try:
+                self.generate_footer(plan)
+                return ('footer', True)
+            except Exception as e:
+                self.log(f"  Footer generation failed in parallel: {e}")
+                return ('footer', False)
+
+        with ThreadPoolExecutor(max_workers=6) as pool:
+            futures = {}
+
+            # Submit remaining pages
+            for i, page_spec in enumerate(remaining):
+                future = pool.submit(_generate_single_page, i + 1, page_spec)
+                futures[future] = ('page', i + 1, page_spec)
+
+            # Submit header and footer
+            futures[pool.submit(_generate_header_task)] = ('header',)
+            futures[pool.submit(_generate_footer_task)] = ('footer',)
+
+            for future in as_completed(futures):
+                task_info = futures[future]
+                if task_info[0] == 'page':
                     page = future.result()
                     if page:
                         self.generated_pages.append(page)
+                else:
+                    # header or footer — result already handled inside the task
+                    future.result()
 
     def _build_page_brief(self, page_spec: Dict, plan: Dict) -> str:
         """Build an enriched generation brief for a page."""
@@ -762,13 +793,10 @@ BUTTONS:
 
         return '\n'.join(brief_parts)
 
-    def generate_design_guide(self):
-        """Generate a design guide from the home page (first generated page)."""
-        from ai.services import ContentGenerationService
+    def generate_design_guide(self, plan: Dict = None):
+        """Generate a design guide from the project briefing and design system settings."""
         from core.models import SiteSettings
-
-        if not self.generated_pages:
-            return
+        from ai.utils.llm_config import LLMBase
 
         self.log("\n--- Generating Design Guide ---")
 
@@ -777,31 +805,22 @@ BUTTONS:
             if not settings:
                 return
 
-            # Use the home page + any other generated pages for analysis
-            service = ContentGenerationService(model_name=self.model)
             default_lang = settings.get_default_language()
             site_name = settings.get_site_name(default_lang)
             project_briefing = settings.get_project_briefing()
-
-            # Build settings summary
             settings_summary = self._build_settings_summary(settings)
 
-            # Collect page HTML samples
-            page_samples = []
-            for page in self.generated_pages[:3]:  # First 3 pages
-                title = page.default_title or page.default_slug
-                html = page.html_content or ''
-                if len(html) > 8000:
-                    html = html[:8000] + '\n<!-- truncated -->'
-                page_samples.append(f"### {title}\n```html\n{html}\n```")
-
-            from ai.utils.llm_config import LLMBase
+            # Build page list from plan (if available) for context
+            page_context = ""
+            if plan and plan.get('pages'):
+                page_names = [p['name'] for p in plan['pages']]
+                page_context = f"\nPlanned pages: {', '.join(page_names)}"
 
             system_prompt = (
                 "You are a senior UI/UX designer creating a design guide for a website. "
-                "Analyze the existing pages and design system settings, then write a comprehensive "
-                "design guide in markdown format that captures all visual patterns, component styles, "
-                "and conventions used across the site."
+                "Based on the project briefing and design system settings, write a comprehensive "
+                "design guide in markdown format that defines visual patterns, component styles, "
+                "and conventions to ensure consistency across all pages."
             )
 
             user_prompt = f"""Site: {site_name}
@@ -809,22 +828,20 @@ Briefing: {project_briefing}
 
 Design System Settings:
 {settings_summary}
+{page_context}
 
-Page Samples:
-{''.join(page_samples)}
-
-Write a design guide that documents the visual patterns and component conventions.
+Write a design guide that defines the visual patterns and component conventions.
 Focus on: color usage, typography hierarchy, spacing patterns, button styles,
 card layouts, section structure, image treatment, and responsive behavior.
 Keep it concise and actionable — this guide will be injected into AI prompts
-for generating additional pages to ensure consistency."""
+for generating pages to ensure visual consistency."""
 
             llm = LLMBase()
             messages = [
                 {'role': 'system', 'content': system_prompt},
                 {'role': 'user', 'content': user_prompt},
             ]
-            response = llm.get_completion(messages, tool_name=self.model)
+            response = llm.get_completion(messages, tool_name='gemini-flash')
             guide = response.choices[0].message.content
 
             # Strip markdown code fences
@@ -833,7 +850,7 @@ for generating additional pages to ensure consistency."""
 
             settings.design_guide = guide
             settings.save()
-            self.log(f"  Design guide generated ({len(guide)} chars)")
+            self.log(f"  Design guide generated ({len(guide)} chars) using gemini-flash")
 
         except Exception as e:
             self.log(f"  Design guide generation failed: {e}")
@@ -906,6 +923,7 @@ for generating additional pages to ensure consistency."""
             result = service.refine_global_section(
                 section_key='main-header',
                 refinement_instructions=instructions,
+                model_override='gemini-flash',
             )
 
             section.html_template = result.get('html_template', '')
@@ -947,6 +965,7 @@ for generating additional pages to ensure consistency."""
             result = service.refine_global_section(
                 section_key='main-footer',
                 refinement_instructions=instructions,
+                model_override='gemini-flash',
             )
 
             section.html_template = result.get('html_template', '')
