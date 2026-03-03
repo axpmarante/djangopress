@@ -134,36 +134,18 @@ MODEL_CONFIG = {
         model_name="gemini-3.1-pro-preview",
         max_output_tokens=32000,
         temperature=0.3,
-        provider_params={
-            "generation_config": {
-                "top_p": 0.95,
-                "top_k": 40
-            }
-        }
     ),
     'gemini-flash': ModelConfig(
         provider=ModelProvider.GOOGLE,
         model_name="gemini-3-flash-preview",
         max_output_tokens=32000,
         temperature=0.3,
-        provider_params={
-            "generation_config": {
-                "top_p": 0.95,
-                "top_k": 40
-            }
-        }
     ),
     'gemini-lite': ModelConfig(
         provider=ModelProvider.GOOGLE,
         model_name="gemini-2.5-flash-lite",
         max_output_tokens=32000,
         temperature=0.3,
-        provider_params={
-            "generation_config": {
-                "top_p": 0.95,
-                "top_k": 40
-            }
-        }
     )
 }
 
@@ -185,6 +167,7 @@ class LLMBase:
 
     _instance = None
     _clients = {}
+    _using_vertex_ai = False
 
     def __new__(cls):
         if cls._instance is None:
@@ -203,9 +186,19 @@ class LLMBase:
                 self._clients[ModelProvider.ANTHROPIC] = Anthropic(api_key=anthropic_key)
 
         if ModelProvider.GOOGLE not in self._clients and GOOGLE_AVAILABLE:
-            google_key = get_env('GEMINI_API_KEY')
-            if google_key:
-                self._clients[ModelProvider.GOOGLE] = genai.Client(api_key=google_key)
+            vertex_project = get_env('VERTEX_AI_PROJECT')
+            vertex_location = get_env('VERTEX_AI_LOCATION')
+            if vertex_project:
+                self._clients[ModelProvider.GOOGLE] = genai.Client(
+                    vertexai=True,
+                    project=vertex_project,
+                    location=vertex_location or 'global',
+                )
+                LLMBase._using_vertex_ai = True
+            else:
+                google_key = get_env('GEMINI_API_KEY')
+                if google_key:
+                    self._clients[ModelProvider.GOOGLE] = genai.Client(api_key=google_key)
 
     def _format_messages_for_claude(self, messages: List[Dict[str, str]]) -> List[Dict[str, str]]:
         """Convert chat messages to Claude's format (now uses messages API)"""
@@ -431,6 +424,7 @@ class LLMBase:
             elif config.provider == ModelProvider.GOOGLE:
                 # Google Gemini implementation (using google-genai SDK)
                 client = self._clients[ModelProvider.GOOGLE]
+                resolved_model = config.model_name
 
                 gemini_messages = self._format_messages_for_gemini(messages)
 
@@ -463,12 +457,13 @@ class LLMBase:
                 generation_config = types.GenerateContentConfig(**gen_config_params)
 
                 try:
-                    print("\n⏳ Calling Google Gemini API (google-genai SDK)...")
-                    print(f"   Model: {config.model_name}")
+                    backend = "Vertex AI" if self._using_vertex_ai else "google-genai SDK"
+                    print(f"\n⏳ Calling Google Gemini API ({backend})...")
+                    print(f"   Model: {resolved_model}")
                     print(f"   Contents: {len(contents)} message(s)")
 
                     response = client.models.generate_content(
-                        model=config.model_name,
+                        model=resolved_model,
                         contents=contents,
                         config=generation_config
                     )
@@ -745,8 +740,9 @@ class LLMBase:
 
         generation_config = types.GenerateContentConfig(**gen_config_params)
 
+        resolved_model = config.model_name
         response = client.models.generate_content(
-            model=config.model_name,
+            model=resolved_model,
             contents=contents,
             config=generation_config
         )
@@ -856,7 +852,7 @@ class LLMBase:
             reference_images: List[bytes] = None,
     ) -> GeneratedImageResponse:
         """
-        Generate an image using Gemini 3 Pro Image.
+        Generate an image. Uses Imagen 4.0 on Vertex AI, Gemini image on public API.
 
         Args:
             prompt: The text prompt describing the desired image
@@ -871,12 +867,17 @@ class LLMBase:
         from PIL import Image as PILImage
 
         start_time = time.time()
-        model_id = "gemini-3-pro-image-preview"
+
+        if self._using_vertex_ai:
+            model_id = "imagen-4.0-fast-generate-001"
+        else:
+            model_id = "gemini-3-pro-image-preview"
 
         print("\n" + "=" * 80)
         print("🎨 IMAGE GENERATION API CALL STARTED")
         print("=" * 80)
-        print(f"📍 Provider: GOOGLE (Gemini 3 Pro Image)")
+        backend = "Vertex AI" if self._using_vertex_ai else "Public API"
+        print(f"📍 Provider: GOOGLE ({backend})")
         print(f"🧠 Model: {model_id}")
         print(f"📐 Aspect Ratio: {aspect_ratio}")
         if reference_images:
@@ -890,104 +891,19 @@ class LLMBase:
             return GeneratedImageResponse(success=False, error=error_msg, prompt_used=prompt)
 
         if ModelProvider.GOOGLE not in self._clients:
-            error_msg = "Google client not initialized. Check GEMINI_API_KEY."
+            error_msg = "Google client not initialized. Check GEMINI_API_KEY or VERTEX_AI_PROJECT."
             print(f"❌ {error_msg}")
             return GeneratedImageResponse(success=False, error=error_msg, prompt_used=prompt)
 
         try:
             client = self._clients[ModelProvider.GOOGLE]
 
-            contents = [prompt]
+            # Vertex AI: use Imagen 4.0 dedicated image generation API
+            if self._using_vertex_ai:
+                return self._imagen_generate(client, model_id, prompt, aspect_ratio, start_time)
 
-            if reference_images:
-                for i, img_bytes in enumerate(reference_images[:6]):
-                    try:
-                        img = PILImage.open(BytesIO(img_bytes))
-                        contents.append(img)
-                        print(f"   ✅ Added reference image {i+1} ({len(img_bytes) / 1024:.1f} KB)")
-                    except Exception as e:
-                        print(f"   ⚠️ Failed to load reference image {i+1}: {e}")
-
-            if aspect_ratio != '1:1':
-                enhanced_prompt = f"[Image should be {aspect_ratio} aspect ratio] {prompt}"
-                contents[0] = enhanced_prompt
-
-            print("\n⏳ Calling Gemini Image Generation API...")
-
-            response = client.models.generate_content(
-                model=model_id,
-                contents=contents,
-                config=types.GenerateContentConfig(
-                    response_modalities=['TEXT', 'IMAGE'],
-                )
-            )
-
-            image_bytes = None
-            thinking_text = None
-
-            if response.candidates and len(response.candidates) > 0:
-                candidate = response.candidates[0]
-                if hasattr(candidate, 'content') and candidate.content:
-                    for part in candidate.content.parts:
-                        if hasattr(part, 'text') and part.text:
-                            thinking_text = part.text
-                            print(f"   💭 Model thinking: {part.text[:100]}..." if len(part.text) > 100 else f"   💭 Model thinking: {part.text}")
-                        elif hasattr(part, 'inline_data') and part.inline_data:
-                            image_bytes = part.inline_data.data
-                            print(f"   ✅ Got image: {part.inline_data.mime_type}, {len(image_bytes) / 1024:.1f} KB")
-
-            if not image_bytes and hasattr(response, 'parts'):
-                for part in response.parts:
-                    if hasattr(part, 'text') and part.text:
-                        thinking_text = part.text
-                    elif hasattr(part, 'inline_data') and part.inline_data:
-                        image_bytes = part.inline_data.data
-                        print(f"   ✅ Got image from parts: {len(image_bytes) / 1024:.1f} KB")
-
-            if not image_bytes and hasattr(response, 'parts'):
-                for part in response.parts:
-                    if hasattr(part, 'as_image'):
-                        img = part.as_image()
-                        if img:
-                            output = BytesIO()
-                            img.save(output, format='PNG')
-                            output.seek(0)
-                            image_bytes = output.getvalue()
-                            print(f"   ✅ Generated image via as_image: {len(image_bytes) / 1024:.1f} KB")
-
-            elapsed_time = time.time() - start_time
-
-            if image_bytes:
-                print("\n" + "=" * 80)
-                print("✅ IMAGE GENERATION SUCCESSFUL")
-                print("=" * 80)
-                print(f"⏱️  Time Elapsed: {elapsed_time:.2f}s")
-                print(f"📏 Image Size: {len(image_bytes) / 1024:.1f} KB")
-                print("=" * 80 + "\n")
-
-                return GeneratedImageResponse(
-                    success=True,
-                    image_bytes=image_bytes,
-                    mime_type="image/png",
-                    prompt_used=prompt,
-                    thinking_text=thinking_text
-                )
-            else:
-                print("\n" + "=" * 80)
-                print("❌ IMAGE GENERATION FAILED")
-                print("=" * 80)
-                print(f"⏱️  Time Elapsed: {elapsed_time:.2f}s")
-                print("❗ Error: No image was generated by the model")
-                if thinking_text:
-                    print(f"💭 Model response: {thinking_text}")
-                print("=" * 80 + "\n")
-
-                return GeneratedImageResponse(
-                    success=False,
-                    error="No image was generated by the model",
-                    prompt_used=prompt,
-                    thinking_text=thinking_text
-                )
+            # Public API: use Gemini multimodal image generation
+            return self._gemini_image_generate(client, model_id, prompt, aspect_ratio, reference_images, start_time)
 
         except Exception as e:
             elapsed_time = time.time() - start_time
@@ -1005,6 +921,135 @@ class LLMBase:
                 success=False,
                 error=error_msg,
                 prompt_used=prompt
+            )
+
+    def _imagen_generate(self, client, model_id, prompt, aspect_ratio, start_time):
+        """Generate image using Imagen 4.0 on Vertex AI."""
+        import time
+
+        print(f"\n⏳ Calling Imagen 4.0 API...")
+
+        response = client.models.generate_images(
+            model=model_id,
+            prompt=prompt,
+            config=types.GenerateImagesConfig(
+                number_of_images=1,
+                aspect_ratio=aspect_ratio,
+            )
+        )
+
+        elapsed_time = time.time() - start_time
+
+        if response.generated_images:
+            image_bytes = response.generated_images[0].image.image_bytes
+            print("\n" + "=" * 80)
+            print("✅ IMAGE GENERATION SUCCESSFUL")
+            print("=" * 80)
+            print(f"⏱️  Time Elapsed: {elapsed_time:.2f}s")
+            print(f"📏 Image Size: {len(image_bytes) / 1024:.1f} KB")
+            print("=" * 80 + "\n")
+
+            return GeneratedImageResponse(
+                success=True,
+                image_bytes=image_bytes,
+                mime_type="image/png",
+                prompt_used=prompt,
+            )
+        else:
+            print("\n" + "=" * 80)
+            print("❌ IMAGE GENERATION FAILED")
+            print("=" * 80)
+            print(f"⏱️  Time Elapsed: {elapsed_time:.2f}s")
+            print("❗ Error: No image was generated by the model")
+            print("=" * 80 + "\n")
+
+            return GeneratedImageResponse(
+                success=False,
+                error="No image was generated by the model",
+                prompt_used=prompt,
+            )
+
+    def _gemini_image_generate(self, client, model_id, prompt, aspect_ratio, reference_images, start_time):
+        """Generate image using Gemini multimodal on public API."""
+        import time
+        from io import BytesIO
+        from PIL import Image as PILImage
+
+        contents = [prompt]
+
+        if reference_images:
+            for i, img_bytes in enumerate(reference_images[:6]):
+                try:
+                    img = PILImage.open(BytesIO(img_bytes))
+                    contents.append(img)
+                    print(f"   ✅ Added reference image {i+1} ({len(img_bytes) / 1024:.1f} KB)")
+                except Exception as e:
+                    print(f"   ⚠️ Failed to load reference image {i+1}: {e}")
+
+        if aspect_ratio != '1:1':
+            enhanced_prompt = f"[Image should be {aspect_ratio} aspect ratio] {prompt}"
+            contents[0] = enhanced_prompt
+
+        print("\n⏳ Calling Gemini Image Generation API...")
+
+        response = client.models.generate_content(
+            model=model_id,
+            contents=contents,
+            config=types.GenerateContentConfig(
+                response_modalities=['TEXT', 'IMAGE'],
+            )
+        )
+
+        image_bytes = None
+        thinking_text = None
+
+        if response.candidates and len(response.candidates) > 0:
+            candidate = response.candidates[0]
+            if hasattr(candidate, 'content') and candidate.content:
+                for part in candidate.content.parts:
+                    if hasattr(part, 'text') and part.text:
+                        thinking_text = part.text
+                    elif hasattr(part, 'inline_data') and part.inline_data:
+                        image_bytes = part.inline_data.data
+                        print(f"   ✅ Got image: {part.inline_data.mime_type}, {len(image_bytes) / 1024:.1f} KB")
+
+        if not image_bytes and hasattr(response, 'parts'):
+            for part in response.parts:
+                if hasattr(part, 'inline_data') and part.inline_data:
+                    image_bytes = part.inline_data.data
+
+        elapsed_time = time.time() - start_time
+
+        if image_bytes:
+            print("\n" + "=" * 80)
+            print("✅ IMAGE GENERATION SUCCESSFUL")
+            print("=" * 80)
+            print(f"⏱️  Time Elapsed: {elapsed_time:.2f}s")
+            print(f"📏 Image Size: {len(image_bytes) / 1024:.1f} KB")
+            print("=" * 80 + "\n")
+
+            return GeneratedImageResponse(
+                success=True,
+                image_bytes=image_bytes,
+                mime_type="image/png",
+                prompt_used=prompt,
+                thinking_text=thinking_text
+            )
+        else:
+            print("\n" + "=" * 80)
+            print("❌ IMAGE GENERATION FAILED")
+            print("=" * 80)
+            print(f"⏱️  Time Elapsed: {elapsed_time:.2f}s")
+            print("❗ Error: No image was generated by the model")
+            if thinking_text:
+                print(f"💭 Model response: {thinking_text}")
+            print("=" * 80 + "\n")
+
+            return GeneratedImageResponse(
+                success=False,
+                error="No image was generated by the model",
+                prompt_used=prompt,
+                thinking_text=thinking_text
             )
 
 
