@@ -9,6 +9,7 @@ processes images, and creates menu items.
 import json
 import logging
 import re
+import sys
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
@@ -220,6 +221,7 @@ class SiteGenerator:
         self.delay = options.get('delay', 2)
         self.generated_pages = []
         self.errors = []
+        self._overall_start = None
 
     def log(self, message: str):
         if self.stdout:
@@ -227,8 +229,36 @@ class SiteGenerator:
         else:
             print(message)
 
+    def _elapsed(self):
+        """Return formatted elapsed time since pipeline start."""
+        if self._overall_start is None:
+            return ""
+        secs = time.time() - self._overall_start
+        mins = int(secs // 60)
+        secs_rem = int(secs % 60)
+        if mins:
+            return f"({mins}m {secs_rem:02d}s)"
+        return f"({secs_rem}s)"
+
+    def _make_page_progress_callback(self, label):
+        """Create an on_progress callback for terminal display during generation."""
+        start = time.time()
+        def on_progress(event):
+            status = event.get('status', '')
+            chars = event.get('chars', 0)
+            step = event.get('step', '')
+            elapsed = time.time() - start
+            if status == 'streaming' and chars:
+                sys.stderr.write(f"\r    {label}: {chars:,} chars ({elapsed:.0f}s)")
+                sys.stderr.flush()
+            elif status == 'done' and step in ('html_generation', 'refine_html'):
+                sys.stderr.write(f"\r    {label}: done ({elapsed:.0f}s)          \n")
+                sys.stderr.flush()
+        return on_progress
+
     def run(self):
         """Execute the full pipeline."""
+        self._overall_start = time.time()
         self.log(f"\n{'='*60}")
         self.log(f"Site Generator: {self.briefing['business_name']}")
         self.log(f"{'='*60}\n")
@@ -339,7 +369,7 @@ class SiteGenerator:
         django.setup()
         from core.models import SiteSettings
 
-        self.log("\n--- Configuring SiteSettings ---")
+        self.log(f"\n--- Configuring SiteSettings --- {self._elapsed()}")
 
         settings, _ = SiteSettings.objects.get_or_create(pk=1)
 
@@ -627,7 +657,7 @@ BUTTONS:
         default_lang = settings.get_default_language()
         language_codes = settings.get_language_codes()
 
-        self.log(f"\n--- Generating {len(plan['pages'])} pages ---")
+        self.log(f"\n--- Generating {len(plan['pages'])} pages --- {self._elapsed()}")
 
         # Ensure home page is generated first
         pages = list(plan['pages'])
@@ -651,9 +681,11 @@ BUTTONS:
             brief = self._build_page_brief(page_spec, plan)
 
             try:
+                progress_cb = self._make_page_progress_callback(page_name)
                 result = thread_service.generate_page(
                     brief=brief,
                     language=default_lang,
+                    on_progress=progress_cb,
                 )
 
                 if page_name.lower() in ('home', 'homepage', 'home page', 'inicio'):
@@ -666,8 +698,9 @@ BUTTONS:
                 page = Page.objects.create(
                     title_i18n=title_i18n,
                     slug_i18n=slug_i18n,
-                    html_content=result['html_content'],
-                    content=result['content'],
+                    html_content_i18n=result.get('html_content_i18n', {}),
+                    html_content=result['html_content'],  # backward compat
+                    content=result['content'],  # backward compat
                     is_active=True,
                     sort_order=i * 10,
                 )
@@ -683,9 +716,11 @@ BUTTONS:
                 try:
                     self.log(f"    Retrying {page_name} with simplified brief...")
                     simple_brief = f"Create a {page_name} page. {page_desc}"
+                    retry_cb = self._make_page_progress_callback(f"{page_name} (retry)")
                     result = thread_service.generate_page(
                         brief=simple_brief,
                         language=default_lang,
+                        on_progress=retry_cb,
                     )
 
                     if page_name.lower() in ('home', 'homepage', 'home page', 'inicio'):
@@ -696,8 +731,9 @@ BUTTONS:
                     page = Page.objects.create(
                         title_i18n=result.get('title_i18n', {}),
                         slug_i18n=slug_i18n,
-                        html_content=result['html_content'],
-                        content=result['content'],
+                        html_content_i18n=result.get('html_content_i18n', {}),
+                        html_content=result['html_content'],  # backward compat
+                        content=result['content'],  # backward compat
                         is_active=True,
                         sort_order=i * 10,
                     )
@@ -798,7 +834,7 @@ BUTTONS:
         from core.models import SiteSettings
         from ai.utils.llm_config import LLMBase
 
-        self.log("\n--- Generating Design Guide ---")
+        self.log(f"\n--- Generating Design Guide --- {self._elapsed()}")
 
         try:
             settings = SiteSettings.objects.first()
@@ -877,7 +913,7 @@ for generating pages to ensure visual consistency."""
         if not self.generated_pages:
             return
 
-        self.log("\n--- Creating Menu Items ---")
+        self.log(f"\n--- Creating Menu Items --- {self._elapsed()}")
 
         # Clear existing top-level menu items
         MenuItem.objects.filter(parent__isnull=True).delete()
@@ -920,14 +956,17 @@ for generating pages to ensure visual consistency."""
             )
 
             service = ContentGenerationService(model_name=self.model)
+            progress_cb = self._make_page_progress_callback('Header')
             result = service.refine_global_section(
                 section_key='main-header',
                 refinement_instructions=instructions,
                 model_override='gemini-flash',
+                on_progress=progress_cb,
             )
 
-            section.html_template = result.get('html_template', '')
-            section.content = result.get('content', {'translations': {}})
+            section.html_template_i18n = result.get('html_template_i18n', {})
+            section.html_template = result.get('html_template', '')  # backward compat
+            section.content = result.get('content', {'translations': {}})  # backward compat
             section.save()
             self.log(f"  Header generated ({len(section.html_template)} chars)")
 
@@ -962,14 +1001,17 @@ for generating pages to ensure visual consistency."""
             )
 
             service = ContentGenerationService(model_name=self.model)
+            progress_cb = self._make_page_progress_callback('Footer')
             result = service.refine_global_section(
                 section_key='main-footer',
                 refinement_instructions=instructions,
                 model_override='gemini-flash',
+                on_progress=progress_cb,
             )
 
-            section.html_template = result.get('html_template', '')
-            section.content = result.get('content', {'translations': {}})
+            section.html_template_i18n = result.get('html_template_i18n', {})
+            section.html_template = result.get('html_template', '')  # backward compat
+            section.content = result.get('content', {'translations': {}})  # backward compat
             section.save()
             self.log(f"  Footer generated ({len(section.html_template)} chars)")
 
@@ -985,7 +1027,7 @@ for generating pages to ensure visual consistency."""
         if not self.generated_pages:
             return
 
-        self.log("\n--- Processing Images ---")
+        self.log(f"\n--- Processing Images --- {self._elapsed()}")
 
         service = ContentGenerationService(model_name=self.model)
         settings = SiteSettings.objects.first()
@@ -1000,8 +1042,12 @@ for generating pages to ensure visual consistency."""
         total_processed = 0
         total_failed = 0
 
+        default_lang = settings.get_default_language() if settings else 'pt'
+
         for page in self.generated_pages:
-            html = page.html_content or ''
+            # Read from html_content_i18n with fallback to html_content
+            html_i18n = page.html_content_i18n or {}
+            html = html_i18n.get(default_lang, '') or page.html_content or ''
             soup = BeautifulSoup(html, 'html.parser')
 
             # Find all images with data-image-prompt or placeholder sources
@@ -1121,8 +1167,13 @@ for generating pages to ensure visual consistency."""
         """Print a summary of what was generated."""
         from core.models import GlobalSection
 
+        total_elapsed = time.time() - self._overall_start if self._overall_start else 0
+        mins = int(total_elapsed // 60)
+        secs = int(total_elapsed % 60)
+        elapsed_str = f"{mins}m {secs:02d}s" if mins else f"{secs}s"
+
         self.log(f"\n{'='*60}")
-        self.log(f"Generation Complete: {self.briefing['business_name']}")
+        self.log(f"Generation Complete: {self.briefing['business_name']} ({elapsed_str})")
         self.log(f"{'='*60}")
 
         self.log(f"\nPages generated: {len(self.generated_pages)}")
@@ -1131,8 +1182,10 @@ for generating pages to ensure visual consistency."""
 
         header = GlobalSection.objects.filter(key='main-header').first()
         footer = GlobalSection.objects.filter(key='main-footer').first()
-        self.log(f"\nHeader: {'generated' if header and header.html_template else 'missing'}")
-        self.log(f"Footer: {'generated' if footer and footer.html_template else 'missing'}")
+        header_ok = header and (header.html_template_i18n or header.html_template)
+        footer_ok = footer and (footer.html_template_i18n or footer.html_template)
+        self.log(f"\nHeader: {'generated' if header_ok else 'missing'}")
+        self.log(f"Footer: {'generated' if footer_ok else 'missing'}")
 
         if self.errors:
             self.log(f"\nErrors ({len(self.errors)}):")
@@ -1146,7 +1199,7 @@ for generating pages to ensure visual consistency."""
 
         return {
             'pages': len(self.generated_pages),
-            'header': bool(header and header.html_template),
-            'footer': bool(footer and footer.html_template),
+            'header': bool(header_ok),
+            'footer': bool(footer_ok),
             'errors': self.errors,
         }
