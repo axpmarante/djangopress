@@ -131,7 +131,7 @@ DjangoPress ships with Claude Code skills (`.claude/skills/`) that automate comm
 | Skill | Usage | What It Does |
 |-------|-------|-------------|
 | `/new-site` | `/new-site my-project` | Interactive setup wizard for a freshly cloned project. Walks through `.env`, dependencies, migrations, SiteSettings configuration, and validates everything is ready for content generation. **Start here for every new site.** |
-| `/add-app` | `/add-app properties` | Scaffolds a new decoupled feature app with i18n models, views, templates, and URL registration. Handles the `i18n_patterns` registration before the `core.urls` catch-all. |
+| `/add-app` | `/add-app properties` | Scaffolds a full decoupled feature app using the **news app as reference** (`docs/decoupled-app-reference.md`). Creates models (I18nModelMixin, category, layout), public views, template tags, backoffice CRUD, AI endpoints, editor v2 integration, and URL registration. |
 | `/generate-content` | `/generate-content` | Guides through the full content pipeline: pre-flight check, page planning, bulk/individual generation, chat refinement, header/footer, image processing, design system polish. |
 | `/create-briefing` | `/create-briefing O Moinho` | **Interactive briefing generator.** Researches the client online (website, social media, reviews), asks targeted questions to fill gaps, and writes a complete `briefings/<slug>.md` file ready for `/generate-site`. Accepts a client name or URL as argument. |
 | `/generate-site` | `/generate-site briefings/my-site.md` | **Full site generation from a markdown briefing.** Reads the briefing, configures SiteSettings, generates all pages, header/footer, menu items, processes images. Claude Code reviews quality and fixes issues. Also available as `python manage.py generate_site` for batch use. |
@@ -391,19 +391,20 @@ The API key is never exposed to the frontend — searches are proxied via `/ai/a
 
 ## Adding a New Decoupled App
 
-1. `python manage.py startapp appname`
-2. Add to `INSTALLED_APPS` in `config/settings.py`
-3. Create models, views, templates within the app
-4. Add URL patterns in `appname/urls.py`
-5. Include in `config/urls.py` — if the app has public-facing URLs, add them inside `i18n_patterns()` **before** `core.urls` (which is a catch-all):
-   ```python
-   urlpatterns += i18n_patterns(
-       path('', include('myapp.urls')),    # <-- before core
-       path('', include('core.urls')),
-       prefix_default_language=True,
-   )
-   ```
-6. The app should NOT import from other apps (except `core` for shared models like SiteSettings)
+> **Full reference:** `docs/decoupled-app-reference.md` — comprehensive guide with code examples based on the **news** app.
+
+Use `/add-app appname` to scaffold automatically, or follow the reference manually. The news app (`news/`) is the canonical template — copy its patterns for any new content type (properties, athletes, products, etc.).
+
+**Key patterns (all documented in the reference):**
+1. Models use `I18nModelMixin` from `core/mixins.py` with `_i18n` JSON fields
+2. `html_content_i18n` stores per-language HTML (same as Page)
+3. Category + Layout models per app
+4. Public views render through DB-stored layouts (with fallback HTML)
+5. Template tags (`{% latest_items 3 as items %}`) for embedding records in CMS pages
+6. Editor v2 works automatically via `content_type_id`/`object_id` in template
+7. AI endpoints use `RefinementSession` with generic FK for chat history
+8. URLs registered in `i18n_patterns()` **before** `core.urls` (catch-all)
+9. App should NOT import from other apps (except `core` for SiteSettings, SiteImage)
 
 ## Key Files Reference
 
@@ -415,11 +416,21 @@ The API key is never exposed to the frontend — searches are proxied via `/ai/a
 
 ### Core CMS
 - `core/models.py` — Page, SiteSettings, GlobalSection, SiteImage, PageVersion, DynamicForm, FormSubmission
+- `core/mixins.py` — `I18nModelMixin`: shared mixin for language-aware field resolution (used by all decoupled apps)
 - `core/views.py` — PageView (catches all page URLs), set_language, form_submit
 - `core/email.py` — form notification + confirmation email helpers
 - `core/context_processors.py` — injects THEME, SITE_NAME, LOGO, etc. into all templates
 - `core/templatetags/section_tags.py` — `load_global_section`, `get_translation` filters
 - `templates/base.html` — master layout, loads header/footer GlobalSections
+
+### News (Reference App for Decoupled Apps)
+- `docs/decoupled-app-reference.md` — **full guide for creating new apps** based on this pattern
+- `news/models.py` — NewsPost, NewsCategory, NewsLayout, NewsGalleryImage (canonical model pattern)
+- `news/public_views.py` — list/detail/category views with layout rendering + editor v2 support
+- `news/urls.py` — public URL patterns (registered before core catch-all)
+- `news/views.py` — backoffice CRUD + AI tool views
+- `news/templatetags/news_tags.py` — template tags for embedding records in CMS pages
+- `news/templates/news/base_news.html` — master template with editor config injection
 
 ### AI
 - `ai/services.py` — `ContentGenerationService`: generate, refine, process images, analyze page images
