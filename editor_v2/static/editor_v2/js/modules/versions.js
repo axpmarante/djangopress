@@ -12,6 +12,11 @@ import { shortcuts } from '../lib/shortcuts.js';
 import { getPendingCount } from './changes.js';
 
 const config = () => window.EDITOR_CONFIG || {};
+function withEditableId(body) {
+    const cfg = config();
+    if (cfg.contentTypeId && cfg.objectId) { body.content_type_id = cfg.contentTypeId; body.object_id = cfg.objectId; }
+    return body;
+}
 
 let unsubs = [];
 
@@ -154,11 +159,11 @@ async function restore() {
     if (!previewVersion) return;
 
     try {
-        await api.post('/save-ai-page/', {
+        await api.post('/save-ai-page/', withEditableId({
             page_id: config().pageId,
             html_template: previewVersion.html_content,
             content: previewVersion.content,
-        });
+        }));
         // Reload to show the restored version as current
         window.location.reload();
     } catch (err) {

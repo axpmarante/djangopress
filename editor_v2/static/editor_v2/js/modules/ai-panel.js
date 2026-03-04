@@ -10,6 +10,11 @@ import { SSEClient } from '../lib/sse-client.js';
 function esc(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
 const config = () => window.EDITOR_CONFIG || {};
+function withEditableId(body) {
+    const cfg = config();
+    if (cfg.contentTypeId && cfg.objectId) { body.content_type_id = cfg.contentTypeId; body.object_id = cfg.objectId; }
+    return body;
+}
 let unsubs = [];
 
 // Step label mapping for progress events
@@ -326,15 +331,15 @@ async function send() {
 
     if (activeScope === 'page') {
         url = `${apiBase}/refine-page/stream/`;
-        body = {
+        body = withEditableId({
             page_id: config().pageId,
             instructions: text,
             conversation_history: history,
             session_id: sessionId,
-        };
+        });
     } else if (activeScope === 'element') {
         url = `${apiBase}/refine-multi/stream/`;
-        body = {
+        body = withEditableId({
             page_id: config().pageId,
             scope: 'element',
             selector: currentSelector,
@@ -342,10 +347,10 @@ async function send() {
             conversation_history: history,
             session_id: sessionId,
             multi_option: multiOption,
-        };
+        });
     } else {
         url = `${apiBase}/refine-multi/stream/`;
-        body = {
+        body = withEditableId({
             page_id: config().pageId,
             scope: 'section',
             section_name: currentSection,
@@ -353,7 +358,7 @@ async function send() {
             conversation_history: history,
             session_id: sessionId,
             multi_option: multiOption,
-        };
+        });
     }
 
     activeSSE = new SSEClient(url, {
@@ -480,21 +485,21 @@ async function applyResult() {
             // Multi-option: send chosen option to apply-option endpoint
             const chosen = options[activeOption];
             if (!chosen) return;
-            await api.post('/apply-option/', {
+            await api.post('/apply-option/', withEditableId({
                 page_id: config().pageId,
                 scope: pendingScope,
                 section_name: lockedSection,
                 selector: lockedSelector,
                 html: chosen.html,
-            });
+            }));
         } else if (pendingResult && pendingScope) {
             // Single-option (page scope): existing flow
             if (pendingScope === 'page') {
-                await api.post('/save-ai-page/', {
+                await api.post('/save-ai-page/', withEditableId({
                     page_id: config().pageId,
                     html_template: pendingResult.html_template,
                     content: pendingResult.content,
-                });
+                }));
             }
         } else {
             setLoading(false);

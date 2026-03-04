@@ -9,6 +9,14 @@ import { insertBefore, insertAfterSection } from './section-inserter.js';
 function esc(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
 const config = () => window.EDITOR_CONFIG || {};
+function withEditableId(body) {
+    const cfg = config();
+    if (cfg.contentTypeId && cfg.objectId) {
+        body.content_type_id = cfg.contentTypeId;
+        body.object_id = cfg.objectId;
+    }
+    return body;
+}
 const handlers = {};
 let menu;
 
@@ -72,10 +80,10 @@ function confirmRemoveSection(sectionName) {
 
 async function removeSection(sectionName) {
   try {
-    const res = await api.post('/remove-section/', {
+    const res = await api.post('/remove-section/', withEditableId({
       page_id: config().pageId,
       section_name: sectionName,
-    });
+    }));
     if (res.success) {
       window.location.reload();
     } else {
@@ -93,10 +101,10 @@ function confirmRemoveElement(selector) {
 
 async function removeElement(selector) {
   try {
-    const res = await api.post('/remove-element/', {
+    const res = await api.post('/remove-element/', withEditableId({
       page_id: config().pageId,
       selector: selector,
-    });
+    }));
     if (res.success) {
       window.location.reload();
     } else {

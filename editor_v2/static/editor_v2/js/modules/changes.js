@@ -13,7 +13,21 @@ function changeKey(c) {
 
 function getConfig() {
     const cfg = window.EDITOR_CONFIG || {};
-    return { pageId: cfg.pageId, language: cfg.language };
+    return {
+        pageId: cfg.pageId,
+        language: cfg.language,
+        contentTypeId: cfg.contentTypeId || null,
+        objectId: cfg.objectId || null,
+    };
+}
+
+/** Add content_type_id/object_id to an API body if editing non-Page content. */
+function withEditableId(body, cfg) {
+    if (cfg.contentTypeId && cfg.objectId) {
+        body.content_type_id = cfg.contentTypeId;
+        body.object_id = cfg.objectId;
+    }
+    return body;
 }
 
 // --- DOM helpers ---
@@ -125,7 +139,8 @@ async function save() {
         console.log('[ev2] save: no pending changes');
         return;
     }
-    const { pageId, language } = getConfig();
+    const cfg = getConfig();
+    const { pageId, language } = cfg;
     const changes = Array.from(pending.values());
     console.log(`[ev2] save: ${changes.length} changes, page=${pageId}, lang=${language}`);
 
@@ -136,32 +151,32 @@ async function save() {
     try {
         for (const c of contentChanges) {
             console.log('[ev2] save content:', c.fieldKey);
-            await api.post('/update-page-content/', {
+            await api.post('/update-page-content/', withEditableId({
                 page_id: pageId,
                 field_key: c.fieldKey,
                 selector: c.selector,
                 language: language,
                 value: c.value,
-            });
+            }, cfg));
         }
         for (const c of classChanges) {
             console.log('[ev2] save classes:', c.selector);
-            await api.post('/update-page-classes/', {
+            await api.post('/update-page-classes/', withEditableId({
                 page_id: pageId,
                 selector: c.selector,
                 new_classes: c.value,
-            });
+            }, cfg));
         }
         for (const c of attrChanges) {
             console.log('[ev2] save attr:', c.selector, c.attribute);
-            await api.post('/update-page-attribute/', {
+            await api.post('/update-page-attribute/', withEditableId({
                 page_id: pageId,
                 selector: c.selector,
                 attribute: c.attribute,
                 value: c.value,
                 old_value: c.oldValue,
                 tag_name: c.tagName,
-            });
+            }, cfg));
         }
 
         pending.clear();

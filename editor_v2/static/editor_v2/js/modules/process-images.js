@@ -11,6 +11,11 @@ import { events } from '../lib/events.js';
 import { api } from '../lib/api.js';
 
 const config = () => window.EDITOR_CONFIG || {};
+function withEditableId(body) {
+    const cfg = config();
+    if (cfg.contentTypeId && cfg.objectId) { body.content_type_id = cfg.contentTypeId; body.object_id = cfg.objectId; }
+    return body;
+}
 
 let modal, body, grid, emptyEl, statusEl, suggestBtn, processBtn, scopeBadge, closeBtn, backdrop;
 let images = [];
@@ -402,11 +407,11 @@ async function aiSuggest() {
         'Content-Type': 'application/json',
         'X-CSRFToken': csrfToken,
       },
-      body: JSON.stringify({
+      body: JSON.stringify(withEditableId({
         page_id: config().pageId,
         images: imageData,
         model: 'gemini-pro',
-      }),
+      })),
     });
     const data = await resp.json();
 
@@ -486,10 +491,10 @@ async function processSelected() {
         'Content-Type': 'application/json',
         'X-CSRFToken': csrfToken,
       },
-      body: JSON.stringify({
+      body: JSON.stringify(withEditableId({
         page_id: config().pageId,
         images: entries,
-      }),
+      })),
     });
     const data = await resp.json();
 

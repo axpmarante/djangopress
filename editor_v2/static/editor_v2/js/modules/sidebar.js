@@ -558,9 +558,10 @@ function renderDesignTab() {
                 videoSetBtn.disabled = true;
                 videoSetBtn.textContent = 'Setting...';
                 try {
-                    await api.post('/update-section-video/', {
-                        page_id: pageId, section_id: sectionId, video_url: url
-                    });
+                    const videoBody = { page_id: pageId, section_id: sectionId, video_url: url };
+                    const cfg = window.EDITOR_CONFIG || {};
+                    if (cfg.contentTypeId && cfg.objectId) { videoBody.content_type_id = cfg.contentTypeId; videoBody.object_id = cfg.objectId; }
+                    await api.post('/update-section-video/', videoBody);
                     window.location.reload();
                 } catch (err) {
                     videoSetBtn.disabled = false;
@@ -575,9 +576,10 @@ function renderDesignTab() {
                 videoRemoveBtn.disabled = true;
                 videoRemoveBtn.textContent = 'Removing...';
                 try {
-                    await api.post('/update-section-video/', {
-                        page_id: pageId, section_id: sectionId, video_url: ''
-                    });
+                    const rmBody = { page_id: pageId, section_id: sectionId, video_url: '' };
+                    const cfg2 = window.EDITOR_CONFIG || {};
+                    if (cfg2.contentTypeId && cfg2.objectId) { rmBody.content_type_id = cfg2.contentTypeId; rmBody.object_id = cfg2.objectId; }
+                    await api.post('/update-section-video/', rmBody);
                     window.location.reload();
                 } catch (err) {
                     videoRemoveBtn.disabled = false;

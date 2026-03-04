@@ -47,6 +47,7 @@ if settings.DEBUG:
 # Our DynamicLanguageMiddleware handles unprefixed URLs by routing them to the default language
 # This allows the default language to be changed in the database without code changes
 urlpatterns += i18n_patterns(
-    path('', include('core.urls')),
+    path('', include('news.urls')),    # News public routes (before catch-all)
+    path('', include('core.urls')),    # Core page catch-all (must be last)
     prefix_default_language=True,  # All languages use prefixes (middleware handles unprefixed URLs)
 )

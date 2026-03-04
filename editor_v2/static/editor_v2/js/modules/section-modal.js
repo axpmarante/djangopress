@@ -15,6 +15,11 @@ import {
 } from './section-inserter.js';
 
 const config = () => window.EDITOR_CONFIG || {};
+function withEditableId(body) {
+    const cfg = config();
+    if (cfg.contentTypeId && cfg.objectId) { body.content_type_id = cfg.contentTypeId; body.object_id = cfg.objectId; }
+    return body;
+}
 
 // DOM references (cached on init)
 let modal, backdrop, closeBtn, promptInput, statusEl;
@@ -125,14 +130,14 @@ async function generate() {
     setStatus('Generating 3 options...', 'loading');
 
     try {
-        const res = await api.post('/refine-multi/', {
+        const res = await api.post('/refine-multi/', withEditableId({
             page_id: config().pageId,
             mode: 'create',
             insert_after: insertState.afterSection || null,
             instructions: text,
             conversation_history: [],
             session_id: null,
-        });
+        }));
 
         if (res.success && res.options) {
             options = res.options;
@@ -181,7 +186,7 @@ async function apply() {
     discardBtn.disabled = true;
 
     try {
-        await api.post('/apply-option/', {
+        await api.post('/apply-option/', withEditableId({
             page_id: config().pageId,
             scope: 'new-section',
             section_name: null,
@@ -189,7 +194,7 @@ async function apply() {
             html: chosen.html,
             mode: 'insert',
             insert_after: insertState?.afterSection || null,
-        });
+        }));
 
         applyBtn.textContent = 'Saved!';
         applyBtn.style.background = '#10b981';

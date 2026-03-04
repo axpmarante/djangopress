@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+
+{% block content %}
+{{ page_content }}
+{% endblock %}
+
+{% block extra_js %}
+{% if edit_mode == 'v2' and editable_content_type_id %}
+<script>
+  // Extend EDITOR_CONFIG for news post editing
+  window.EDITOR_CONFIG.contentTypeId = {{ editable_content_type_id }};
+  window.EDITOR_CONFIG.objectId = {{ editable_object_id }};
+</script>
+{% endif %}
+{% endblock %}
