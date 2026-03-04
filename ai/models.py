@@ -1,6 +1,8 @@
 import time
 import traceback
 
+from django.contrib.contenttypes.fields import GenericForeignKey
+from django.contrib.contenttypes.models import ContentType
 from django.db import models
 from django.conf import settings
 from django.utils import timezone
@@ -96,8 +98,18 @@ class RefinementSession(models.Model):
     page = models.ForeignKey(
         'core.Page',
         on_delete=models.CASCADE,
-        related_name='refinement_sessions'
+        related_name='refinement_sessions',
+        null=True, blank=True,
     )
+    # Generic FK for any content type (NewsPost, PropertyListing, etc.)
+    content_type = models.ForeignKey(
+        ContentType,
+        on_delete=models.CASCADE,
+        null=True, blank=True,
+    )
+    object_id = models.PositiveIntegerField(null=True, blank=True)
+    content_object = GenericForeignKey('content_type', 'object_id')
+
     title = models.CharField(max_length=200, blank=True, default='')
     messages = models.JSONField(default=list)
     model_used = models.CharField(max_length=50, default='gemini-pro')
@@ -114,7 +126,8 @@ class RefinementSession(models.Model):
         ordering = ['-updated_at']
 
     def __str__(self):
-        return f"Session #{self.pk} — {self.title or 'Untitled'} (page {self.page_id})"
+        target = f"page {self.page_id}" if self.page_id else f"{self.content_type} #{self.object_id}" if self.content_type else "no target"
+        return f"Session #{self.pk} — {self.title or 'Untitled'} ({target})"
 
     def add_user_message(self, content, reference_images_count=0):
         self.messages.append({
