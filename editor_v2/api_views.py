@@ -8,14 +8,101 @@ import re
 import queue
 import threading
 from django.http import JsonResponse
+from django.utils.translation import get_language
 from django.views.decorators.http import require_http_methods
 from django.contrib.admin.views.decorators import staff_member_required
 from core.decorators import superuser_required
 from django.views.decorators.csrf import csrf_exempt
-from core.models import Page, PageVersion, SiteImage
+from core.models import Page, PageVersion, SiteImage, SiteSettings
 from ai.models import RefinementSession
 from ai.utils.sse import sse_event, sse_response
 from bs4 import BeautifulSoup
+
+
+# ---------------------------------------------------------------------------
+# Per-language HTML helpers
+# ---------------------------------------------------------------------------
+
+def _get_default_language():
+    """Get the default language from SiteSettings."""
+    settings = SiteSettings.load()
+    return settings.get_default_language() if settings else 'pt'
+
+
+def _get_page_html(page, lang=None):
+    """Read page HTML from html_content_i18n with backward-compat fallback.
+
+    Args:
+        page: Page instance
+        lang: Language code (defaults to current language or default lang)
+
+    Returns:
+        tuple: (html_string, resolved_lang)
+    """
+    default_lang = _get_default_language()
+    lang = lang or get_language() or default_lang
+    html_i18n = page.html_content_i18n or {}
+    html = html_i18n.get(lang) or html_i18n.get(default_lang) or page.html_content or ''
+    return html, lang
+
+
+def _save_page_html(page, html, lang, all_langs=False):
+    """Save HTML to html_content_i18n and backward-compat html_content.
+
+    Args:
+        page: Page instance (will be modified but NOT saved)
+        html: The new HTML string
+        lang: Language code to save for
+        all_langs: If True, save the same HTML to ALL existing language copies
+    """
+    html_i18n = dict(page.html_content_i18n or {})
+    if all_langs:
+        for existing_lang in list(html_i18n.keys()):
+            html_i18n[existing_lang] = html
+    html_i18n[lang] = html
+    page.html_content_i18n = html_i18n
+    page.html_content = html  # backward compat
+
+
+def _apply_structural_change_to_all_langs(page, change_fn):
+    """Apply a structural HTML change (classes, attributes, video) to all language copies.
+
+    Also handles the legacy case where html_content_i18n is empty — applies the
+    change to html_content directly.
+
+    Args:
+        page: Page instance (will be modified but NOT saved)
+        change_fn: A function(soup) that modifies the soup in-place and returns True on success.
+                   If it returns False, that language copy is skipped.
+    """
+    html_i18n = dict(page.html_content_i18n or {})
+    result_html = None
+
+    for existing_lang, existing_html in html_i18n.items():
+        if not existing_html:
+            continue
+        soup = BeautifulSoup(existing_html, 'html.parser')
+        if change_fn(soup):
+            new_html = str(soup)
+            if new_html.startswith('<html><body>'):
+                new_html = new_html[12:-14]
+            html_i18n[existing_lang] = _sanitize_trans_vars(new_html)
+            if result_html is None:
+                result_html = html_i18n[existing_lang]
+
+    page.html_content_i18n = html_i18n
+
+    # Also update html_content (backward compat)
+    if result_html:
+        page.html_content = result_html
+    elif page.html_content:
+        # No i18n entries — apply change directly to legacy html_content
+        soup = BeautifulSoup(page.html_content, 'html.parser')
+        if change_fn(soup):
+            new_html = str(soup)
+            if new_html.startswith('<html><body>'):
+                new_html = new_html[12:-14]
+            page.html_content = _sanitize_trans_vars(new_html)
 
 
 # ---------------------------------------------------------------------------
@@ -56,8 +143,9 @@ def _lookup_get_page_info(params):
             return {'success': False, 'message': f'No page found matching "{title}"'}
 
     sections = []
-    if page.html_content:
-        soup = BeautifulSoup(page.html_content, 'html.parser')
+    html, _ = _get_page_html(page)
+    if html:
+        soup = BeautifulSoup(html, 'html.parser')
         for sec in soup.find_all('section', attrs={'data-section': True}):
             sections.append(sec['data-section'])
 
@@ -86,31 +174,30 @@ def _lookup_get_section_html(params):
     except Page.DoesNotExist:
         return {'success': False, 'message': f'Page {page_id} not found'}
 
-    if not page.html_content:
+    page_html, resolved_lang = _get_page_html(page)
+    if not page_html:
         return {'success': False, 'message': 'Page has no HTML content'}
 
-    soup = BeautifulSoup(page.html_content, 'html.parser')
+    soup = BeautifulSoup(page_html, 'html.parser')
     section = soup.find('section', attrs={'data-section': section_name})
     if not section:
         return {'success': False, 'message': f'Section "{section_name}" not found in page'}
 
     html = str(section)
 
-    # De-templatize: replace {{ trans.xxx }} with real text for readability
-    content = page.content or {}
-    translations = content.get('translations', {})
-    default_lang = None
-    if translations:
-        from core.models import SiteSettings
-        settings = SiteSettings.load()
-        default_lang = settings.get_default_language() if settings else None
-        if not default_lang:
-            default_lang = next(iter(translations))
+    # If the HTML still uses {{ trans.xxx }} (legacy templatized format),
+    # de-templatize by replacing with real text for readability
+    if '{{ trans.' in html:
+        content = page.content or {}
+        translations = content.get('translations', {})
+        default_lang = _get_default_language()
+        if not default_lang or default_lang not in translations:
+            default_lang = next(iter(translations), None)
 
-    if default_lang and default_lang in translations:
-        lang_trans = translations[default_lang]
-        for var_name, text in lang_trans.items():
-            html = html.replace('{{ trans.' + var_name + ' }}', str(text))
+        if default_lang and default_lang in translations:
+            lang_trans = translations[default_lang]
+            for var_name, text in lang_trans.items():
+                html = html.replace('{{ trans.' + var_name + ' }}', str(text))
 
     # Truncate to avoid blowing up context
     if len(html) > 3000:
@@ -312,9 +399,12 @@ def update_page_content(request):
                 'error': 'Page not found'
             }, status=400)
 
+        # Get current HTML for this language
+        current_html, resolved_lang = _get_page_html(page, language)
+
         # If field_key not provided, derive it from the template HTML via selector
-        if not field_key and selector and page.html_content:
-            soup = BeautifulSoup(page.html_content, 'html.parser')
+        if not field_key and selector and current_html:
+            soup = BeautifulSoup(current_html, 'html.parser')
             element = soup.select_one(selector)
             if element:
                 match = re.search(r'\{\{\s*trans\.(\w+)\s*\}\}', element.get_text())
@@ -322,13 +412,12 @@ def update_page_content(request):
                     field_key = match.group(1)
                     print(f'[API] derived field_key from template: {field_key}')
                 else:
-                    # Element has hardcoded text — generate a new trans variable
+                    # Element has hardcoded text — generate a field_key for backward compat
                     section_el = element.find_parent('section', attrs={'data-section': True})
                     section_name = section_el.get('data-section', 'page') if section_el else 'page'
                     tag = element.name or 'text'
-                    # Build key like "hero_h1" or "about_p", ensure uniqueness
                     base_key = f'{section_name}_{tag}'.replace('-', '_')
-                    existing_vars = set(re.findall(r'\{\{\s*trans\.(\w+)\s*\}\}', page.html_content))
+                    existing_vars = set(re.findall(r'\{\{\s*trans\.(\w+)\s*\}\}', current_html))
                     field_key = base_key
                     counter = 1
                     while field_key in existing_vars:
@@ -342,7 +431,7 @@ def update_page_content(request):
                 'error': 'Cannot determine field_key from selector'
             }, status=400)
 
-        # Update content translations
+        # Update content translations (backward compat)
         content = page.content or {}
         if 'translations' not in content:
             content['translations'] = {}
@@ -352,10 +441,35 @@ def update_page_content(request):
         content['translations'][language][field_key] = value
         page.content = content
 
-        # Also ensure the HTML template uses {{ trans.field_key }} instead of
-        # hardcoded text. Elements generated before templatization (or where it
-        # was missed) have raw text that ignores the JSON translations.
-        if page.html_content and selector:
+        # --- Update per-language HTML in html_content_i18n ---
+        html_i18n = dict(page.html_content_i18n or {})
+        lang_html = html_i18n.get(language, '')
+
+        if lang_html and selector:
+            # New format: directly update the text in per-language HTML
+            soup = BeautifulSoup(lang_html, 'html.parser')
+            element = soup.select_one(selector)
+            if element:
+                # Check if element contains {{ trans.xxx }} (legacy) or real text
+                element_text = element.get_text()
+                if '{{ trans.' in element_text:
+                    # Legacy templatized HTML — replace with trans var (backward compat)
+                    trans_var = '{{ trans.' + field_key + ' }}'
+                    if trans_var not in str(element):
+                        element.clear()
+                        element.append(trans_var)
+                else:
+                    # New per-language HTML — update text directly
+                    element.clear()
+                    element.append(value)
+
+                new_html = str(soup)
+                if new_html.startswith('<html><body>'):
+                    new_html = new_html[12:-14]
+                html_i18n[language] = _sanitize_trans_vars(new_html)
+
+        elif not lang_html and page.html_content and selector:
+            # Fallback: working with legacy html_content (templatized)
             soup = BeautifulSoup(page.html_content, 'html.parser')
             element = soup.select_one(selector)
             if element:
@@ -368,9 +482,11 @@ def update_page_content(request):
                     new_html = str(soup)
                     if new_html.startswith('<html><body>'):
                         new_html = new_html[12:-14]
-                    page.html_content = new_html
+                    page.html_content = _sanitize_trans_vars(new_html)
 
-            # Sanitize any remaining hyphenated trans vars in the full HTML
+        page.html_content_i18n = html_i18n
+        # Also keep backward compat html_content in sync
+        if page.html_content:
             page.html_content = _sanitize_trans_vars(page.html_content)
 
         page.save()
@@ -432,16 +548,16 @@ def update_page_element_classes(request):
                 'error': 'Page not found'
             }, status=400)
 
-        if not page.html_content or page.html_content.strip() == '':
+        # Read HTML from current language for validation
+        current_html, resolved_lang = _get_page_html(page)
+        if not current_html or current_html.strip() == '':
             return JsonResponse({
                 'success': False,
                 'error': 'Page has no HTML content'
             }, status=400)
 
-        # Parse HTML with BeautifulSoup
-        soup = BeautifulSoup(page.html_content, 'html.parser')
-
-        # Find element by CSS selector
+        # Validate element exists in current language
+        soup = BeautifulSoup(current_html, 'html.parser')
         element = soup.select_one(selector)
 
         if not element:
@@ -453,19 +569,19 @@ def update_page_element_classes(request):
         # Store old classes
         old_classes = ' '.join(element.get('class', []))
 
-        # Update classes
-        if new_classes:
-            element['class'] = new_classes.split()
-        else:
-            if 'class' in element.attrs:
-                del element['class']
+        # Apply structural change to ALL language copies (+ legacy fallback)
+        def apply_classes(s):
+            el = s.select_one(selector)
+            if not el:
+                return False
+            if new_classes:
+                el['class'] = new_classes.split()
+            else:
+                if 'class' in el.attrs:
+                    del el['class']
+            return True
 
-        # Convert back to HTML string
-        new_html = str(soup)
-        if new_html.startswith('<html><body>'):
-            new_html = new_html[12:-14]
-
-        page.html_content = _sanitize_trans_vars(new_html)
+        _apply_structural_change_to_all_langs(page, apply_classes)
         page.save()
 
         return JsonResponse({
@@ -537,8 +653,11 @@ def update_page_element_attribute(request):
                 'error': 'Page not found'
             }, status=400)
 
+        # Read HTML from current language for validation
+        current_html, resolved_lang = _get_page_html(page)
+
         # Parse HTML
-        soup = BeautifulSoup(page.html_content, 'html.parser')
+        soup = BeautifulSoup(current_html, 'html.parser')
 
         # Find element by CSS selector
         element = None
@@ -558,19 +677,23 @@ def update_page_element_attribute(request):
         # Store old value
         old_value = element.get(attribute, '')
 
-        # Update attribute
-        if value:
-            element[attribute] = value
-        else:
-            if attribute in element.attrs:
-                del element[attribute]
+        # Apply structural change to ALL language copies (+ legacy fallback)
+        def apply_attribute(s):
+            el = None
+            if selector:
+                el = s.select_one(selector)
+            if not el and old_value and tag_name:
+                el = s.find(tag_name, attrs={attribute: old_value})
+            if not el:
+                return False
+            if value:
+                el[attribute] = value
+            else:
+                if attribute in el.attrs:
+                    del el[attribute]
+            return True
 
-        # Save
-        new_html = str(soup)
-        if new_html.startswith('<html><body>'):
-            new_html = new_html[12:-14]
-
-        page.html_content = _sanitize_trans_vars(new_html)
+        _apply_structural_change_to_all_langs(page, apply_attribute)
         page.save()
 
         return JsonResponse({
@@ -803,8 +926,14 @@ def save_ai_section(request):
         # Create version for rollback
         page.create_version(user=request.user, change_summary=f'AI refined section: {section_name}')
 
+        # Determine current language
+        lang = data.get('language') or get_language() or _get_default_language()
+
+        # Read HTML for the current language
+        current_html, resolved_lang = _get_page_html(page, lang)
+
         # Parse current page HTML and replace the target section
-        soup = BeautifulSoup(page.html_content, 'html.parser')
+        soup = BeautifulSoup(current_html, 'html.parser')
         old_section = soup.find('section', attrs={'data-section': section_name})
 
         if not old_section:
@@ -822,13 +951,13 @@ def save_ai_section(request):
 
         old_section.replace_with(new_section)
 
-        # Save updated HTML
+        # Save updated HTML to html_content_i18n for current language
         new_html = str(soup)
         if new_html.startswith('<html><body>'):
             new_html = new_html[12:-14]
-        page.html_content = new_html
+        _save_page_html(page, new_html, lang)
 
-        # Merge translations (don't overwrite other sections' translations)
+        # Merge translations (backward compat — don't overwrite other sections' translations)
         new_translations = content.get('translations', {})
         page_content = page.content or {}
         if 'translations' not in page_content:
@@ -1006,8 +1135,14 @@ def save_ai_element(request):
             change_summary=f'AI refined element'
         )
 
+        # Determine current language
+        lang = data.get('language') or get_language() or _get_default_language()
+
+        # Read HTML for the current language
+        current_html, resolved_lang = _get_page_html(page, lang)
+
         # Parse current page HTML and find the target element
-        soup = BeautifulSoup(page.html_content, 'html.parser')
+        soup = BeautifulSoup(current_html, 'html.parser')
         old_element = soup.select_one(selector)
 
         if not old_element:
@@ -1027,13 +1162,13 @@ def save_ai_element(request):
 
         old_element.replace_with(new_element)
 
-        # Save updated HTML
+        # Save updated HTML to html_content_i18n for current language
         new_html = str(soup)
         if new_html.startswith('<html><body>'):
             new_html = new_html[12:-14]
-        page.html_content = new_html
+        _save_page_html(page, new_html, lang)
 
-        # Merge translations
+        # Merge translations (backward compat)
         new_translations = content.get('translations', {})
         page_content = page.content or {}
         if 'translations' not in page_content:
@@ -1220,7 +1355,6 @@ def apply_option(request):
 
         # Templatize + translate the chosen option
         from ai.services import ContentGenerationService
-        from core.models import SiteSettings
         site_settings = SiteSettings.objects.first()
         default_language = site_settings.get_default_language() if site_settings else 'pt'
         languages = site_settings.get_language_codes() if site_settings else ['pt', 'en']
@@ -1231,7 +1365,13 @@ def apply_option(request):
         html_template = templatized['html_content']
         content = templatized['content']
 
-        # Create version for rollback BEFORE modifying page.html_content
+        # Determine current language
+        lang = data.get('language') or get_language() or default_language
+
+        # Read current HTML for this language
+        current_html, resolved_lang = _get_page_html(page, lang)
+
+        # Create version for rollback BEFORE modifying
         page.create_version(
             user=request.user,
             change_summary=f'AI {"new section" if mode == "insert" else "multi-option"} applied'
@@ -1239,7 +1379,7 @@ def apply_option(request):
 
         if mode == 'insert':
             # Insert new section into page
-            soup = BeautifulSoup(page.html_content or '', 'html.parser')
+            soup = BeautifulSoup(current_html or '', 'html.parser')
             new_soup = BeautifulSoup(html_template, 'html.parser')
             new_section = new_soup.find('section')
             if not new_section:
@@ -1263,11 +1403,12 @@ def apply_option(request):
             new_html = str(soup)
             if new_html.startswith('<html><body>'):
                 new_html = new_html[12:-14]
-            page.html_content = _sanitize_trans_vars(new_html)
+            new_html = _sanitize_trans_vars(new_html)
+            _save_page_html(page, new_html, lang)
 
         elif scope == 'element' and selector:
             # Surgical element replacement
-            soup = BeautifulSoup(page.html_content, 'html.parser')
+            soup = BeautifulSoup(current_html, 'html.parser')
             old_element = soup.select_one(selector)
             if not old_element:
                 return JsonResponse({'success': False, 'error': 'Element not found for selector'}, status=400)
@@ -1281,11 +1422,12 @@ def apply_option(request):
             new_html = str(soup)
             if new_html.startswith('<html><body>'):
                 new_html = new_html[12:-14]
-            page.html_content = _sanitize_trans_vars(new_html)
+            new_html = _sanitize_trans_vars(new_html)
+            _save_page_html(page, new_html, lang)
 
         else:
             # Surgical section replacement
-            soup = BeautifulSoup(page.html_content, 'html.parser')
+            soup = BeautifulSoup(current_html, 'html.parser')
             old_section = soup.find('section', attrs={'data-section': section_name})
             if not old_section:
                 return JsonResponse({'success': False, 'error': f'Section "{section_name}" not found'}, status=400)
@@ -1301,9 +1443,10 @@ def apply_option(request):
             new_html = str(soup)
             if new_html.startswith('<html><body>'):
                 new_html = new_html[12:-14]
-            page.html_content = _sanitize_trans_vars(new_html)
+            new_html = _sanitize_trans_vars(new_html)
+            _save_page_html(page, new_html, lang)
 
-        # Merge translations
+        # Merge translations (backward compat)
         new_translations = content.get('translations', {})
         page_content = page.content or {}
         if 'translations' not in page_content:
@@ -1364,7 +1507,9 @@ def update_section_video(request):
                 'error': 'Page not found'
             }, status=400)
 
-        soup = BeautifulSoup(page.html_content, 'html.parser')
+        # Validate section exists in current language HTML
+        current_html, resolved_lang = _get_page_html(page)
+        soup = BeautifulSoup(current_html, 'html.parser')
         section = (
             soup.find('section', attrs={'data-section': section_id})
             or soup.find('section', attrs={'id': section_id})
@@ -1376,71 +1521,69 @@ def update_section_video(request):
                 'error': f'Section "{section_id}" not found'
             }, status=400)
 
-        # Remove existing background video/iframe
-        old_video = section.find('video', recursive=False)
-        old_iframe = None
-        for iframe in section.find_all('iframe', recursive=False):
-            if iframe.get('src', '') and 'youtube' in iframe.get('src', ''):
-                old_iframe = iframe
-                break
-
-        if old_video:
-            old_video.decompose()
-        if old_iframe:
-            old_iframe.decompose()
-
-        if video_url:
-            # Detect YouTube
-            yt_match = re.search(
-                r'(?:youtube\.com/watch\?.*v=|youtube\.com/embed/|youtu\.be/)([a-zA-Z0-9_-]{11})',
-                video_url
+        # Apply video change to ALL language copies (structural change)
+        def apply_video(s):
+            sec = (
+                s.find('section', attrs={'data-section': section_id})
+                or s.find('section', attrs={'id': section_id})
             )
+            if not sec:
+                return False
 
-            if yt_match:
-                # YouTube: insert <iframe> as first child
-                yt_id = yt_match.group(1)
-                embed_url = (
-                    f'https://www.youtube.com/embed/{yt_id}'
-                    f'?autoplay=1&mute=1&loop=1&controls=0&showinfo=0'
-                    f'&playlist={yt_id}&playsinline=1'
-                )
-                new_el = soup.new_tag(
-                    'iframe',
-                    src=embed_url,
-                    frameborder='0',
-                    allow='autoplay; encrypted-media',
-                    allowfullscreen='',
-                    **{'class': 'absolute inset-0 w-full h-full pointer-events-none'}
-                )
-                # Scale iframe to cover section like a video
-                new_el['style'] = (
-                    'position:absolute;top:50%;left:50%;'
-                    'width:100vw;height:56.25vw;'
-                    'min-height:100%;min-width:177.77vh;'
-                    'transform:translate(-50%,-50%);'
-                )
-            else:
-                # Direct video URL: insert <video> as first child
-                new_el = soup.new_tag(
-                    'video',
-                    autoplay='',
-                    muted='',
-                    loop='',
-                    playsinline='',
-                    **{'class': 'absolute inset-0 w-full h-full object-cover'}
-                )
-                source_tag = soup.new_tag('source', src=video_url, type='video/mp4')
-                new_el.append(source_tag)
+            # Remove existing background video/iframe
+            old_vid = sec.find('video', recursive=False)
+            old_ifr = None
+            for ifr in sec.find_all('iframe', recursive=False):
+                if ifr.get('src', '') and 'youtube' in ifr.get('src', ''):
+                    old_ifr = ifr
+                    break
+            if old_vid:
+                old_vid.decompose()
+            if old_ifr:
+                old_ifr.decompose()
 
-            # Insert as first child of section
-            section.insert(0, new_el)
+            if video_url:
+                yt_match = re.search(
+                    r'(?:youtube\.com/watch\?.*v=|youtube\.com/embed/|youtu\.be/)([a-zA-Z0-9_-]{11})',
+                    video_url
+                )
+                if yt_match:
+                    yt_id = yt_match.group(1)
+                    embed_url = (
+                        f'https://www.youtube.com/embed/{yt_id}'
+                        f'?autoplay=1&mute=1&loop=1&controls=0&showinfo=0'
+                        f'&playlist={yt_id}&playsinline=1'
+                    )
+                    new_el = s.new_tag(
+                        'iframe',
+                        src=embed_url,
+                        frameborder='0',
+                        allow='autoplay; encrypted-media',
+                        allowfullscreen='',
+                        **{'class': 'absolute inset-0 w-full h-full pointer-events-none'}
+                    )
+                    new_el['style'] = (
+                        'position:absolute;top:50%;left:50%;'
+                        'width:100vw;height:56.25vw;'
+                        'min-height:100%;min-width:177.77vh;'
+                        'transform:translate(-50%,-50%);'
+                    )
+                else:
+                    new_el = s.new_tag(
+                        'video',
+                        autoplay='',
+                        muted='',
+                        loop='',
+                        playsinline='',
+                        **{'class': 'absolute inset-0 w-full h-full object-cover'}
+                    )
+                    source_tag = s.new_tag('source', src=video_url, type='video/mp4')
+                    new_el.append(source_tag)
 
-        # Save
-        new_html = str(soup)
-        if new_html.startswith('<html><body>'):
-            new_html = new_html[12:-14]
+                sec.insert(0, new_el)
+            return True
 
-        page.html_content = _sanitize_trans_vars(new_html)
+        _apply_structural_change_to_all_langs(page, apply_video)
         page.save()
 
         action = 'removed' if not video_url else ('YouTube' if video_url and 'youtu' in video_url else 'video')
@@ -1624,7 +1767,12 @@ def save_ai_page(request):
             change_summary='Before save-ai-page (full page replacement)'
         )
 
-        page.html_content = html_template
+        # Determine current language
+        lang = data.get('language') or get_language() or _get_default_language()
+
+        # Save to html_content_i18n for current language + backward compat
+        _save_page_html(page, html_template, lang)
+
         if content:
             page.content = content
         page.save()
@@ -1741,6 +1889,7 @@ def get_page_version(request, page_id, version_number):
         'version': {
             'version_number': version.version_number,
             'html_content': version.html_content,
+            'html_content_i18n': version.html_content_i18n or {},
             'content': version.content,
             'change_summary': version.change_summary,
             'created_at': version.created_at.isoformat(),
@@ -1766,7 +1915,9 @@ def remove_section(request):
 
         page = Page.objects.get(pk=page_id)
 
-        soup = BeautifulSoup(page.html_content or '', 'html.parser')
+        # Validate section exists in current language HTML
+        current_html, resolved_lang = _get_page_html(page)
+        soup = BeautifulSoup(current_html or '', 'html.parser')
         section = soup.find('section', attrs={'data-section': section_name})
         if not section:
             return JsonResponse({'success': False, 'error': f'Section "{section_name}" not found'}, status=400)
@@ -1781,12 +1932,18 @@ def remove_section(request):
             change_summary=f'Removed section "{section_name}"'
         )
 
-        # Remove the section
-        section.decompose()
-        new_html = str(soup)
-        if new_html.startswith('<html><body>'):
-            new_html = new_html[12:-14]
-        page.html_content = new_html
+        # Remove section from ALL language copies (structural change, + legacy fallback)
+        def remove_sect(s):
+            sec = s.find('section', attrs={'data-section': section_name})
+            if not sec:
+                return False
+            sec.decompose()
+            return True
+
+        _apply_structural_change_to_all_langs(page, remove_sect)
+
+        # Get the new HTML for orphan detection (from first available source)
+        new_html = page.html_content or ''
 
         # Find vars still used in remaining HTML
         remaining_vars = set(re.findall(r'\{\{\s*trans\.(\w+)\s*\}\}', new_html))
@@ -1834,7 +1991,9 @@ def remove_element(request):
 
         page = Page.objects.get(pk=page_id)
 
-        soup = BeautifulSoup(page.html_content or '', 'html.parser')
+        # Validate element exists in current language HTML
+        current_html, resolved_lang = _get_page_html(page)
+        soup = BeautifulSoup(current_html or '', 'html.parser')
         element = soup.select_one(selector)
         if not element:
             return JsonResponse({'success': False, 'error': 'Element not found for selector'}, status=400)
@@ -1849,12 +2008,18 @@ def remove_element(request):
             change_summary='Removed element'
         )
 
-        # Remove the element
-        element.decompose()
-        new_html = str(soup)
-        if new_html.startswith('<html><body>'):
-            new_html = new_html[12:-14]
-        page.html_content = new_html
+        # Remove element from ALL language copies (structural change, + legacy fallback)
+        def remove_el(s):
+            el = s.select_one(selector)
+            if not el:
+                return False
+            el.decompose()
+            return True
+
+        _apply_structural_change_to_all_langs(page, remove_el)
+
+        # Get the new HTML for orphan detection (from first available source)
+        new_html = page.html_content or ''
 
         # Find vars still used in remaining HTML
         remaining_vars = set(re.findall(r'\{\{\s*trans\.(\w+)\s*\}\}', new_html))
