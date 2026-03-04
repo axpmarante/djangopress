@@ -2200,6 +2200,53 @@ Keep the translations natural and fluent — these are website UI strings.
             )
             raise
 
+    def translate_html(self, html: str, source_lang: str, target_lang: str, model: str = None) -> str:
+        """
+        Translate HTML content from one language to another.
+        LLM only outputs clean HTML -- no JSON, no template variables.
+
+        Args:
+            html: The HTML string to translate
+            source_lang: Source language code (e.g. 'pt')
+            target_lang: Target language code (e.g. 'en')
+            model: LLM model to use (default: 'gemini-flash')
+
+        Returns:
+            Translated HTML string
+        """
+        prompt = PromptTemplates.get_html_translation_prompt(
+            html=html,
+            source_lang=source_lang,
+            target_lang=target_lang,
+        )
+        model = model or 'gemini-flash'
+
+        messages = [
+            {'role': 'user', 'content': prompt}
+        ]
+
+        actual_model, provider = self._get_model_info(model)
+        t0 = time.time()
+        try:
+            response = self.llm.get_completion(messages, tool_name=model)
+            usage = self._extract_usage(response)
+            content = response.choices[0].message.content
+            log_ai_call(
+                action='translate_html', model_name=actual_model, provider=provider,
+                user_prompt=prompt, response_text=content,
+                duration_ms=int((time.time() - t0) * 1000), **usage,
+            )
+            translated_html = self._extract_html_from_response(content)
+            return translated_html or content
+        except Exception as e:
+            log_ai_call(
+                action='translate_html', model_name=actual_model, provider=provider,
+                user_prompt=prompt,
+                duration_ms=int((time.time() - t0) * 1000),
+                success=False, error_message=str(e),
+            )
+            raise
+
     @staticmethod
     def _build_library_catalog(default_language: str = 'pt') -> List[Dict]:
         """Build a metadata-only catalog of all active library images."""

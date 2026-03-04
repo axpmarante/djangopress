@@ -3,13 +3,18 @@ API views for inline editing functionality.
 These endpoints allow staff users to update content directly from the frontend.
 """
 
+import base64
 import hmac
 import json
+import logging
 import os
+import re
 import signal
 import subprocess
 import sys
+import tempfile
 from django.http import JsonResponse
+from django.template import Template, Context
 from django.views.decorators.http import require_http_methods
 from django.contrib.admin.views.decorators import staff_member_required
 from django.views.decorators.csrf import csrf_exempt
@@ -17,7 +22,10 @@ from django.core.cache import cache
 from django.core.serializers import deserialize
 from django.utils.text import slugify
 from django.db import connection
+from bs4 import BeautifulSoup
 from core.models import SiteSettings, SiteImage, Page, MenuItem, Blueprint, BlueprintPage
+
+logger = logging.getLogger(__name__)
 from core.utils import resize_and_compress_image
 from core.decorators import superuser_required
 
@@ -268,6 +276,7 @@ def get_page_content(request, page_id):
                 'slug': page.default_slug
             },
             'html_content': page.html_content or '',
+            'html_content_i18n': page.html_content_i18n or {},
             'content': page.content or {}
         })
 
@@ -281,6 +290,174 @@ def get_page_content(request, page_id):
             'success': False,
             'error': str(e)
         }, status=500)
+
+
+@staff_member_required
+@require_http_methods(["GET"])
+def get_page_sections(request, page_id):
+    """
+    Get page metadata and ordered list of sections parsed from html_content.
+
+    GET /backoffice/api/page-sections/<page_id>/
+
+    Returns: {
+        "success": true,
+        "page": {"id", "title", "title_i18n", "slug_i18n", "is_active", "meta_title_i18n", "meta_description_i18n", "updated_at"},
+        "sections": [{"name": "hero", "html": "<section ...>...</section>"}, ...]
+    }
+    """
+    try:
+        page = Page.objects.get(id=page_id)
+        sections = []
+
+        if page.html_content:
+            soup = BeautifulSoup(page.html_content, 'html.parser')
+            for section_el in soup.find_all('section', attrs={'data-section': True}):
+                sections.append({
+                    'name': section_el.get('data-section', ''),
+                    'html': str(section_el),
+                })
+
+        return JsonResponse({
+            'success': True,
+            'page': {
+                'id': page.id,
+                'title': page.default_title,
+                'title_i18n': page.title_i18n or {},
+                'slug_i18n': page.slug_i18n or {},
+                'is_active': page.is_active,
+                'meta_title_i18n': page.meta_title_i18n or {},
+                'meta_description_i18n': page.meta_description_i18n or {},
+                'updated_at': page.updated_at.isoformat(),
+            },
+            'sections': sections,
+            'html_content': page.html_content or '',
+        })
+
+    except Page.DoesNotExist:
+        return JsonResponse({
+            'success': False,
+            'error': f'Page with id {page_id} not found'
+        }, status=404)
+
+
+@staff_member_required
+@require_http_methods(["GET"])
+def get_page_section_screenshots(request, page_id):
+    """
+    Capture screenshots of each section on a page using Playwright.
+
+    GET /backoffice/api/page-screenshots/<page_id>/
+
+    Returns: {
+        "success": true,
+        "sections": [{"name": "hero", "image": "data:image/png;base64,..."}, ...]
+    }
+    """
+    try:
+        page = Page.objects.get(id=page_id)
+    except Page.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Page not found'}, status=404)
+
+    if not page.html_content:
+        return JsonResponse({'success': True, 'sections': []})
+
+    # Check cache (keyed by page id + updated_at)
+    cache_key = f'page_screenshots_{page_id}_{page.updated_at.isoformat()}'
+    cached = cache.get(cache_key)
+    if cached:
+        return JsonResponse({'success': True, 'sections': cached})
+
+    # Render html_content with translations (same as PageView)
+    site_settings = SiteSettings.load()
+    default_lang = 'pt'
+    if site_settings:
+        langs = site_settings.get_enabled_languages()
+        if langs:
+            default_lang = langs[0][0]
+
+    translations = (page.content or {}).get('translations', {})
+    trans = translations.get(default_lang, {})
+
+    try:
+        template = Template(page.html_content)
+        rendered_html = template.render(Context({
+            'trans': trans,
+            'LANGUAGE_CODE': default_lang,
+            'page': page,
+            'SITE_NAME': site_settings.site_name_i18n.get(default_lang, '') if site_settings else '',
+        }))
+    except Exception:
+        rendered_html = page.html_content
+
+    # Build full HTML page for Playwright
+    full_html = f"""<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {{ margin: 0; padding: 0; }}
+        img {{ max-width: 100%; height: auto; }}
+    </style>
+</head>
+<body>
+{rendered_html}
+</body>
+</html>"""
+
+    # Write to temp file and capture screenshots with Playwright
+    sections_data = []
+    tmp_path = None
+    try:
+        from playwright.sync_api import sync_playwright
+
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.html', delete=False, encoding='utf-8') as f:
+            f.write(full_html)
+            tmp_path = f.name
+
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True)
+            ctx = browser.new_context(viewport={'width': 1280, 'height': 800})
+            pg = ctx.new_page()
+            pg.goto(f'file://{tmp_path}', wait_until='networkidle')
+
+            # Wait for Tailwind to process
+            pg.wait_for_timeout(1500)
+
+            section_elements = pg.query_selector_all('section[data-section]')
+            for el in section_elements:
+                name = el.get_attribute('data-section') or ''
+                try:
+                    screenshot_bytes = el.screenshot(type='png')
+                    b64 = base64.b64encode(screenshot_bytes).decode('utf-8')
+                    sections_data.append({
+                        'name': name,
+                        'image': f'data:image/png;base64,{b64}',
+                    })
+                except Exception as e:
+                    logger.warning(f'Screenshot failed for section "{name}": {e}')
+                    sections_data.append({'name': name, 'image': ''})
+
+            browser.close()
+
+        # Cache for 10 minutes
+        cache.set(cache_key, sections_data, 600)
+
+    except ImportError:
+        return JsonResponse({
+            'success': False,
+            'error': 'Playwright is not installed. Run: pip install playwright && playwright install chromium'
+        }, status=500)
+    except Exception as e:
+        logger.error(f'Playwright screenshot error for page {page_id}: {e}')
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+    finally:
+        if tmp_path and os.path.exists(tmp_path):
+            os.unlink(tmp_path)
+
+    return JsonResponse({'success': True, 'sections': sections_data})
 
 
 @staff_member_required
@@ -453,6 +630,68 @@ def update_page_order(request):
             'success': False,
             'error': str(e)
         }, status=500)
+
+
+@staff_member_required
+@require_http_methods(["POST"])
+def update_page_settings(request, page_id):
+    """
+    Update page settings (title, slug, status, SEO) inline from the explorer.
+
+    Expected POST data:
+    {
+        "title_i18n": {"pt": "...", "en": "..."},
+        "slug_i18n": {"pt": "...", "en": "..."},
+        "is_active": true,
+        "meta_title_i18n": {"pt": "...", "en": "..."},
+        "meta_description_i18n": {"pt": "...", "en": "..."}
+    }
+    """
+    try:
+        page = Page.objects.get(id=page_id)
+    except Page.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Page not found'}, status=404)
+
+    try:
+        data = json.loads(request.body)
+    except json.JSONDecodeError:
+        return JsonResponse({'success': False, 'error': 'Invalid JSON'}, status=400)
+
+    # Validate slugs are unique
+    slug_i18n = data.get('slug_i18n')
+    if slug_i18n:
+        for lang, slug_val in slug_i18n.items():
+            if not slug_val:
+                continue
+            conflict = Page.objects.filter(
+                slug_i18n__contains={lang: slug_val}
+            ).exclude(id=page_id).first()
+            if conflict:
+                return JsonResponse({
+                    'success': False,
+                    'error': f'Slug "{slug_val}" ({lang}) is already used by "{conflict.default_title}"'
+                }, status=400)
+
+    # Update fields
+    if 'title_i18n' in data:
+        page.title_i18n = data['title_i18n']
+    if 'slug_i18n' in data:
+        page.slug_i18n = data['slug_i18n']
+    if 'is_active' in data:
+        page.is_active = data['is_active']
+    if 'meta_title_i18n' in data:
+        page.meta_title_i18n = data['meta_title_i18n']
+    if 'meta_description_i18n' in data:
+        page.meta_description_i18n = data['meta_description_i18n']
+
+    page._snapshot_user = request.user.get_username()
+    page.save()
+
+    return JsonResponse({
+        'success': True,
+        'message': f'Page "{page.default_title}" updated.',
+        'updated_at': page.updated_at.isoformat(),
+    })
 
 
 @staff_member_required

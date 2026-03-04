@@ -40,6 +40,9 @@ urlpatterns = [
     # Bulk translation
     path('api/translate-to-language/', views.translate_to_language_api, name='translate_to_language'),
 
+    # Translation propagation (per-page, per-section)
+    path('api/propagate-translation/', views.propagate_translation_api, name='propagate_translation'),
+
     # Image descriptions
     path('api/describe-images/', views.describe_images_api, name='describe_images'),
 

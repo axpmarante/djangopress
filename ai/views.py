@@ -1996,3 +1996,76 @@ def enhance_prompt_api(request):
         return JsonResponse({'success': False, 'error': 'Invalid JSON'}, status=400)
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
+@superuser_required
+@require_http_methods(["POST"])
+def propagate_translation_api(request):
+    """
+    Propagate refined HTML to other languages via translation.
+
+    POST /ai/api/propagate-translation/
+    Body: {
+        "page_id": 1,
+        "source_lang": "pt",
+        "target_languages": ["en"],
+        "scope": "page",           # "section" or "page"
+        "section_id": "hero",      # required if scope == "section"
+        "html": "<section>...</section>"  # the HTML to translate
+    }
+    """
+    try:
+        data = json.loads(request.body)
+        page_id = data.get('page_id')
+        source_lang = data.get('source_lang')
+        target_languages = data.get('target_languages', [])
+        scope = data.get('scope', 'page')
+        section_id = data.get('section_id')
+        html = data.get('html')
+
+        if not all([page_id, source_lang, target_languages, html]):
+            return JsonResponse({'success': False, 'error': 'Missing required fields'}, status=400)
+
+        page = Page.objects.get(id=page_id)
+        service = ContentGenerationService()
+        results = {}
+
+        for target_lang in target_languages:
+            if target_lang == source_lang:
+                continue
+            try:
+                translated_html = service.translate_html(html, source_lang, target_lang)
+
+                # Patch the page's html_content_i18n for this language
+                html_i18n = dict(page.html_content_i18n or {})
+
+                if scope == 'section' and section_id:
+                    # Replace just the matching section in the target language's HTML
+                    from bs4 import BeautifulSoup
+                    target_page_html = html_i18n.get(target_lang, '')
+                    if target_page_html:
+                        soup = BeautifulSoup(target_page_html, 'html.parser')
+                        old_section = soup.find('section', {'data-section': section_id})
+                        if old_section:
+                            new_section = BeautifulSoup(translated_html, 'html.parser')
+                            old_section.replace_with(new_section)
+                            html_i18n[target_lang] = str(soup)
+                        else:
+                            html_i18n[target_lang] = translated_html
+                    else:
+                        html_i18n[target_lang] = translated_html
+                else:
+                    # Full page replacement
+                    html_i18n[target_lang] = translated_html
+
+                page.html_content_i18n = html_i18n
+                page.save(update_fields=['html_content_i18n'])
+                results[target_lang] = {'success': True}
+            except Exception as e:
+                results[target_lang] = {'success': False, 'error': str(e)}
+
+        return JsonResponse({'success': True, 'results': results})
+    except Page.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Page not found'}, status=404)
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)

@@ -407,6 +407,26 @@ class PagesView(LoginRequiredMixin, TemplateView):
         return redirect('backoffice:pages')
 
 
+class PagesExplorerView(LoginRequiredMixin, TemplateView):
+    """Pages explorer - sidebar + detail panel view"""
+    template_name = 'backoffice/pages_explorer.html'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        pages = Page.objects.all()
+        context['pages'] = pages
+        context['total_pages'] = pages.count()
+        context['active_pages'] = pages.filter(is_active=True).count()
+
+        site_settings = SiteSettings.objects.first()
+        if site_settings:
+            context['languages'] = site_settings.get_enabled_languages()
+        else:
+            context['languages'] = [('pt', 'Portuguese'), ('en', 'English')]
+
+        return context
+
+
 class PageEditView(LoginRequiredMixin, TemplateView):
     """Edit page details (slug, title, active status)"""
     template_name = 'backoffice/page_edit.html'
@@ -881,6 +901,9 @@ class MenuView(LoginRequiredMixin, TemplateView):
             prev_top_level_id = item.id
 
         context['menu_items'] = ordered_items
+        context['total_items'] = len(all_items)
+        context['active_items'] = sum(1 for i in all_items if i.is_active)
+        context['top_level_items'] = len(top_level)
         return context
 
     def post(self, request, *args, **kwargs):
@@ -962,30 +985,6 @@ class MenuView(LoginRequiredMixin, TemplateView):
 
         return redirect('backoffice:menu')
 
-
-
-class AIManagementView(SuperuserRequiredMixin, TemplateView):
-    """AI Content Studio - Main dashboard"""
-    template_name = 'backoffice/ai_management.html'
-
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-
-        # Get all pages for dropdown options
-        context['pages'] = Page.objects.all().order_by('title')
-        context['total_pages'] = Page.objects.count()
-
-        # Get AI configuration (if available)
-        try:
-            from ai.utils.llm_config import LLMConfig
-            config = LLMConfig()
-            context['ai_models'] = config.get_available_models()
-            context['default_model'] = config.default_model
-        except:
-            context['ai_models'] = []
-            context['default_model'] = None
-
-        return context
 
 
 class AIGeneratePageView(SuperuserRequiredMixin, TemplateView):
@@ -1173,6 +1172,27 @@ class AIChatRefineView(SuperuserRequiredMixin, TemplateView):
         except Exception:
             context['ai_models'] = []
             context['default_model'] = 'gemini-pro'
+
+        # Language info for translation propagation
+        from core.models import SiteSettings
+        site_settings = SiteSettings.objects.first()
+        if site_settings:
+            default_lang = site_settings.get_default_language()
+            enabled_langs = site_settings.get_enabled_languages()
+            context['default_language'] = default_lang
+            context['enabled_languages'] = enabled_langs
+            # Other languages (exclude default) for propagation targets
+            context['other_languages'] = [
+                (code, name) for code, name in enabled_langs if code != default_lang
+            ]
+            # Languages that already have HTML content
+            html_i18n = page.html_content_i18n or {}
+            context['languages_with_html'] = list(html_i18n.keys())
+        else:
+            context['default_language'] = 'pt'
+            context['enabled_languages'] = []
+            context['other_languages'] = []
+            context['languages_with_html'] = []
 
         return context
 

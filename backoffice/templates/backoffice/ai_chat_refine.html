@@ -234,6 +234,48 @@
                     </a>
                 </div>
             </div>
+
+            {% if other_languages %}
+            <!-- Translation Propagation -->
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-5">
+                <h3 class="text-sm font-semibold text-gray-900 mb-3">Propagate Translations</h3>
+                <p class="text-xs text-gray-500 mb-3">After refining in one language, translate the changes to other languages.</p>
+
+                <div class="space-y-2 mb-3">
+                    <!-- Source language -->
+                    <div>
+                        <label class="text-xs font-medium text-gray-700">Source language</label>
+                        <select id="propagateSourceLang" class="w-full border border-gray-300 rounded-md px-2 py-1.5 text-sm focus:ring-2 focus:ring-purple-500 focus:border-transparent mt-1">
+                            {% for code, name in enabled_languages %}
+                            <option value="{{ code }}" {% if code == default_language %}selected{% endif %}>{{ name }} ({{ code|upper }})</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <!-- Target languages -->
+                    <div>
+                        <label class="text-xs font-medium text-gray-700 block mb-1">Target languages</label>
+                        {% for code, name in other_languages %}
+                        <label class="flex items-center gap-2 text-sm text-gray-700 cursor-pointer py-0.5">
+                            <input type="checkbox" class="propagate-target-lang w-4 h-4 text-purple-600 border-gray-300 rounded" value="{{ code }}" checked>
+                            {{ name }} ({{ code|upper }})
+                            <span id="propagateStatus_{{ code }}" class="text-xs ml-auto"></span>
+                        </label>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                <button id="propagateBtn" onclick="propagateTranslations()"
+                        class="w-full px-3 py-2 bg-gradient-to-r from-blue-500 to-indigo-500 text-white rounded-lg hover:from-blue-600 hover:to-indigo-600 text-sm font-medium transition-all flex items-center justify-center gap-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129"/>
+                    </svg>
+                    <span id="propagateBtnText">Propagate to Other Languages</span>
+                </button>
+
+                <div id="propagateResults" class="hidden mt-3 space-y-1"></div>
+            </div>
+            {% endif %}
         </div>
     </div>
 </div>
@@ -738,6 +780,120 @@ async function processSelectedImages() {
     } catch (e) {
         btn.disabled = false;
         btn.textContent = origText;
+        alert('Error: ' + e.message);
+    }
+}
+
+// --- Translation Propagation ---
+async function propagateTranslations() {
+    const sourceLang = document.getElementById('propagateSourceLang')?.value;
+    if (!sourceLang) return;
+
+    const checkboxes = document.querySelectorAll('.propagate-target-lang:checked');
+    const targetLanguages = Array.from(checkboxes).map(cb => cb.value);
+    if (targetLanguages.length === 0) {
+        alert('Please select at least one target language.');
+        return;
+    }
+
+    const btn = document.getElementById('propagateBtn');
+    const btnText = document.getElementById('propagateBtnText');
+    const resultsDiv = document.getElementById('propagateResults');
+    btn.disabled = true;
+    btnText.textContent = 'Translating...';
+
+    // Clear previous status indicators
+    targetLanguages.forEach(lang => {
+        const statusEl = document.getElementById('propagateStatus_' + lang);
+        if (statusEl) {
+            statusEl.textContent = '...';
+            statusEl.className = 'text-xs ml-auto text-gray-400';
+        }
+    });
+
+    try {
+        // Fetch the current page HTML for source language
+        const pageResponse = await fetch(`/backoffice/api/page-content/${PAGE_ID}/`);
+        const pageData = await pageResponse.json();
+        if (!pageData.success) {
+            alert('Failed to load page content');
+            btn.disabled = false;
+            btnText.textContent = 'Propagate to Other Languages';
+            return;
+        }
+
+        // Get source language HTML from html_content_i18n
+        const htmlI18n = pageData.html_content_i18n || {};
+        const sourceHtml = htmlI18n[sourceLang] || pageData.html_content || '';
+        if (!sourceHtml) {
+            alert('No HTML content found for source language: ' + sourceLang.toUpperCase());
+            btn.disabled = false;
+            btnText.textContent = 'Propagate to Other Languages';
+            return;
+        }
+
+        const response = await fetch('/ai/api/propagate-translation/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            body: JSON.stringify({
+                page_id: PAGE_ID,
+                source_lang: sourceLang,
+                target_languages: targetLanguages,
+                scope: 'page',
+                html: sourceHtml
+            })
+        });
+
+        const result = await response.json();
+        btn.disabled = false;
+        btnText.textContent = 'Propagate to Other Languages';
+
+        if (result.success) {
+            resultsDiv.classList.remove('hidden');
+            let html = '';
+            let successCount = 0;
+            let failCount = 0;
+
+            for (const [lang, langResult] of Object.entries(result.results || {})) {
+                const statusEl = document.getElementById('propagateStatus_' + lang);
+                if (langResult.success) {
+                    successCount++;
+                    if (statusEl) {
+                        statusEl.textContent = 'Done';
+                        statusEl.className = 'text-xs ml-auto text-green-600 font-medium';
+                    }
+                } else {
+                    failCount++;
+                    if (statusEl) {
+                        statusEl.textContent = 'Failed';
+                        statusEl.className = 'text-xs ml-auto text-red-600 font-medium';
+                    }
+                    html += `<p class="text-xs text-red-600">${lang.toUpperCase()}: ${escapeHtml(langResult.error)}</p>`;
+                }
+            }
+
+            if (successCount > 0) {
+                html = `<p class="text-xs text-green-600 font-medium">${successCount} language(s) translated successfully.</p>` + html;
+            }
+            resultsDiv.innerHTML = html;
+
+            // Show result in chat
+            renderMessage({
+                role: 'assistant',
+                content: `Translation propagated from ${sourceLang.toUpperCase()} to ${targetLanguages.map(l => l.toUpperCase()).join(', ')}. ${successCount} succeeded, ${failCount} failed.`,
+                timestamp: new Date().toISOString(),
+                sections_changed: []
+            });
+        } else {
+            resultsDiv.classList.remove('hidden');
+            resultsDiv.innerHTML = `<p class="text-xs text-red-600">${escapeHtml(result.error || 'Unknown error')}</p>`;
+        }
+    } catch (e) {
+        btn.disabled = false;
+        btnText.textContent = 'Propagate to Other Languages';
         alert('Error: ' + e.message);
     }
 }

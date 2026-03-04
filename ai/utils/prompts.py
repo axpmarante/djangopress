@@ -1432,3 +1432,33 @@ Return a JSON object where each key is a language code, and each value is an obj
 Every variable must appear in every language. The {default_language.upper()} values must match the originals exactly."""
 
         return (system_prompt, user_prompt)
+
+    @staticmethod
+    def get_html_translation_prompt(html, source_lang, target_lang):
+        """Prompt for translating HTML from one language to another.
+        LLM outputs clean HTML only -- no JSON wrapping."""
+
+        # Get full language names for better LLM understanding
+        lang_names = {
+            'pt': 'Portuguese', 'en': 'English', 'fr': 'French',
+            'es': 'Spanish', 'de': 'German', 'it': 'Italian',
+            'nl': 'Dutch', 'ru': 'Russian', 'ja': 'Japanese',
+            'zh': 'Chinese', 'ko': 'Korean', 'ar': 'Arabic',
+        }
+        source_name = lang_names.get(source_lang, source_lang)
+        target_name = lang_names.get(target_lang, target_lang)
+
+        return f"""Translate this HTML from {source_name} to {target_name}.
+
+RULES:
+- Keep ALL HTML tags, CSS classes, attributes, and structure IDENTICAL
+- Only translate visible text content
+- Do NOT add, remove, or modify any HTML elements
+- Do NOT change any class names, IDs, data attributes, or URLs
+- Do NOT translate content inside <script> or <style> tags
+- Do NOT translate placeholder text in data-image-prompt attributes
+- Preserve all Tailwind CSS classes exactly
+- Output ONLY the translated HTML, nothing else
+
+HTML:
+{html}"""
