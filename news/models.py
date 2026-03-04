@@ -146,6 +146,33 @@ class NewsPost(I18nModelMixin, models.Model):
         super().save(*args, **kwargs)
 
 
+class NewsLayout(models.Model):
+    """Layout templates for news public pages (list, detail, category).
+
+    Stores AI-generated HTML per language that wraps dynamic data.
+    The HTML uses Django template syntax with app-specific context variables.
+    """
+    key = models.SlugField(
+        max_length=50,
+        unique=True,
+        help_text='Layout identifier: list, detail, category'
+    )
+    html_content_i18n = models.JSONField(
+        'HTML Layout (All Languages)',
+        default=dict,
+        blank=True,
+        help_text='Per-language HTML layout with Django template syntax'
+    )
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = _("News Layout")
+        verbose_name_plural = _("News Layouts")
+
+    def __str__(self):
+        return f"NewsLayout: {self.key}"
+
+
 class NewsGalleryImage(models.Model):
     """Through model for NewsPost gallery images with ordering"""
 
