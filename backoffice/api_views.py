@@ -254,15 +254,14 @@ def upload_images(request):
 @require_http_methods(["GET"])
 def get_page_content(request, page_id):
     """
-    Get page content (HTML and translations).
+    Get page content (per-language HTML).
 
     GET /backoffice/api/page-content/<page_id>/
 
     Returns: {
         "success": true,
         "page": {"id": 1, "title": "Home", "slug": "home"},
-        "html_content": "...",
-        "content": {"translations": {...}}
+        "html_content_i18n": {"pt": "...", "en": "..."}
     }
     """
     try:
@@ -275,9 +274,7 @@ def get_page_content(request, page_id):
                 'title': page.default_title,
                 'slug': page.default_slug
             },
-            'html_content': page.html_content or '',
             'html_content_i18n': page.html_content_i18n or {},
-            'content': page.content or {}
         })
 
     except Page.DoesNotExist:
@@ -296,7 +293,7 @@ def get_page_content(request, page_id):
 @require_http_methods(["GET"])
 def get_page_sections(request, page_id):
     """
-    Get page metadata and ordered list of sections parsed from html_content.
+    Get page metadata and ordered list of sections parsed from html_content_i18n.
 
     GET /backoffice/api/page-sections/<page_id>/
 
@@ -310,9 +307,8 @@ def get_page_sections(request, page_id):
         page = Page.objects.get(id=page_id)
         sections = []
 
-        # Prefer html_content_i18n (any language) over legacy html_content
         html_i18n = page.html_content_i18n or {}
-        html_for_parse = next(iter(html_i18n.values()), '') if html_i18n else (page.html_content or '')
+        html_for_parse = next(iter(html_i18n.values()), '') if html_i18n else ''
 
         if html_for_parse:
             soup = BeautifulSoup(html_for_parse, 'html.parser')
@@ -335,7 +331,6 @@ def get_page_sections(request, page_id):
                 'updated_at': page.updated_at.isoformat(),
             },
             'sections': sections,
-            'html_content': page.html_content or '',
             'html_content_i18n': page.html_content_i18n or {},
         })
 
@@ -373,13 +368,8 @@ def get_page_section_screenshots(request, page_id):
         if langs:
             default_lang = langs[0][0]
 
-    # Get the best available HTML: default lang from i18n, any lang from i18n, or legacy
-    page_html = (
-        html_i18n.get(default_lang)
-        or next(iter(html_i18n.values()), '')
-        or page.html_content
-        or ''
-    )
+    # Get the best available HTML: default lang from i18n, or any lang from i18n
+    page_html = html_i18n.get(default_lang) or next(iter(html_i18n.values()), '')
 
     if not page_html:
         return JsonResponse({'success': True, 'sections': []})
@@ -390,14 +380,10 @@ def get_page_section_screenshots(request, page_id):
     if cached:
         return JsonResponse({'success': True, 'sections': cached})
 
-    # Render html_content with translations (same as PageView)
-    translations = (page.content or {}).get('translations', {})
-    trans = translations.get(default_lang, {})
-
+    # Render HTML as Django template (for {% url %} tags, etc.)
     try:
         template = Template(page_html)
         rendered_html = template.render(Context({
-            'trans': trans,
             'LANGUAGE_CODE': default_lang,
             'page': page,
             'SITE_NAME': site_settings.site_name_i18n.get(default_lang, '') if site_settings else '',

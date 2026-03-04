@@ -35,12 +35,11 @@ def _detect_language_from_request(request, data=None):
     Priority:
     1. Explicit 'language' field in POST data
     2. Language prefix from Referer URL (e.g., /pt/page?edit=v2 → 'pt')
-    3. Django's get_language()
-    4. Default language from SiteSettings
+    3. Default language from SiteSettings
 
-    This is needed because editor API endpoints are outside i18n_patterns,
-    so get_language() may return the wrong language (e.g., 'en' from browser
-    Accept-Language while user is viewing /pt/).
+    We intentionally skip get_language() because editor API endpoints are
+    outside i18n_patterns, so it returns the browser's Accept-Language
+    (usually 'en') rather than the actual page language.
     """
     import re as _re
     from urllib.parse import urlparse
@@ -62,12 +61,10 @@ def _detect_language_from_request(request, data=None):
         if match and match.group(1) in enabled_langs:
             return match.group(1)
 
-    # 3. Django's get_language (may be wrong in AJAX context)
-    django_lang = get_language()
-    if django_lang and django_lang in enabled_langs:
-        return django_lang
-
-    # 4. Default
+    # 3. Default language from SiteSettings
+    # NOTE: We skip get_language() here because editor API endpoints are
+    # outside i18n_patterns, so it returns the browser's Accept-Language
+    # (usually 'en') rather than the page language the user is viewing.
     return default_lang
 
 
@@ -93,7 +90,7 @@ def _get_editable_object(data):
 
 
 def _get_page_html(page, lang=None):
-    """Read page HTML from html_content_i18n with backward-compat fallback.
+    """Read page HTML from html_content_i18n.
 
     Args:
         page: Page or any model with html_content_i18n field
@@ -103,14 +100,14 @@ def _get_page_html(page, lang=None):
         tuple: (html_string, resolved_lang)
     """
     default_lang = _get_default_language()
-    lang = lang or get_language() or default_lang
+    lang = lang or default_lang
     html_i18n = getattr(page, 'html_content_i18n', None) or {}
-    html = html_i18n.get(lang) or html_i18n.get(default_lang) or getattr(page, 'html_content', '') or ''
+    html = html_i18n.get(lang) or html_i18n.get(default_lang) or ''
     return html, lang
 
 
 def _save_page_html(page, html, lang, all_langs=False):
-    """Save HTML to html_content_i18n and backward-compat html_content.
+    """Save HTML to html_content_i18n.
 
     Args:
         page: Page or any model with html_content_i18n field (will be modified but NOT saved)
@@ -124,15 +121,10 @@ def _save_page_html(page, html, lang, all_langs=False):
             html_i18n[existing_lang] = html
     html_i18n[lang] = html
     page.html_content_i18n = html_i18n
-    if hasattr(page, 'html_content'):
-        page.html_content = html  # backward compat
 
 
 def _apply_structural_change_to_all_langs(page, change_fn):
     """Apply a structural HTML change (classes, attributes, video) to all language copies.
-
-    Also handles the legacy case where html_content_i18n is empty — applies the
-    change to html_content directly.
 
     Args:
         page: Page or any model with html_content_i18n field (will be modified but NOT saved)
@@ -140,7 +132,6 @@ def _apply_structural_change_to_all_langs(page, change_fn):
                    If it returns False, that language copy is skipped.
     """
     html_i18n = dict(getattr(page, 'html_content_i18n', None) or {})
-    result_html = None
 
     for existing_lang, existing_html in html_i18n.items():
         if not existing_html:
@@ -150,24 +141,9 @@ def _apply_structural_change_to_all_langs(page, change_fn):
             new_html = str(soup)
             if new_html.startswith('<html><body>'):
                 new_html = new_html[12:-14]
-            html_i18n[existing_lang] = _sanitize_trans_vars(new_html)
-            if result_html is None:
-                result_html = html_i18n[existing_lang]
+            html_i18n[existing_lang] = new_html
 
     page.html_content_i18n = html_i18n
-
-    # Also update html_content (backward compat) — only if the model has it
-    legacy_html = getattr(page, 'html_content', None)
-    if result_html and hasattr(page, 'html_content'):
-        page.html_content = result_html
-    elif legacy_html:
-        # No i18n entries — apply change directly to legacy html_content
-        soup = BeautifulSoup(legacy_html, 'html.parser')
-        if change_fn(soup):
-            new_html = str(soup)
-            if new_html.startswith('<html><body>'):
-                new_html = new_html[12:-14]
-            page.html_content = _sanitize_trans_vars(new_html)
 
 
 # ---------------------------------------------------------------------------
@@ -249,20 +225,6 @@ def _lookup_get_section_html(params):
         return {'success': False, 'message': f'Section "{section_name}" not found in page'}
 
     html = str(section)
-
-    # If the HTML still uses {{ trans.xxx }} (legacy templatized format),
-    # de-templatize by replacing with real text for readability
-    if '{{ trans.' in html:
-        content = page.content or {}
-        translations = content.get('translations', {})
-        default_lang = _get_default_language()
-        if not default_lang or default_lang not in translations:
-            default_lang = next(iter(translations), None)
-
-        if default_lang and default_lang in translations:
-            lang_trans = translations[default_lang]
-            for var_name, text in lang_trans.items():
-                html = html.replace('{{ trans.' + var_name + ' }}', str(text))
 
     # Truncate to avoid blowing up context
     if len(html) > 3000:
@@ -409,22 +371,11 @@ def _enrich_instructions(instructions, page):
         return instructions
 
 
-def _sanitize_trans_vars(html):
-    """Fix hyphenated {{ trans.xxx-yyy }} → {{ trans.xxx_yyy }} in HTML.
-    Django templates don't allow hyphens in variable names."""
-    def _fix(m):
-        return m.group(1) + m.group(2).replace('-', '_') + m.group(3)
-    return re.sub(
-        r'(\{\{\s*trans\.)([a-z0-9_-]+)(\s*(?:\|[a-z]+)?\s*\}\})',
-        _fix, html
-    )
-
-
 @staff_member_required
 @require_http_methods(["POST"])
 def update_page_content(request):
     """
-    Update a Page's content JSON field (translations).
+    Update a Page's per-language HTML for an inline text edit.
 
     Expected POST data:
     {
@@ -441,10 +392,6 @@ def update_page_content(request):
         field_key = data.get('field_key')
         language = data.get('language', 'pt')
 
-        # Normalize field_key: hyphens → underscores (Django templates use {{ trans.xxx_yyy }})
-        if field_key:
-            field_key = field_key.replace('-', '_')
-
         print(f'[API] update_page_content data: page_id={page_id}, field_key={field_key}, lang={language}')
         value = data.get('value', '').strip() if isinstance(data.get('value'), str) else data.get('value')
 
@@ -460,97 +407,29 @@ def update_page_content(request):
                 'error': 'Page or editable object not found'
             }, status=400)
 
-        # Get current HTML for this language
-        current_html, resolved_lang = _get_page_html(page, language)
-
-        # If field_key not provided, derive it from the template HTML via selector
-        if not field_key and selector and current_html:
-            soup = BeautifulSoup(current_html, 'html.parser')
-            element = soup.select_one(selector)
-            if element:
-                match = re.search(r'\{\{\s*trans\.(\w+)\s*\}\}', element.get_text())
-                if match:
-                    field_key = match.group(1)
-                    print(f'[API] derived field_key from template: {field_key}')
-                else:
-                    # Element has hardcoded text — generate a field_key for backward compat
-                    section_el = element.find_parent('section', attrs={'data-section': True})
-                    section_name = section_el.get('data-section', 'page') if section_el else 'page'
-                    tag = element.name or 'text'
-                    base_key = f'{section_name}_{tag}'.replace('-', '_')
-                    existing_vars = set(re.findall(r'\{\{\s*trans\.(\w+)\s*\}\}', current_html))
-                    field_key = base_key
-                    counter = 1
-                    while field_key in existing_vars:
-                        counter += 1
-                        field_key = f'{base_key}_{counter}'
-                    print(f'[API] generated new field_key: {field_key} for hardcoded text')
-
-        if not field_key:
+        if not field_key and not selector:
             return JsonResponse({
                 'success': False,
-                'error': 'Cannot determine field_key from selector'
+                'error': 'Missing field_key or selector'
             }, status=400)
-
-        # Update content translations (backward compat — only if model has content field)
-        if hasattr(page, 'content'):
-            content = page.content or {}
-            if 'translations' not in content:
-                content['translations'] = {}
-            if language not in content['translations']:
-                content['translations'][language] = {}
-
-            content['translations'][language][field_key] = value
-            page.content = content
 
         # --- Update per-language HTML in html_content_i18n ---
         html_i18n = dict(getattr(page, 'html_content_i18n', None) or {})
         lang_html = html_i18n.get(language, '')
 
         if lang_html and selector:
-            # New format: directly update the text in per-language HTML
             soup = BeautifulSoup(lang_html, 'html.parser')
             element = soup.select_one(selector)
             if element:
-                # Check if element contains {{ trans.xxx }} (legacy) or real text
-                element_text = element.get_text()
-                if '{{ trans.' in element_text:
-                    # Legacy templatized HTML — replace with trans var (backward compat)
-                    trans_var = '{{ trans.' + field_key + ' }}'
-                    if trans_var not in str(element):
-                        element.clear()
-                        element.append(trans_var)
-                else:
-                    # New per-language HTML — update text directly
-                    element.clear()
-                    element.append(value)
+                element.clear()
+                element.append(value)
 
                 new_html = str(soup)
                 if new_html.startswith('<html><body>'):
                     new_html = new_html[12:-14]
-                html_i18n[language] = _sanitize_trans_vars(new_html)
-
-        elif not lang_html and getattr(page, 'html_content', None) and selector:
-            # Fallback: working with legacy html_content (templatized)
-            soup = BeautifulSoup(page.html_content, 'html.parser')
-            element = soup.select_one(selector)
-            if element:
-                trans_var = '{{ trans.' + field_key + ' }}'
-                element_html = str(element)
-                has_var = trans_var in element_html
-                if not has_var:
-                    element.clear()
-                    element.append(trans_var)
-                    new_html = str(soup)
-                    if new_html.startswith('<html><body>'):
-                        new_html = new_html[12:-14]
-                    page.html_content = _sanitize_trans_vars(new_html)
+                html_i18n[language] = new_html
 
         page.html_content_i18n = html_i18n
-        # Also keep backward compat html_content in sync
-        if hasattr(page, 'html_content') and page.html_content:
-            page.html_content = _sanitize_trans_vars(page.html_content)
-
         page.save()
 
         return JsonResponse({
@@ -962,14 +841,13 @@ def refine_section(request):
 def save_ai_section(request):
     """
     Save an AI-refined section to the page in DB.
-    Replaces only the target section in html_content and merges translations.
+    Replaces only the target section in html_content_i18n for the current language.
 
     Expected POST data:
     {
         "page_id": 1,
         "section_name": "hero",
-        "html_template": "<section data-section='hero'>...</section>",
-        "content": {"translations": {"pt": {...}, "en": {...}}}
+        "html_template": "<section data-section='hero'>...</section>"
     }
     """
     try:
@@ -977,7 +855,6 @@ def save_ai_section(request):
         page_id = data.get('page_id')
         section_name = data.get('section_name')
         html_template = data.get('html_template', '')
-        content = data.get('content', {})
 
         if not page_id or not section_name or not html_template:
             return JsonResponse({
@@ -997,7 +874,7 @@ def save_ai_section(request):
         page.create_version(user=request.user, change_summary=f'AI refined section: {section_name}')
 
         # Determine current language
-        lang = data.get('language') or get_language() or _get_default_language()
+        lang = _detect_language_from_request(request, data)
 
         # Read HTML for the current language
         current_html, resolved_lang = _get_page_html(page, lang)
@@ -1026,19 +903,6 @@ def save_ai_section(request):
         if new_html.startswith('<html><body>'):
             new_html = new_html[12:-14]
         _save_page_html(page, new_html, lang)
-
-        # Merge translations (backward compat — don't overwrite other sections' translations)
-        new_translations = content.get('translations', {})
-        page_content = page.content or {}
-        if 'translations' not in page_content:
-            page_content['translations'] = {}
-
-        for lang_code, lang_trans in new_translations.items():
-            if lang_code not in page_content['translations']:
-                page_content['translations'][lang_code] = {}
-            page_content['translations'][lang_code].update(lang_trans)
-
-        page.content = page_content
         page.save()
 
         return JsonResponse({
@@ -1177,8 +1041,7 @@ def save_ai_element(request):
     {
         "page_id": 1,
         "selector": "section[data-section='hero'] > div > a.btn",
-        "html_template": "<a ...>...</a>",
-        "content": {"translations": {"pt": {...}, "en": {...}}}
+        "html_template": "<a ...>...</a>"
     }
     """
     try:
@@ -1187,7 +1050,6 @@ def save_ai_element(request):
         section_name = data.get('section_name', '')
         selector = data.get('selector')
         html_template = data.get('html_template', '')
-        content = data.get('content', {})
 
         if not page_id or not selector or not html_template:
             return JsonResponse({
@@ -1210,7 +1072,7 @@ def save_ai_element(request):
         )
 
         # Determine current language
-        lang = data.get('language') or get_language() or _get_default_language()
+        lang = _detect_language_from_request(request, data)
 
         # Read HTML for the current language
         current_html, resolved_lang = _get_page_html(page, lang)
@@ -1241,19 +1103,6 @@ def save_ai_element(request):
         if new_html.startswith('<html><body>'):
             new_html = new_html[12:-14]
         _save_page_html(page, new_html, lang)
-
-        # Merge translations (backward compat)
-        new_translations = content.get('translations', {})
-        page_content = page.content or {}
-        if 'translations' not in page_content:
-            page_content['translations'] = {}
-
-        for lang_code, lang_trans in new_translations.items():
-            if lang_code not in page_content['translations']:
-                page_content['translations'][lang_code] = {}
-            page_content['translations'][lang_code].update(lang_trans)
-
-        page.content = page_content
         page.save()
 
         return JsonResponse({
@@ -1538,18 +1387,92 @@ def apply_option(request):
 
         page.save()
 
+        # Auto-translate ONLY the changed section/element to other languages
+        site_settings = SiteSettings.objects.first()
+        default_language = site_settings.get_default_language() if site_settings else 'pt'
+        all_languages = site_settings.get_language_codes() if site_settings else [default_language]
+        other_languages = [l for l in all_languages if l != lang]
+        translated_langs = []
+
+        if other_languages:
+            html_i18n = dict(page.html_content_i18n or {})
+            print(f"Auto-translating {scope} to {other_languages} ({len(html)} chars)...")
+
+            from ai.services import ContentGenerationService
+            service = ContentGenerationService(model_name='gemini-flash')
+
+            for target_lang in other_languages:
+                try:
+                    # Translate only the changed snippet
+                    translated_snippet = service.translate_html(html, lang, target_lang)
+                    print(f"  Translated snippet [{lang}] → [{target_lang}]: {len(translated_snippet)} chars")
+
+                    # Surgically insert/replace in the target language's full page HTML
+                    target_html = html_i18n.get(target_lang) or html_i18n.get(default_language) or ''
+                    target_soup = BeautifulSoup(target_html, 'html.parser')
+                    snippet_soup = BeautifulSoup(translated_snippet, 'html.parser')
+
+                    if mode == 'insert':
+                        new_section = snippet_soup.find('section')
+                        if new_section:
+                            if insert_after:
+                                anchor = target_soup.find('section', attrs={'data-section': insert_after})
+                                if anchor:
+                                    anchor.insert_after(new_section)
+                                else:
+                                    target_soup.append(new_section)
+                            else:
+                                first_section = target_soup.find('section')
+                                if first_section:
+                                    first_section.insert_before(new_section)
+                                else:
+                                    target_soup.append(new_section)
+
+                    elif scope == 'element' and selector:
+                        old_el = target_soup.select_one(selector)
+                        if old_el:
+                            children = list(snippet_soup.children)
+                            new_el = children[0] if children else snippet_soup
+                            old_el.replace_with(new_el)
+
+                    else:
+                        # Section replacement — match by data-section
+                        new_sec = snippet_soup.find('section', attrs={'data-section': section_name})
+                        if not new_sec:
+                            new_sec = snippet_soup.find('section')
+                        old_sec = target_soup.find('section', attrs={'data-section': section_name})
+                        if old_sec and new_sec:
+                            old_sec.replace_with(new_sec)
+
+                    result_html = str(target_soup)
+                    if result_html.startswith('<html><body>'):
+                        result_html = result_html[12:-14]
+                    html_i18n[target_lang] = result_html
+                    translated_langs.append(target_lang)
+
+                except Exception as e:
+                    print(f"  Translation [{lang}] → [{target_lang}] failed: {e}")
+                    translated_langs.append(f"{target_lang}(failed)")
+
+            page.html_content_i18n = html_i18n
+            page.save(update_fields=['html_content_i18n'])
+            print(f"  Auto-translation complete")
+
         # Debug: verify save
         page.refresh_from_db()
         saved_i18n = getattr(page, 'html_content_i18n', None) or {}
         print(f"After save — html_content_i18n keys: {list(saved_i18n.keys())}")
         for k, v in saved_i18n.items():
             print(f"  [{k}]: {len(v)} chars")
-        print(f"  html_content: {len(getattr(page, 'html_content', '') or '')} chars")
         print(f"=== apply_option done ===\n")
+
+        msg = f'{scope.capitalize()} saved successfully'
+        if translated_langs:
+            msg += f' (translated to {", ".join(translated_langs)})'
 
         return JsonResponse({
             'success': True,
-            'message': f'{scope.capitalize()} saved successfully',
+            'message': msg,
             'page_id': page.id,
         })
 
@@ -1817,9 +1740,7 @@ def refine_page(request):
         return JsonResponse({
             'success': True,
             'page': {
-                'html_content': result.get('html_content', ''),
                 'html_content_i18n': result.get('html_content_i18n', {}),
-                'content': result.get('content', {}),
             },
             'assistant_message': assistant_msg,
             'session_id': session.id,
@@ -1841,15 +1762,13 @@ def save_ai_page(request):
     POST /editor-v2/api/save-ai-page/
     {
         "page_id": 1,
-        "html_template": "<section ...>...</section>...",
-        "content": {"translations": {"pt": {...}, "en": {...}}}
+        "html_template": "<section ...>...</section>..."
     }
     """
     try:
         data = json.loads(request.body)
         page_id = data.get('page_id')
         html_template = data.get('html_template', '').strip()
-        content = data.get('content', {})
 
         if not html_template:
             return JsonResponse({'success': False, 'error': 'Missing html_template'}, status=400)
@@ -1868,13 +1787,10 @@ def save_ai_page(request):
             )
 
         # Determine current language
-        lang = data.get('language') or get_language() or _get_default_language()
+        lang = _detect_language_from_request(request, data)
 
-        # Save to html_content_i18n for current language + backward compat
+        # Save to html_content_i18n for current language
         _save_page_html(page, html_template, lang)
-
-        if content and hasattr(page, 'content'):
-            page.content = content
         page.save()
 
         return JsonResponse({
@@ -1988,9 +1904,7 @@ def get_page_version(request, page_id, version_number):
         'success': True,
         'version': {
             'version_number': version.version_number,
-            'html_content': version.html_content,
             'html_content_i18n': version.html_content_i18n or {},
-            'content': version.content,
             'change_summary': version.change_summary,
             'created_at': version.created_at.isoformat(),
         }
@@ -2002,8 +1916,7 @@ def get_page_version(request, page_id, version_number):
 def remove_section(request):
     """
     Remove a section from a page by its data-section name.
-    Creates a version snapshot before modifying. Cleans up orphaned
-    translation keys that only appeared in the removed section.
+    Creates a version snapshot before modifying.
     """
     try:
         data = json.loads(request.body)
@@ -2027,10 +1940,6 @@ def remove_section(request):
         if not section:
             return JsonResponse({'success': False, 'error': f'Section "{section_name}" not found'}, status=400)
 
-        # Collect trans vars used ONLY in this section so we can clean them up
-        section_html = str(section)
-        section_vars = set(re.findall(r'\{\{\s*trans\.(\w+)\s*\}\}', section_html))
-
         # Create version for rollback (only if model supports it)
         if hasattr(page, 'create_version'):
             page.create_version(
@@ -2038,7 +1947,7 @@ def remove_section(request):
                 change_summary=f'Removed section "{section_name}"'
             )
 
-        # Remove section from ALL language copies (structural change, + legacy fallback)
+        # Remove section from ALL language copies
         def remove_sect(s):
             sec = s.find('section', attrs={'data-section': section_name})
             if not sec:
@@ -2047,22 +1956,6 @@ def remove_section(request):
             return True
 
         _apply_structural_change_to_all_langs(page, remove_sect)
-
-        # Get the new HTML for orphan detection (from first available source)
-        new_html = getattr(page, 'html_content', '') or ''
-
-        # Find vars still used in remaining HTML
-        remaining_vars = set(re.findall(r'\{\{\s*trans\.(\w+)\s*\}\}', new_html))
-        orphaned_vars = section_vars - remaining_vars
-
-        # Remove orphaned translation keys (only if model has content field)
-        if orphaned_vars and hasattr(page, 'content') and page.content:
-            translations = page.content.get('translations', {})
-            for lang_code, lang_trans in translations.items():
-                for var in orphaned_vars:
-                    lang_trans.pop(var, None)
-            page.content = page.content  # mark dirty
-
         page.save()
 
         return JsonResponse({
@@ -2084,8 +1977,7 @@ def remove_section(request):
 def remove_element(request):
     """
     Remove an element from a page by CSS selector.
-    Creates a version snapshot before modifying. Cleans up orphaned
-    translation keys that only appeared in the removed element.
+    Creates a version snapshot before modifying.
     """
     try:
         data = json.loads(request.body)
@@ -2109,10 +2001,6 @@ def remove_element(request):
         if not element:
             return JsonResponse({'success': False, 'error': 'Element not found for selector'}, status=400)
 
-        # Collect trans vars used ONLY in this element
-        element_html = str(element)
-        element_vars = set(re.findall(r'\{\{\s*trans\.(\w+)\s*\}\}', element_html))
-
         # Create version for rollback (only if model supports it)
         if hasattr(page, 'create_version'):
             page.create_version(
@@ -2120,7 +2008,7 @@ def remove_element(request):
                 change_summary='Removed element'
             )
 
-        # Remove element from ALL language copies (structural change, + legacy fallback)
+        # Remove element from ALL language copies
         def remove_el(s):
             el = s.select_one(selector)
             if not el:
@@ -2129,22 +2017,6 @@ def remove_element(request):
             return True
 
         _apply_structural_change_to_all_langs(page, remove_el)
-
-        # Get the new HTML for orphan detection (from first available source)
-        new_html = getattr(page, 'html_content', '') or ''
-
-        # Find vars still used in remaining HTML
-        remaining_vars = set(re.findall(r'\{\{\s*trans\.(\w+)\s*\}\}', new_html))
-        orphaned_vars = element_vars - remaining_vars
-
-        # Remove orphaned translation keys (only if model has content field)
-        if orphaned_vars and hasattr(page, 'content') and page.content:
-            translations = page.content.get('translations', {})
-            for lang_code, lang_trans in translations.items():
-                for var in orphaned_vars:
-                    lang_trans.pop(var, None)
-            page.content = page.content  # mark dirty
-
         page.save()
 
         return JsonResponse({
@@ -2253,8 +2125,7 @@ def refine_page_stream(request):
                 q.put(('complete', {
                     'success': True,
                     'page': {
-                        'html_template': result.get('html_content', ''),
-                        'content': result.get('content', {}),
+                        'html_content_i18n': result.get('html_content_i18n', {}),
                     },
                     'assistant_message': assistant_msg,
                     'session_id': session.id,

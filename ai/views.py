@@ -212,12 +212,10 @@ def refine_header_api(request):
             model_override=model
         )
 
-        # Save the refined header to the database (html_template_i18n + backward compat)
+        # Save the refined header to the database
         from core.models import GlobalSection
         section = GlobalSection.objects.get(key='main-header')
         section.html_template_i18n = section_data.get('html_template_i18n', section.html_template_i18n or {})
-        section.html_template = section_data.get('html_template', '')
-        section.content = section_data.get('content', {})
         section.save()
 
         return JsonResponse({
@@ -268,12 +266,10 @@ def refine_footer_api(request):
             model_override=model
         )
 
-        # Save the refined footer to the database (html_template_i18n + backward compat)
+        # Save the refined footer to the database
         from core.models import GlobalSection
         section = GlobalSection.objects.get(key='main-footer')
         section.html_template_i18n = section_data.get('html_template_i18n', section.html_template_i18n or {})
-        section.html_template = section_data.get('html_template', '')
-        section.content = section_data.get('content', {})
         section.save()
 
         return JsonResponse({
@@ -356,8 +352,6 @@ def save_generated_page_api(request):
             page.title_i18n = title_i18n
             page.slug_i18n = slug_i18n
             page.html_content_i18n = page_data.get('html_content_i18n', {})
-            page.html_content = page_data.get('html_content', '')
-            page.content = page_data.get('content', {})
             page.is_active = True
             page.save()
             created = False
@@ -366,8 +360,6 @@ def save_generated_page_api(request):
                 title_i18n=title_i18n,
                 slug_i18n=slug_i18n,
                 html_content_i18n=page_data.get('html_content_i18n', {}),
-                html_content=page_data.get('html_content', ''),
-                content=page_data.get('content', {}),
                 is_active=True
             )
             created = True
@@ -633,10 +625,8 @@ def refine_page_with_html_api(request):
             reference_images=reference_images or None
         )
 
-        # Save refined content to page (html_content_i18n + backward compat)
+        # Save refined content to page
         page.html_content_i18n = refined_data.get('html_content_i18n', page.html_content_i18n or {})
-        page.html_content = refined_data.get('html_content', page.html_content)
-        page.content = refined_data.get('content', page.content)
         page.save()
 
         return JsonResponse({
@@ -732,7 +722,7 @@ def chat_refine_page_api(request):
         default_lang = site_settings.get_default_language() if site_settings else 'pt'
         current_lang = get_language() or default_lang
         html_i18n = page.html_content_i18n or {}
-        old_html = html_i18n.get(current_lang) or html_i18n.get(default_lang) or page.html_content or ''
+        old_html = html_i18n.get(current_lang) or html_i18n.get(default_lang) or ''
 
         # Append user message to session
         session.add_user_message(message, reference_images_count=len(reference_images))
@@ -757,14 +747,13 @@ def chat_refine_page_api(request):
             handle_images=handle_images,
         )
 
-        # Save refined content to page (html_content_i18n + backward compat)
+        # Save refined content to page
         page.html_content_i18n = refined_data.get('html_content_i18n', page.html_content_i18n or {})
-        page.html_content = refined_data.get('html_content', page.html_content)
-        page.content = refined_data.get('content', page.content)
         page.save()
 
         # Compute section changes
-        new_html = refined_data.get('html_content', page.html_content) or ''
+        page.refresh_from_db()
+        new_html = (page.html_content_i18n or {}).get(current_lang) or (page.html_content_i18n or {}).get(default_lang) or ''
         added, removed, modified = compute_section_changes(old_html, new_html)
         change_summary = build_change_summary(added, removed, modified)
         sections_changed = added + modified
@@ -910,7 +899,7 @@ def chat_refine_page_stream(request):
         default_lang = site_settings.get_default_language() if site_settings else 'pt'
         current_lang = get_language() or default_lang
         html_i18n = page.html_content_i18n or {}
-        old_html = html_i18n.get(current_lang) or html_i18n.get(default_lang) or page.html_content or ''
+        old_html = html_i18n.get(current_lang) or html_i18n.get(default_lang) or ''
 
         # Append user message to session
         session.add_user_message(message, reference_images_count=len(reference_images))
@@ -944,14 +933,13 @@ def chat_refine_page_stream(request):
                     on_progress=on_progress,
                 )
 
-                # Post-processing: save page (html_content_i18n + backward compat)
+                # Post-processing: save page
                 page.html_content_i18n = refined_data.get('html_content_i18n', page.html_content_i18n or {})
-                page.html_content = refined_data.get('html_content', page.html_content)
-                page.content = refined_data.get('content', page.content)
                 page.save()
 
                 # Compute section changes
-                new_html = refined_data.get('html_content', page.html_content) or ''
+                page.refresh_from_db()
+                new_html = (page.html_content_i18n or {}).get(current_lang) or (page.html_content_i18n or {}).get(default_lang) or ''
                 added, removed, modified = compute_section_changes(old_html, new_html)
                 change_summary = build_change_summary(added, removed, modified)
                 sections_changed = added + modified
@@ -965,8 +953,7 @@ def chat_refine_page_stream(request):
                     'session_id': session.id,
                     'assistant_message': change_summary,
                     'sections_changed': sections_changed,
-                    'html_content': page.html_content,
-                    'content': page.content,
+                    'html_content_i18n': page.html_content_i18n,
                     'page_id': page.id,
                 }))
             except Exception as e:
@@ -1041,12 +1028,10 @@ def refine_header_stream(request):
                     on_progress=on_progress,
                 )
 
-                # Save the refined header to the database (html_template_i18n + backward compat)
+                # Save the refined header to the database
                 from core.models import GlobalSection
                 section = GlobalSection.objects.get(key='main-header')
                 section.html_template_i18n = section_data.get('html_template_i18n', section.html_template_i18n or {})
-                section.html_template = section_data.get('html_template', '')
-                section.content = section_data.get('content', {})
                 section.save()
 
                 q.put(('complete', {
@@ -1125,12 +1110,10 @@ def refine_footer_stream(request):
                     on_progress=on_progress,
                 )
 
-                # Save the refined footer to the database (html_template_i18n + backward compat)
+                # Save the refined footer to the database
                 from core.models import GlobalSection
                 section = GlobalSection.objects.get(key='main-footer')
                 section.html_template_i18n = section_data.get('html_template_i18n', section.html_template_i18n or {})
-                section.html_template = section_data.get('html_template', '')
-                section.content = section_data.get('content', {})
                 section.save()
 
                 q.put(('complete', {
@@ -1259,7 +1242,7 @@ def generate_design_guide_ai_api(request):
             for page in pages:
                 title = page.default_title or page.default_slug
                 page_html_i18n = page.html_content_i18n or {}
-                html = page_html_i18n.get(default_language) or page.html_content or ''
+                html = page_html_i18n.get(default_language) or ''
                 if not html:
                     continue
                 # Truncate very long pages to keep prompt reasonable

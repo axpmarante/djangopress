@@ -12,7 +12,7 @@ def _get_default_language():
 
 
 def _get_page_html(page, lang=None):
-    """Read page HTML from html_content_i18n with backward-compat fallback.
+    """Read page HTML from html_content_i18n.
 
     Returns:
         Tuple of (html_string, resolved_language_code)
@@ -21,7 +21,7 @@ def _get_page_html(page, lang=None):
     default_lang = _get_default_language()
     lang = lang or get_language() or default_lang
     html_i18n = page.html_content_i18n or {}
-    return html_i18n.get(lang) or html_i18n.get(default_lang) or page.html_content or '', lang
+    return html_i18n.get(lang) or html_i18n.get(default_lang) or '', lang
 
 
 def _get_page(context):
@@ -37,7 +37,7 @@ def _get_page(context):
 
 
 def _save_html(page, soup, lang=None):
-    """Save BeautifulSoup back to page.html_content_i18n and html_content."""
+    """Save BeautifulSoup back to page.html_content_i18n."""
     from django.utils.translation import get_language
     new_html = str(soup)
     if new_html.startswith('<html><body>'):
@@ -46,13 +46,9 @@ def _save_html(page, soup, lang=None):
     default_lang = _get_default_language()
     lang = lang or get_language() or default_lang
 
-    # Save to html_content_i18n for current language
     html_i18n = dict(page.html_content_i18n or {})
     html_i18n[lang] = new_html
     page.html_content_i18n = html_i18n
-
-    # Backward compat
-    page.html_content = new_html
     page.save()
 
 
@@ -68,31 +64,9 @@ def _create_version_if_needed(context):
 
 
 def update_translations(params, context):
-    _create_version_if_needed(context)
-    page = _get_page(context)
-    if not page:
-        return {'success': False, 'message': 'Active page not found'}
-
-    updates = params.get('updates', {})
-    if not updates:
-        return {'success': False, 'message': 'No updates provided'}
-
-    content = page.content or {}
-    if 'translations' not in content:
-        content['translations'] = {}
-
-    count = 0
-    for lang, fields in updates.items():
-        if lang not in content['translations']:
-            content['translations'][lang] = {}
-        for key, value in fields.items():
-            content['translations'][lang][key] = value
-            count += 1
-
-    page.content = content
-    page.save()
-
-    return {'success': True, 'message': f'Updated {count} translation(s)'}
+    """Deprecated — text is now embedded in per-language HTML (html_content_i18n).
+    Use refine_section or refine_page to change text content."""
+    return {'success': False, 'message': 'update_translations is deprecated. Use refine_section or refine_page to change text.'}
 
 
 def update_element_styles(params, context):
@@ -305,11 +279,9 @@ def refine_page(params, context):
 
     page.refresh_from_db()
 
-    # refine_page_with_html returns html_content_i18n, html_content, content
+    # refine_page_with_html returns html_content_i18n
     if 'html_content_i18n' in result:
         page.html_content_i18n = result['html_content_i18n']
-    page.html_content = result.get('html_content', '')  # backward compat
-    page.content = result.get('content', {})  # backward compat
     page.save()
 
     return {

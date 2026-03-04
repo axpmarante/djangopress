@@ -48,28 +48,16 @@ class PageView(TemplateView):
         context['page'] = page_slug
         context['preview_mode'] = preview_mode
 
-        # Render page HTML content with translations
+        # Render page HTML content
         language = current_lang or 'pt'
 
         # Get default language from SiteSettings
         site_settings = SiteSettings.load()
         default_lang = site_settings.get_default_language() if site_settings else 'pt'
 
-        # Determine which HTML to render and whether trans context is needed
+        # Get per-language HTML (with fallback to default language)
         html_i18n = page_obj.html_content_i18n or {}
-        trans = {}
-
-        if html_i18n.get(language):
-            # New format: per-language HTML with real text already embedded
-            html = html_i18n[language]
-        elif html_i18n.get(default_lang):
-            # Fallback to default language HTML from new format
-            html = html_i18n[default_lang]
-        else:
-            # Backward compat: old templatized HTML with {{ trans.xxx }} variables
-            html = page_obj.html_content or ''
-            translations = (page_obj.content or {}).get('translations', {})
-            trans = translations.get(language, translations.get(default_lang, {}))
+        html = html_i18n.get(language) or html_i18n.get(default_lang) or ''
 
         if html:
             from django.template import Template, RequestContext
@@ -81,8 +69,6 @@ class PageView(TemplateView):
                     'page': page_obj,
                     **context,
                 }
-                if trans:
-                    render_context['trans'] = trans  # Only for old templatized format
                 context['page_content'] = template.render(
                     RequestContext(self.request, render_context)
                 )

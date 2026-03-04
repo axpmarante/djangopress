@@ -187,34 +187,16 @@ def load_global_section(context, key, fallback_template=None):
         site_settings = SiteSettings.load()
         default_lang = site_settings.get_default_language() if site_settings else 'pt'
 
-        # Three-tier HTML resolution (mirrors PageView logic):
-        # 1. html_template_i18n[current_language]
-        # 2. html_template_i18n[default_language]
-        # 3. Old format: html_template + trans from content['translations']
+        # Get per-language HTML (with fallback to default language)
         html_i18n = section.html_template_i18n or {}
-        html = None
-        trans = {}
-
-        if html_i18n.get(language):
-            # New format: per-language HTML with text already embedded
-            html = html_i18n[language]
-        elif html_i18n.get(default_lang):
-            # Fallback to default language HTML from new format
-            html = html_i18n[default_lang]
-        elif hasattr(section, 'html_template') and section.html_template:
-            # Backward compat: old templatized HTML with {{ trans.xxx }} variables
-            html = section.html_template
-            translations = section.content.get('translations', {}) if hasattr(section, 'content') else {}
-            trans = translations.get(language, translations.get(default_lang, {}))
+        html = html_i18n.get(language) or html_i18n.get(default_lang)
 
         if html:
-            # Build context for rendering
+            # Build context for rendering (Django template engine needed for {% url %}, etc.)
             section_context = {
                 'section': section,
                 'LANGUAGE_CODE': language,
             }
-            if trans:
-                section_context['trans'] = trans  # Only for old templatized format
             section_context.update(context.flatten())
 
             # Render template (Django template engine always needed for {% url %}, etc.)

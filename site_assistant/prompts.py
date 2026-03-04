@@ -89,11 +89,14 @@ RULES:
 
 
 def build_page_context(page):
-    """Build a compact page context for the LLM (sections + translations + elements)."""
-    if not page or not page.html_content:
+    """Build a compact page context for the LLM (sections + elements)."""
+    html_i18n = page.html_content_i18n or {} if page else {}
+    html = next(iter(html_i18n.values()), '') if html_i18n else ''
+
+    if not page or not html:
         return "Page has no content yet."
 
-    soup = BeautifulSoup(page.html_content, 'html.parser')
+    soup = BeautifulSoup(html, 'html.parser')
     lines = []
 
     # Sections summary
@@ -106,20 +109,11 @@ def build_page_context(page):
             text = sec.get_text(strip=True)[:80]
             lines.append(f"- `{name}`: {text}...")
 
-    # Translation variables
-    translations = (page.content or {}).get('translations', {})
-    if translations:
-        lines.append("\n### Translation Variables")
-        # Show default language fully, others just key count
-        for lang, trans in translations.items():
-            if trans:
-                sample = list(trans.items())[:5]
-                sample_str = ', '.join(f'`{k}`: "{v[:40]}..."' if len(str(v)) > 40 else f'`{k}`: "{v}"' for k, v in sample)
-                extra = f' (+{len(trans) - 5} more)' if len(trans) > 5 else ''
-                lines.append(f"**{lang}**: {sample_str}{extra}")
+    # Available languages
+    if html_i18n:
+        lines.append(f"\n### Available Languages: {', '.join(html_i18n.keys())}")
 
-    # Page sections
-    sections = soup.find_all('section', attrs={'data-section': True})
+    # Page sections with element counts
     if sections:
         lines.append("\n### Page Sections")
         for sec in sections:

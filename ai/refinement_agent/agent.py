@@ -218,12 +218,11 @@ class RefinementAgent:
     def _get_target_html(self, page, scope, target_name, default_language):
         """Extract clean HTML for the target section/element from html_content_i18n."""
         from bs4 import BeautifulSoup
-        from django.utils.translation import get_language
 
-        # Read from html_content_i18n with fallback
-        current_lang = get_language() or default_language
+        # Use default_language directly — get_language() is unreliable in AJAX context
+        # (editor API endpoints are outside i18n_patterns)
         html_i18n = page.html_content_i18n or {}
-        clean_html = html_i18n.get(current_lang) or html_i18n.get(default_language) or page.html_content or ''
+        clean_html = html_i18n.get(default_language) or ''
 
         soup = BeautifulSoup(clean_html, 'html.parser')
 

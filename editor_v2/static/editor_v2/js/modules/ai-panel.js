@@ -474,10 +474,10 @@ function updateThinkingLabel(label) {
 async function applyResult() {
     const applyBtn = $('#ev2-ai-apply');
     const discardBtn = $('#ev2-ai-discard');
-    if (applyBtn) { applyBtn.textContent = 'Saving...'; applyBtn.disabled = true; }
+    if (applyBtn) { applyBtn.textContent = 'Saving & translating...'; applyBtn.disabled = true; }
     if (discardBtn) discardBtn.disabled = true;
 
-    // Show overlay to block editor interaction during save + templatize
+    // Show overlay to block editor interaction during save + translate
     setLoading(true);
 
     try {

@@ -230,8 +230,7 @@ def run_benchmark(briefing_path, skip_images=True, skip_design_guide=False,
                 page = Page.objects.create(
                     title_i18n=result.get('title_i18n', {lang: page_name for lang in language_codes}),
                     slug_i18n={lang: slugify(s) or slugify(page_name) for lang, s in slug_i18n.items()},
-                    html_content=result['html_content'],
-                    content=result.get('content', {}),
+                    html_content_i18n=result.get('html_content_i18n', {}),
                     is_active=True,
                     sort_order=i * 10,
                 )

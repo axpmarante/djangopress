@@ -695,18 +695,18 @@ BUTTONS:
 
                 title_i18n = result.get('title_i18n', {})
 
+                html_i18n = result.get('html_content_i18n', {})
                 page = Page.objects.create(
                     title_i18n=title_i18n,
                     slug_i18n=slug_i18n,
-                    html_content_i18n=result.get('html_content_i18n', {}),
-                    html_content=result['html_content'],  # backward compat
-                    content=result['content'],  # backward compat
+                    html_content_i18n=html_i18n,
                     is_active=True,
                     sort_order=i * 10,
                 )
 
                 self.log(f"    Saved: {page.default_title} (/{page.default_slug}/)")
-                self.log(f"    HTML: {len(result['html_content'])} chars")
+                default_html = next(iter(html_i18n.values()), '')
+                self.log(f"    HTML: {len(default_html)} chars")
                 return page
 
             except Exception as e:
@@ -732,8 +732,6 @@ BUTTONS:
                         title_i18n=result.get('title_i18n', {}),
                         slug_i18n=slug_i18n,
                         html_content_i18n=result.get('html_content_i18n', {}),
-                        html_content=result['html_content'],  # backward compat
-                        content=result['content'],  # backward compat
                         is_active=True,
                         sort_order=i * 10,
                     )
@@ -949,8 +947,6 @@ for generating pages to ensure visual consistency."""
                 defaults={
                     'name': 'Main Header',
                     'section_type': 'header',
-                    'html_template': '',
-                    'content': {'translations': {}},
                     'is_active': True,
                 }
             )
@@ -965,10 +961,9 @@ for generating pages to ensure visual consistency."""
             )
 
             section.html_template_i18n = result.get('html_template_i18n', {})
-            section.html_template = result.get('html_template', '')  # backward compat
-            section.content = result.get('content', {'translations': {}})  # backward compat
             section.save()
-            self.log(f"  Header generated ({len(section.html_template)} chars)")
+            html_len = max((len(v) for v in section.html_template_i18n.values()), default=0)
+            self.log(f"  Header generated ({html_len} chars)")
 
         except Exception as e:
             self.log(f"  Header generation failed: {e}")
@@ -994,8 +989,6 @@ for generating pages to ensure visual consistency."""
                 defaults={
                     'name': 'Main Footer',
                     'section_type': 'footer',
-                    'html_template': '',
-                    'content': {'translations': {}},
                     'is_active': True,
                 }
             )
@@ -1010,10 +1003,9 @@ for generating pages to ensure visual consistency."""
             )
 
             section.html_template_i18n = result.get('html_template_i18n', {})
-            section.html_template = result.get('html_template', '')  # backward compat
-            section.content = result.get('content', {'translations': {}})  # backward compat
             section.save()
-            self.log(f"  Footer generated ({len(section.html_template)} chars)")
+            html_len = max((len(v) for v in section.html_template_i18n.values()), default=0)
+            self.log(f"  Footer generated ({html_len} chars)")
 
         except Exception as e:
             self.log(f"  Footer generation failed: {e}")
@@ -1045,9 +1037,8 @@ for generating pages to ensure visual consistency."""
         default_lang = settings.get_default_language() if settings else 'pt'
 
         for page in self.generated_pages:
-            # Read from html_content_i18n with fallback to html_content
             html_i18n = page.html_content_i18n or {}
-            html = html_i18n.get(default_lang, '') or page.html_content or ''
+            html = html_i18n.get(default_lang, '') or ''
             soup = BeautifulSoup(html, 'html.parser')
 
             # Find all images with data-image-prompt or placeholder sources
@@ -1182,8 +1173,8 @@ for generating pages to ensure visual consistency."""
 
         header = GlobalSection.objects.filter(key='main-header').first()
         footer = GlobalSection.objects.filter(key='main-footer').first()
-        header_ok = header and (header.html_template_i18n or header.html_template)
-        footer_ok = footer and (footer.html_template_i18n or footer.html_template)
+        header_ok = header and header.html_template_i18n
+        footer_ok = footer and footer.html_template_i18n
         self.log(f"\nHeader: {'generated' if header_ok else 'missing'}")
         self.log(f"Footer: {'generated' if footer_ok else 'missing'}")
 

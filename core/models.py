@@ -954,9 +954,7 @@ class Page(models.Model):
             version_number=version_number,
             title_i18n=self.title_i18n if self.title_i18n else {},
             slug_i18n=self.slug_i18n if self.slug_i18n else {},
-            html_content=self.html_content,
             html_content_i18n=self.html_content_i18n if self.html_content_i18n else {},
-            content=self.content if self.content else {},
             is_active=self.is_active,
             created_by=user,
             change_summary=change_summary
@@ -1134,9 +1132,7 @@ class PageVersion(models.Model):
         p = self.page
         p.title_i18n = self.title_i18n if self.title_i18n else {}
         p.slug_i18n = self.slug_i18n if self.slug_i18n else {}
-        p.html_content = self.html_content
         p.html_content_i18n = self.html_content_i18n if self.html_content_i18n else {}
-        p.content = self.content if self.content else {}
         p.is_active = self.is_active
         setattr(p, '_change_summary', f'Restore to version {self.version_number}')
         p.save()

@@ -210,325 +210,11 @@ Return the complete, corrected JSON now:"""
 
         return options[:3]  # Cap at 3
 
-    def _detemplatize_html(self, html: str, translations: dict, language: str) -> str:
-        """
-        Replace {{ trans.xxx }} variables in HTML with actual text from translations.
-
-        Args:
-            html: HTML string with {{ trans.xxx }} template variables
-            translations: Dict like {"pt": {"hero_title": "Título", ...}, "en": {...}}
-            language: Language code to use for substitution
-
-        Returns:
-            Clean HTML with real text instead of template variables
-        """
-        lang_translations = translations.get(language, {})
-
-        def replace_var(match):
-            var_name = match.group(1)
-            return lang_translations.get(var_name, match.group(0))
-
-        return re.sub(r'\{\{\s*trans\.(\w+)\s*\}\}', replace_var, html)
-
     @staticmethod
     def _strip_legacy_attrs(html: str) -> str:
         """Strip legacy data-element-id attributes from HTML to save tokens."""
         return re.sub(r'\s+data-element-id="[^"]*"', '', html)
 
-
-    @staticmethod
-    def _extract_text_from_html(html: str) -> list:
-        """
-        Extract translatable text strings from HTML using BeautifulSoup.
-
-        Walks all NavigableString nodes, filters out non-translatable content,
-        and generates variable names based on section context and element role.
-
-        Args:
-            html: HTML string (with Django tags already protected as comments)
-
-        Returns:
-            List of dicts: [{"var": "hero_title", "original": "Welcome"}, ...]
-        """
-        from bs4 import BeautifulSoup, NavigableString, Comment
-
-        soup = BeautifulSoup(html, 'html.parser')
-
-        # Tags whose text content should never be extracted
-        skip_tags = {'script', 'style', 'svg', 'code', 'pre', 'noscript'}
-
-        # Map parent tag to a role suffix for variable naming
-        tag_role_map = {
-            'h1': 'title', 'h2': 'heading', 'h3': 'heading', 'h4': 'heading',
-            'h5': 'heading', 'h6': 'heading',
-            'p': 'text', 'a': 'link', 'button': 'button', 'span': 'label',
-            'li': 'item', 'th': 'header', 'td': 'cell', 'label': 'label',
-            'figcaption': 'caption', 'blockquote': 'quote', 'cite': 'cite',
-            'dt': 'term', 'dd': 'definition', 'legend': 'legend',
-            'option': 'option', 'summary': 'summary', 'strong': 'text',
-            'em': 'text', 'b': 'text', 'i': 'text', 'small': 'text',
-        }
-
-        results = []
-        # Track counters per base name to avoid duplicates
-        name_counters = {}
-
-        for text_node in soup.descendants:
-            # Only process text nodes
-            if not isinstance(text_node, NavigableString):
-                continue
-            # Skip comments and CDATA
-            if isinstance(text_node, Comment):
-                continue
-
-            text = text_node.strip()
-            if not text or len(text) < 2:
-                continue
-
-            # Skip protected Django tag placeholders
-            if 'PROTECTED_DJANGO_TAG' in text:
-                continue
-
-            # Skip if inside a skip tag
-            parent = text_node.parent
-            if parent is None:
-                continue
-            in_skip_tag = False
-            for ancestor in [parent] + list(parent.parents):
-                if ancestor.name in skip_tags:
-                    in_skip_tag = True
-                    break
-            if in_skip_tag:
-                continue
-
-            # Find nearest <section data-section="X"> ancestor for section prefix
-            section_name = None
-            for ancestor in [parent] + list(parent.parents):
-                if ancestor.name == 'section' and ancestor.get('data-section'):
-                    section_name = ancestor['data-section']
-                    break
-
-            # Determine role from parent tag
-            role = tag_role_map.get(parent.name, 'text')
-
-            # Build base variable name
-            if section_name:
-                # Sanitize section name to snake_case
-                section_prefix = re.sub(r'[^a-zA-Z0-9]', '_', section_name).strip('_').lower()
-                base_name = f"{section_prefix}_{role}"
-            else:
-                base_name = role
-
-            # Handle duplicate names with counters
-            if base_name not in name_counters:
-                name_counters[base_name] = 0
-            name_counters[base_name] += 1
-
-            if name_counters[base_name] == 1:
-                var_name = base_name
-            else:
-                var_name = f"{base_name}_{name_counters[base_name]}"
-
-            results.append({
-                'var': var_name,
-                'original': text,
-            })
-
-        return results
-
-    def _templatize_and_translate(self, html: str, languages: list, default_language: str, model: str) -> Dict:
-        """
-        Step 2: Python-based text extraction + translation-only LLM call.
-
-        Extracts text in Python with BeautifulSoup and only sends the text strings
-        for translation. ~10x fewer tokens than sending full HTML to the LLM.
-
-        Args:
-            html: Clean HTML with real text in the default language
-            languages: List of language codes
-            default_language: The language the HTML text is written in
-            model: LLM model name to use
-
-        Returns:
-            Dict with 'html_content' (templatized) and 'content' (with translations)
-
-        Raises:
-            ValueError: If templatization fails
-        """
-        print(f"\n--- Step 2 (v2): Python Extract + Translate ---")
-
-        # Always use gemini-flash for translation
-        model = 'gemini-flash'
-
-        # --- Phase A: Protect Django template tags ---
-        protected_tags = {}
-        protected_html = html
-
-        # Normalize double-brace template tags that LLMs sometimes generate
-        protected_html = re.sub(r'\{\{(%.*?%)\}\}', r'{\1}', protected_html)
-        protected_html = re.sub(r'\{\{\{\{(.*?)\}\}\}\}', r'{{\1}}', protected_html)
-
-        def protect_tag(match):
-            placeholder = f'<!-- PROTECTED_DJANGO_TAG_{len(protected_tags)} -->'
-            protected_tags[placeholder] = match.group(0)
-            return placeholder
-
-        # Protect {% ... %} tags
-        protected_html = re.sub(r'\{%.*?%\}', protect_tag, protected_html, flags=re.DOTALL)
-        # Protect {{ ... }} context variables
-        protected_html = re.sub(r'\{\{.*?\}\}', protect_tag, protected_html, flags=re.DOTALL)
-
-        if protected_tags:
-            print(f"Protected {len(protected_tags)} Django template tags from templatization")
-
-        # --- Phase B: Python text extraction ---
-        extracted = self._extract_text_from_html(protected_html)
-
-        if not extracted:
-            print("No translatable text found — returning HTML as-is with empty translations")
-            final_html = protected_html
-            for placeholder, original_tag in protected_tags.items():
-                final_html = final_html.replace(placeholder, original_tag)
-            return {
-                'html_content': final_html,
-                'content': {'translations': {lang: {} for lang in languages}},
-            }
-
-        print(f"Extracted {len(extracted)} text strings from HTML")
-
-        # Build the text dict for the LLM: {var_name: "original text"}
-        text_dict = {item['var']: item['original'] for item in extracted}
-
-        # --- Phase C: Send ONLY text strings to LLM for translation ---
-        system_prompt, user_prompt = PromptTemplates.get_translate_only_prompt(
-            text_dict=text_dict,
-            languages=languages,
-            default_language=default_language
-        )
-
-        # Debug output
-        system_token_estimate = len(system_prompt.split()) * 1.3
-        user_token_estimate = len(user_prompt.split()) * 1.3
-        total_token_estimate = system_token_estimate + user_token_estimate
-        print(f"TRANSLATE PROMPT (≈{int(total_token_estimate)} tokens)")
-
-        messages = [
-            {'role': 'system', 'content': system_prompt},
-            {'role': 'user', 'content': user_prompt}
-        ]
-
-        actual_model, provider = self._get_model_info(model)
-        t0 = time.time()
-        try:
-            response = self.llm.get_completion(messages, tool_name=model)
-            usage = self._extract_usage(response)
-            log_ai_call(
-                action='templatize_v2', model_name=actual_model, provider=provider,
-                system_prompt=system_prompt, user_prompt=user_prompt,
-                response_text=response.choices[0].message.content,
-                duration_ms=int((time.time() - t0) * 1000), **usage,
-            )
-        except Exception as e:
-            log_ai_call(
-                action='templatize_v2', model_name=actual_model, provider=provider,
-                system_prompt=system_prompt, user_prompt=user_prompt,
-                duration_ms=int((time.time() - t0) * 1000),
-                success=False, error_message=str(e),
-            )
-            raise
-
-        content = response.choices[0].message.content
-        translations_response = self._extract_json_from_response(content)
-
-        # The LLM returns {lang_code: {var: text, ...}, ...}
-        if not isinstance(translations_response, dict):
-            raise ValueError("Translation step returned invalid data (expected a dict)")
-
-        # Build translations dict — ensure all vars are present for all languages
-        translations = {lang: {} for lang in languages}
-        for lang in languages:
-            lang_trans = translations_response.get(lang, {})
-            for item in extracted:
-                var = item['var']
-                if lang == default_language:
-                    # Default language always uses the original text
-                    translations[lang][var] = item['original']
-                elif var in lang_trans:
-                    translations[lang][var] = lang_trans[var]
-                else:
-                    # Fallback to original if translation missing
-                    translations[lang][var] = item['original']
-                    print(f"  WARNING: Missing {lang.upper()} translation for '{var}', using original")
-
-        # --- Phase D: HTML replacement + validation ---
-        templatized_html = protected_html
-
-        # Sort by length of original text (longest first) to avoid partial replacements
-        sorted_extracted = sorted(extracted, key=lambda m: len(m['original']), reverse=True)
-
-        replaced_count = 0
-        for item in sorted_extracted:
-            var_name = item['var']
-            original_text = item['original']
-            template_var = '{{ trans.' + var_name + ' }}'
-            if original_text in templatized_html:
-                templatized_html = templatized_html.replace(original_text, template_var, 1)
-                replaced_count += 1
-
-        print(f"Replaced {replaced_count}/{len(extracted)} text strings with template variables")
-
-        # Validate translations completeness
-        trans_vars = set(re.findall(r'\{\{\s*trans\.(\w+)\s*\}\}', templatized_html))
-        if trans_vars:
-            missing_vars = {}
-            for lang in languages:
-                lang_trans = translations.get(lang, {})
-                missing_in_lang = trans_vars - set(lang_trans.keys())
-                if missing_in_lang:
-                    missing_vars[lang] = list(missing_in_lang)
-            if missing_vars:
-                print(f"WARNING: Missing translations after templatization:")
-                for lang, vars_list in missing_vars.items():
-                    print(f"  - {lang.upper()}: {', '.join(vars_list)}")
-
-        print(f"Templatized HTML with {len(trans_vars)} translation variables")
-
-        # Restore protected Django template tags
-        if protected_tags:
-            restored_count = 0
-            for placeholder, original_tag in protected_tags.items():
-                if placeholder in templatized_html:
-                    templatized_html = templatized_html.replace(placeholder, original_tag)
-                    restored_count += 1
-                else:
-                    print(f"WARNING: Placeholder {placeholder} was consumed during templatization — re-inserting is not possible")
-                    print(f"  Original tag was: {original_tag}")
-            print(f"Restored {restored_count}/{len(protected_tags)} protected Django template tags")
-
-        # Validate template syntax before returning
-        from django.template import Template, TemplateSyntaxError
-        try:
-            Template(templatized_html)
-        except TemplateSyntaxError as e:
-            print(f"ERROR: Templatized HTML has broken template syntax: {e}")
-            print("Attempting auto-fix of broken template tags...")
-            templatized_html = re.sub(
-                r'\{\{\s*trans\.(\w+)\s+\{\{[^}]*\}\}\s*\}\}',
-                r'{{ trans.\1 }}',
-                templatized_html
-            )
-            try:
-                Template(templatized_html)
-                print("Auto-fix successful")
-            except TemplateSyntaxError as e2:
-                raise ValueError(f"Templatized HTML has invalid template syntax that could not be auto-fixed: {e2}")
-
-        return {
-            'html_content': templatized_html,
-            'content': {
-                'translations': translations
-            }
-        }
 
     def _generate_page_metadata(self, brief: str, languages: list, model: str) -> Dict:
         """
@@ -619,8 +305,7 @@ Return the complete, corrected JSON now:"""
             model_override: Override the default model for this request
 
         Returns:
-            Dictionary with 'html_content_i18n', 'html_content' (backward compat),
-            'content' (backward compat), 'title_i18n', 'slug_i18n'
+            Dictionary with 'html_content_i18n', 'title_i18n', 'slug_i18n'
 
         Raises:
             ValueError: If generation fails or returns invalid data
@@ -741,9 +426,6 @@ Return the complete, corrected JSON now:"""
         default_lang = default_language
         page_data = {
             'html_content_i18n': {default_lang: raw_html},
-            # Backward compat during transition
-            'html_content': raw_html,
-            'content': {'translations': {default_lang: {}}},
         }
         page_data['title_i18n'] = metadata.get('title_i18n', {})
         page_data['slug_i18n'] = metadata.get('slug_i18n', {})
@@ -799,9 +481,9 @@ Return the complete, corrected JSON now:"""
         from core.models import SiteSettings, Page
         site_settings = SiteSettings.objects.first()
         default_language = site_settings.get_default_language() if site_settings else 'pt'
-        current_lang = get_language() or default_language
+        current_lang = default_language  # get_language() unreliable in AJAX context
         template_i18n = section.html_template_i18n or {}
-        current_template = template_i18n.get(current_lang) or template_i18n.get(default_language) or section.html_template
+        current_template = template_i18n.get(current_lang) or template_i18n.get(default_language) or ''
         print(f"Reading html_template from html_template_i18n[{current_lang}] ({len(current_template or '')} chars)")
 
         existing_data = {
@@ -995,7 +677,7 @@ Return the complete, corrected JSON now:"""
         """
         Refine a page's HTML content based on user instructions.
 
-        Sends the page's html_content and translations to the LLM for refinement.
+        Sends the page's HTML to the LLM for refinement.
         If section_name is provided, the LLM focuses on that specific section.
 
         Args:
@@ -1008,7 +690,7 @@ Return the complete, corrected JSON now:"""
                 to bypass Page lookup. Used for non-Page content like NewsPost.
 
         Returns:
-            Dictionary with 'html_content' and 'content' (translations)
+            Dictionary with 'html_content_i18n'
 
         Raises:
             ValueError: If refinement fails
@@ -1069,13 +751,13 @@ Return the complete, corrected JSON now:"""
             targeted_instructions = f"Focus on the <section data-section=\"{section_name}\"> section. {instructions}"
 
         # --- Read current HTML from html_content_i18n with fallback ---
-        current_lang = get_language() or default_language
+        current_lang = default_language  # get_language() unreliable in AJAX context
         if content_override:
             html_i18n = override_html_i18n
             clean_html = html_i18n.get(current_lang) or html_i18n.get(default_language) or ''
         else:
             html_i18n = page.html_content_i18n or {}
-            clean_html = html_i18n.get(current_lang) or html_i18n.get(default_language) or page.html_content or ''
+            clean_html = html_i18n.get(current_lang) or html_i18n.get(default_language) or ''
         print(f"Reading HTML from html_content_i18n[{current_lang}] ({len(clean_html)} chars)")
         notify("prepare", "done")
 
@@ -1194,8 +876,6 @@ Return the complete, corrected JSON now:"""
         notify("complete", "done")
         return {
             'html_content_i18n': result_html_i18n,
-            'html_content': refined_html,  # backward compat
-            'content': page.content if page else {},  # backward compat
         }
 
     def refine_section_only(
@@ -1267,9 +947,9 @@ Return the complete, corrected JSON now:"""
                 pages_data.append({'title': p.title_i18n or {}, 'slug': p.slug_i18n or {}})
 
         # Read current HTML from html_content_i18n with fallback
-        current_lang = get_language() or default_language
+        current_lang = default_language  # get_language() unreliable in AJAX context
         html_i18n = page.html_content_i18n or {}
-        clean_html = html_i18n.get(current_lang) or html_i18n.get(default_language) or page.html_content or ''
+        clean_html = html_i18n.get(current_lang) or html_i18n.get(default_language) or ''
         clean_html = self._strip_legacy_attrs(clean_html)
         print(f"Reading HTML from html_content_i18n[{current_lang}] ({len(clean_html)} chars)")
         notify("prepare", "done")
@@ -1462,9 +1142,9 @@ Return the complete, corrected JSON now:"""
             pages_data.append({'title': p.title_i18n or {}, 'slug': p.slug_i18n or {}})
 
         # Read current HTML from html_content_i18n with fallback
-        current_lang = get_language() or default_language
+        current_lang = default_language  # get_language() unreliable in AJAX context
         html_i18n = page.html_content_i18n or {}
-        clean_html = html_i18n.get(current_lang) or html_i18n.get(default_language) or page.html_content or ''
+        clean_html = html_i18n.get(current_lang) or html_i18n.get(default_language) or ''
         clean_html = self._strip_legacy_attrs(clean_html)
         print(f"Reading HTML from html_content_i18n[{current_lang}] ({len(clean_html)} chars)")
 
@@ -1609,9 +1289,9 @@ Return the complete, corrected JSON now:"""
         model = model_override or self.model_name
 
         # Read current HTML from html_content_i18n with fallback
-        current_lang = get_language() or default_language
+        current_lang = default_language  # get_language() unreliable in AJAX context
         html_i18n = page.html_content_i18n or {}
-        clean_html = html_i18n.get(current_lang) or html_i18n.get(default_language) or page.html_content or ''
+        clean_html = html_i18n.get(current_lang) or html_i18n.get(default_language) or ''
         clean_html = self._strip_legacy_attrs(clean_html)
         print(f"Reading HTML from html_content_i18n[{current_lang}] ({len(clean_html)} chars)")
         notify("prepare", "done")
@@ -1807,9 +1487,9 @@ Return the complete, corrected JSON now:"""
         # Read current HTML from html_content_i18n with fallback
         from django.utils.translation import get_language
         default_language = site_settings.get_default_language() if site_settings else 'pt'
-        current_lang = get_language() or default_language
+        current_lang = default_language  # get_language() unreliable in AJAX context
         html_i18n = page.html_content_i18n or {}
-        html = html_i18n.get(current_lang) or html_i18n.get(default_language) or page.html_content or ''
+        html = html_i18n.get(current_lang) or html_i18n.get(default_language) or ''
         print(f"Reading HTML from html_content_i18n[{current_lang}] ({len(html)} chars)")
         processed = []
         failed = []
@@ -2033,11 +1713,10 @@ Return the complete, corrected JSON now:"""
                     html
                 )
 
-        # Save updated HTML to html_content_i18n and backward compat field
+        # Save updated HTML to html_content_i18n
         result_html_i18n = dict(page.html_content_i18n or {})
         result_html_i18n[current_lang] = html
         page.html_content_i18n = result_html_i18n
-        page.html_content = html  # backward compat
         page.save()
 
         print(f"Processed {len(processed)} images, {len(failed)} failed")
@@ -2055,8 +1734,7 @@ Return the complete, corrected JSON now:"""
         """
         Bulk-translate all existing Pages and GlobalSections to a new language.
 
-        Translates the content['translations'] values using gemini-flash.
-        Does NOT re-templatize — the HTML already has {{ trans.xxx }} variables.
+        Uses translate_html to translate per-language HTML directly.
 
         Args:
             target_lang: Language code to translate into (e.g. 'es')
@@ -2072,11 +1750,6 @@ Return the complete, corrected JSON now:"""
         if not source_lang:
             source_lang = site_settings.get_default_language() if site_settings else 'pt'
 
-        # Get language names for prompt
-        lang_names = {code: name for code, name in (site_settings.get_enabled_languages() if site_settings else [])}
-        source_name = lang_names.get(source_lang, source_lang)
-        target_name = lang_names.get(target_lang, target_lang)
-
         translated_pages = 0
         translated_sections = 0
         errors = []
@@ -2084,33 +1757,26 @@ Return the complete, corrected JSON now:"""
         # Translate Pages
         for page in Page.objects.filter(is_active=True):
             try:
-                translations = (page.content or {}).get('translations', {})
-                source_trans = translations.get(source_lang, {})
+                html_i18n = page.html_content_i18n or {}
+                source_html = html_i18n.get(source_lang, '')
 
-                if not source_trans:
+                if not source_html:
                     continue
 
-                # Skip if target translations already exist with same number of keys
-                existing_target = translations.get(target_lang, {})
-                if existing_target and len(existing_target) >= len(source_trans):
+                # Skip if target HTML already exists
+                if html_i18n.get(target_lang):
                     continue
 
-                # Translate content translations
-                translated = self._translate_key_value_pairs(
-                    source_trans, source_name, target_name
-                )
-                if translated:
-                    if not page.content:
-                        page.content = {}
-                    if 'translations' not in page.content:
-                        page.content['translations'] = {}
-                    page.content['translations'][target_lang] = translated
+                translated_html = self.translate_html(source_html, source_lang, target_lang)
+                if not page.html_content_i18n:
+                    page.html_content_i18n = {}
+                page.html_content_i18n[target_lang] = translated_html
 
                 # Translate title
                 source_title = (page.title_i18n or {}).get(source_lang, '')
                 if source_title and not (page.title_i18n or {}).get(target_lang):
                     title_result = self._translate_key_value_pairs(
-                        {'title': source_title}, source_name, target_name
+                        {'title': source_title}, source_lang, target_lang
                     )
                     if title_result and 'title' in title_result:
                         if not page.title_i18n:
@@ -2139,27 +1805,21 @@ Return the complete, corrected JSON now:"""
         # Translate GlobalSections
         for section in GlobalSection.objects.filter(is_active=True):
             try:
-                translations = (section.content or {}).get('translations', {})
-                source_trans = translations.get(source_lang, {})
+                html_i18n = section.html_template_i18n or {}
+                source_html = html_i18n.get(source_lang, '')
 
-                if not source_trans:
+                if not source_html:
                     continue
 
-                existing_target = translations.get(target_lang, {})
-                if existing_target and len(existing_target) >= len(source_trans):
+                if html_i18n.get(target_lang):
                     continue
 
-                translated = self._translate_key_value_pairs(
-                    source_trans, source_name, target_name
-                )
-                if translated:
-                    if not section.content:
-                        section.content = {}
-                    if 'translations' not in section.content:
-                        section.content['translations'] = {}
-                    section.content['translations'][target_lang] = translated
-                    section.save()
-                    translated_sections += 1
+                translated_html = self.translate_html(source_html, source_lang, target_lang)
+                if not section.html_template_i18n:
+                    section.html_template_i18n = {}
+                section.html_template_i18n[target_lang] = translated_html
+                section.save()
+                translated_sections += 1
 
             except Exception as e:
                 errors.append(f'Section "{section.key}": {str(e)}')
@@ -2442,9 +2102,9 @@ Keep the translations natural and fluent — these are website UI strings.
 
         # Read current HTML from html_content_i18n with fallback
         from django.utils.translation import get_language
-        current_lang = get_language() or default_language
+        current_lang = default_language  # get_language() unreliable in AJAX context
         html_i18n = page.html_content_i18n or {}
-        clean_html = html_i18n.get(current_lang) or html_i18n.get(default_language) or page.html_content or ''
+        clean_html = html_i18n.get(current_lang) or html_i18n.get(default_language) or ''
         clean_html = self._strip_legacy_attrs(clean_html)
         print(f"Reading HTML from html_content_i18n[{current_lang}] ({len(clean_html)} chars)")
 

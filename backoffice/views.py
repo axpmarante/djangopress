@@ -68,15 +68,11 @@ class MediaDetailView(LoginRequiredMixin, TemplateView):
         media_url = image.url
         if media_url:
             for page in Page.objects.all():
-                # Check html_content_i18n first, then fall back to html_content
                 html_i18n = page.html_content_i18n or {}
-                found = False
-                for lang_html in html_i18n.values():
-                    if lang_html and media_url in lang_html:
-                        found = True
-                        break
-                if not found and page.html_content and media_url in page.html_content:
-                    found = True
+                found = any(
+                    lang_html and media_url in lang_html
+                    for lang_html in html_i18n.values()
+                )
                 if found:
                     usage_count += 1
         context['usage_count'] = usage_count
@@ -347,8 +343,7 @@ class PagesView(LoginRequiredMixin, TemplateView):
                 (lang, bool(html_i18n.get(lang)))
                 for lang in language_codes
             ]
-            # Has any HTML content (i18n or legacy)
-            page.has_any_content = bool(html_i18n) or bool(page.html_content)
+            page.has_any_content = bool(html_i18n)
 
         context['pages'] = pages
         context['language_codes'] = language_codes
@@ -485,9 +480,8 @@ class PageEditView(LoginRequiredMixin, TemplateView):
                 if ref_page.id == page_id:
                     continue
 
-                # Check html_content_i18n first, then fall back to html_content
                 ref_html_i18n = ref_page.html_content_i18n or {}
-                has_content = bool(ref_html_i18n) or bool(ref_page.html_content)
+                has_content = bool(ref_html_i18n)
                 if has_content:
                     reference_pages.append({
                         'id': ref_page.id,
@@ -773,11 +767,10 @@ class SettingsDesignSystemView(LoginRequiredMixin, TemplateView):
         context['google_fonts'] = GOOGLE_FONTS_CHOICES
 
         # Design guide: pages + AI models
-        # Include pages that have content in html_content_i18n or html_content
         all_active_pages = Page.objects.filter(is_active=True).order_by('id')
         context['pages_with_content'] = [
             p for p in all_active_pages
-            if (p.html_content_i18n and any(p.html_content_i18n.values())) or p.html_content
+            if p.html_content_i18n and any(p.html_content_i18n.values())
         ]
 
         try:
@@ -1206,9 +1199,8 @@ class AIRefinePageView(SuperuserRequiredMixin, TemplateView):
             if selected_page_id and page.id == selected_page_id:
                 continue
 
-            # Check html_content_i18n first, then fall back to html_content
             ref_html_i18n = page.html_content_i18n or {}
-            has_content = bool(ref_html_i18n) or bool(page.html_content)
+            has_content = bool(ref_html_i18n)
             if has_content:
                 reference_pages.append({
                     'id': page.id,
@@ -1250,9 +1242,9 @@ class AIChatRefineView(SuperuserRequiredMixin, TemplateView):
 
         context['page'] = page
 
-        # Parse section names from HTML (prefer html_content_i18n, fall back to html_content)
+        # Parse section names from HTML
         html_i18n = page.html_content_i18n or {}
-        html = next(iter(html_i18n.values()), '') if html_i18n else (page.html_content or '')
+        html = next(iter(html_i18n.values()), '') if html_i18n else ''
         section_matches = re.findall(r'data-section="([^"]+)"', html)
         context['page_sections'] = section_matches
 

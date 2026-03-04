@@ -181,7 +181,7 @@ async function apply() {
 
     const insertState = getInsertState();
 
-    applyBtn.textContent = 'Saving...';
+    applyBtn.textContent = 'Saving & translating...';
     applyBtn.disabled = true;
     discardBtn.disabled = true;
 

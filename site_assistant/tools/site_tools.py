@@ -53,7 +53,7 @@ def get_page_info(params, context):
     default_lang = site_settings.get_default_language() if site_settings else 'pt'
     current_lang = get_language() or default_lang
     html_i18n = page.html_content_i18n or {}
-    page_html = html_i18n.get(current_lang) or html_i18n.get(default_lang) or page.html_content or ''
+    page_html = html_i18n.get(current_lang) or html_i18n.get(default_lang) or ''
     if page_html:
         soup = BeautifulSoup(page_html, 'html.parser')
         for sec in soup.find_all('section', attrs={'data-section': True}):
@@ -88,8 +88,6 @@ def create_page(params, context):
     page = Page.objects.create(
         title_i18n=title_i18n,
         slug_i18n=slug_i18n,
-        html_content='',
-        content={'translations': {}},
         is_active=params.get('is_active', True),
     )
 
