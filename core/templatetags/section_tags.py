@@ -182,22 +182,43 @@ def load_global_section(context, key, fallback_template=None):
     try:
         section = GlobalSection.objects.get(key=key, is_active=True)
 
-        # Use html_template
-        if hasattr(section, 'html_template') and section.html_template:
-            # Get translated content
-            translations = section.content.get('translations', {}) if hasattr(section, 'content') else {}
-            trans = translations.get(language, translations.get('pt', {}))
+        # Get default language from SiteSettings
+        from core.models import SiteSettings
+        site_settings = SiteSettings.load()
+        default_lang = site_settings.get_default_language() if site_settings else 'pt'
 
+        # Three-tier HTML resolution (mirrors PageView logic):
+        # 1. html_template_i18n[current_language]
+        # 2. html_template_i18n[default_language]
+        # 3. Old format: html_template + trans from content['translations']
+        html_i18n = section.html_template_i18n or {}
+        html = None
+        trans = {}
+
+        if html_i18n.get(language):
+            # New format: per-language HTML with text already embedded
+            html = html_i18n[language]
+        elif html_i18n.get(default_lang):
+            # Fallback to default language HTML from new format
+            html = html_i18n[default_lang]
+        elif hasattr(section, 'html_template') and section.html_template:
+            # Backward compat: old templatized HTML with {{ trans.xxx }} variables
+            html = section.html_template
+            translations = section.content.get('translations', {}) if hasattr(section, 'content') else {}
+            trans = translations.get(language, translations.get(default_lang, {}))
+
+        if html:
             # Build context for rendering
             section_context = {
                 'section': section,
-                'trans': trans,
                 'LANGUAGE_CODE': language,
             }
+            if trans:
+                section_context['trans'] = trans  # Only for old templatized format
             section_context.update(context.flatten())
 
-            # Render template
-            template = Template(section.html_template)
+            # Render template (Django template engine always needed for {% url %}, etc.)
+            template = Template(html)
             rendered_html = template.render(Context(section_context))
         else:
             return mark_safe(f'<!-- Global section has no content: {key} -->')
