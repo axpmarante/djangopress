@@ -44,6 +44,10 @@ urlpatterns = [
     path('news/categories/<int:pk>/delete/', news_views.CategoryDeleteView.as_view(), name='news_category_delete'),
     path('news/layouts/', news_views.LayoutListView.as_view(), name='news_layouts'),
     path('news/layouts/<int:pk>/edit/', news_views.LayoutUpdateView.as_view(), name='news_layout_edit'),
+    path('news/ai/generate/', news_views.NewsGenerateView.as_view(), name='news_ai_generate'),
+    path('news/ai/bulk/', news_views.NewsBulkView.as_view(), name='news_ai_bulk'),
+    path('news/ai/chat/refine/<int:pk>/', news_views.NewsRefineView.as_view(), name='news_ai_refine'),
+    path('news/<int:pk>/images/', news_views.NewsImagesView.as_view(), name='news_images'),
 
     # Pages Management
     path('pages/', views.PagesView.as_view(), name='pages'),

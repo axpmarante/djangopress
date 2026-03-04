@@ -16,7 +16,7 @@ from .models import log_ai_call
 class ContentGenerationService:
     """Service for generating CMS content using LLM"""
 
-    def __init__(self, model_name: str = 'gemini-pro'):
+    def __init__(self, model_name: str = 'gemini-flash'):
         """
         Initialize the content generation service
 
@@ -981,15 +981,16 @@ Return the complete, corrected JSON now:"""
 
     def refine_page_with_html(
         self,
-        page_id: int,
-        instructions: str,
+        page_id: int = None,
+        instructions: str = '',
         section_name: str = None,
         language: str = 'pt',
         model_override: str = None,
         reference_images: list = None,
         conversation_history: str = None,
         handle_images: bool = False,
-        on_progress=None
+        on_progress=None,
+        content_override: dict = None,
     ) -> Dict:
         """
         Refine a page's HTML content based on user instructions.
@@ -998,11 +999,13 @@ Return the complete, corrected JSON now:"""
         If section_name is provided, the LLM focuses on that specific section.
 
         Args:
-            page_id: ID of the page being refined
+            page_id: ID of the page being refined (optional if content_override provided)
             instructions: User's refinement instructions
             section_name: Optional data-section name to target specific section
             language: Primary language for content (default: 'pt')
             model_override: Override the default model for this request
+            content_override: Optional dict with 'html_content_i18n', 'title', 'slug'
+                to bypass Page lookup. Used for non-Page content like NewsPost.
 
         Returns:
             Dictionary with 'html_content' and 'content' (translations)
@@ -1023,17 +1026,26 @@ Return the complete, corrected JSON now:"""
         print(f"Section: {section_name or 'entire page'}")
         print(f"Language: {language}")
 
-        # Get page
+        # Get page or use content_override
         notify("prepare", "running")
         from core.models import Page, SiteSettings
         from django.utils.translation import get_language
-        try:
-            page = Page.objects.get(id=page_id)
-        except Page.DoesNotExist:
-            raise ValueError(f"Page with ID {page_id} not found")
 
-        page_title = page.default_title
-        page_slug = page.default_slug
+        page = None
+        if content_override:
+            # Use provided content instead of loading a Page from DB
+            page_title = content_override.get('title', 'Untitled')
+            page_slug = content_override.get('slug', '')
+            override_html_i18n = content_override.get('html_content_i18n', {})
+        else:
+            if not page_id:
+                raise ValueError("Either page_id or content_override is required")
+            try:
+                page = Page.objects.get(id=page_id)
+            except Page.DoesNotExist:
+                raise ValueError(f"Page with ID {page_id} not found")
+            page_title = page.default_title
+            page_slug = page.default_slug
 
         # Get site context
         site_settings = SiteSettings.objects.first()
@@ -1058,8 +1070,12 @@ Return the complete, corrected JSON now:"""
 
         # --- Read current HTML from html_content_i18n with fallback ---
         current_lang = get_language() or default_language
-        html_i18n = page.html_content_i18n or {}
-        clean_html = html_i18n.get(current_lang) or html_i18n.get(default_language) or page.html_content or ''
+        if content_override:
+            html_i18n = override_html_i18n
+            clean_html = html_i18n.get(current_lang) or html_i18n.get(default_language) or ''
+        else:
+            html_i18n = page.html_content_i18n or {}
+            clean_html = html_i18n.get(current_lang) or html_i18n.get(default_language) or page.html_content or ''
         print(f"Reading HTML from html_content_i18n[{current_lang}] ({len(clean_html)} chars)")
         notify("prepare", "done")
 
@@ -1168,7 +1184,10 @@ Return the complete, corrected JSON now:"""
         notify("refine_html", "done", chars=len(refined_html))
 
         # Save refined HTML to html_content_i18n for current language
-        result_html_i18n = dict(page.html_content_i18n or {})
+        if content_override:
+            result_html_i18n = dict(override_html_i18n)
+        else:
+            result_html_i18n = dict(page.html_content_i18n or {})
         result_html_i18n[current_lang] = refined_html
 
         print(f"Successfully refined page")
@@ -1176,7 +1195,7 @@ Return the complete, corrected JSON now:"""
         return {
             'html_content_i18n': result_html_i18n,
             'html_content': refined_html,  # backward compat
-            'content': page.content or {},  # backward compat
+            'content': page.content if page else {},  # backward compat
         }
 
     def refine_section_only(

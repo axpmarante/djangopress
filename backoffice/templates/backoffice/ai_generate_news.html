@@ -1,0 +1,554 @@
+{% extends 'backoffice/base.html' %}
+{% load static %}
+
+{% block title %}Generate News Post - AI Content Studio{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <!-- Breadcrumb -->
+    <nav class="flex" aria-label="Breadcrumb">
+        <ol class="flex items-center space-x-2 text-sm text-gray-500">
+            <li>
+                <a href="{% url 'backoffice:dashboard' %}" class="hover:text-gray-700">Dashboard</a>
+            </li>
+            <li>
+                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+                </svg>
+            </li>
+            <li>
+                <a href="{% url 'backoffice:news_list' %}" class="hover:text-gray-700">News</a>
+            </li>
+            <li>
+                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+                </svg>
+            </li>
+            <li class="text-gray-900 font-medium">Generate News Post</li>
+        </ol>
+    </nav>
+
+    <!-- Header -->
+    <div class="flex items-center justify-between">
+        <div>
+            <h2 class="text-3xl font-bold text-gray-900 flex items-center">
+                <span class="w-12 h-12 bg-gradient-to-r from-emerald-600 to-teal-600 rounded-lg flex items-center justify-center mr-3">
+                    <svg class="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z"/>
+                    </svg>
+                </span>
+                Generate News Post
+            </h2>
+            <p class="text-gray-600 mt-2 ml-15">Create a new news post with AI-generated content</p>
+        </div>
+    </div>
+
+    <!-- Main Form -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- Form Column -->
+        <div class="lg:col-span-2">
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                <form id="generateForm" class="space-y-6">
+                    <!-- Post Description -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-900 mb-2">
+                            Post Description *
+                        </label>
+                        <textarea id="brief" name="brief" rows="8" required
+                                  class="w-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all"
+                                  placeholder="Example: Write a news post about our company's latest product launch. Include details about the new features, quotes from the CEO, and information about availability and pricing."></textarea>
+                        <p class="mt-2 text-xs text-gray-500">Describe the news post topic, key points, and tone. The more detail you provide, the better the results.</p>
+                        {% include 'backoffice/partials/style_tags.html' with target_id='brief' %}
+                    </div>
+
+                    <!-- Post Details - Multi-Language -->
+                    <div class="space-y-4">
+                        <h3 class="text-sm font-semibold text-gray-900 border-b pb-2">Post Information (All Languages)</h3>
+                        <p class="text-xs text-gray-500">Leave empty and AI will suggest a title and slug based on your brief.</p>
+                        <div id="languageFields"></div>
+                    </div>
+
+                    <!-- Category -->
+                    {% if categories %}
+                    <div>
+                        <label for="categorySelect" class="block text-sm font-medium text-gray-900 mb-2">
+                            Category <span class="text-gray-400 font-normal">(optional)</span>
+                        </label>
+                        <select id="categorySelect" name="category_id"
+                                class="w-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all">
+                            <option value="">No category</option>
+                            {% for cat in categories %}
+                            <option value="{{ cat.id }}">{{ cat }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    {% endif %}
+
+                    <!-- Reference Images -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-900 mb-2">
+                            Reference Images <span class="text-gray-400 font-normal">(optional)</span>
+                        </label>
+                        <div id="imageDropZone"
+                             class="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-emerald-400 hover:bg-emerald-50 transition-colors cursor-pointer"
+                             onclick="document.getElementById('referenceImages').click()">
+                            <svg class="w-8 h-8 text-gray-400 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                            </svg>
+                            <p class="text-sm text-gray-600">Drop design screenshots or mockups here, or <span class="text-emerald-600 font-medium">browse</span></p>
+                            <p class="text-xs text-gray-400 mt-1">PNG, JPG, WebP</p>
+                        </div>
+                        <input type="file" id="referenceImages" accept="image/*" multiple class="hidden" onchange="handleImageSelect(event)">
+                        <div id="imagePreviews" class="grid grid-cols-4 gap-3 mt-3"></div>
+                    </div>
+
+                    <!-- AI Model Selection -->
+                    {% if ai_models %}
+                    <div>
+                        <label for="modelSelect" class="block text-sm font-medium text-gray-900 mb-2">AI Model</label>
+                        <select id="modelSelect" name="model"
+                                class="w-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all">
+                            {% for model_id, model_name in ai_models %}
+                            <option value="{{ model_id }}" {% if model_id == default_model %}selected{% endif %}>{{ model_name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    {% endif %}
+
+                    <!-- Action Buttons -->
+                    <div class="flex items-center justify-between pt-4 border-t">
+                        <a href="{% url 'backoffice:news_list' %}"
+                           class="px-6 py-3 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors">
+                            Cancel
+                        </a>
+                        <button type="submit"
+                                class="px-8 py-3 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-lg hover:from-emerald-700 hover:to-teal-700 flex items-center shadow-md hover:shadow-lg transition-all">
+                            <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                            </svg>
+                            Generate Post
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Sidebar -->
+        <div class="space-y-6">
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-5">
+                <h3 class="text-sm font-semibold text-gray-900 mb-3">What Gets Generated</h3>
+                <div class="space-y-2 text-xs">
+                    <div class="flex items-start">
+                        <svg class="w-4 h-4 text-emerald-600 mr-2 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                        </svg>
+                        <span class="text-gray-700">Complete article HTML</span>
+                    </div>
+                    <div class="flex items-start">
+                        <svg class="w-4 h-4 text-emerald-600 mr-2 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                        </svg>
+                        <span class="text-gray-700">Structured sections</span>
+                    </div>
+                    <div class="flex items-start">
+                        <svg class="w-4 h-4 text-emerald-600 mr-2 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                        </svg>
+                        <span class="text-gray-700">Content in default language</span>
+                    </div>
+                    <div class="flex items-start">
+                        <svg class="w-4 h-4 text-emerald-600 mr-2 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                        </svg>
+                        <span class="text-gray-700">Suggested title and slug</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-5">
+                <h3 class="text-sm font-semibold text-gray-900 mb-3">Your News</h3>
+                <div class="flex justify-between items-center">
+                    <span class="text-sm text-gray-600">Total Posts</span>
+                    <span class="text-sm font-semibold text-gray-900">{{ total_posts }}</span>
+                </div>
+            </div>
+
+            <div class="bg-amber-50 border border-amber-200 rounded-lg p-4">
+                <div class="flex">
+                    <svg class="w-5 h-5 text-amber-600 mr-2 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                    <div class="text-xs text-amber-800">
+                        <p>Title and slug are optional. AI will suggest them from your brief.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading Indicator -->
+    <div id="loadingModal" class="hidden fixed inset-0 bg-gray-900 bg-opacity-50 z-50 flex items-center justify-center">
+        <div class="bg-white rounded-lg p-8 max-w-md w-full mx-4 shadow-2xl">
+            <div class="flex flex-col items-center">
+                <div class="relative">
+                    <div class="animate-spin rounded-full h-20 w-20 border-b-4 border-emerald-600"></div>
+                    <svg class="w-10 h-10 text-emerald-600 absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                    </svg>
+                </div>
+                <p class="mt-6 text-lg font-semibold text-gray-900">Generating your news post...</p>
+                <div class="mt-4 w-full space-y-2">
+                    <div data-step="component_selection" class="flex items-center gap-2 text-gray-400">
+                        <span class="step-icon w-5 h-5 flex items-center justify-center text-xs">&#9675;</span>
+                        <span>Selecting components</span>
+                        <span class="step-chars ml-1 text-xs text-emerald-500 font-mono"></span>
+                        <span class="step-time ml-auto text-xs"></span>
+                    </div>
+                    <div data-step="html_generation" class="flex items-center gap-2 text-gray-400">
+                        <span class="step-icon w-5 h-5 flex items-center justify-center text-xs">&#9675;</span>
+                        <span>Generating HTML</span>
+                        <span class="step-chars ml-1 text-xs text-emerald-500 font-mono"></span>
+                        <span class="step-time ml-auto text-xs"></span>
+                    </div>
+                    <div data-step="metadata_generation" class="flex items-center gap-2 text-gray-400">
+                        <span class="step-icon w-5 h-5 flex items-center justify-center text-xs">&#9675;</span>
+                        <span>Generating metadata</span>
+                        <span class="step-chars ml-1 text-xs text-emerald-500 font-mono"></span>
+                        <span class="step-time ml-auto text-xs"></span>
+                    </div>
+                </div>
+                <div class="mt-4 w-full bg-gray-200 rounded-full h-2">
+                    <div id="progressFill" class="bg-emerald-600 h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Results Modal -->
+    <div id="resultsModal" class="hidden fixed inset-0 bg-gray-900 bg-opacity-50 z-50 overflow-y-auto">
+        <div class="min-h-screen px-4 py-8 flex items-center justify-center">
+            <div class="bg-white rounded-lg max-w-6xl w-full shadow-2xl">
+                <div class="flex items-center justify-between p-6 border-b">
+                    <div>
+                        <h3 class="text-xl font-semibold text-gray-900">Generated News Post Preview</h3>
+                        <p id="postInfo" class="text-sm text-gray-500 mt-1"></p>
+                    </div>
+                    <button onclick="closeResults()" class="text-gray-400 hover:text-gray-600">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                        </svg>
+                    </button>
+                </div>
+                <div id="resultsContent" class="p-6 max-h-[600px] overflow-y-auto"></div>
+                <div class="flex items-center justify-between p-6 border-t bg-gray-50">
+                    <button onclick="closeResults()" class="px-6 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-100">Cancel</button>
+                    <button id="btnSave" onclick="saveGeneratedPost()"
+                            class="px-8 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 shadow-md hover:shadow-lg transition-all">
+                        Save News Post
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="{% static 'backoffice/js/sse-client.js' %}"></script>
+<script>
+let generatedPageData = null;
+let suggestedTitle = {};
+let suggestedSlug = {};
+let enabledLanguages = [];
+let selectedFiles = [];
+let postTitle = null;
+let postSlug = null;
+
+function handleImageSelect(event) {
+    const files = Array.from(event.target.files);
+    files.forEach(f => { if (f.type.startsWith('image/')) selectedFiles.push(f); });
+    renderImagePreviews();
+}
+
+function removeImage(index) {
+    selectedFiles.splice(index, 1);
+    renderImagePreviews();
+}
+
+function renderImagePreviews() {
+    const container = document.getElementById('imagePreviews');
+    container.innerHTML = '';
+    selectedFiles.forEach((file, i) => {
+        const url = URL.createObjectURL(file);
+        container.insertAdjacentHTML('beforeend', `
+            <div class="relative group">
+                <img src="${url}" class="w-full h-24 object-cover rounded-lg border border-gray-200">
+                <button type="button" onclick="removeImage(${i})"
+                        class="absolute -top-2 -right-2 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity">&times;</button>
+                <p class="text-xs text-gray-500 truncate mt-1">${file.name}</p>
+            </div>
+        `);
+    });
+}
+
+(function() {
+    const dz = document.getElementById('imageDropZone');
+    ['dragenter','dragover'].forEach(e => dz.addEventListener(e, ev => { ev.preventDefault(); dz.classList.add('border-emerald-500','bg-emerald-50'); }));
+    ['dragleave','drop'].forEach(e => dz.addEventListener(e, ev => { ev.preventDefault(); dz.classList.remove('border-emerald-500','bg-emerald-50'); }));
+    dz.addEventListener('drop', ev => {
+        const files = Array.from(ev.dataTransfer.files);
+        files.forEach(f => { if (f.type.startsWith('image/')) selectedFiles.push(f); });
+        renderImagePreviews();
+    });
+})();
+
+function getDisplayTitle(titleObj) {
+    if (!titleObj) return '';
+    if (typeof titleObj === 'string') return titleObj;
+    const firstLang = enabledLanguages[0];
+    if (firstLang && titleObj[firstLang.code]) return titleObj[firstLang.code];
+    const vals = Object.values(titleObj).filter(v => v);
+    return vals[0] || '';
+}
+
+async function loadLanguages() {
+    try {
+        const response = await fetch('/backoffice/api/get-site-settings/');
+        const data = await response.json();
+        if (data.success && data.settings.enabled_languages) {
+            enabledLanguages = data.settings.enabled_languages;
+        } else {
+            enabledLanguages = [{code: 'pt', name: 'Portuguese'}, {code: 'en', name: 'English'}];
+        }
+    } catch (error) {
+        enabledLanguages = [{code: 'pt', name: 'Portuguese'}, {code: 'en', name: 'English'}];
+    }
+    renderLanguageFields();
+}
+
+function renderLanguageFields() {
+    const container = document.getElementById('languageFields');
+    container.innerHTML = '';
+    enabledLanguages.forEach(lang => {
+        container.insertAdjacentHTML('beforeend', `
+            <div class="pl-4 border-l-4 border-emerald-500 space-y-3 py-3">
+                <h4 class="font-medium text-gray-900">${lang.name} (${lang.code.toUpperCase()})</h4>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Post Title <span class="text-gray-400 font-normal">(optional)</span></label>
+                    <input type="text" id="postTitle_${lang.code}" name="post_title_${lang.code}"
+                           class="w-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all title-input"
+                           data-lang="${lang.code}" placeholder="AI will suggest if empty">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Post Slug <span class="text-gray-400 font-normal">(optional)</span></label>
+                    <input type="text" id="postSlug_${lang.code}" name="post_slug_${lang.code}" pattern="[a-z0-9-]*"
+                           class="w-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all"
+                           placeholder="AI will suggest if empty">
+                </div>
+            </div>
+        `);
+    });
+    document.querySelectorAll('.title-input').forEach(input => {
+        input.addEventListener('input', function(e) {
+            const lang = e.target.dataset.lang;
+            const slug = e.target.value.toLowerCase().trim().replace(/[^\w\s-]/g, '').replace(/\s+/g, '-').replace(/-+/g, '-').replace(/^-+|-+$/g, '');
+            document.getElementById(`postSlug_${lang}`).value = slug;
+        });
+    });
+}
+
+document.addEventListener('DOMContentLoaded', loadLanguages);
+
+document.getElementById('generateForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    const rawFormData = new FormData(this);
+
+    const titleI18n = {};
+    const slugI18n = {};
+    enabledLanguages.forEach(lang => {
+        const t = (rawFormData.get(`post_title_${lang.code}`) || '').trim();
+        const s = (rawFormData.get(`post_slug_${lang.code}`) || '').trim();
+        if (t) titleI18n[lang.code] = t;
+        if (s) slugI18n[lang.code] = s;
+    });
+    postTitle = Object.keys(titleI18n).length > 0 ? titleI18n : null;
+    postSlug = Object.keys(slugI18n).length > 0 ? slugI18n : null;
+
+    showLoading();
+
+    const formData = new FormData();
+    formData.append('brief', rawFormData.get('brief'));
+    formData.append('model', rawFormData.get('model'));
+    selectedFiles.forEach(f => formData.append('reference_images', f));
+
+    const stepTimers = {};
+    const STEP_PROGRESS = { component_selection: 15, html_generation: 80, metadata_generation: 100 };
+
+    const sse = new SSEClient("{% url 'ai:generate_news_post_stream' %}", {
+        csrfToken: '{{ csrf_token }}',
+        onProgress: (data) => {
+            const stepEl = document.querySelector('[data-step="' + data.step + '"]');
+            if (!stepEl) return;
+            if (data.status === 'running') {
+                stepEl.classList.remove('text-gray-400');
+                stepEl.classList.add('text-emerald-700', 'font-medium');
+                stepEl.querySelector('.step-icon').innerHTML = '<svg class="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>';
+                stepTimers[data.step] = Date.now();
+            } else if (data.status === 'streaming') {
+                const charsEl = stepEl.querySelector('.step-chars');
+                if (charsEl && data.chars) charsEl.textContent = data.chars.toLocaleString() + ' chars';
+                if (data.chars) {
+                    const progress = Math.min(data.chars / 8000, 1);
+                    const fill = document.getElementById('progressFill');
+                    if (fill) fill.style.width = (15 + progress * 55) + '%';
+                }
+                if (data.elapsed) stepEl.querySelector('.step-time').textContent = data.elapsed + 's';
+            } else if (data.status === 'done') {
+                stepEl.classList.remove('text-emerald-700');
+                stepEl.classList.add('text-green-600');
+                stepEl.querySelector('.step-icon').innerHTML = '&#10003;';
+                if (stepTimers[data.step]) stepEl.querySelector('.step-time').textContent = ((Date.now() - stepTimers[data.step]) / 1000).toFixed(1) + 's';
+                const fill = document.getElementById('progressFill');
+                if (fill) fill.style.width = (STEP_PROGRESS[data.step] || 0) + '%';
+            }
+        },
+        onComplete: (data) => {
+            document.getElementById('progressFill').style.width = '100%';
+            hideLoading();
+            if (data.success && data.page_data) {
+                const titleI18n = data.title_i18n || data.page_data.title_i18n;
+                const slugI18n = data.slug_i18n || data.page_data.slug_i18n;
+                if (titleI18n) suggestedTitle = titleI18n;
+                if (slugI18n) suggestedSlug = slugI18n;
+                delete data.page_data.title_i18n;
+                delete data.page_data.slug_i18n;
+                generatedPageData = data.page_data;
+                displayResults(data.page_data);
+            }
+        },
+        onError: (data) => {
+            hideLoading();
+            alert('Generation failed: ' + (data.error || 'Unknown error'));
+        },
+    });
+    sse.start(formData);
+});
+
+function showLoading() {
+    document.getElementById('loadingModal').classList.remove('hidden');
+    document.getElementById('progressFill').style.width = '0%';
+    document.querySelectorAll('[data-step]').forEach(el => {
+        el.className = 'flex items-center gap-2 text-gray-400';
+        el.querySelector('.step-icon').innerHTML = '&#9675;';
+        el.querySelector('.step-time').textContent = '';
+        const c = el.querySelector('.step-chars'); if (c) c.textContent = '';
+    });
+}
+
+function hideLoading() { document.getElementById('loadingModal').classList.add('hidden'); }
+
+function displayResults(pageData) {
+    const container = document.getElementById('resultsContent');
+    const htmlI18n = pageData.html_content_i18n || {};
+    const html = Object.values(htmlI18n)[0] || pageData.html_content || '';
+    const langCount = Object.keys(htmlI18n).length;
+    const sectionMatches = html.match(/data-section="[^"]+"/g) || [];
+    const sectionNames = sectionMatches.map(m => m.replace('data-section="', '').replace('"', ''));
+    const displayTitle = getDisplayTitle(postTitle) || getDisplayTitle(suggestedTitle) || 'Untitled';
+    document.getElementById('postInfo').textContent = `${sectionNames.length} sections for "${displayTitle}"`;
+
+    container.innerHTML = `
+        <div class="space-y-6">
+            <div class="bg-green-50 border border-green-200 rounded-lg p-4">
+                <div class="flex items-center">
+                    <svg class="w-5 h-5 text-green-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                    <p class="text-green-800 font-medium">News post generated with ${sectionNames.length} section(s)${langCount ? ' in ' + langCount + ' language(s)' : ''}!</p>
+                </div>
+            </div>
+            ${sectionNames.length > 0 ? `
+            <div>
+                <h4 class="text-sm font-semibold text-gray-900 mb-2">Sections Found</h4>
+                <div class="flex flex-wrap gap-2">
+                    ${sectionNames.map(name => `<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800">${name}</span>`).join('')}
+                </div>
+            </div>` : ''}
+            <div>
+                <div class="flex items-center justify-between mb-2">
+                    <h4 class="text-sm font-semibold text-gray-900">HTML Preview</h4>
+                    <button onclick="document.getElementById('htmlPreview').classList.toggle('hidden')"
+                            class="text-xs text-emerald-600 hover:text-emerald-800 px-3 py-1 border border-emerald-300 rounded hover:bg-emerald-50">Toggle Code</button>
+                </div>
+                <pre id="htmlPreview" class="hidden text-xs text-gray-700 whitespace-pre-wrap overflow-auto max-h-64 bg-gray-50 p-3 rounded border">${escapeHtml(html)}</pre>
+            </div>
+            <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <p class="text-sm text-blue-800"><strong>Next step:</strong> Review and click "Save News Post" to add it. You can refine it later with AI chat.</p>
+            </div>
+        </div>
+    `;
+    document.getElementById('resultsModal').classList.remove('hidden');
+}
+
+function escapeHtml(text) { const div = document.createElement('div'); div.appendChild(document.createTextNode(text)); return div.innerHTML; }
+
+async function saveGeneratedPost() {
+    if (!generatedPageData) { alert('Missing post data'); return; }
+
+    const finalTitle = {};
+    const finalSlug = {};
+    enabledLanguages.forEach(lang => {
+        finalTitle[lang.code] = (postTitle && postTitle[lang.code]) || suggestedTitle[lang.code] || '';
+        finalSlug[lang.code] = (postSlug && postSlug[lang.code]) || suggestedSlug[lang.code] || '';
+    });
+
+    if (!Object.values(finalTitle).some(v => v) || !Object.values(finalSlug).some(v => v)) {
+        alert('Post needs at least one title and slug.');
+        return;
+    }
+
+    showLoading();
+    closeResults();
+
+    try {
+        const categoryId = document.getElementById('categorySelect')?.value || '';
+        const response = await fetch('{% url "ai:save_news_post" %}', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
+            body: JSON.stringify({
+                title_i18n: finalTitle,
+                slug_i18n: finalSlug,
+                page_data: generatedPageData,
+                category_id: categoryId ? parseInt(categoryId) : null,
+                is_published: false
+            })
+        });
+        const result = await response.json();
+        hideLoading();
+
+        if (result.success) {
+            alert(`News post "${getDisplayTitle(finalTitle)}" created successfully!`);
+            window.location.href = `/backoffice/news/${result.post_id}/edit/`;
+        } else {
+            alert('Error saving post: ' + result.error);
+        }
+    } catch (error) {
+        hideLoading();
+        alert('Error saving post: ' + error.message);
+    }
+}
+
+function closeResults() { document.getElementById('resultsModal').classList.add('hidden'); }
+
+function getCookie(name) {
+    let v = null;
+    if (document.cookie && document.cookie !== '') {
+        document.cookie.split(';').forEach(c => {
+            c = c.trim();
+            if (c.substring(0, name.length + 1) === (name + '='))
+                v = decodeURIComponent(c.substring(name.length + 1));
+        });
+    }
+    return v;
+}
+</script>
+<script src="{% static 'js/style-prompt-tools.js' %}"></script>
+{% endblock %}

@@ -56,4 +56,12 @@ urlpatterns = [
 
     # Prompt tools
     path('api/enhance-prompt/', views.enhance_prompt_api, name='enhance_prompt'),
+
+    # News post generation and refinement
+    path('api/generate-news-post/', views.generate_news_post_api, name='generate_news_post'),
+    path('api/generate-news-post/stream/', views.generate_news_post_stream, name='generate_news_post_stream'),
+    path('api/chat-refine-news/', views.chat_refine_news_api, name='chat_refine_news'),
+    path('api/chat-refine-news/stream/', views.chat_refine_news_stream, name='chat_refine_news_stream'),
+    path('api/save-news-post/', views.save_news_post_api, name='save_news_post'),
+    path('api/news-refinement-sessions/<int:post_id>/', views.list_news_refinement_sessions_api, name='list_news_refinement_sessions'),
 ]

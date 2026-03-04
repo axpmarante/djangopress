@@ -1,0 +1,437 @@
+{% extends 'backoffice/base.html' %}
+{% load static %}
+
+{% block title %}Chat Refine — {{ post }} — News{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <!-- Breadcrumb -->
+    <nav class="flex" aria-label="Breadcrumb">
+        <ol class="flex items-center space-x-2 text-sm text-gray-500">
+            <li><a href="{% url 'backoffice:dashboard' %}" class="hover:text-gray-700">Dashboard</a></li>
+            <li>
+                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+                </svg>
+            </li>
+            <li><a href="{% url 'backoffice:news_list' %}" class="hover:text-gray-700">News</a></li>
+            <li>
+                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+                </svg>
+            </li>
+            <li class="text-gray-900 font-medium">Chat Refine — {{ post }}</li>
+        </ol>
+    </nav>
+
+    <!-- Header -->
+    <div class="flex items-center justify-between">
+        <div>
+            <h2 class="text-3xl font-bold text-gray-900 flex items-center">
+                <span class="w-12 h-12 bg-gradient-to-r from-emerald-500 to-teal-500 rounded-lg flex items-center justify-center mr-3">
+                    <svg class="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"/>
+                    </svg>
+                </span>
+                Chat Refine
+            </h2>
+            <p class="text-gray-600 mt-2 ml-15">Iteratively refine <strong>{{ post }}</strong> through conversation</p>
+        </div>
+    </div>
+
+    <!-- Main grid -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- Chat Column (2/3) -->
+        <div class="lg:col-span-2 flex flex-col">
+            <!-- Session bar -->
+            <div class="bg-white rounded-t-lg border border-gray-200 px-4 py-3 flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                    <select id="sessionSelect" onchange="loadSession(this.value)"
+                            class="border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:ring-2 focus:ring-emerald-500 focus:border-transparent">
+                        <option value="">New session</option>
+                        {% for s in sessions %}
+                        <option value="{{ s.id }}" {% if active_session and active_session.id == s.id %}selected{% endif %}>
+                            {{ s.title|truncatechars:50 }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                    <button onclick="startNewSession()" class="text-sm text-emerald-600 hover:text-emerald-800 font-medium">+ New Session</button>
+                </div>
+            </div>
+
+            <!-- Chat messages -->
+            <div id="chatMessages" class="bg-white border-x border-gray-200 flex-1 overflow-y-auto p-4 space-y-4" style="min-height:400px; max-height:60vh;">
+                {% if active_session_messages %}
+                    {% for msg in active_session_messages %}
+                        {% if msg.role == 'user' %}
+                        <div class="flex justify-end">
+                            <div class="max-w-[75%] bg-emerald-600 text-white rounded-lg px-4 py-3 shadow-sm">
+                                <p class="text-sm whitespace-pre-wrap">{{ msg.content }}</p>
+                                {% if msg.reference_images_count %}
+                                <p class="text-xs text-emerald-200 mt-1">{{ msg.reference_images_count }} image(s) attached</p>
+                                {% endif %}
+                                <p class="text-xs text-emerald-300 mt-1 text-right">{{ msg.timestamp|truncatechars:19 }}</p>
+                            </div>
+                        </div>
+                        {% elif msg.role == 'assistant' %}
+                        <div class="flex justify-start">
+                            <div class="max-w-[75%] bg-gray-100 text-gray-900 rounded-lg px-4 py-3 shadow-sm">
+                                <p class="text-sm whitespace-pre-wrap">{{ msg.content }}</p>
+                                {% if msg.sections_changed %}
+                                <div class="flex flex-wrap gap-1 mt-2">
+                                    {% for sec in msg.sections_changed %}
+                                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-emerald-100 text-emerald-800">{{ sec }}</span>
+                                    {% endfor %}
+                                </div>
+                                {% endif %}
+                                <p class="text-xs text-gray-400 mt-1">{{ msg.timestamp|truncatechars:19 }}</p>
+                            </div>
+                        </div>
+                        {% endif %}
+                    {% endfor %}
+                {% else %}
+                <div id="emptyState" class="flex flex-col items-center justify-center h-full text-gray-400 py-16">
+                    <svg class="w-12 h-12 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"/>
+                    </svg>
+                    <p class="text-sm">Send a message to start refining this news post</p>
+                </div>
+                {% endif %}
+            </div>
+
+            <!-- Typing/Progress Indicator -->
+            <div id="typingIndicator" class="hidden bg-white border-x border-gray-200 px-4 pb-2">
+                <div class="flex items-start gap-3 max-w-2xl">
+                    <div class="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center flex-shrink-0">
+                        <svg class="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                        </svg>
+                    </div>
+                    <div class="bg-gray-100 rounded-lg px-4 py-3 text-sm text-gray-600">
+                        <div id="chatStepText" class="flex items-center gap-2">
+                            <svg class="animate-spin h-4 w-4 text-emerald-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
+                            <span id="chatStepLabel">Processing...</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Style tags -->
+            <div class="bg-white border-x border-gray-200 px-4 pt-2">
+                {% include 'backoffice/partials/style_tags.html' with target_id='messageInput' %}
+            </div>
+
+            <!-- Image drop zone -->
+            <div class="bg-white border-x border-gray-200 px-4">
+                <div id="imageDropZone"
+                     class="border-2 border-dashed border-gray-200 rounded-lg p-3 text-center hover:border-emerald-400 hover:bg-emerald-50 transition-colors cursor-pointer"
+                     onclick="document.getElementById('referenceImages').click()">
+                    <p class="text-xs text-gray-500">Drop reference images here or <span class="text-emerald-600 font-medium">browse</span></p>
+                </div>
+                <input type="file" id="referenceImages" accept="image/*" multiple class="hidden" onchange="handleImageSelect(event)">
+                <div id="imagePreviews" class="grid grid-cols-6 gap-2 mt-2"></div>
+            </div>
+
+            <!-- Input area -->
+            <div class="bg-white rounded-b-lg border border-gray-200 p-4">
+                <form id="chatForm" onsubmit="sendMessage(event)" class="flex items-end gap-3">
+                    <textarea id="messageInput" rows="2" required
+                              class="flex-1 border border-gray-300 rounded-lg px-4 py-2 text-sm focus:ring-2 focus:ring-emerald-500 focus:border-transparent resize-none"
+                              placeholder="Describe the changes you want..."
+                              onkeydown="if(event.key==='Enter' && !event.shiftKey){event.preventDefault();sendMessage(event)}"></textarea>
+                    <button type="submit" id="sendButton"
+                            class="px-5 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-lg hover:from-emerald-700 hover:to-teal-700 flex items-center shadow-sm transition-all text-sm font-medium">
+                        <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
+                        </svg>
+                        Send
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Sidebar (1/3) -->
+        <div class="space-y-6">
+            <!-- Post Info -->
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-5">
+                <h3 class="text-sm font-semibold text-gray-900 mb-3">Post Info</h3>
+                <div class="space-y-2 text-sm">
+                    <p class="text-gray-700"><strong>Title:</strong> {{ post }}</p>
+                    {% if post_sections %}
+                    <div class="pt-2 border-t">
+                        <p class="text-xs text-gray-600 mb-1">Sections:</p>
+                        <div class="flex flex-wrap gap-1">
+                            {% for sec in post_sections %}
+                            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-emerald-100 text-emerald-800">{{ sec }}</span>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Past Sessions -->
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-5">
+                <h3 class="text-sm font-semibold text-gray-900 mb-3">Past Sessions</h3>
+                {% if sessions %}
+                <div class="space-y-2 max-h-48 overflow-y-auto">
+                    {% for s in sessions %}
+                    <button onclick="loadSession({{ s.id }})"
+                            class="w-full text-left px-3 py-2 rounded-md text-sm hover:bg-emerald-50 transition-colors {% if active_session and active_session.id == s.id %}bg-emerald-50 text-emerald-700 font-medium{% else %}text-gray-700{% endif %}">
+                        <p class="truncate">{{ s.title|truncatechars:40 }}</p>
+                        <p class="text-xs text-gray-400">{{ s.messages|length }} messages</p>
+                    </button>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <p class="text-sm text-gray-500">No sessions yet</p>
+                {% endif %}
+            </div>
+
+            <!-- AI Model -->
+            {% if ai_models %}
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-5">
+                <h3 class="text-sm font-semibold text-gray-900 mb-3">AI Model</h3>
+                <select id="modelSelect"
+                        class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 focus:border-transparent">
+                    {% for model in ai_models %}
+                    <option value="{{ model.0 }}" {% if model.0 == default_model %}selected{% endif %}>{{ model.1 }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            {% endif %}
+
+            <!-- Process Images -->
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-5">
+                <h3 class="text-sm font-semibold text-gray-900 mb-3">Images</h3>
+                <p class="text-xs text-gray-500 mb-3">After refining, process image placeholders into real images.</p>
+                <a href="{% url 'backoffice:news_images' pk=post.id %}"
+                   class="w-full inline-flex items-center justify-center px-3 py-2 bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-lg hover:from-emerald-600 hover:to-teal-600 text-sm font-medium transition-all gap-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                    </svg>
+                    Process Images
+                </a>
+            </div>
+
+            <!-- Quick Links -->
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-5">
+                <h3 class="text-sm font-semibold text-gray-900 mb-3">Quick Links</h3>
+                <div class="space-y-2 text-sm">
+                    <a href="{% url 'backoffice:news_edit' pk=post.id %}" class="block text-gray-600 hover:text-gray-800">Edit post details &rarr;</a>
+                    <a href="{% url 'backoffice:news_list' %}" class="block text-gray-600 hover:text-gray-800">All news posts &rarr;</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="{% static 'backoffice/js/sse-client.js' %}"></script>
+<script>
+const POST_ID = {{ post.id }};
+let currentSessionId = {{ active_session.id|default:"null" }};
+let selectedFiles = [];
+
+function handleImageSelect(event) {
+    const files = Array.from(event.target.files);
+    files.forEach(f => { if (f.type.startsWith('image/')) selectedFiles.push(f); });
+    renderImagePreviews();
+}
+
+function removeImage(index) {
+    selectedFiles.splice(index, 1);
+    renderImagePreviews();
+}
+
+function renderImagePreviews() {
+    const container = document.getElementById('imagePreviews');
+    container.innerHTML = '';
+    selectedFiles.forEach((file, i) => {
+        const url = URL.createObjectURL(file);
+        container.insertAdjacentHTML('beforeend', `
+            <div class="relative group">
+                <img src="${url}" class="w-full h-16 object-cover rounded border border-gray-200">
+                <button type="button" onclick="removeImage(${i})"
+                        class="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white rounded-full flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity">&times;</button>
+            </div>
+        `);
+    });
+}
+
+(function() {
+    document.addEventListener('DOMContentLoaded', function() {
+        const dz = document.getElementById('imageDropZone');
+        if (!dz) return;
+        ['dragenter','dragover'].forEach(e => dz.addEventListener(e, ev => { ev.preventDefault(); dz.classList.add('border-emerald-500','bg-emerald-50'); }));
+        ['dragleave','drop'].forEach(e => dz.addEventListener(e, ev => { ev.preventDefault(); dz.classList.remove('border-emerald-500','bg-emerald-50'); }));
+        dz.addEventListener('drop', ev => {
+            const files = Array.from(ev.dataTransfer.files);
+            files.forEach(f => { if (f.type.startsWith('image/')) selectedFiles.push(f); });
+            renderImagePreviews();
+        });
+    });
+})();
+
+function renderMessage(msg) {
+    const chat = document.getElementById('chatMessages');
+    const empty = document.getElementById('emptyState');
+    if (empty) empty.remove();
+
+    if (msg.role === 'user') {
+        const imgInfo = msg.reference_images_count ? `<p class="text-xs text-emerald-200 mt-1">${msg.reference_images_count} image(s) attached</p>` : '';
+        chat.insertAdjacentHTML('beforeend', `
+            <div class="flex justify-end">
+                <div class="max-w-[75%] bg-emerald-600 text-white rounded-lg px-4 py-3 shadow-sm">
+                    <p class="text-sm whitespace-pre-wrap">${escapeHtml(msg.content)}</p>
+                    ${imgInfo}
+                    <p class="text-xs text-emerald-300 mt-1 text-right">${formatTime(msg.timestamp)}</p>
+                </div>
+            </div>
+        `);
+    } else {
+        const badges = (msg.sections_changed || []).map(s =>
+            `<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-emerald-100 text-emerald-800">${escapeHtml(s)}</span>`
+        ).join('');
+        const badgeHtml = badges ? `<div class="flex flex-wrap gap-1 mt-2">${badges}</div>` : '';
+        chat.insertAdjacentHTML('beforeend', `
+            <div class="flex justify-start">
+                <div class="max-w-[75%] bg-gray-100 text-gray-900 rounded-lg px-4 py-3 shadow-sm">
+                    <p class="text-sm whitespace-pre-wrap">${escapeHtml(msg.content)}</p>
+                    ${badgeHtml}
+                    <p class="text-xs text-gray-400 mt-1">${formatTime(msg.timestamp)}</p>
+                </div>
+            </div>
+        `);
+    }
+    chat.scrollTop = chat.scrollHeight;
+}
+
+async function sendMessage(event) {
+    event.preventDefault();
+    const input = document.getElementById('messageInput');
+    const message = input.value.trim();
+    if (!message) return;
+
+    const model = document.getElementById('modelSelect')?.value || 'gemini-pro';
+
+    renderMessage({ role: 'user', content: message, timestamp: new Date().toISOString(), reference_images_count: selectedFiles.length });
+    input.value = '';
+
+    document.getElementById('typingIndicator').classList.remove('hidden');
+    document.getElementById('chatStepLabel').textContent = 'Processing...';
+    document.getElementById('sendButton').disabled = true;
+
+    const STEP_LABELS = {
+        prepare: 'Preparing content...',
+        component_selection: 'Analyzing components...',
+        refine_html: 'Refining HTML...',
+    };
+
+    const fd = new FormData();
+    fd.append('post_id', POST_ID);
+    fd.append('message', message);
+    fd.append('model', model);
+    if (currentSessionId) fd.append('session_id', currentSessionId);
+    selectedFiles.forEach(f => fd.append('reference_images', f));
+
+    const sse = new SSEClient("{% url 'ai:chat_refine_news_stream' %}", {
+        csrfToken: getCookie('csrftoken'),
+        onProgress: function(data) {
+            if (data.status === 'streaming' && data.chars) {
+                document.getElementById('chatStepLabel').textContent = 'Refining HTML... ' + data.chars.toLocaleString() + ' chars';
+            } else {
+                document.getElementById('chatStepLabel').textContent = STEP_LABELS[data.step] || data.status || 'Processing...';
+            }
+        },
+        onComplete: function(result) {
+            document.getElementById('typingIndicator').classList.add('hidden');
+            document.getElementById('sendButton').disabled = false;
+
+            if (result.success) {
+                currentSessionId = result.session_id;
+                updateSessionSelector(result.session_id, message);
+                renderMessage({ role: 'assistant', content: result.assistant_message, timestamp: new Date().toISOString(), sections_changed: result.sections_changed });
+            } else {
+                renderMessage({ role: 'assistant', content: 'Error: ' + (result.error || 'Unknown error'), timestamp: new Date().toISOString(), sections_changed: [] });
+            }
+        },
+        onError: function(data) {
+            document.getElementById('typingIndicator').classList.add('hidden');
+            document.getElementById('sendButton').disabled = false;
+            renderMessage({ role: 'assistant', content: 'Error: ' + (data.error || 'Unknown error'), timestamp: new Date().toISOString(), sections_changed: [] });
+        }
+    });
+
+    sse.start(fd);
+    selectedFiles = [];
+    renderImagePreviews();
+    document.getElementById('referenceImages').value = '';
+}
+
+async function loadSession(sessionId) {
+    if (!sessionId) { startNewSession(); return; }
+    try {
+        const response = await fetch(`/ai/api/refinement-session/${sessionId}/`);
+        const result = await response.json();
+        if (result.success) {
+            currentSessionId = result.session.id;
+            const chat = document.getElementById('chatMessages');
+            chat.innerHTML = '';
+            result.session.messages.forEach(msg => renderMessage(msg));
+            document.getElementById('sessionSelect').value = sessionId;
+        }
+    } catch (error) {
+        console.error('Error loading session:', error);
+    }
+}
+
+function startNewSession() {
+    currentSessionId = null;
+    const chat = document.getElementById('chatMessages');
+    chat.innerHTML = `
+        <div id="emptyState" class="flex flex-col items-center justify-center h-full text-gray-400 py-16">
+            <svg class="w-12 h-12 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"/>
+            </svg>
+            <p class="text-sm">Send a message to start refining this news post</p>
+        </div>
+    `;
+    document.getElementById('sessionSelect').value = '';
+}
+
+function updateSessionSelector(sessionId, title) {
+    const select = document.getElementById('sessionSelect');
+    let found = false;
+    for (const opt of select.options) {
+        if (opt.value == sessionId) { found = true; opt.selected = true; break; }
+    }
+    if (!found) {
+        const opt = document.createElement('option');
+        opt.value = sessionId;
+        opt.textContent = title.substring(0, 50);
+        opt.selected = true;
+        select.insertBefore(opt, select.options[1]);
+    }
+}
+
+function escapeHtml(text) { const div = document.createElement('div'); div.textContent = text; return div.innerHTML; }
+function formatTime(iso) { if (!iso) return ''; return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }); }
+
+function getCookie(name) {
+    let v = null;
+    if (document.cookie && document.cookie !== '') {
+        document.cookie.split(';').forEach(c => {
+            c = c.trim();
+            if (c.substring(0, name.length + 1) === (name + '='))
+                v = decodeURIComponent(c.substring(name.length + 1));
+        });
+    }
+    return v;
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    document.getElementById('chatMessages').scrollTop = document.getElementById('chatMessages').scrollHeight;
+});
+</script>
+<script src="{% static 'js/style-prompt-tools.js' %}"></script>
+{% endblock %}

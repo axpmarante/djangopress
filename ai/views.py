@@ -2225,3 +2225,469 @@ def propagate_translation_api(request):
         return JsonResponse({'success': False, 'error': 'Page not found'}, status=404)
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
+# ─── News Post AI Endpoints ─────────────────────────────────────────────────
+
+
+@superuser_required
+@require_http_methods(["POST"])
+def generate_news_post_api(request):
+    """
+    Generate a news post HTML via AI. Same flow as page generation.
+
+    POST /ai/api/generate-news-post/
+    Accepts multipart (with images) or JSON body.
+    Fields: brief, language, model, reference_images
+    """
+    try:
+        if request.content_type and 'multipart' in request.content_type:
+            brief = request.POST.get('brief')
+            language = request.POST.get('language', 'pt')
+            model = request.POST.get('model', 'gemini-pro')
+            reference_images = []
+            for f in request.FILES.getlist('reference_images'):
+                reference_images.append({'bytes': f.read(), 'mime_type': f.content_type})
+        else:
+            data = json.loads(request.body)
+            brief = data.get('brief')
+            language = data.get('language', 'pt')
+            model = data.get('model', 'gemini-pro')
+            reference_images = []
+
+        if not brief:
+            return JsonResponse({'success': False, 'error': 'Brief is required'}, status=400)
+
+        service = ContentGenerationService()
+        page_data = service.generate_page(
+            brief=brief,
+            language=language,
+            model_override=model,
+            reference_images=reference_images or None,
+        )
+
+        return JsonResponse({
+            'success': True,
+            'page_data': page_data,
+            'title_i18n': page_data.pop('title_i18n', {}),
+            'slug_i18n': page_data.pop('slug_i18n', {}),
+        })
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
+@superuser_required
+@require_http_methods(["POST"])
+def generate_news_post_stream(request):
+    """
+    SSE streaming endpoint for news post generation.
+
+    POST /ai/api/generate-news-post/stream/
+    Same inputs as generate_news_post_api (multipart or JSON).
+    Returns Server-Sent Events with progress updates followed by the final result.
+    """
+    try:
+        if request.content_type and 'multipart' in request.content_type:
+            brief = request.POST.get('brief')
+            language = request.POST.get('language', 'pt')
+            model = request.POST.get('model', 'gemini-pro')
+            reference_images = []
+            for f in request.FILES.getlist('reference_images'):
+                reference_images.append({'bytes': f.read(), 'mime_type': f.content_type})
+        else:
+            data = json.loads(request.body)
+            brief = data.get('brief')
+            language = data.get('language', 'pt')
+            model = data.get('model', 'gemini-pro')
+            reference_images = []
+
+        if not brief:
+            return sse_response(iter([
+                sse_event({'error': 'Brief is required'}, event='error')
+            ]))
+
+        service = ContentGenerationService()
+        kwargs = dict(
+            brief=brief,
+            language=language,
+            model_override=model,
+            reference_images=reference_images or None,
+        )
+        return sse_response(run_with_progress(service.generate_page, kwargs))
+    except Exception as e:
+        return sse_response(iter([
+            sse_event({'error': str(e)}, event='error')
+        ]))
+
+
+@superuser_required
+@require_http_methods(["POST"])
+def chat_refine_news_api(request):
+    """
+    Chat-based news post refinement endpoint.
+
+    POST /ai/api/chat-refine-news/
+    Accepts JSON or multipart (when reference images are included).
+    Fields: post_id, message, session_id (optional), model, handle_images, reference_images
+    """
+    try:
+        from .models import RefinementSession
+        from .utils.diff_utils import compute_section_changes, build_change_summary
+        from django.contrib.contenttypes.models import ContentType
+        from news.models import NewsPost
+
+        # Parse input
+        if request.content_type and 'multipart' in request.content_type:
+            post_id = request.POST.get('post_id')
+            if post_id:
+                post_id = int(post_id)
+            message = request.POST.get('message')
+            session_id = request.POST.get('session_id')
+            if session_id:
+                session_id = int(session_id)
+            model = request.POST.get('model', 'gemini-pro')
+            handle_images = request.POST.get('handle_images') in ('true', '1', 'on')
+            reference_images = []
+            for f in request.FILES.getlist('reference_images'):
+                reference_images.append({'bytes': f.read(), 'mime_type': f.content_type})
+        else:
+            data = json.loads(request.body)
+            post_id = data.get('post_id')
+            message = data.get('message')
+            session_id = data.get('session_id')
+            model = data.get('model', 'gemini-pro')
+            handle_images = bool(data.get('handle_images', False))
+            reference_images = []
+
+        if not post_id or not message:
+            return JsonResponse({
+                'success': False,
+                'error': 'post_id and message are required'
+            }, status=400)
+
+        try:
+            post = NewsPost.objects.get(id=post_id)
+        except NewsPost.DoesNotExist:
+            return JsonResponse({
+                'success': False,
+                'error': f'NewsPost with id {post_id} not found'
+            }, status=400)
+
+        ct = ContentType.objects.get_for_model(NewsPost)
+
+        # Load or create session using generic FK
+        if session_id:
+            try:
+                session = RefinementSession.objects.get(
+                    id=session_id, content_type=ct, object_id=post_id
+                )
+            except RefinementSession.DoesNotExist:
+                return JsonResponse({
+                    'success': False,
+                    'error': f'Session {session_id} not found'
+                }, status=400)
+        else:
+            session = RefinementSession(
+                content_type=ct,
+                object_id=post_id,
+                title=message[:80],
+                model_used=model,
+                created_by=request.user if request.user.is_authenticated else None,
+            )
+            session.save()
+
+        # Capture old HTML for diff
+        from django.utils.translation import get_language
+        from core.models import SiteSettings
+        site_settings = SiteSettings.objects.first()
+        default_lang = site_settings.get_default_language() if site_settings else 'pt'
+        current_lang = get_language() or default_lang
+        html_i18n = post.html_content_i18n or {}
+        old_html = html_i18n.get(current_lang) or html_i18n.get(default_lang) or ''
+
+        # Append user message to session
+        session.add_user_message(message, reference_images_count=len(reference_images))
+        history = session.get_history_for_prompt()
+
+        # Call AI service using content_override (no Page DB lookup)
+        service = ContentGenerationService()
+        refined_data = service.refine_page_with_html(
+            instructions=message,
+            model_override=model,
+            reference_images=reference_images or None,
+            conversation_history=history or None,
+            handle_images=handle_images,
+            content_override={
+                'html_content_i18n': html_i18n,
+                'title': post.get_i18n_field('title') or 'Untitled',
+                'slug': post.get_i18n_field('slug') or '',
+            },
+        )
+
+        # Save refined content to post
+        new_html_i18n = refined_data.get('html_content_i18n', html_i18n)
+        post.html_content_i18n = new_html_i18n
+        post.save()
+
+        # Compute section changes
+        new_html = refined_data.get('html_content', '') or ''
+        added, removed, modified = compute_section_changes(old_html, new_html)
+        change_summary = build_change_summary(added, removed, modified)
+        sections_changed = added + modified
+
+        # Append assistant message and save session
+        session.add_assistant_message(change_summary, sections_changed)
+        session.save()
+
+        return JsonResponse({
+            'success': True,
+            'session_id': session.id,
+            'assistant_message': change_summary,
+            'sections_changed': sections_changed,
+            'post_id': post.id,
+        })
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
+@superuser_required
+@require_http_methods(["POST"])
+def chat_refine_news_stream(request):
+    """
+    SSE streaming endpoint for chat-based news post refinement.
+
+    POST /ai/api/chat-refine-news/stream/
+    Same inputs as chat_refine_news_api.
+    Returns Server-Sent Events with progress updates followed by the final result.
+    """
+    try:
+        from .models import RefinementSession
+        from .utils.diff_utils import compute_section_changes, build_change_summary
+        from django.contrib.contenttypes.models import ContentType
+        from news.models import NewsPost
+
+        # Parse input
+        if request.content_type and 'multipart' in request.content_type:
+            post_id = request.POST.get('post_id')
+            if post_id:
+                post_id = int(post_id)
+            message = request.POST.get('message')
+            session_id = request.POST.get('session_id')
+            if session_id:
+                session_id = int(session_id)
+            model = request.POST.get('model', 'gemini-pro')
+            handle_images = request.POST.get('handle_images') in ('true', '1', 'on')
+            reference_images = []
+            for f in request.FILES.getlist('reference_images'):
+                reference_images.append({'bytes': f.read(), 'mime_type': f.content_type})
+        else:
+            data = json.loads(request.body)
+            post_id = data.get('post_id')
+            message = data.get('message')
+            session_id = data.get('session_id')
+            model = data.get('model', 'gemini-pro')
+            handle_images = bool(data.get('handle_images', False))
+            reference_images = []
+
+        if not post_id or not message:
+            return sse_response(iter([
+                sse_event({'error': 'post_id and message are required'}, event='error')
+            ]))
+
+        try:
+            post = NewsPost.objects.get(id=post_id)
+        except NewsPost.DoesNotExist:
+            return sse_response(iter([
+                sse_event({'error': f'NewsPost with id {post_id} not found'}, event='error')
+            ]))
+
+        ct = ContentType.objects.get_for_model(NewsPost)
+
+        # Load or create session
+        if session_id:
+            try:
+                session = RefinementSession.objects.get(
+                    id=session_id, content_type=ct, object_id=post_id
+                )
+            except RefinementSession.DoesNotExist:
+                return sse_response(iter([
+                    sse_event({'error': f'Session {session_id} not found'}, event='error')
+                ]))
+        else:
+            session = RefinementSession(
+                content_type=ct,
+                object_id=post_id,
+                title=message[:80],
+                model_used=model,
+                created_by=request.user if request.user.is_authenticated else None,
+            )
+            session.save()
+
+        # Capture old HTML for diff
+        from django.utils.translation import get_language
+        from core.models import SiteSettings
+        site_settings = SiteSettings.objects.first()
+        default_lang = site_settings.get_default_language() if site_settings else 'pt'
+        current_lang = get_language() or default_lang
+        html_i18n = post.html_content_i18n or {}
+        old_html = html_i18n.get(current_lang) or html_i18n.get(default_lang) or ''
+
+        session.add_user_message(message, reference_images_count=len(reference_images))
+        history = session.get_history_for_prompt()
+
+        # Build worker thread
+        q = queue.Queue()
+        sentinel = object()
+
+        def on_progress(event_data):
+            q.put(('progress', event_data))
+
+        def worker():
+            try:
+                service = ContentGenerationService()
+                refined_data = service.refine_page_with_html(
+                    instructions=message,
+                    model_override=model,
+                    reference_images=reference_images or None,
+                    conversation_history=history or None,
+                    handle_images=handle_images,
+                    on_progress=on_progress,
+                    content_override={
+                        'html_content_i18n': html_i18n,
+                        'title': post.get_i18n_field('title') or 'Untitled',
+                        'slug': post.get_i18n_field('slug') or '',
+                    },
+                )
+
+                # Save refined content to post
+                new_html_i18n = refined_data.get('html_content_i18n', html_i18n)
+                post.html_content_i18n = new_html_i18n
+                post.save()
+
+                new_html = refined_data.get('html_content', '') or ''
+                added, removed, modified = compute_section_changes(old_html, new_html)
+                change_summary = build_change_summary(added, removed, modified)
+                sections_changed = added + modified
+
+                session.add_assistant_message(change_summary, sections_changed)
+                session.save()
+
+                q.put(('complete', {
+                    'success': True,
+                    'session_id': session.id,
+                    'assistant_message': change_summary,
+                    'sections_changed': sections_changed,
+                    'post_id': post.id,
+                }))
+            except Exception as e:
+                q.put(('error', str(e)))
+            finally:
+                q.put(sentinel)
+
+        thread = threading.Thread(target=worker, daemon=True)
+        thread.start()
+
+        def generate():
+            while True:
+                try:
+                    item = q.get(timeout=300)
+                except queue.Empty:
+                    yield sse_event({'error': 'Refinement timed out'}, event='error')
+                    return
+                if item is sentinel:
+                    return
+                event_type, payload = item
+                if event_type == 'progress':
+                    yield sse_event(payload, event='progress')
+                elif event_type == 'complete':
+                    yield sse_event(payload, event='complete')
+                elif event_type == 'error':
+                    yield sse_event({'error': payload}, event='error')
+
+        return sse_response(generate())
+    except Exception as e:
+        return sse_response(iter([
+            sse_event({'error': str(e)}, event='error')
+        ]))
+
+
+@superuser_required
+@require_http_methods(["POST"])
+def save_news_post_api(request):
+    """
+    Save a generated news post to the database.
+
+    POST /ai/api/save-news-post/
+    Body: {
+        "html_content_i18n": {...},
+        "title_i18n": {...},
+        "slug_i18n": {...},
+        "excerpt_i18n": {...},
+        "category_id": 1,  // optional
+        "is_published": false
+    }
+    """
+    try:
+        from news.models import NewsPost, NewsCategory
+
+        data = json.loads(request.body)
+        page_data = data.get('page_data', {})
+        html_content_i18n = page_data.get('html_content_i18n', data.get('html_content_i18n', {}))
+        title_i18n = data.get('title_i18n', data.get('title', {}))
+        slug_i18n = data.get('slug_i18n', data.get('slug', {}))
+        excerpt_i18n = data.get('excerpt_i18n', {})
+        category_id = data.get('category_id')
+        is_published = data.get('is_published', False)
+
+        post = NewsPost(
+            title_i18n=title_i18n,
+            slug_i18n=slug_i18n,
+            excerpt_i18n=excerpt_i18n,
+            html_content_i18n=html_content_i18n,
+            is_published=is_published,
+        )
+
+        if category_id:
+            try:
+                post.category = NewsCategory.objects.get(id=category_id)
+            except NewsCategory.DoesNotExist:
+                pass
+
+        post.save()
+
+        return JsonResponse({
+            'success': True,
+            'post_id': post.id,
+            'message': f'News post saved: {post}'
+        })
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
+@superuser_required
+@require_http_methods(["GET"])
+def list_news_refinement_sessions_api(request, post_id):
+    """Return refinement sessions for a news post."""
+    from .models import RefinementSession
+    from django.contrib.contenttypes.models import ContentType
+    from news.models import NewsPost
+
+    ct = ContentType.objects.get_for_model(NewsPost)
+    sessions = RefinementSession.objects.filter(
+        content_type=ct, object_id=post_id
+    ).order_by('-updated_at')[:20]
+
+    return JsonResponse({
+        'success': True,
+        'sessions': [
+            {
+                'id': s.id,
+                'title': s.title,
+                'message_count': len(s.messages),
+                'updated_at': s.updated_at.isoformat(),
+            }
+            for s in sessions
+        ]
+    })

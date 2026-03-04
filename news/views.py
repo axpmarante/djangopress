@@ -1,12 +1,15 @@
+import re
+
 from django.views.generic import ListView, CreateView, UpdateView, DeleteView, TemplateView
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib import messages
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse_lazy
 from django.http import JsonResponse
+from core.decorators import SuperuserRequiredMixin
 from .models import NewsPost, NewsGalleryImage, NewsCategory, NewsLayout
 from .forms import NewsPostForm, NewsCategoryForm
-from core.models import SiteImage
+from core.models import SiteImage, SiteSettings
 
 
 # ─── News Posts ───────────────────────────────────────────────────────────────
@@ -282,3 +285,156 @@ class LayoutUpdateView(LoginRequiredMixin, UpdateView):
         response = super().form_valid(form)
         messages.success(self.request, f'Layout "{self.object.key}" updated successfully!')
         return response
+
+
+# ─── AI Tools ────────────────────────────────────────────────────────────────
+
+
+class NewsGenerateView(SuperuserRequiredMixin, TemplateView):
+    """AI generation page for news posts"""
+    template_name = 'backoffice/ai_generate_news.html'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['total_posts'] = NewsPost.objects.count()
+        context['categories'] = NewsCategory.objects.filter(is_active=True).order_by('order')
+
+        try:
+            from ai.utils.llm_config import LLMConfig
+            config = LLMConfig()
+            context['ai_models'] = config.get_available_models()
+            context['default_model'] = config.default_model
+        except Exception:
+            context['ai_models'] = []
+            context['default_model'] = None
+
+        return context
+
+
+class NewsBulkView(SuperuserRequiredMixin, TemplateView):
+    """Bulk create news posts via AI"""
+    template_name = 'backoffice/ai_bulk_news.html'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['total_posts'] = NewsPost.objects.count()
+        context['categories'] = NewsCategory.objects.filter(is_active=True).order_by('order')
+
+        try:
+            from ai.utils.llm_config import LLMConfig
+            config = LLMConfig()
+            context['ai_models'] = config.get_available_models()
+            context['default_model'] = config.default_model
+        except Exception:
+            context['ai_models'] = []
+            context['default_model'] = None
+
+        return context
+
+
+class NewsRefineView(SuperuserRequiredMixin, TemplateView):
+    """Chat-based news post refinement"""
+    template_name = 'backoffice/ai_refine_news.html'
+
+    def get_context_data(self, **kwargs):
+        from ai.models import RefinementSession
+        from django.contrib.contenttypes.models import ContentType
+
+        context = super().get_context_data(**kwargs)
+        post_id = kwargs.get('pk')
+
+        try:
+            post = NewsPost.objects.get(pk=post_id)
+        except NewsPost.DoesNotExist:
+            context['post'] = None
+            return context
+
+        context['post'] = post
+
+        # Parse section names from HTML
+        html_i18n = post.html_content_i18n or {}
+        html = next(iter(html_i18n.values()), '') if html_i18n else ''
+        section_matches = re.findall(r'data-section="([^"]+)"', html)
+        context['post_sections'] = section_matches
+
+        # Sessions for this post (using generic FK)
+        ct = ContentType.objects.get_for_model(NewsPost)
+        sessions = RefinementSession.objects.filter(
+            content_type=ct, object_id=post_id
+        )[:20]
+        context['sessions'] = sessions
+
+        # Active session from query param
+        active_session_id = self.request.GET.get('session')
+        if active_session_id:
+            try:
+                active_session = RefinementSession.objects.get(
+                    id=active_session_id, content_type=ct, object_id=post_id
+                )
+                context['active_session'] = active_session
+                context['active_session_messages'] = active_session.messages
+            except RefinementSession.DoesNotExist:
+                pass
+
+        # AI models
+        try:
+            from ai.utils.llm_config import LLMConfig
+            config = LLMConfig()
+            context['ai_models'] = config.get_available_models()
+            context['default_model'] = config.default_model
+        except Exception:
+            context['ai_models'] = []
+            context['default_model'] = 'gemini-pro'
+
+        # Language info
+        site_settings = SiteSettings.objects.first()
+        if site_settings:
+            default_lang = site_settings.get_default_language()
+            enabled_langs = site_settings.get_enabled_languages()
+            context['default_language'] = default_lang
+            context['enabled_languages'] = enabled_langs
+            context['other_languages'] = [
+                (code, name) for code, name in enabled_langs if code != default_lang
+            ]
+            html_i18n = post.html_content_i18n or {}
+            context['languages_with_html'] = list(html_i18n.keys())
+        else:
+            context['default_language'] = 'pt'
+            context['enabled_languages'] = []
+            context['other_languages'] = []
+            context['languages_with_html'] = []
+
+        return context
+
+
+class NewsImagesView(SuperuserRequiredMixin, TemplateView):
+    """Process images on a news post"""
+    template_name = 'backoffice/news_images.html'
+
+    def get_context_data(self, **kwargs):
+        from django.conf import settings as django_settings
+
+        context = super().get_context_data(**kwargs)
+        post_id = kwargs.get('pk')
+
+        try:
+            post = NewsPost.objects.get(pk=post_id)
+            context['post'] = post
+
+            try:
+                from ai.utils.llm_config import LLMConfig
+                config = LLMConfig()
+                context['ai_models'] = config.get_available_models()
+                context['default_model'] = config.default_model
+            except Exception:
+                context['ai_models'] = []
+                context['default_model'] = None
+
+            context['unsplash_configured'] = bool(getattr(django_settings, 'UNSPLASH_ACCESS_KEY', ''))
+        except NewsPost.DoesNotExist:
+            context['post'] = None
+            context['ai_models'] = []
+            context['default_model'] = None
+            context['unsplash_configured'] = False
+
+        return context
