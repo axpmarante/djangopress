@@ -4,6 +4,26 @@ from bs4 import BeautifulSoup
 from core.models import Page
 
 
+def _get_default_language():
+    """Get the default language from SiteSettings."""
+    from core.models import SiteSettings
+    site_settings = SiteSettings.objects.first()
+    return site_settings.get_default_language() if site_settings else 'pt'
+
+
+def _get_page_html(page, lang=None):
+    """Read page HTML from html_content_i18n with backward-compat fallback.
+
+    Returns:
+        Tuple of (html_string, resolved_language_code)
+    """
+    from django.utils.translation import get_language
+    default_lang = _get_default_language()
+    lang = lang or get_language() or default_lang
+    html_i18n = page.html_content_i18n or {}
+    return html_i18n.get(lang) or html_i18n.get(default_lang) or page.html_content or '', lang
+
+
 def _get_page(context):
     """Get the active page from context."""
     page = context.get('active_page')
@@ -16,11 +36,22 @@ def _get_page(context):
         return None
 
 
-def _save_html(page, soup):
-    """Save BeautifulSoup back to page.html_content."""
+def _save_html(page, soup, lang=None):
+    """Save BeautifulSoup back to page.html_content_i18n and html_content."""
+    from django.utils.translation import get_language
     new_html = str(soup)
     if new_html.startswith('<html><body>'):
         new_html = new_html[12:-14]
+
+    default_lang = _get_default_language()
+    lang = lang or get_language() or default_lang
+
+    # Save to html_content_i18n for current language
+    html_i18n = dict(page.html_content_i18n or {})
+    html_i18n[lang] = new_html
+    page.html_content_i18n = html_i18n
+
+    # Backward compat
     page.html_content = new_html
     page.save()
 
@@ -77,10 +108,11 @@ def update_element_styles(params, context):
     if not selector and not section_name:
         return {'success': False, 'message': 'Provide selector or section_name'}
 
-    if not page.html_content:
+    html, lang = _get_page_html(page)
+    if not html:
         return {'success': False, 'message': 'Page has no HTML content'}
 
-    soup = BeautifulSoup(page.html_content, 'html.parser')
+    soup = BeautifulSoup(html, 'html.parser')
 
     if selector:
         element = soup.select_one(selector)
@@ -96,7 +128,7 @@ def update_element_styles(params, context):
     elif 'class' in element.attrs:
         del element['class']
 
-    _save_html(page, soup)
+    _save_html(page, soup, lang)
     return {
         'success': True,
         'message': 'Updated element classes',
@@ -118,7 +150,8 @@ def update_element_attribute(params, context):
     if not selector or not attribute:
         return {'success': False, 'message': 'Missing selector or attribute'}
 
-    soup = BeautifulSoup(page.html_content, 'html.parser')
+    html, lang = _get_page_html(page)
+    soup = BeautifulSoup(html, 'html.parser')
     element = soup.select_one(selector)
 
     if not element:
@@ -130,7 +163,7 @@ def update_element_attribute(params, context):
     elif attribute in element.attrs:
         del element[attribute]
 
-    _save_html(page, soup)
+    _save_html(page, soup, lang)
     return {
         'success': True,
         'message': f'Updated {attribute} on element',
@@ -149,14 +182,15 @@ def remove_section(params, context):
     if not section_name:
         return {'success': False, 'message': 'Missing section_name'}
 
-    soup = BeautifulSoup(page.html_content, 'html.parser')
+    html, lang = _get_page_html(page)
+    soup = BeautifulSoup(html, 'html.parser')
     section = soup.find('section', attrs={'data-section': section_name})
 
     if not section:
         return {'success': False, 'message': f'Section "{section_name}" not found'}
 
     section.decompose()
-    _save_html(page, soup)
+    _save_html(page, soup, lang)
 
     return {'success': True, 'message': f'Removed section "{section_name}"'}
 
@@ -171,7 +205,8 @@ def reorder_sections(params, context):
     if not order:
         return {'success': False, 'message': 'Missing order list'}
 
-    soup = BeautifulSoup(page.html_content, 'html.parser')
+    html, lang = _get_page_html(page)
+    soup = BeautifulSoup(html, 'html.parser')
 
     # Extract all sections
     sections = {}
@@ -188,7 +223,7 @@ def reorder_sections(params, context):
         if name not in order:
             soup.append(sec)
 
-    _save_html(page, soup)
+    _save_html(page, soup, lang)
     return {'success': True, 'message': f'Reordered {len(order)} sections'}
 
 
@@ -217,31 +252,24 @@ def refine_section(params, context):
     )
 
     # Apply the refined section to the page
-    soup = BeautifulSoup(page.html_content, 'html.parser')
+    html, lang = _get_page_html(page)
+    soup = BeautifulSoup(html, 'html.parser')
     old_section = soup.find('section', attrs={'data-section': section_name})
 
-    if old_section:
-        new_soup = BeautifulSoup(result['html_template'], 'html.parser')
+    # refine_section_only returns {'options': [{'html': ...}], 'assistant_message': ...}
+    # with clean HTML (no template vars) — stored per-language in html_content_i18n
+    refined_html = result.get('options', [{}])[0].get('html', '')
+
+    if old_section and refined_html:
+        new_soup = BeautifulSoup(refined_html, 'html.parser')
         new_section = new_soup.find('section') or new_soup
         old_section.replace_with(new_section)
-    else:
+    elif refined_html:
         # Append as new section
-        new_soup = BeautifulSoup(result['html_template'], 'html.parser')
+        new_soup = BeautifulSoup(refined_html, 'html.parser')
         soup.append(new_soup)
 
-    _save_html(page, soup)
-
-    # Merge translations
-    new_translations = result.get('content', {}).get('translations', {})
-    page_content = page.content or {}
-    if 'translations' not in page_content:
-        page_content['translations'] = {}
-    for lang, trans in new_translations.items():
-        if lang not in page_content['translations']:
-            page_content['translations'][lang] = {}
-        page_content['translations'][lang].update(trans)
-    page.content = page_content
-    page.save()
+    _save_html(page, soup, lang)
 
     return {
         'success': True,
@@ -276,8 +304,12 @@ def refine_page(params, context):
     )
 
     page.refresh_from_db()
-    page.html_content = result['html_content']
-    page.content = result['content']
+
+    # refine_page_with_html returns html_content_i18n, html_content, content
+    if 'html_content_i18n' in result:
+        page.html_content_i18n = result['html_content_i18n']
+    page.html_content = result.get('html_content', '')  # backward compat
+    page.content = result.get('content', {})  # backward compat
     page.save()
 
     return {

@@ -46,8 +46,16 @@ def get_page_info(params, context):
             return {'success': False, 'message': f'No page found matching "{title}"'}
 
     sections = []
-    if page.html_content:
-        soup = BeautifulSoup(page.html_content, 'html.parser')
+    # Read from html_content_i18n with fallback to html_content
+    from django.utils.translation import get_language
+    from core.models import SiteSettings
+    site_settings = SiteSettings.objects.first()
+    default_lang = site_settings.get_default_language() if site_settings else 'pt'
+    current_lang = get_language() or default_lang
+    html_i18n = page.html_content_i18n or {}
+    page_html = html_i18n.get(current_lang) or html_i18n.get(default_lang) or page.html_content or ''
+    if page_html:
+        soup = BeautifulSoup(page_html, 'html.parser')
         for sec in soup.find_all('section', attrs={'data-section': True}):
             sections.append(sec['data-section'])
 

@@ -216,19 +216,14 @@ class RefinementAgent:
         return result
 
     def _get_target_html(self, page, scope, target_name, default_language):
-        """Extract de-templatized HTML for the target section/element."""
+        """Extract clean HTML for the target section/element from html_content_i18n."""
         from bs4 import BeautifulSoup
-        from ai.services import ContentGenerationService
+        from django.utils.translation import get_language
 
-        current_html = page.html_content or ''
-        current_translations = (page.content or {}).get('translations', {})
-
-        # De-templatize
-        if current_translations.get(default_language):
-            service = ContentGenerationService.__new__(ContentGenerationService)
-            clean_html = service._detemplatize_html(current_html, current_translations, default_language)
-        else:
-            clean_html = current_html
+        # Read from html_content_i18n with fallback
+        current_lang = get_language() or default_language
+        html_i18n = page.html_content_i18n or {}
+        clean_html = html_i18n.get(current_lang) or html_i18n.get(default_language) or page.html_content or ''
 
         soup = BeautifulSoup(clean_html, 'html.parser')
 
