@@ -718,6 +718,10 @@ class Page(models.Model):
         default='',
         help_text='Full page HTML with Tailwind CSS. Use {{trans.field}} for translatable content. Use data-section="name" on <section> tags for LLM reference.'
     )
+    html_content_i18n = models.JSONField(
+        default=dict, blank=True,
+        help_text='Per-language HTML content. Structure: {"pt": "<html>...", "en": "<html>..."}'
+    )
     content = models.JSONField(
         'Translations',
         default=dict,
@@ -951,6 +955,7 @@ class Page(models.Model):
             title_i18n=self.title_i18n if self.title_i18n else {},
             slug_i18n=self.slug_i18n if self.slug_i18n else {},
             html_content=self.html_content,
+            html_content_i18n=self.html_content_i18n if self.html_content_i18n else {},
             content=self.content if self.content else {},
             is_active=self.is_active,
             created_by=user,
@@ -1030,6 +1035,10 @@ class GlobalSection(models.Model):
         'HTML Template',
         help_text='HTML template with Django template syntax. Use {{trans.field}} for translatable content.'
     )
+    html_template_i18n = models.JSONField(
+        default=dict, blank=True,
+        help_text='Per-language Django template HTML. Structure: {"pt": "<html>...", "en": "<html>..."}'
+    )
 
     # JSON content for translations
     content = models.JSONField(
@@ -1094,6 +1103,10 @@ class PageVersion(models.Model):
     )
 
     html_content = models.TextField('HTML Content', blank=True, default='')
+    html_content_i18n = models.JSONField(
+        default=dict, blank=True,
+        help_text='Per-language HTML content snapshot.'
+    )
     content = models.JSONField('Translations', default=dict, blank=True)
 
     is_active = models.BooleanField('Active', default=True)
@@ -1122,6 +1135,7 @@ class PageVersion(models.Model):
         p.title_i18n = self.title_i18n if self.title_i18n else {}
         p.slug_i18n = self.slug_i18n if self.slug_i18n else {}
         p.html_content = self.html_content
+        p.html_content_i18n = self.html_content_i18n if self.html_content_i18n else {}
         p.content = self.content if self.content else {}
         p.is_active = self.is_active
         setattr(p, '_change_summary', f'Restore to version {self.version_number}')
