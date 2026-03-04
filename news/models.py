@@ -1,7 +1,59 @@
 from django.db import models
 from django.utils.text import slugify
 from django.utils.translation import gettext_lazy as _
+from core.mixins import I18nModelMixin
 from core.models import SiteImage
+
+
+class NewsCategory(I18nModelMixin, models.Model):
+    """Category for organizing news posts."""
+    name_i18n = models.JSONField(
+        'Name (All Languages)',
+        default=dict,
+        blank=True,
+        help_text='{"pt": "Tecnologia", "en": "Technology"}'
+    )
+    slug_i18n = models.JSONField(
+        'Slug (All Languages)',
+        default=dict,
+        blank=True,
+        help_text='{"pt": "tecnologia", "en": "technology"}'
+    )
+    description_i18n = models.JSONField(
+        'Description (All Languages)',
+        default=dict,
+        blank=True,
+    )
+    order = models.PositiveIntegerField(default=0)
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ['order', 'pk']
+        verbose_name = _("News Category")
+        verbose_name_plural = _("News Categories")
+
+    def __str__(self):
+        return self.get_i18n_field('name') or f'Category #{self.pk}'
+
+    def get_absolute_url(self, lang=None):
+        from django.urls import reverse
+        from django.utils.translation import get_language
+        lang = lang or get_language()
+        slug = (self.slug_i18n or {}).get(lang, '')
+        if not slug:
+            from core.models import SiteSettings
+            settings = SiteSettings.load()
+            default = settings.get_default_language() if settings else 'pt'
+            slug = (self.slug_i18n or {}).get(default, '')
+        return reverse('news:category', kwargs={'slug': slug}) if slug else '#'
+
+    def save(self, *args, **kwargs):
+        # Auto-generate slugs from name_i18n if empty
+        if self.name_i18n and not self.slug_i18n:
+            self.slug_i18n = {
+                lang: slugify(name) for lang, name in self.name_i18n.items() if name
+            }
+        super().save(*args, **kwargs)
 
 
 class NewsPost(models.Model):
