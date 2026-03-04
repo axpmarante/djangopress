@@ -472,6 +472,31 @@ git merge upstream/main
 
 The first merge requires `--allow-unrelated-histories` since GitHub template repos don't share git history. Resolve conflicts by taking the upstream version for core engine files (`core/`, `ai/`, `backoffice/`, `editor_v2/`, `config/`, `templates/`). Site-specific content lives in the database and `.env`, so it won't conflict.
 
+### Upgrading to v1.0.0 (Per-Language HTML)
+
+v1.0.0 replaces the `{{ trans.xxx }}` template variable system with per-language HTML. The migration is automatic:
+
+```bash
+git fetch upstream
+git merge upstream/main
+pip install -r requirements.txt
+python manage.py migrate                    # Adds i18n fields + auto-populates from old data
+python manage.py fix_i18n_html --dry-run    # Preview: check for leftover {{ trans.xxx }}
+python manage.py fix_i18n_html              # Fix any remaining template vars
+```
+
+**What happens automatically:**
+- Migration 0037 adds `html_content_i18n` / `html_template_i18n` JSON fields
+- Migration 0038 populates them by replacing `{{ trans.xxx }}` with real text from `content['translations']`
+- Old fields (`html_content`, `content`, `html_template`) are preserved but no longer read by the code
+
+**After migrating, verify:**
+1. Check each page renders correctly in all languages
+2. Check header/footer render correctly
+3. Use the editor to make a small change and confirm auto-translation works
+
+**Old fields are NOT deleted** — they remain in the DB as a safety net. If something goes wrong, the data is still there for manual recovery.
+
 ## Git Conventions
 
 - **Do not include `Co-Authored-By` lines in commit messages.**
