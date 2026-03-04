@@ -10,7 +10,7 @@ from django.views.decorators.http import require_POST
 
 from django.core.cache import cache
 
-from .models import Page, DynamicForm, FormSubmission
+from .models import Page, DynamicForm, FormSubmission, SiteSettings
 
 
 class PageView(TemplateView):
@@ -51,20 +51,41 @@ class PageView(TemplateView):
         # Render page HTML content with translations
         language = current_lang or 'pt'
 
-        if page_obj.html_content:
-            from django.template import Template, RequestContext
+        # Get default language from SiteSettings
+        site_settings = SiteSettings.load()
+        default_lang = site_settings.get_default_language() if site_settings else 'pt'
+
+        # Determine which HTML to render and whether trans context is needed
+        html_i18n = page_obj.html_content_i18n or {}
+        trans = {}
+
+        if html_i18n.get(language):
+            # New format: per-language HTML with real text already embedded
+            html = html_i18n[language]
+        elif html_i18n.get(default_lang):
+            # Fallback to default language HTML from new format
+            html = html_i18n[default_lang]
+        else:
+            # Backward compat: old templatized HTML with {{ trans.xxx }} variables
+            html = page_obj.html_content or ''
             translations = (page_obj.content or {}).get('translations', {})
-            trans = translations.get(language, translations.get('pt', {}))
+            trans = translations.get(language, translations.get(default_lang, {}))
+
+        if html:
+            from django.template import Template, RequestContext
 
             try:
-                template = Template(page_obj.html_content)
-                render_context = RequestContext(self.request, {
-                    'trans': trans,
+                template = Template(html)
+                render_context = {
                     'LANGUAGE_CODE': language,
                     'page': page_obj,
                     **context,
-                })
-                context['page_content'] = template.render(render_context)
+                }
+                if trans:
+                    render_context['trans'] = trans  # Only for old templatized format
+                context['page_content'] = template.render(
+                    RequestContext(self.request, render_context)
+                )
             except Exception as e:
                 import logging
                 logger = logging.getLogger(__name__)
