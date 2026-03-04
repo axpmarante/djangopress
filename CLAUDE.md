@@ -10,7 +10,7 @@ DjangoPress is a **reusable CMS blueprint** — the Django equivalent of WordPre
 
 - **Everything lives in the database.** Pages, headers, footers, site settings, design tokens — all DB-driven via the backoffice. No file-based templates for content.
 - **LLMs generate the HTML.** The primary workflow is: project briefing + design system → AI generates pages with Tailwind CSS → user refines via AI chat or inline editor.
-- **Two-step generation.** Step 1: LLM writes clean HTML with real text in the default language. Step 2: a second LLM call extracts text, assigns `{{ trans.xxx }}` variables, and translates to all languages. Python does the actual HTML replacement.
+- **Per-language HTML.** LLM generates clean HTML with real text in the default language. A second LLM call translates the full HTML to each additional language. Each language gets its own complete HTML copy — no template variables, no JSON translation dicts.
 - **Clear section markup.** All generated HTML must use `data-section="name"` and `id="name"` on `<section>` tags so individual sections can be referenced, edited, or regenerated independently.
 - **Decoupled apps.** Feature apps (news, blog, shop, etc.) are optional plugins bolted onto the core CMS. They don't depend on each other.
 - **Multi-language by default.** All content uses JSON fields (`{"pt": "...", "en": "..."}`) — no gettext .po files for user content.
@@ -188,8 +188,8 @@ static/          → CSS/JS assets
 | Model | Purpose |
 |-------|---------|
 | `SiteSettings` | Singleton. Branding, contact info, social media (7 platforms), design system (colors, fonts, spacing, buttons), languages, project briefing, design guide, SEO, Open Graph defaults, custom code injection (head/body). Accessed via `SiteSettings.load()`. |
-| `Page` | A website page. `title_i18n` / `slug_i18n` (JSON), `html_content` (Tailwind HTML with `{{ trans.field }}`), `content` (JSON translations). |
-| `GlobalSection` | Site-wide sections (header, footer). `key` (slug), `html_template` (Django template), `content` (JSON translations). Cached per language. |
+| `Page` | A website page. `title_i18n` / `slug_i18n` (JSON), `html_content_i18n` (per-language Tailwind HTML: `{"pt": "<html>...", "en": "<html>..."}`). |
+| `GlobalSection` | Site-wide sections (header, footer). `key` (slug), `html_template_i18n` (per-language Django template HTML: `{"pt": "<html>...", "en": "<html>..."}`). |
 | `SiteImage` | Media library. Multi-language titles/alt text (`title_i18n`, `alt_text_i18n`), categories, tags. |
 | `PageVersion` | Page revision history for rollback. Auto-created before AI edits. |
 | `DynamicForm` | DB-driven form definitions. `slug` determines submission URL (`/forms/<slug>/submit/`), `fields_schema` (JSON) for validation/labels, i18n success messages, optional confirmation email. A default `contact` form is seeded on migrate. |
@@ -205,15 +205,15 @@ static/          → CSS/JS assets
 
 1. `PageView` (core/views.py) catches all URLs via `i18n_patterns`
 2. Root URL (`/`) defaults to slug `home` — **this slug must be `home` in ALL languages**
-3. The page's `html_content` is rendered as a Django template with `{{ trans.field }}` variables
-4. Translations come from `page.content["translations"][language_code]`
-5. The rendered HTML is injected into `base.html` → `core/page.html`
+3. The current language is detected from the URL prefix (e.g., `/pt/about/` → `pt`)
+4. The page's `html_content_i18n[language]` is loaded — each language has its own complete HTML with real text (no template variables)
+5. The HTML is rendered as a Django template (for `{% url %}` tags etc.) and injected into `base.html` → `core/page.html`
 
 ## How GlobalSections Work (Header/Footer)
 
 - Stored in DB as `GlobalSection` with a unique `key` (e.g. `main-header`, `main-footer`)
 - `base.html` loads them via `{% load_global_section 'main-header' fallback_template='partials/header.html' %}`
-- They render as Django templates with `{{ trans.field }}` from their own `content` JSON
+- Per-language HTML is stored in `html_template_i18n[language]` — each language has its own complete template with real text
 - Full Django template syntax available: `{% url %}`, `{% csrf_token %}`, `{% if %}`, `{% for %}`, etc.
 - **Caching:** Uses `LocMemCache` by default (per-process). Restart server or set `DummyCache` in dev to see DB changes instantly.
 
@@ -227,10 +227,12 @@ The `editor_v2` app powers the `?edit=v2` (or `?edit=true`) mode for staff users
 3. ES module architecture with selector, sidebar, tracker, and AI chat
 4. Supports section/element/full-page AI refinement with session history
 5. Version navigation for page rollback
-6. Changes are persisted via `/editor-v2/api/*` endpoints to `Page.html_content` and `Page.content`
+6. Changes are persisted via `/editor-v2/api/*` endpoints to `Page.html_content_i18n`
+7. Language bar in sidebar switches between language versions for preview
+8. Applying AI changes auto-translates the modified section/element to other languages
 
 ### Editor API Endpoints (all require staff auth):
-- `POST /editor-v2/api/update-page-content/` — update translation text
+- `POST /editor-v2/api/update-page-content/` — update page text content in html_content_i18n
 - `POST /editor-v2/api/update-page-classes/` — update element CSS classes
 - `POST /editor-v2/api/update-page-attribute/` — update element attributes (href, src, etc.)
 - `POST /editor-v2/api/update-section-video/` — update/remove section background video
@@ -262,10 +264,10 @@ The **Design Guide** (`SiteSettings.design_guide`) is a freeform markdown field 
 
 ## HTML Generation Rules
 
-When generating `html_content` for pages or GlobalSections:
+When generating HTML for pages or GlobalSections:
 
 1. **Use Tailwind CSS only** — loaded via CDN in base.html
-2. **Use `{{ trans.field }}` for all text** — never hardcode strings
+2. **Write real text in the target language** — no template variables for content. Text is embedded directly in the HTML.
 3. **Every `<section>` must have `data-section="name"` and `id="name"`** — for targeting
 4. **Alpine.js is available** (`x-data`, `x-show`, `@click`, etc.) — loaded in base.html
 5. **Use context variables** for dynamic data: `{{ SITE_NAME }}`, `{{ LOGO.url }}`, `{{ CONTACT_EMAIL }}`, `{{ SOCIAL_MEDIA.instagram }}`, etc.
@@ -288,18 +290,15 @@ Use `data-lightbox="group-name"` on `<a>` tags wrapping images. All elements sha
 
 Key points: use `<a href="full-size-url">` for the lightbox source, `data-alt` for caption, different `data-lightbox` group names for independent galleries on the same page.
 
-## Translation JSON Structure
+## Multi-Language Content
 
-```json
-{
-  "translations": {
-    "en": { "hero_title": "Welcome", "hero_subtitle": "..." },
-    "pt": { "hero_title": "Bem-vindo", "hero_subtitle": "..." }
-  }
-}
-```
+Each language gets its own complete HTML copy stored in JSON fields:
 
-Both `Page.content` and `GlobalSection.content` use this structure.
+- **`Page.html_content_i18n`**: `{"pt": "<section>...texto em PT...</section>", "en": "<section>...text in EN...</section>"}`
+- **`GlobalSection.html_template_i18n`**: Same structure for headers/footers
+- **`Page.title_i18n`** / **`Page.slug_i18n`**: `{"pt": "Sobre", "en": "About"}`
+
+No `{{ trans.xxx }}` variables — text is embedded directly in each language's HTML. Translation between languages is done by sending the HTML to an LLM (gemini-flash) which returns a fully translated copy.
 
 ## URL Patterns
 
@@ -333,7 +332,7 @@ Configured in `ai/utils/llm_config.py`. Supports OpenAI, Anthropic, and Google (
 
 | Endpoint | Method | Purpose |
 |----------|--------|---------|
-| `/ai/api/generate-page/` | POST | Generate a new page (two-step: HTML → templatize + translate) |
+| `/ai/api/generate-page/` | POST | Generate a new page (HTML + auto-translate to other languages) |
 | `/ai/api/refine-page-with-html/` | POST | Refine existing page via form |
 | `/ai/api/chat-refine-page/` | POST | Chat-based iterative refinement (with session history) |
 | `/ai/api/analyze-page-images/` | POST | AI suggests generation prompts, aspect ratios, and library matches per image |
@@ -345,13 +344,11 @@ Configured in `ai/utils/llm_config.py`. Supports OpenAI, Anthropic, and Google (
 | `/ai/api/analyze-bulk-pages/` | POST | Analyze description, extract page structure |
 | `/ai/api/generate-design-guide/` | POST | AI-generate a design guide from existing pages |
 
-### Two-Step Generation Flow
+### Generation Flow
 
-1. **Step 1 (HTML):** LLM generates clean HTML with real text in the default language. No `{{ trans.xxx }}` variables — just plain readable HTML.
-2. **Step 2 (Templatize + Translate):** Python extracts all visible text via BeautifulSoup and assigns variable names, then a LLM call translates to all enabled languages. Python replaces text in HTML with `{{ trans.var }}` variables.
-3. **Step 3 (Metadata):** A third LLM call suggests `title_i18n` and `slug_i18n` from the brief. The user can override these or leave them blank to use the AI suggestions.
-
-This avoids the LLM needing to output valid JSON-wrapped HTML, which was error-prone.
+1. **Step 1 (HTML):** LLM generates clean HTML with real text in the default language. Plain readable HTML — no template variables.
+2. **Step 2 (Translate):** For each additional language, the HTML is sent to gemini-flash which returns a fully translated copy. Each language's HTML is stored in `html_content_i18n[lang]`.
+3. **Step 3 (Metadata):** A LLM call suggests `title_i18n` and `slug_i18n` from the brief. The user can override these or leave them blank to use the AI suggestions.
 
 ### Chat Refinement
 
