@@ -41,7 +41,7 @@ def _extract_usage(response):
 @require_http_methods(["POST"])
 def generate_page_api(request):
     """
-    API endpoint to generate a complete page as HTML + translations
+    API endpoint to generate a page as HTML in the default language.
 
     POST /ai/api/generate-page/
     Body: {
@@ -52,7 +52,9 @@ def generate_page_api(request):
 
     Returns: {
         "success": true,
-        "page_data": {"html_content": "...", "content": {"translations": {...}}}
+        "page_data": {"html_content_i18n": {"pt": "..."}, "html_content": "...", "content": {...}},
+        "title_i18n": {...},
+        "slug_i18n": {...}
     }
     """
     try:
@@ -294,7 +296,11 @@ def save_generated_page_api(request):
     Body: {
         "slug": "new-page" or {"pt": "nova-pagina", "en": "new-page"},
         "title": "New Page" or {"pt": "Nova Página", "en": "New Page"},
-        "page_data": {"html_content": "...", "content": {"translations": {...}}}
+        "page_data": {
+            "html_content_i18n": {"pt": "<html>..."},
+            "html_content": "...",
+            "content": {"translations": {...}}
+        }
     }
 
     Returns: {
@@ -347,6 +353,7 @@ def save_generated_page_api(request):
             page = existing_page
             page.title_i18n = title_i18n
             page.slug_i18n = slug_i18n
+            page.html_content_i18n = page_data.get('html_content_i18n', {})
             page.html_content = page_data.get('html_content', '')
             page.content = page_data.get('content', {})
             page.is_active = True
@@ -356,6 +363,7 @@ def save_generated_page_api(request):
             page = Page.objects.create(
                 title_i18n=title_i18n,
                 slug_i18n=slug_i18n,
+                html_content_i18n=page_data.get('html_content_i18n', {}),
                 html_content=page_data.get('html_content', ''),
                 content=page_data.get('content', {}),
                 is_active=True

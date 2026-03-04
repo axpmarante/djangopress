@@ -131,11 +131,11 @@ Focus on:
 Return the complete, corrected JSON now:"""
 
         try:
-            # Use a fast model for fixing
+            # Use a fast model for fixing — never the expensive pro model
             messages = [{"role": "user", "content": fix_prompt}]
             response = self.llm.get_completion(
                 messages=messages,
-                tool_name=self.model_name
+                tool_name='gemini-flash'
             )
 
             if response and hasattr(response, 'choices') and len(response.choices) > 0:
@@ -147,6 +147,27 @@ Return the complete, corrected JSON now:"""
             print(f"Error asking LLM to fix JSON: {e}")
 
         return None
+
+    def _make_stream_callback(self, on_progress, step_name, throttle_chars=500):
+        """Create an on_stream callback that sends progress events during LLM streaming."""
+        last_update = [0]
+        start_time = [time.time()]
+
+        def on_stream(accumulated_text, char_count):
+            if char_count - last_update[0] >= throttle_chars:
+                last_update[0] = char_count
+                elapsed = time.time() - start_time[0]
+                if on_progress:
+                    try:
+                        on_progress({
+                            "step": step_name,
+                            "status": "streaming",
+                            "chars": char_count,
+                            "elapsed": round(elapsed, 1),
+                        })
+                    except Exception:
+                        pass
+        return on_stream
 
     def _extract_html_from_response(self, content: str) -> str:
         """
@@ -585,7 +606,12 @@ Return the complete, corrected JSON now:"""
         on_progress=None
     ) -> Dict:
         """
-        Generate a complete page as a single HTML document with translations
+        Generate a page as HTML in the default language.
+
+        Step 1: LLM generates clean HTML with real text in the default language.
+        Step 2: Generate page metadata (title_i18n, slug_i18n).
+
+        No templatize/translate step — HTML is stored per-language in html_content_i18n.
 
         Args:
             brief: User's description of the desired page
@@ -593,7 +619,8 @@ Return the complete, corrected JSON now:"""
             model_override: Override the default model for this request
 
         Returns:
-            Dictionary with 'html_content' and 'content' (translations)
+            Dictionary with 'html_content_i18n', 'html_content' (backward compat),
+            'content' (backward compat), 'title_i18n', 'slug_i18n'
 
         Raises:
             ValueError: If generation fails or returns invalid data
@@ -605,7 +632,7 @@ Return the complete, corrected JSON now:"""
                 except Exception:
                     pass
 
-        print(f"\n=== Generating Page (Two-Step) ===")
+        print(f"\n=== Generating Page (HTML + Metadata) ===")
         print(f"Brief: {brief}")
         print(f"Language: {language}")
 
@@ -678,7 +705,8 @@ Return the complete, corrected JSON now:"""
                     {'role': 'system', 'content': system_prompt},
                     {'role': 'user', 'content': user_prompt}
                 ]
-                response = self.llm.get_completion(messages, tool_name=model)
+                stream_cb = self._make_stream_callback(on_progress, 'html_generation')
+                response = self.llm.get_completion(messages, tool_name=model, on_stream=stream_cb)
 
             usage = self._extract_usage(response)
             log_ai_call(
@@ -704,25 +732,23 @@ Return the complete, corrected JSON now:"""
         print(f"Step 1 produced {len(raw_html)} chars of HTML")
         notify("html_generation", "done", chars=len(raw_html))
 
-        # --- Step 2 + Step 3: Run in parallel ---
-        # Step 2 (templatize) and Step 3 (metadata) are independent — run concurrently
-        notify("templatize_translate", "running")
-        print(f"\nRunning Step 2 (templatize) and Step 3 (metadata) in parallel...")
-        with ThreadPoolExecutor(max_workers=2) as pool:
-            future_templatize = pool.submit(
-                self._templatize_and_translate, raw_html, languages, default_language, model
-            )
-            future_metadata = pool.submit(
-                self._generate_page_metadata, brief, languages, model
-            )
-            page_data = future_templatize.result()
-            metadata = future_metadata.result()
+        # --- Step 2: Generate metadata only (templatize/translate removed) ---
+        notify("metadata_generation", "running")
+        print(f"\nRunning Step 2 (metadata) only — templatize/translate removed")
+        metadata = self._generate_page_metadata(brief, languages, model)
+        notify("metadata_generation", "done")
 
+        default_lang = default_language
+        page_data = {
+            'html_content_i18n': {default_lang: raw_html},
+            # Backward compat during transition
+            'html_content': raw_html,
+            'content': {'translations': {default_lang: {}}},
+        }
         page_data['title_i18n'] = metadata.get('title_i18n', {})
         page_data['slug_i18n'] = metadata.get('slug_i18n', {})
-        notify("templatize_translate", "done")
 
-        print(f"Successfully generated page (two-step, parallel)")
+        print(f"Successfully generated page")
         notify("complete", "done")
         return page_data
 
@@ -862,18 +888,21 @@ Return the complete, corrected JSON now:"""
         config = MODEL_CONFIG.get(model)
         actual_model, provider = self._get_model_info(model)
         action = 'refine_header' if section_key == 'main-header' else 'refine_footer'
+        stream_cb = self._make_stream_callback(on_progress, 'refine_html')
         t0 = time.time()
         try:
             if config and config.provider == ModelProvider.GOOGLE:
                 response = self.llm.get_completion(
                     messages,
                     tool_name=model,
+                    on_stream=stream_cb,
                     max_output_tokens=16384
                 )
             else:
                 response = self.llm.get_completion(
                     messages,
                     tool_name=model,
+                    on_stream=stream_cb,
                     max_tokens=16384
                 )
             usage = self._extract_usage(response)
@@ -1101,7 +1130,8 @@ Return the complete, corrected JSON now:"""
                     {'role': 'system', 'content': system_prompt},
                     {'role': 'user', 'content': user_prompt}
                 ]
-                response = self.llm.get_completion(messages, tool_name=model)
+                stream_cb = self._make_stream_callback(on_progress, 'refine_html')
+                response = self.llm.get_completion(messages, tool_name=model, on_stream=stream_cb)
 
             usage = self._extract_usage(response)
             log_ai_call(
@@ -1267,10 +1297,11 @@ Return the complete, corrected JSON now:"""
         ]
 
         notify("refine_html", "running", model=model)
+        stream_cb = self._make_stream_callback(on_progress, 'refine_html')
         actual_model, provider_str = self._get_model_info(model)
         t0 = time.time()
         try:
-            response = self.llm.get_completion(messages, tool_name=model)
+            response = self.llm.get_completion(messages, tool_name=model, on_stream=stream_cb)
             usage = self._extract_usage(response)
             log_ai_call(
                 action='refine_section', model_name=actual_model, provider=provider_str,

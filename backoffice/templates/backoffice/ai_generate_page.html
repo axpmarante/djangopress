@@ -9,7 +9,7 @@
     <nav class="flex" aria-label="Breadcrumb">
         <ol class="flex items-center space-x-2 text-sm text-gray-500">
             <li>
-                <a href="{% url 'backoffice:ai_management' %}" class="hover:text-gray-700">AI Content Studio</a>
+                <a href="{% url 'backoffice:dashboard' %}" class="hover:text-gray-700">Dashboard</a>
             </li>
             <li>
                 <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
@@ -110,7 +110,7 @@
 
                     <!-- Action Buttons -->
                     <div class="flex items-center justify-between pt-4 border-t">
-                        <a href="{% url 'backoffice:ai_management' %}"
+                        <a href="{% url 'backoffice:dashboard' %}"
                            class="px-6 py-3 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors">
                             Cancel
                         </a>
@@ -148,7 +148,7 @@
                         <svg class="w-4 h-4 text-purple-600 mr-2 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
                         </svg>
-                        <span class="text-gray-700">Bilingual content (PT & EN)</span>
+                        <span class="text-gray-700">Content in default language</span>
                     </div>
                     <div class="flex items-start">
                         <svg class="w-4 h-4 text-purple-600 mr-2 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -206,16 +206,19 @@
                     <div data-step="component_selection" class="flex items-center gap-2 text-gray-400">
                         <span class="step-icon w-5 h-5 flex items-center justify-center text-xs">&#9675;</span>
                         <span>Selecting components</span>
+                        <span class="step-chars ml-1 text-xs text-purple-500 font-mono"></span>
                         <span class="step-time ml-auto text-xs"></span>
                     </div>
                     <div data-step="html_generation" class="flex items-center gap-2 text-gray-400">
                         <span class="step-icon w-5 h-5 flex items-center justify-center text-xs">&#9675;</span>
                         <span>Generating HTML</span>
+                        <span class="step-chars ml-1 text-xs text-purple-500 font-mono"></span>
                         <span class="step-time ml-auto text-xs"></span>
                     </div>
-                    <div data-step="templatize_translate" class="flex items-center gap-2 text-gray-400">
+                    <div data-step="metadata_generation" class="flex items-center gap-2 text-gray-400">
                         <span class="step-icon w-5 h-5 flex items-center justify-center text-xs">&#9675;</span>
-                        <span>Extracting &amp; translating text</span>
+                        <span>Generating metadata</span>
+                        <span class="step-chars ml-1 text-xs text-purple-500 font-mono"></span>
                         <span class="step-time ml-auto text-xs"></span>
                     </div>
                 </div>
@@ -436,8 +439,8 @@ document.getElementById('generatePageForm').addEventListener('submit', async fun
 
     const STEP_PROGRESS = {
         component_selection: 15,
-        html_generation: 70,
-        templatize_translate: 100,
+        html_generation: 80,
+        metadata_generation: 100,
     };
 
     const sse = new SSEClient("{% url 'ai:generate_page_stream' %}", {
@@ -451,6 +454,22 @@ document.getElementById('generatePageForm').addEventListener('submit', async fun
                 stepEl.classList.add('text-purple-700', 'font-medium');
                 stepEl.querySelector('.step-icon').innerHTML = '<svg class="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>';
                 stepTimers[data.step] = Date.now();
+            } else if (data.status === 'streaming') {
+                const charsEl = stepEl.querySelector('.step-chars');
+                if (charsEl && data.chars) {
+                    charsEl.textContent = data.chars.toLocaleString() + ' chars';
+                }
+                // Smooth progress bar: 15% to 70% proportional to chars (est max ~8000)
+                if (data.chars) {
+                    const progress = Math.min(data.chars / 8000, 1);
+                    const barPercent = 15 + (progress * 55);
+                    const fill = document.getElementById('progressFill');
+                    if (fill) fill.style.width = barPercent + '%';
+                }
+                // Update elapsed time
+                if (data.elapsed) {
+                    stepEl.querySelector('.step-time').textContent = data.elapsed + 's';
+                }
             } else if (data.status === 'done') {
                 stepEl.classList.remove('text-purple-700');
                 stepEl.classList.add('text-green-600');
@@ -468,10 +487,16 @@ document.getElementById('generatePageForm').addEventListener('submit', async fun
             if (fill) fill.style.width = '100%';
             hideLoading();
             if (data.success && data.page_data) {
+                // Extract title/slug from page_data (SSE path) or top-level (non-stream path)
+                const titleI18n = data.title_i18n || data.page_data.title_i18n;
+                const slugI18n = data.slug_i18n || data.page_data.slug_i18n;
+                if (titleI18n) suggestedTitle = titleI18n;
+                if (slugI18n) suggestedSlug = slugI18n;
+                // Remove title/slug from page_data before storing (not part of page content)
+                delete data.page_data.title_i18n;
+                delete data.page_data.slug_i18n;
                 generatedPageData = data.page_data;
                 window.generatedPageData = data.page_data;
-                if (data.title_i18n) suggestedTitle = data.title_i18n;
-                if (data.slug_i18n) suggestedSlug = data.slug_i18n;
                 displayResults(data.page_data);
             }
         },
@@ -492,6 +517,8 @@ function showLoading() {
         el.className = 'flex items-center gap-2 text-gray-400';
         el.querySelector('.step-icon').innerHTML = '&#9675;';
         el.querySelector('.step-time').textContent = '';
+        const charsEl = el.querySelector('.step-chars');
+        if (charsEl) charsEl.textContent = '';
     });
 }
 
@@ -501,16 +528,17 @@ function hideLoading() {
 
 function displayResults(pageData) {
     const container = document.getElementById('resultsContent');
-    const html = pageData.html_content || '';
-    const translations = pageData.content?.translations || {};
-    const langCount = Object.keys(translations).length;
+    // Use html_content_i18n (new path) or html_content (backward compat)
+    const htmlI18n = pageData.html_content_i18n || {};
+    const html = Object.values(htmlI18n)[0] || pageData.html_content || '';
+    const langCount = Object.keys(htmlI18n).length;
 
     // Count sections from data-section attributes
     const sectionMatches = html.match(/data-section="[^"]+"/g) || [];
     const sectionNames = sectionMatches.map(m => m.replace('data-section="', '').replace('"', ''));
 
     const displayTitle = getDisplayTitle(pageTitle) || getDisplayTitle(suggestedTitle) || 'Untitled';
-    document.getElementById('pageInfo').textContent = `${sectionNames.length} sections, ${langCount} language(s) for "${displayTitle}"`;
+    document.getElementById('pageInfo').textContent = `${sectionNames.length} sections for "${displayTitle}"`;
 
     container.innerHTML = `
         <div class="space-y-6">
@@ -519,7 +547,7 @@ function displayResults(pageData) {
                     <svg class="w-5 h-5 text-green-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
                     </svg>
-                    <p class="text-green-800 font-medium">Page generated with ${sectionNames.length} section(s) and ${langCount} language(s)!</p>
+                    <p class="text-green-800 font-medium">Page generated with ${sectionNames.length} section(s)${langCount ? ' in ' + langCount + ' language(s)' : ''}!</p>
                 </div>
             </div>
 
@@ -547,14 +575,13 @@ function displayResults(pageData) {
 
             ${langCount > 0 ? `
             <div>
-                <div class="flex items-center justify-between mb-2">
-                    <h4 class="text-sm font-semibold text-gray-900">Translations</h4>
-                    <button onclick="document.getElementById('translationsPreview').classList.toggle('hidden')"
-                            class="text-xs text-purple-600 hover:text-purple-800 px-3 py-1 border border-purple-300 rounded hover:bg-purple-50">
-                        Toggle
-                    </button>
+                <h4 class="text-sm font-semibold text-gray-900 mb-2">Languages</h4>
+                <div class="flex flex-wrap gap-2">
+                    ${Object.keys(htmlI18n).map(lang => `
+                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">${lang.toUpperCase()}</span>
+                    `).join('')}
                 </div>
-                <pre id="translationsPreview" class="hidden text-xs text-gray-700 whitespace-pre-wrap overflow-auto max-h-64 bg-gray-50 p-3 rounded border">${escapeHtml(JSON.stringify(translations, null, 2))}</pre>
+                <p class="text-xs text-gray-500 mt-2">Additional languages can be added later via Bulk Translate.</p>
             </div>
             ` : ''}
 
