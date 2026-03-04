@@ -212,9 +212,10 @@ def refine_header_api(request):
             model_override=model
         )
 
-        # Save the refined header to the database
+        # Save the refined header to the database (html_template_i18n + backward compat)
         from core.models import GlobalSection
         section = GlobalSection.objects.get(key='main-header')
+        section.html_template_i18n = section_data.get('html_template_i18n', section.html_template_i18n or {})
         section.html_template = section_data.get('html_template', '')
         section.content = section_data.get('content', {})
         section.save()
@@ -267,9 +268,10 @@ def refine_footer_api(request):
             model_override=model
         )
 
-        # Save the refined footer to the database
+        # Save the refined footer to the database (html_template_i18n + backward compat)
         from core.models import GlobalSection
         section = GlobalSection.objects.get(key='main-footer')
+        section.html_template_i18n = section_data.get('html_template_i18n', section.html_template_i18n or {})
         section.html_template = section_data.get('html_template', '')
         section.content = section_data.get('content', {})
         section.save()
@@ -631,7 +633,8 @@ def refine_page_with_html_api(request):
             reference_images=reference_images or None
         )
 
-        # Save refined content to page
+        # Save refined content to page (html_content_i18n + backward compat)
+        page.html_content_i18n = refined_data.get('html_content_i18n', page.html_content_i18n or {})
         page.html_content = refined_data.get('html_content', page.html_content)
         page.content = refined_data.get('content', page.content)
         page.save()
@@ -722,8 +725,14 @@ def chat_refine_page_api(request):
             )
             session.save()
 
-        # Capture old HTML for diff
-        old_html = page.html_content or ''
+        # Capture old HTML for diff (from html_content_i18n with fallback)
+        from django.utils.translation import get_language
+        from core.models import SiteSettings
+        site_settings = SiteSettings.objects.first()
+        default_lang = site_settings.get_default_language() if site_settings else 'pt'
+        current_lang = get_language() or default_lang
+        html_i18n = page.html_content_i18n or {}
+        old_html = html_i18n.get(current_lang) or html_i18n.get(default_lang) or page.html_content or ''
 
         # Append user message to session
         session.add_user_message(message, reference_images_count=len(reference_images))
@@ -748,13 +757,14 @@ def chat_refine_page_api(request):
             handle_images=handle_images,
         )
 
-        # Save refined content to page
+        # Save refined content to page (html_content_i18n + backward compat)
+        page.html_content_i18n = refined_data.get('html_content_i18n', page.html_content_i18n or {})
         page.html_content = refined_data.get('html_content', page.html_content)
         page.content = refined_data.get('content', page.content)
         page.save()
 
         # Compute section changes
-        new_html = page.html_content or ''
+        new_html = refined_data.get('html_content', page.html_content) or ''
         added, removed, modified = compute_section_changes(old_html, new_html)
         change_summary = build_change_summary(added, removed, modified)
         sections_changed = added + modified
@@ -893,8 +903,14 @@ def chat_refine_page_stream(request):
             )
             session.save()
 
-        # Capture old HTML for diff
-        old_html = page.html_content or ''
+        # Capture old HTML for diff (from html_content_i18n with fallback)
+        from django.utils.translation import get_language
+        from core.models import SiteSettings
+        site_settings = SiteSettings.objects.first()
+        default_lang = site_settings.get_default_language() if site_settings else 'pt'
+        current_lang = get_language() or default_lang
+        html_i18n = page.html_content_i18n or {}
+        old_html = html_i18n.get(current_lang) or html_i18n.get(default_lang) or page.html_content or ''
 
         # Append user message to session
         session.add_user_message(message, reference_images_count=len(reference_images))
@@ -928,13 +944,14 @@ def chat_refine_page_stream(request):
                     on_progress=on_progress,
                 )
 
-                # Post-processing: save page
+                # Post-processing: save page (html_content_i18n + backward compat)
+                page.html_content_i18n = refined_data.get('html_content_i18n', page.html_content_i18n or {})
                 page.html_content = refined_data.get('html_content', page.html_content)
                 page.content = refined_data.get('content', page.content)
                 page.save()
 
                 # Compute section changes
-                new_html = page.html_content or ''
+                new_html = refined_data.get('html_content', page.html_content) or ''
                 added, removed, modified = compute_section_changes(old_html, new_html)
                 change_summary = build_change_summary(added, removed, modified)
                 sections_changed = added + modified
@@ -1024,9 +1041,10 @@ def refine_header_stream(request):
                     on_progress=on_progress,
                 )
 
-                # Save the refined header to the database
+                # Save the refined header to the database (html_template_i18n + backward compat)
                 from core.models import GlobalSection
                 section = GlobalSection.objects.get(key='main-header')
+                section.html_template_i18n = section_data.get('html_template_i18n', section.html_template_i18n or {})
                 section.html_template = section_data.get('html_template', '')
                 section.content = section_data.get('content', {})
                 section.save()
@@ -1107,9 +1125,10 @@ def refine_footer_stream(request):
                     on_progress=on_progress,
                 )
 
-                # Save the refined footer to the database
+                # Save the refined footer to the database (html_template_i18n + backward compat)
                 from core.models import GlobalSection
                 section = GlobalSection.objects.get(key='main-footer')
+                section.html_template_i18n = section_data.get('html_template_i18n', section.html_template_i18n or {})
                 section.html_template = section_data.get('html_template', '')
                 section.content = section_data.get('content', {})
                 section.save()
@@ -1233,13 +1252,16 @@ def generate_design_guide_ai_api(request):
 - Secondary: bg `{site_settings.secondary_button_bg}`, text `{site_settings.secondary_button_text}`, hover `{site_settings.secondary_button_hover}`
 - Border width: {site_settings.button_border_width}px"""
 
-        # Collect page HTML samples
+        # Collect page HTML samples (from html_content_i18n with fallback)
         page_samples = ""
         if page_ids:
-            pages = Page.objects.filter(id__in=page_ids, is_active=True).exclude(html_content='')
+            pages = Page.objects.filter(id__in=page_ids, is_active=True)
             for page in pages:
                 title = page.default_title or page.default_slug
-                html = page.html_content or ''
+                page_html_i18n = page.html_content_i18n or {}
+                html = page_html_i18n.get(default_language) or page.html_content or ''
+                if not html:
+                    continue
                 # Truncate very long pages to keep prompt reasonable
                 if len(html) > 8000:
                     html = html[:8000] + "\n<!-- ... truncated ... -->"

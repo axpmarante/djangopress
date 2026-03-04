@@ -790,23 +790,30 @@ Return the complete, corrected JSON now:"""
         notify("load_section", "running")
         try:
             from core.models import GlobalSection
+            from django.utils.translation import get_language
             section = GlobalSection.objects.get(key=section_key)
         except GlobalSection.DoesNotExist:
             raise ValueError(f"GlobalSection with key '{section_key}' not found")
 
-        # Convert to dict
+        # Convert to dict — read from html_template_i18n with fallback
+        from core.models import SiteSettings, Page
+        site_settings = SiteSettings.objects.first()
+        default_language = site_settings.get_default_language() if site_settings else 'pt'
+        current_lang = get_language() or default_language
+        template_i18n = section.html_template_i18n or {}
+        current_template = template_i18n.get(current_lang) or template_i18n.get(default_language) or section.html_template
+        print(f"Reading html_template from html_template_i18n[{current_lang}] ({len(current_template or '')} chars)")
+
         existing_data = {
             'key': section.key,
             'section_type': section.section_type,
-            'html_template': section.html_template,
+            'html_template': current_template,
             'content': section.content,
             'name': section.name,
         }
         notify("load_section", "done")
 
         # Get site context
-        from core.models import SiteSettings, Page
-        site_settings = SiteSettings.objects.first()
         language = site_settings.default_language if site_settings else 'pt'
         site_name = site_settings.get_site_name(language) if site_settings else 'Website'
         site_description = site_settings.get_site_description(language) if site_settings else ''
@@ -963,7 +970,12 @@ Return the complete, corrected JSON now:"""
                 print(f"  The {section.section_type} may render with blank text for these variables.")
         notify("templatize_translate", "done")
 
-        print(f"✓ Successfully refined global section: {section_key}")
+        # Add html_template_i18n to the result for the current language
+        result_template_i18n = dict(section.html_template_i18n or {})
+        result_template_i18n[current_lang] = refined_data.get('html_template', '')
+        refined_data['html_template_i18n'] = result_template_i18n
+
+        print(f"Successfully refined global section: {section_key}")
         notify("complete", "done")
         return refined_data
 
@@ -1005,7 +1017,7 @@ Return the complete, corrected JSON now:"""
                 except Exception:
                     pass
 
-        print(f"\n=== Refining Page (Two-Step) ===")
+        print(f"\n=== Refining Page ===")
         print(f"Page ID: {page_id}")
         print(f"Instructions: {instructions}")
         print(f"Section: {section_name or 'entire page'}")
@@ -1014,6 +1026,7 @@ Return the complete, corrected JSON now:"""
         # Get page
         notify("prepare", "running")
         from core.models import Page, SiteSettings
+        from django.utils.translation import get_language
         try:
             page = Page.objects.get(id=page_id)
         except Page.DoesNotExist:
@@ -1043,16 +1056,11 @@ Return the complete, corrected JSON now:"""
         if section_name:
             targeted_instructions = f"Focus on the <section data-section=\"{section_name}\"> section. {instructions}"
 
-        # --- De-templatize: convert {{ trans.xxx }} back to real text ---
-        current_html = page.html_content or ''
-        current_translations = (page.content or {}).get('translations', {})
-
-        if current_translations.get(default_language):
-            clean_html = self._detemplatize_html(current_html, current_translations, default_language)
-            print(f"De-templatized HTML using {default_language.upper()} translations")
-        else:
-            clean_html = current_html
-            print(f"No {default_language.upper()} translations found, using HTML as-is")
+        # --- Read current HTML from html_content_i18n with fallback ---
+        current_lang = get_language() or default_language
+        html_i18n = page.html_content_i18n or {}
+        clean_html = html_i18n.get(current_lang) or html_i18n.get(default_language) or page.html_content or ''
+        print(f"Reading HTML from html_content_i18n[{current_lang}] ({len(clean_html)} chars)")
         notify("prepare", "done")
 
         # --- Step 1: Refine the clean HTML ---
@@ -1159,14 +1167,17 @@ Return the complete, corrected JSON now:"""
         print(f"Step 1 produced {len(refined_html)} chars of refined HTML")
         notify("refine_html", "done", chars=len(refined_html))
 
-        # --- Step 2: Templatize + Translate ---
-        notify("templatize_translate", "running")
-        refined_data = self._templatize_and_translate(refined_html, languages, default_language, model)
-        notify("templatize_translate", "done")
+        # Save refined HTML to html_content_i18n for current language
+        result_html_i18n = dict(page.html_content_i18n or {})
+        result_html_i18n[current_lang] = refined_html
 
-        print(f"Successfully refined page (two-step)")
+        print(f"Successfully refined page")
         notify("complete", "done")
-        return refined_data
+        return {
+            'html_content_i18n': result_html_i18n,
+            'html_content': refined_html,  # backward compat
+            'content': page.content or {},  # backward compat
+        }
 
     def refine_section_only(
         self,
@@ -1205,6 +1216,7 @@ Return the complete, corrected JSON now:"""
                     pass
 
         from core.models import Page, SiteSettings
+        from django.utils.translation import get_language
         from bs4 import BeautifulSoup
 
         print(f"\n=== Refining Section Only ===")
@@ -1235,15 +1247,12 @@ Return the complete, corrected JSON now:"""
             for p in Page.objects.filter(is_active=True).order_by('id'):
                 pages_data.append({'title': p.title_i18n or {}, 'slug': p.slug_i18n or {}})
 
-        # De-templatize full page HTML
-        current_html = page.html_content or ''
-        current_translations = (page.content or {}).get('translations', {})
-
-        if current_translations.get(default_language):
-            clean_html = self._detemplatize_html(current_html, current_translations, default_language)
-        else:
-            clean_html = current_html
+        # Read current HTML from html_content_i18n with fallback
+        current_lang = get_language() or default_language
+        html_i18n = page.html_content_i18n or {}
+        clean_html = html_i18n.get(current_lang) or html_i18n.get(default_language) or page.html_content or ''
         clean_html = self._strip_legacy_attrs(clean_html)
+        print(f"Reading HTML from html_content_i18n[{current_lang}] ({len(clean_html)} chars)")
         notify("prepare", "done")
 
         # Build conversation history string for prompt
@@ -1404,6 +1413,7 @@ Return the complete, corrected JSON now:"""
             Dict with 'options' (list of {'html': str}) and 'assistant_message'
         """
         from core.models import Page, SiteSettings
+        from django.utils.translation import get_language
         from bs4 import BeautifulSoup
 
         print(f"\n=== Generating New Section ===")
@@ -1432,15 +1442,12 @@ Return the complete, corrected JSON now:"""
         for p in Page.objects.filter(is_active=True).order_by('id'):
             pages_data.append({'title': p.title_i18n or {}, 'slug': p.slug_i18n or {}})
 
-        # De-templatize full page HTML
-        current_html = page.html_content or ''
-        current_translations = (page.content or {}).get('translations', {})
-
-        if current_translations.get(default_language):
-            clean_html = self._detemplatize_html(current_html, current_translations, default_language)
-        else:
-            clean_html = current_html
+        # Read current HTML from html_content_i18n with fallback
+        current_lang = get_language() or default_language
+        html_i18n = page.html_content_i18n or {}
+        clean_html = html_i18n.get(current_lang) or html_i18n.get(default_language) or page.html_content or ''
         clean_html = self._strip_legacy_attrs(clean_html)
+        print(f"Reading HTML from html_content_i18n[{current_lang}] ({len(clean_html)} chars)")
 
         # Build conversation history string for prompt
         history_text = ''
@@ -1560,6 +1567,7 @@ Return the complete, corrected JSON now:"""
                     pass
 
         from core.models import Page, SiteSettings
+        from django.utils.translation import get_language
         from bs4 import BeautifulSoup
 
         print(f"\n=== Refining Element Only ===")
@@ -1581,15 +1589,12 @@ Return the complete, corrected JSON now:"""
         design_guide = '' if skip_design_guide else (site_settings.design_guide if site_settings else '')
         model = model_override or self.model_name
 
-        # De-templatize full page HTML, then extract parent section
-        current_html = page.html_content or ''
-        current_translations = (page.content or {}).get('translations', {})
-
-        if current_translations.get(default_language):
-            clean_html = self._detemplatize_html(current_html, current_translations, default_language)
-        else:
-            clean_html = current_html
+        # Read current HTML from html_content_i18n with fallback
+        current_lang = get_language() or default_language
+        html_i18n = page.html_content_i18n or {}
+        clean_html = html_i18n.get(current_lang) or html_i18n.get(default_language) or page.html_content or ''
         clean_html = self._strip_legacy_attrs(clean_html)
+        print(f"Reading HTML from html_content_i18n[{current_lang}] ({len(clean_html)} chars)")
         notify("prepare", "done")
 
         # Find the target element by CSS selector
@@ -1777,8 +1782,16 @@ Return the complete, corrected JSON now:"""
         if not languages:
             site_settings = SiteSettings.objects.first()
             languages = site_settings.get_language_codes() if site_settings else ['pt', 'en']
+        else:
+            site_settings = SiteSettings.objects.first()
 
-        html = page.html_content or ''
+        # Read current HTML from html_content_i18n with fallback
+        from django.utils.translation import get_language
+        default_language = site_settings.get_default_language() if site_settings else 'pt'
+        current_lang = get_language() or default_language
+        html_i18n = page.html_content_i18n or {}
+        html = html_i18n.get(current_lang) or html_i18n.get(default_language) or page.html_content or ''
+        print(f"Reading HTML from html_content_i18n[{current_lang}] ({len(html)} chars)")
         processed = []
         failed = []
 
@@ -1881,11 +1894,8 @@ Return the complete, corrected JSON now:"""
                         if not library_catalog:
                             failed.append({'image_name': image_name, 'error': 'Library is empty — cannot auto-match'})
                             continue
-                        page_translations = (page.content or {}).get('translations', {})
-                        if page_translations.get(default_lang):
-                            page_context = self._detemplatize_html(html, page_translations, default_lang)
-                        else:
-                            page_context = html
+                        # html is already clean (read from html_content_i18n)
+                        page_context = html
                         image_context = {
                             'name': image_name,
                             'alt': decision.get('alt', ''),
@@ -2004,8 +2014,11 @@ Return the complete, corrected JSON now:"""
                     html
                 )
 
-        # Save updated HTML
-        page.html_content = html
+        # Save updated HTML to html_content_i18n and backward compat field
+        result_html_i18n = dict(page.html_content_i18n or {})
+        result_html_i18n[current_lang] = html
+        page.html_content_i18n = result_html_i18n
+        page.html_content = html  # backward compat
         page.save()
 
         print(f"Processed {len(processed)} images, {len(failed)} failed")
@@ -2299,14 +2312,13 @@ Keep the translations natural and fluent — these are website UI strings.
         project_briefing = site_settings.get_project_briefing() if site_settings else ''
         design_guide = site_settings.design_guide if site_settings else ''
 
-        # De-templatize page HTML
-        current_html = page.html_content or ''
-        current_translations = (page.content or {}).get('translations', {})
-        if current_translations.get(default_language):
-            clean_html = self._detemplatize_html(current_html, current_translations, default_language)
-        else:
-            clean_html = current_html
+        # Read current HTML from html_content_i18n with fallback
+        from django.utils.translation import get_language
+        current_lang = get_language() or default_language
+        html_i18n = page.html_content_i18n or {}
+        clean_html = html_i18n.get(current_lang) or html_i18n.get(default_language) or page.html_content or ''
         clean_html = self._strip_legacy_attrs(clean_html)
+        print(f"Reading HTML from html_content_i18n[{current_lang}] ({len(clean_html)} chars)")
 
         # Build library catalog (metadata only, no URLs)
         library_catalog = self._build_library_catalog(default_language)
