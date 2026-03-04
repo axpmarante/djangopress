@@ -54,7 +54,7 @@ class NewsCreateView(LoginRequiredMixin, CreateView):
 
         messages.success(
             self.request,
-            f'News post "{self.object.title}" created successfully!'
+            f'News post "{self.object}" created successfully!'
         )
         return response
 
@@ -70,7 +70,7 @@ class NewsUpdateView(LoginRequiredMixin, UpdateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context['form_title'] = f'Edit News Post: {self.object.title}'
+        context['form_title'] = f'Edit News Post: {self.object}'
         context['submit_text'] = 'Update Post'
         return context
 
@@ -93,7 +93,7 @@ class NewsUpdateView(LoginRequiredMixin, UpdateView):
 
         messages.success(
             self.request,
-            f'News post "{self.object.title}" updated successfully!'
+            f'News post "{self.object}" updated successfully!'
         )
         return response
 
@@ -107,7 +107,7 @@ class NewsDeleteView(LoginRequiredMixin, DeleteView):
     def delete(self, request, *args, **kwargs):
         messages.success(
             request,
-            f'News post "{self.get_object().title}" deleted successfully!'
+            f'News post "{self.get_object()}" deleted successfully!'
         )
         return super().delete(request, *args, **kwargs)
 
