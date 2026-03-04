@@ -38,6 +38,12 @@ urlpatterns = [
     path('news/<int:pk>/edit/', news_views.NewsUpdateView.as_view(), name='news_edit'),
     path('news/<int:pk>/delete/', news_views.NewsDeleteView.as_view(), name='news_delete'),
     path('news/<int:pk>/gallery/', news_views.NewsGalleryView.as_view(), name='news_gallery'),
+    path('news/categories/', news_views.CategoryListView.as_view(), name='news_categories'),
+    path('news/categories/create/', news_views.CategoryCreateView.as_view(), name='news_category_create'),
+    path('news/categories/<int:pk>/edit/', news_views.CategoryUpdateView.as_view(), name='news_category_edit'),
+    path('news/categories/<int:pk>/delete/', news_views.CategoryDeleteView.as_view(), name='news_category_delete'),
+    path('news/layouts/', news_views.LayoutListView.as_view(), name='news_layouts'),
+    path('news/layouts/<int:pk>/edit/', news_views.LayoutUpdateView.as_view(), name='news_layout_edit'),
 
     # Pages Management
     path('pages/', views.PagesView.as_view(), name='pages'),

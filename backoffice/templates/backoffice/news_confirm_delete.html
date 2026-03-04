@@ -13,7 +13,7 @@
         <div class="mb-6">
             <div class="flex items-center">
                 {% if object.featured_image %}
-                <img src="{{ object.featured_image.url }}" alt="{{ object.title }}"
+                <img src="{{ object.featured_image.url }}" alt="{{ object }}"
                      class="w-20 h-20 object-cover rounded-lg mr-4">
                 {% else %}
                 <div class="w-20 h-20 bg-gray-200 rounded-lg mr-4 flex items-center justify-center">
@@ -23,8 +23,7 @@
                 </div>
                 {% endif %}
                 <div>
-                    <h3 class="text-lg font-semibold text-gray-900">{{ object.title }}</h3>
-                    <p class="text-sm text-gray-500">{{ object.slug }}</p>
+                    <h3 class="text-lg font-semibold text-gray-900">{{ object }}</h3>
                     {% if object.is_published %}
                     <span class="mt-1 inline-block px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">Published</span>
                     {% else %}

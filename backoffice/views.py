@@ -16,6 +16,7 @@ from django.conf.global_settings import LANGUAGES as ALL_LANGUAGES
 from core.models import SiteSettings, SiteImage, Page, GOOGLE_FONTS_CHOICES, GlobalSection, Blueprint, BlueprintPage, DynamicForm, FormSubmission
 from core.utils import resize_and_compress_image
 from django.utils.text import slugify
+from news.models import NewsPost
 
 
 class MediaDetailView(LoginRequiredMixin, TemplateView):
@@ -161,6 +162,10 @@ class DashboardView(LoginRequiredMixin, TemplateView):
         # Page statistics
         context['total_pages'] = Page.objects.count()
         context['active_pages'] = Page.objects.filter(is_active=True).count()
+
+        # News statistics
+        context['total_news_posts'] = NewsPost.objects.count()
+        context['published_news_posts'] = NewsPost.objects.filter(is_published=True).count()
 
         # Recent activity
         recent_images = list(SiteImage.objects.order_by('-uploaded_at')[:3])

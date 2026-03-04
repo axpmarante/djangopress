@@ -4,9 +4,12 @@ from django.contrib import messages
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse_lazy
 from django.http import JsonResponse
-from .models import NewsPost, NewsGalleryImage
-from .forms import NewsPostForm
+from .models import NewsPost, NewsGalleryImage, NewsCategory, NewsLayout
+from .forms import NewsPostForm, NewsCategoryForm
 from core.models import SiteImage
+
+
+# ─── News Posts ───────────────────────────────────────────────────────────────
 
 
 class NewsListView(LoginRequiredMixin, ListView):
@@ -17,7 +20,7 @@ class NewsListView(LoginRequiredMixin, ListView):
     paginate_by = 20
 
     def get_queryset(self):
-        return NewsPost.objects.order_by('-created_at')
+        return NewsPost.objects.select_related('category').order_by('-created_at')
 
 
 class NewsCreateView(LoginRequiredMixin, CreateView):
@@ -182,3 +185,100 @@ class NewsGalleryView(LoginRequiredMixin, TemplateView):
             return JsonResponse({'success': True})
 
         return redirect('backoffice:news_gallery', pk=self.news_post.pk)
+
+
+# ─── News Categories ─────────────────────────────────────────────────────────
+
+
+class CategoryListView(LoginRequiredMixin, ListView):
+    """List all news categories"""
+    model = NewsCategory
+    template_name = 'backoffice/news_categories.html'
+    context_object_name = 'categories'
+
+    def get_queryset(self):
+        return NewsCategory.objects.order_by('order', 'pk')
+
+
+class CategoryCreateView(LoginRequiredMixin, CreateView):
+    """Create a new news category"""
+    model = NewsCategory
+    form_class = NewsCategoryForm
+    template_name = 'backoffice/news_category_form.html'
+    success_url = reverse_lazy('backoffice:news_categories')
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['form_title'] = 'Create New Category'
+        context['submit_text'] = 'Create Category'
+        return context
+
+    def form_valid(self, form):
+        response = super().form_valid(form)
+        messages.success(self.request, f'Category "{self.object}" created successfully!')
+        return response
+
+
+class CategoryUpdateView(LoginRequiredMixin, UpdateView):
+    """Edit an existing news category"""
+    model = NewsCategory
+    form_class = NewsCategoryForm
+    template_name = 'backoffice/news_category_form.html'
+    success_url = reverse_lazy('backoffice:news_categories')
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['form_title'] = f'Edit Category: {self.object}'
+        context['submit_text'] = 'Update Category'
+        return context
+
+    def form_valid(self, form):
+        response = super().form_valid(form)
+        messages.success(self.request, f'Category "{self.object}" updated successfully!')
+        return response
+
+
+class CategoryDeleteView(LoginRequiredMixin, DeleteView):
+    """Delete a news category"""
+    model = NewsCategory
+    template_name = 'backoffice/news_category_confirm_delete.html'
+    success_url = reverse_lazy('backoffice:news_categories')
+
+    def delete(self, request, *args, **kwargs):
+        messages.success(
+            request,
+            f'Category "{self.get_object()}" deleted successfully!'
+        )
+        return super().delete(request, *args, **kwargs)
+
+
+# ─── News Layouts ─────────────────────────────────────────────────────────────
+
+
+class LayoutListView(LoginRequiredMixin, ListView):
+    """List all news layout templates"""
+    model = NewsLayout
+    template_name = 'backoffice/news_layouts.html'
+    context_object_name = 'layouts'
+
+    def get_queryset(self):
+        return NewsLayout.objects.order_by('key')
+
+
+class LayoutUpdateView(LoginRequiredMixin, UpdateView):
+    """Edit a news layout template"""
+    model = NewsLayout
+    template_name = 'backoffice/news_layout_form.html'
+    fields = ['html_content_i18n']
+    success_url = reverse_lazy('backoffice:news_layouts')
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['form_title'] = f'Edit Layout: {self.object.key}'
+        context['submit_text'] = 'Update Layout'
+        return context
+
+    def form_valid(self, form):
+        response = super().form_valid(form)
+        messages.success(self.request, f'Layout "{self.object.key}" updated successfully!')
+        return response

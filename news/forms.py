@@ -1,5 +1,5 @@
 from django import forms
-from .models import NewsPost
+from .models import NewsPost, NewsCategory
 from core.models import SiteImage
 
 
@@ -49,3 +49,27 @@ class NewsPostForm(forms.ModelForm):
         # Load existing gallery images if editing
         if self.instance and self.instance.pk:
             self.fields['gallery_images'].initial = self.instance.gallery_images.all()
+
+
+class NewsCategoryForm(forms.ModelForm):
+    """Form for creating and updating news categories"""
+
+    class Meta:
+        model = NewsCategory
+        fields = ['name_i18n', 'slug_i18n', 'description_i18n', 'order', 'is_active']
+        widgets = {
+            'name_i18n': forms.Textarea(attrs={
+                'rows': 2, 'class': 'w-full px-3 py-2 border border-gray-300 rounded-md text-sm font-mono',
+                'placeholder': '{"pt": "Tecnologia", "en": "Technology"}'
+            }),
+            'slug_i18n': forms.Textarea(attrs={
+                'rows': 2, 'class': 'w-full px-3 py-2 border border-gray-300 rounded-md text-sm font-mono',
+                'placeholder': '{"pt": "tecnologia", "en": "technology"} (auto-generated if empty)'
+            }),
+            'description_i18n': forms.Textarea(attrs={
+                'rows': 3, 'class': 'w-full px-3 py-2 border border-gray-300 rounded-md text-sm font-mono',
+            }),
+            'order': forms.NumberInput(attrs={
+                'class': 'w-24 px-3 py-2 border border-gray-300 rounded-md text-sm',
+            }),
+        }
