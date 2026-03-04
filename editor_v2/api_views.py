@@ -860,14 +860,18 @@ def refine_section(request):
         session.add_assistant_message(assistant_msg, [section_name])
         session.save()
 
+        # Service returns {'options': [{'html': ...}], 'assistant_message': ...}
+        options = result.get('options', [])
+        page = Page.objects.get(id=page_id)
+        html_i18n = page.html_content_i18n or {}
+        available_languages = [lang for lang in html_i18n.keys()] if len(html_i18n) > 1 else []
+
         return JsonResponse({
             'success': True,
-            'section': {
-                'html_template': result['html_template'],
-                'content': result['content'],
-            },
+            'options': options,
             'assistant_message': assistant_msg,
             'session_id': session.id,
+            'available_languages': available_languages,
         })
 
     except Page.DoesNotExist:
@@ -1065,14 +1069,18 @@ def refine_element(request):
         session.add_assistant_message(assistant_msg, ['element'])
         session.save()
 
+        # Service returns {'options': [{'html': ...}], 'assistant_message': ...}
+        options = result.get('options', [])
+        page = Page.objects.get(id=page_id)
+        html_i18n = page.html_content_i18n or {}
+        available_languages = [lang for lang in html_i18n.keys()] if len(html_i18n) > 1 else []
+
         return JsonResponse({
             'success': True,
-            'element': {
-                'html_template': result['html_template'],
-                'content': result['content'],
-            },
+            'options': options,
             'assistant_message': assistant_msg,
             'session_id': session.id,
+            'available_languages': available_languages,
         })
 
     except Page.DoesNotExist:
@@ -1719,14 +1727,19 @@ def refine_page(request):
         session.add_assistant_message(assistant_msg, ['full-page'])
         session.save()
 
+        html_i18n = page.html_content_i18n or {}
+        available_languages = [lang for lang in html_i18n.keys()] if len(html_i18n) > 1 else []
+
         return JsonResponse({
             'success': True,
             'page': {
-                'html_template': result.get('html_content', ''),
+                'html_content': result.get('html_content', ''),
+                'html_content_i18n': result.get('html_content_i18n', {}),
                 'content': result.get('content', {}),
             },
             'assistant_message': assistant_msg,
             'session_id': session.id,
+            'available_languages': available_languages,
         })
 
     except Exception as e:
