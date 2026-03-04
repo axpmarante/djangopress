@@ -584,13 +584,19 @@ function getCookie(name) {
 let mediaLibraryCache = null;
 let detectedImages = [];
 
+function _getHtmlFromResult(result) {
+    // Prefer html_content_i18n (any language) over legacy html_content
+    const htmlI18n = result.html_content_i18n || {};
+    return Object.values(htmlI18n)[0] || result.html_content || '';
+}
+
 async function checkForImagePlaceholders() {
     try {
         const response = await fetch(`/backoffice/api/page-content/${PAGE_ID}/`);
         const result = await response.json();
         if (!result.success) return;
 
-        const html = result.html_content || '';
+        const html = _getHtmlFromResult(result);
         const hasPlaceholders = /data-image-prompt="/.test(html);
         const btn = document.getElementById('processImagesBtn');
         if (btn) {
@@ -607,7 +613,7 @@ async function scanForImagePlaceholders() {
         const result = await response.json();
         if (!result.success) { alert('Failed to load page content'); return; }
 
-        const html = result.html_content || '';
+        const html = _getHtmlFromResult(result);
         // Parse img tags with data-image-prompt
         const regex = /<img\b[^>]*?data-image-prompt="([^"]*)"[^>]*?>/gi;
         detectedImages = [];

@@ -5,34 +5,43 @@
 
 {% block content %}
 <div class="space-y-6">
-    <!-- Header with Create Button -->
+    <!-- Header -->
     <div class="flex items-center justify-between">
-        <div>
+        <div class="flex items-center gap-3">
             <h2 class="text-3xl font-bold text-gray-900">Pages</h2>
-            <p class="text-gray-600 mt-1">Manage website pages</p>
+            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-sm font-medium bg-gray-100 text-gray-700">{{ total_pages }}</span>
         </div>
-        <div class="flex space-x-3">
+        <div class="flex items-center gap-2">
+            <!-- View Toggle -->
+            <a href="{% url 'backoffice:pages_explorer' %}"
+               class="inline-flex items-center px-3 py-2 text-sm border border-gray-300 rounded-lg text-gray-700 bg-white hover:bg-gray-50 transition-colors"
+               title="Explorer view">
+                <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z"/>
+                </svg>
+                Explorer
+            </a>
             {% if user.is_superuser %}
             {% if languages|length >= 2 %}
             <button onclick="openTranslateModal()"
-                    class="bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-50 flex items-center">
-                <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    class="inline-flex items-center px-3 py-2 text-sm border border-gray-300 rounded-lg text-gray-700 bg-white hover:bg-gray-50 transition-colors">
+                <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129"/>
                 </svg>
-                Bulk Translate
+                Translate
             </button>
             {% endif %}
             <a href="{% url 'backoffice:ai_generate_page' %}"
-               class="bg-gradient-to-r from-purple-600 to-blue-600 text-white px-4 py-2 rounded-md hover:from-purple-700 hover:to-blue-700 flex items-center">
-                <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+               class="inline-flex items-center px-3 py-2 text-sm rounded-lg text-white bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 transition-colors">
+                <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
                 </svg>
                 Generate with AI
             </a>
             {% endif %}
             <button onclick="openCreateModal()"
-                    class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 flex items-center">
-                <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    class="inline-flex items-center px-3 py-2 text-sm rounded-lg text-white bg-blue-600 hover:bg-blue-700 transition-colors">
+                <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
                 </svg>
                 Create Pages
@@ -41,163 +50,161 @@
     </div>
 
     <!-- Statistics -->
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div class="bg-white rounded-lg shadow p-6">
-            <div class="flex items-center">
-                <div class="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center mr-4">
-                    <svg class="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div class="bg-white rounded-lg shadow-sm border border-gray-100 p-4">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 bg-blue-50 rounded-lg flex items-center justify-center">
+                    <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
                     </svg>
                 </div>
                 <div>
-                    <p class="text-3xl font-bold text-gray-900">{{ total_pages }}</p>
-                    <p class="text-sm text-gray-600">Total Pages</p>
+                    <p class="text-2xl font-bold text-gray-900">{{ total_pages }}</p>
+                    <p class="text-xs text-gray-500">Total Pages</p>
                 </div>
             </div>
         </div>
-
-        <div class="bg-white rounded-lg shadow p-6">
-            <div class="flex items-center">
-                <div class="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center mr-4">
-                    <svg class="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <div class="bg-white rounded-lg shadow-sm border border-gray-100 p-4">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 bg-green-50 rounded-lg flex items-center justify-center">
+                    <svg class="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
                     </svg>
                 </div>
                 <div>
-                    <p class="text-3xl font-bold text-gray-900">{{ active_pages }}</p>
-                    <p class="text-sm text-gray-600">Active Pages</p>
+                    <p class="text-2xl font-bold text-gray-900">{{ active_pages }}</p>
+                    <p class="text-xs text-gray-500">Active Pages</p>
                 </div>
             </div>
         </div>
-
-        <div class="bg-white rounded-lg shadow p-6">
-            <div class="flex items-center">
-                <div class="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center mr-4">
-                    <svg class="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <div class="bg-white rounded-lg shadow-sm border border-gray-100 p-4">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 bg-purple-50 rounded-lg flex items-center justify-center">
+                    <svg class="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129"/>
                     </svg>
                 </div>
                 <div>
-                    <p class="text-3xl font-bold text-gray-900">{{ languages|length }}</p>
-                    <p class="text-sm text-gray-600">Languages</p>
+                    <p class="text-2xl font-bold text-gray-900">{{ languages|length }}</p>
+                    <p class="text-xs text-gray-500">Languages</p>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Pages List -->
     {% if pages %}
-    <div class="bg-white rounded-lg shadow overflow-hidden">
-        <table class="min-w-full divide-y divide-gray-200">
-            <thead class="bg-gray-50">
-                <tr>
-                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Page</th>
-                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Slugs</th>
-                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                    <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-                </tr>
-            </thead>
-            <tbody class="bg-white divide-y divide-gray-200">
-                {% for page in pages %}
-                <tr class="hover:bg-gray-50">
-                    <td class="px-6 py-4">
-                        <div class="flex items-center">
-                            <div class="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center mr-3">
-                                <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-                                </svg>
-                            </div>
-                            <div>
-                                <p class="text-sm font-semibold text-gray-900">{{ page.default_title }}</p>
-                                {% if page.title_i18n %}
-                                <div class="flex flex-wrap gap-1 mt-1">
-                                    {% for lang_code, lang_title in page.title_i18n.items %}
-                                    <span class="text-xs text-gray-500">{{ lang_code }}: {{ lang_title }}</span>
-                                    {% if not forloop.last %}<span class="text-xs text-gray-300">|</span>{% endif %}
-                                    {% endfor %}
-                                </div>
-                                {% endif %}
-                            </div>
-                        </div>
-                    </td>
-                    <td class="px-6 py-4">
-                        {% if page.slug_i18n %}
-                        <div class="flex flex-wrap gap-1">
-                            {% for lang_code, slug_val in page.slug_i18n.items %}
-                            <code class="text-xs text-gray-600 bg-gray-100 px-2 py-0.5 rounded">{{ lang_code }}:/{{ slug_val }}</code>
+    <!-- Search -->
+    <div class="relative">
+        <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+        </svg>
+        <input type="text" id="pageSearch" placeholder="Search pages by title or slug..."
+               class="w-full pl-10 pr-4 py-2.5 text-sm border border-gray-200 rounded-lg bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+               oninput="filterPages(this.value)">
+    </div>
+
+    <!-- Pages List -->
+    <style>
+        .page-row .page-actions { opacity: 0; transition: opacity 150ms; }
+        .page-row:hover .page-actions { opacity: 1; }
+    </style>
+    <div class="bg-white rounded-lg shadow-sm border border-gray-100 divide-y divide-gray-100" id="pagesList">
+        {% for page in pages %}
+        <div class="page-row flex items-center justify-between px-5 py-4 hover:bg-gray-50 transition-colors cursor-pointer"
+             data-title="{{ page.default_title|lower }}"
+             data-slugs="{% for lang_code, slug_val in page.slug_i18n.items %}{{ slug_val }} {% endfor %}{{ page.default_slug }}"
+             onclick="window.location='{% url 'backoffice:page_edit' page_id=page.id %}'">
+            <!-- Left: Status + Title + Meta -->
+            <div class="flex items-center gap-3 min-w-0 flex-1">
+                {% if page.is_active %}
+                <span class="w-2.5 h-2.5 rounded-full bg-green-500 flex-shrink-0" title="Active"></span>
+                {% else %}
+                <span class="w-2.5 h-2.5 rounded-full bg-gray-300 flex-shrink-0" title="Inactive"></span>
+                {% endif %}
+
+                <div class="min-w-0 flex-1">
+                    <div class="flex items-center gap-2">
+                        <span class="text-sm font-semibold text-gray-900 truncate">{{ page.default_title }}</span>
+                        {% if not page.is_active %}
+                        <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-gray-100 text-gray-500 flex-shrink-0">Draft</span>
+                        {% endif %}
+                        {% if page.lang_status %}
+                        <span class="inline-flex items-center gap-0.5 flex-shrink-0">
+                            {% for lang, has_html in page.lang_status %}
+                            <span class="inline-flex items-center px-1 py-0.5 rounded text-[10px] font-medium {% if has_html %}bg-green-100 text-green-700{% else %}bg-gray-100 text-gray-400{% endif %}" title="{{ lang }}{% if has_html %}: translated{% else %}: no HTML{% endif %}">{{ lang }}</span>
                             {% endfor %}
-                        </div>
-                        {% else %}
-                        <code class="text-sm text-gray-600 bg-gray-100 px-2 py-1 rounded">{{ page.default_slug }}</code>
-                        {% endif %}
-                    </td>
-                    <td class="px-6 py-4">
-                        {% if page.is_active %}
-                        <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
-                            Active
-                        </span>
-                        {% else %}
-                        <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-100 text-gray-800">
-                            Inactive
                         </span>
                         {% endif %}
-                    </td>
-                    <td class="px-6 py-4 text-right text-sm font-medium space-x-3">
-                        <a href="{% url 'backoffice:page_edit' page_id=page.id %}"
-                           class="text-blue-600 hover:text-blue-900">
-                            Edit
-                        </a>
-                        <a href="{{ page.get_absolute_url }}{% if not page.is_active %}?preview=true{% endif %}"
-                           target="_blank"
-                           class="text-green-600 hover:text-green-900">
-                            {% if page.is_active %}View{% else %}Preview{% endif %}
-                        </a>
-                        <button onclick="confirmDelete('{{ page.id }}', '{{ page.default_title|escapejs }}')"
-                                class="text-red-600 hover:text-red-900">
-                            Delete
+                    </div>
+                    <div class="flex items-center gap-2 mt-1 text-xs text-gray-400">
+                        {% if page.slug_i18n %}
+                        {% for lang_code, slug_val in page.slug_i18n.items %}
+                        <span class="inline-flex items-center">
+                            <span class="font-medium text-gray-500 uppercase" style="font-size: 10px;">{{ lang_code }}</span>
+                            <span class="ml-0.5 text-gray-400">/{{ slug_val }}</span>
+                        </span>
+                        {% if not forloop.last %}<span class="text-gray-300">&middot;</span>{% endif %}
+                        {% endfor %}
+                        {% else %}
+                        <span class="text-gray-400">/{{ page.default_slug }}</span>
+                        {% endif %}
+                        <span class="text-gray-300">&middot;</span>
+                        <span class="text-gray-400">{{ page.updated_at|timesince }} ago</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right: Actions (visible on hover) -->
+            <div class="page-actions flex items-center gap-1 flex-shrink-0 ml-4" onclick="event.stopPropagation();">
+                <a href="{% url 'backoffice:page_edit' page_id=page.id %}"
+                   class="inline-flex items-center px-2.5 py-1.5 text-xs font-medium text-blue-700 bg-blue-50 rounded-md hover:bg-blue-100 transition-colors">
+                    Edit
+                </a>
+                <a href="{{ page.get_absolute_url }}{% if not page.is_active %}?preview=true{% endif %}"
+                   target="_blank"
+                   class="inline-flex items-center px-2.5 py-1.5 text-xs font-medium text-gray-600 bg-gray-50 rounded-md hover:bg-gray-100 transition-colors">
+                    {% if page.is_active %}View{% else %}Preview{% endif %}
+                </a>
+                <div class="relative" x-data="{ open: false }">
+                    <button @click="open = !open"
+                            class="inline-flex items-center p-1.5 text-gray-400 rounded-md hover:bg-gray-100 hover:text-gray-600 transition-colors">
+                        <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                            <path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z"/>
+                        </svg>
+                    </button>
+                    <div x-show="open" @click.away="open = false" x-transition
+                         class="absolute right-0 mt-1 w-36 bg-white border border-gray-200 rounded-lg shadow-lg z-10 py-1">
+                        <button @click="open = false; confirmDelete('{{ page.id }}', '{{ page.default_title|escapejs }}')"
+                                class="w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors">
+                            Delete page
                         </button>
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <!-- No results message (hidden by default) -->
+    <div id="noResults" class="hidden bg-white rounded-lg shadow-sm border border-gray-100 p-8 text-center">
+        <p class="text-sm text-gray-500">No pages match your search.</p>
     </div>
     {% else %}
     <!-- Empty State -->
-    <div class="bg-white rounded-lg shadow p-12 text-center">
-        <svg class="w-16 h-16 mx-auto mb-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-        </svg>
-        <h3 class="text-lg font-semibold text-gray-900 mb-2">No pages found</h3>
-        <p class="text-gray-600 mb-6">Get started by creating your first page.</p>
+    <div class="bg-white rounded-lg shadow-sm border border-gray-100 p-12 text-center">
+        <div class="w-14 h-14 mx-auto mb-4 bg-gray-50 rounded-xl flex items-center justify-center">
+            <svg class="w-7 h-7 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+            </svg>
+        </div>
+        <h3 class="text-base font-semibold text-gray-900 mb-1">No pages yet</h3>
+        <p class="text-sm text-gray-500 mb-6">Get started by creating your first page.</p>
         <button onclick="openCreateModal()"
-                class="inline-block bg-blue-600 text-white px-6 py-2 rounded-md hover:bg-blue-700">
+                class="inline-flex items-center px-4 py-2 text-sm rounded-lg text-white bg-blue-600 hover:bg-blue-700 transition-colors">
             Create Your First Page
         </button>
     </div>
     {% endif %}
-
-    <!-- Information Card -->
-    <div class="bg-blue-50 border border-blue-200 rounded-lg p-6">
-        <div class="flex">
-            <div class="flex-shrink-0">
-                <svg class="h-5 w-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                </svg>
-            </div>
-            <div class="ml-3">
-                <h3 class="text-sm font-medium text-blue-800">About Pages</h3>
-                <div class="mt-2 text-sm text-blue-700">
-                    <ul class="list-disc list-inside space-y-1">
-                        <li>Pages are the main containers for your website content</li>
-                        <li>Each page has a title and slug for every enabled language</li>
-                        <li>Use "Generate with AI" to create page content automatically</li>
-                        <li>Click "Edit" to manage a page's content and translations</li>
-                    </ul>
-                </div>
-            </div>
-        </div>
-    </div>
 </div>
 
 <!-- Bulk Translate Modal -->
@@ -564,6 +571,26 @@ function runBulkTranslate() {
         resultEl.innerHTML = `<div class="p-3 bg-red-50 border border-red-200 rounded-md text-sm text-red-800">Network error: ${err.message}</div>`;
         resultEl.classList.remove('hidden');
     });
+}
+
+// === Page Search ===
+function filterPages(query) {
+    const q = query.toLowerCase().trim();
+    const rows = document.querySelectorAll('.page-row');
+    const list = document.getElementById('pagesList');
+    const noResults = document.getElementById('noResults');
+    let visible = 0;
+
+    rows.forEach(row => {
+        const title = row.dataset.title || '';
+        const slugs = row.dataset.slugs || '';
+        const match = !q || title.includes(q) || slugs.includes(q);
+        row.style.display = match ? '' : 'none';
+        if (match) visible++;
+    });
+
+    if (list) list.style.display = visible ? '' : 'none';
+    if (noResults) noResults.classList.toggle('hidden', visible > 0);
 }
 
 // Close modals on ESC key

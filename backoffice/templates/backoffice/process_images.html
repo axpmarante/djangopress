@@ -226,7 +226,9 @@ async function scanImages() {
 
         mediaLibraryCache = libResult.success ? libResult.images : [];
 
-        const html = pageResult.html_content || '';
+        // Prefer html_content_i18n (any language) over legacy html_content
+        const htmlI18n = pageResult.html_content_i18n || {};
+        const html = Object.values(htmlI18n)[0] || pageResult.html_content || '';
         const regex = /<img\b[^>]*?>/gi;
         detectedImages = [];
         let match;

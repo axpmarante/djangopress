@@ -66,8 +66,17 @@ class MediaDetailView(LoginRequiredMixin, TemplateView):
         usage_count = 0
         media_url = image.url
         if media_url:
-            for page in Page.objects.exclude(html_content=''):
-                if media_url in page.html_content:
+            for page in Page.objects.all():
+                # Check html_content_i18n first, then fall back to html_content
+                html_i18n = page.html_content_i18n or {}
+                found = False
+                for lang_html in html_i18n.values():
+                    if lang_html and media_url in lang_html:
+                        found = True
+                        break
+                if not found and page.html_content and media_url in page.html_content:
+                    found = True
+                if found:
                     usage_count += 1
         context['usage_count'] = usage_count
 
@@ -314,16 +323,30 @@ class PagesView(LoginRequiredMixin, TemplateView):
 
         # Get all pages (uses model default ordering: sort_order, created_at)
         pages = Page.objects.all()
-        context['pages'] = pages
         context['total_pages'] = pages.count()
         context['active_pages'] = pages.filter(is_active=True).count()
 
-        # Get enabled languages for create form
+        # Get enabled languages for create form and translation status
         site_settings = SiteSettings.objects.first()
         if site_settings:
             context['languages'] = site_settings.get_enabled_languages()
+            language_codes = site_settings.get_language_codes()
         else:
             context['languages'] = [('pt', 'Portuguese'), ('en', 'English')]
+            language_codes = ['pt', 'en']
+
+        # Annotate pages with translation status
+        for page in pages:
+            html_i18n = page.html_content_i18n or {}
+            page.lang_status = [
+                (lang, bool(html_i18n.get(lang)))
+                for lang in language_codes
+            ]
+            # Has any HTML content (i18n or legacy)
+            page.has_any_content = bool(html_i18n) or bool(page.html_content)
+
+        context['pages'] = pages
+        context['language_codes'] = language_codes
 
         return context
 
@@ -457,7 +480,10 @@ class PageEditView(LoginRequiredMixin, TemplateView):
                 if ref_page.id == page_id:
                     continue
 
-                if ref_page.html_content:
+                # Check html_content_i18n first, then fall back to html_content
+                ref_html_i18n = ref_page.html_content_i18n or {}
+                has_content = bool(ref_html_i18n) or bool(ref_page.html_content)
+                if has_content:
                     reference_pages.append({
                         'id': ref_page.id,
                         'title': ref_page.default_title,
@@ -467,6 +493,16 @@ class PageEditView(LoginRequiredMixin, TemplateView):
 
             # Default language for AI form
             context['default_language'] = site_settings.get_default_language() if site_settings else 'pt'
+
+            # Translation status for this page
+            html_i18n = page.html_content_i18n or {}
+            lang_codes = site_settings.get_language_codes() if site_settings else ['pt']
+            lang_status = [
+                (lang, bool(html_i18n.get(lang)))
+                for lang in lang_codes
+            ]
+            context['lang_status'] = lang_status
+            context['has_missing_translations'] = any(not has for _, has in lang_status)
 
             # Get AI configuration
             try:
@@ -732,9 +768,12 @@ class SettingsDesignSystemView(LoginRequiredMixin, TemplateView):
         context['google_fonts'] = GOOGLE_FONTS_CHOICES
 
         # Design guide: pages + AI models
-        context['pages_with_content'] = Page.objects.filter(
-            is_active=True
-        ).exclude(html_content='').order_by('id')
+        # Include pages that have content in html_content_i18n or html_content
+        all_active_pages = Page.objects.filter(is_active=True).order_by('id')
+        context['pages_with_content'] = [
+            p for p in all_active_pages
+            if (p.html_content_i18n and any(p.html_content_i18n.values())) or p.html_content
+        ]
 
         try:
             from ai.utils.llm_config import LLMConfig
@@ -1162,7 +1201,10 @@ class AIRefinePageView(SuperuserRequiredMixin, TemplateView):
             if selected_page_id and page.id == selected_page_id:
                 continue
 
-            if page.html_content:
+            # Check html_content_i18n first, then fall back to html_content
+            ref_html_i18n = page.html_content_i18n or {}
+            has_content = bool(ref_html_i18n) or bool(page.html_content)
+            if has_content:
                 reference_pages.append({
                     'id': page.id,
                     'title': page.default_title,
@@ -1203,8 +1245,9 @@ class AIChatRefineView(SuperuserRequiredMixin, TemplateView):
 
         context['page'] = page
 
-        # Parse section names from HTML
-        html = page.html_content or ''
+        # Parse section names from HTML (prefer html_content_i18n, fall back to html_content)
+        html_i18n = page.html_content_i18n or {}
+        html = next(iter(html_i18n.values()), '') if html_i18n else (page.html_content or '')
         section_matches = re.findall(r'data-section="([^"]+)"', html)
         context['page_sections'] = section_matches
 

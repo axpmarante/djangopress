@@ -310,8 +310,12 @@ def get_page_sections(request, page_id):
         page = Page.objects.get(id=page_id)
         sections = []
 
-        if page.html_content:
-            soup = BeautifulSoup(page.html_content, 'html.parser')
+        # Prefer html_content_i18n (any language) over legacy html_content
+        html_i18n = page.html_content_i18n or {}
+        html_for_parse = next(iter(html_i18n.values()), '') if html_i18n else (page.html_content or '')
+
+        if html_for_parse:
+            soup = BeautifulSoup(html_for_parse, 'html.parser')
             for section_el in soup.find_all('section', attrs={'data-section': True}):
                 sections.append({
                     'name': section_el.get('data-section', ''),
@@ -332,6 +336,7 @@ def get_page_sections(request, page_id):
             },
             'sections': sections,
             'html_content': page.html_content or '',
+            'html_content_i18n': page.html_content_i18n or {},
         })
 
     except Page.DoesNotExist:
@@ -359,7 +364,24 @@ def get_page_section_screenshots(request, page_id):
     except Page.DoesNotExist:
         return JsonResponse({'success': False, 'error': 'Page not found'}, status=404)
 
-    if not page.html_content:
+    # Prefer html_content_i18n over legacy html_content
+    html_i18n = page.html_content_i18n or {}
+    site_settings = SiteSettings.load()
+    default_lang = 'pt'
+    if site_settings:
+        langs = site_settings.get_enabled_languages()
+        if langs:
+            default_lang = langs[0][0]
+
+    # Get the best available HTML: default lang from i18n, any lang from i18n, or legacy
+    page_html = (
+        html_i18n.get(default_lang)
+        or next(iter(html_i18n.values()), '')
+        or page.html_content
+        or ''
+    )
+
+    if not page_html:
         return JsonResponse({'success': True, 'sections': []})
 
     # Check cache (keyed by page id + updated_at)
@@ -369,18 +391,11 @@ def get_page_section_screenshots(request, page_id):
         return JsonResponse({'success': True, 'sections': cached})
 
     # Render html_content with translations (same as PageView)
-    site_settings = SiteSettings.load()
-    default_lang = 'pt'
-    if site_settings:
-        langs = site_settings.get_enabled_languages()
-        if langs:
-            default_lang = langs[0][0]
-
     translations = (page.content or {}).get('translations', {})
     trans = translations.get(default_lang, {})
 
     try:
-        template = Template(page.html_content)
+        template = Template(page_html)
         rendered_html = template.render(Context({
             'trans': trans,
             'LANGUAGE_CODE': default_lang,
@@ -388,7 +403,7 @@ def get_page_section_screenshots(request, page_id):
             'SITE_NAME': site_settings.site_name_i18n.get(default_lang, '') if site_settings else '',
         }))
     except Exception:
-        rendered_html = page.html_content
+        rendered_html = page_html
 
     # Build full HTML page for Playwright
     full_html = f"""<!DOCTYPE html>
