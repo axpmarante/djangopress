@@ -1059,6 +1059,68 @@ class AIBulkPagesView(SuperuserRequiredMixin, TemplateView):
         return context
 
 
+class AIBulkTranslateView(SuperuserRequiredMixin, TemplateView):
+    """AI Content Studio - Bulk Translate Pages"""
+    template_name = 'backoffice/ai_bulk_translate.html'
+
+    def get_context_data(self, **kwargs):
+        from core.models import GlobalSection
+        context = super().get_context_data(**kwargs)
+
+        site_settings = SiteSettings.load()
+        languages = site_settings.get_language_codes() if site_settings else ['pt']
+        default_lang = site_settings.get_default_language() if site_settings else 'pt'
+        language_names = dict(site_settings.get_enabled_languages()) if site_settings else {}
+
+        pages = Page.objects.filter(is_active=True).order_by('sort_order', 'id')
+        pages_data = []
+        for page in pages:
+            html_i18n = page.html_content_i18n or {}
+            pages_data.append({
+                'id': page.id,
+                'title': page.get_title(default_lang),
+                'lang_status': [(lang, bool(html_i18n.get(lang))) for lang in languages],
+            })
+
+        sections = GlobalSection.objects.filter(is_active=True)
+        sections_data = []
+        for section in sections:
+            html_i18n = section.html_template_i18n or {}
+            sections_data.append({
+                'id': section.id,
+                'key': section.key,
+                'name': section.name or section.key,
+                'lang_status': [(lang, bool(html_i18n.get(lang))) for lang in languages],
+            })
+
+        # Language list with names for sidebar (excluding default)
+        target_languages = [
+            (code, language_names.get(code, code))
+            for code in languages if code != default_lang
+        ]
+
+        context['pages_data'] = pages_data
+        context['sections_data'] = sections_data
+        context['languages'] = languages
+        context['language_names'] = language_names
+        context['target_languages'] = target_languages
+        context['default_language'] = default_lang
+        context['pages_data_json'] = json.dumps(pages_data, default=str)
+        context['sections_data_json'] = json.dumps(sections_data, default=str)
+
+        # Get AI configuration
+        try:
+            from ai.utils.llm_config import LLMConfig
+            config = LLMConfig()
+            context['ai_models'] = config.get_available_models()
+            context['default_model'] = config.default_model
+        except Exception:
+            context['ai_models'] = []
+            context['default_model'] = None
+
+        return context
+
+
 class AIRefinePageView(SuperuserRequiredMixin, TemplateView):
     """AI Content Studio - Refine Page"""
     template_name = 'backoffice/ai_refine_page.html'

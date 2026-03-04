@@ -1635,6 +1635,162 @@ def translate_to_language_api(request):
         }, status=500)
 
 
+@superuser_required
+@require_http_methods(["POST"])
+def bulk_translate_api(request):
+    """
+    Bulk-translate selected pages and/or GlobalSections to target languages
+    using per-language HTML (html_content_i18n / html_template_i18n).
+
+    POST /ai/api/bulk-translate/
+    Body: {
+        "page_ids": [1, 2, 3],
+        "section_ids": [1],
+        "target_languages": ["en", "es"],
+        "model": "gemini-flash"
+    }
+
+    Returns: {
+        "success": true,
+        "results": {
+            "pages": [{"id": 1, "title": "...", "languages": {"en": "ok", "es": "ok"}}],
+            "sections": [{"id": 1, "key": "...", "languages": {"en": "ok"}}]
+        },
+        "errors": []
+    }
+    """
+    try:
+        from core.models import Page, GlobalSection, SiteSettings
+        from django.utils.text import slugify
+
+        data = json.loads(request.body)
+        page_ids = data.get('page_ids', [])
+        section_ids = data.get('section_ids', [])
+        target_languages = data.get('target_languages', [])
+        model = data.get('model', 'gemini-flash')
+
+        if not target_languages:
+            return JsonResponse({
+                'success': False,
+                'error': 'target_languages is required'
+            }, status=400)
+
+        if not page_ids and not section_ids:
+            return JsonResponse({
+                'success': False,
+                'error': 'At least one page_id or section_id is required'
+            }, status=400)
+
+        site_settings = SiteSettings.objects.first()
+        default_lang = site_settings.get_default_language() if site_settings else 'pt'
+
+        service = ContentGenerationService()
+
+        page_results = []
+        section_results = []
+        errors = []
+
+        # Translate pages
+        for page_id in page_ids:
+            try:
+                page = Page.objects.get(pk=page_id)
+                lang_results = {}
+
+                translated = service.bulk_translate_page(
+                    page, target_languages, model=model
+                )
+
+                # Save translated HTML to html_content_i18n
+                if not page.html_content_i18n:
+                    page.html_content_i18n = {}
+
+                for lang, html in translated.items():
+                    page.html_content_i18n[lang] = html
+                    lang_results[lang] = 'ok'
+
+                # Also translate title_i18n and slug_i18n if missing
+                source_title = (page.title_i18n or {}).get(default_lang, '')
+                if source_title:
+                    for lang in target_languages:
+                        if lang == default_lang:
+                            continue
+                        if not (page.title_i18n or {}).get(lang):
+                            title_result = service._translate_key_value_pairs(
+                                {'title': source_title},
+                                default_lang, lang
+                            )
+                            if title_result and 'title' in title_result:
+                                if not page.title_i18n:
+                                    page.title_i18n = {}
+                                page.title_i18n[lang] = title_result['title']
+
+                        if not (page.slug_i18n or {}).get(lang):
+                            if not page.slug_i18n:
+                                page.slug_i18n = {}
+                            source_slug = (page.slug_i18n or {}).get(default_lang, '')
+                            if source_slug == 'home':
+                                page.slug_i18n[lang] = 'home'
+                            elif page.title_i18n.get(lang):
+                                page.slug_i18n[lang] = slugify(page.title_i18n[lang])
+                            elif source_slug:
+                                page.slug_i18n[lang] = source_slug
+
+                page.save()
+                page_results.append({
+                    'id': page.id,
+                    'title': page.get_title(default_lang),
+                    'languages': lang_results,
+                })
+
+            except Exception as e:
+                errors.append(f'Page {page_id}: {str(e)}')
+
+        # Translate GlobalSections
+        for section_id in section_ids:
+            try:
+                section = GlobalSection.objects.get(pk=section_id)
+                lang_results = {}
+
+                translated = service.bulk_translate_section(
+                    section, target_languages, model=model
+                )
+
+                if not section.html_template_i18n:
+                    section.html_template_i18n = {}
+
+                for lang, html in translated.items():
+                    section.html_template_i18n[lang] = html
+                    lang_results[lang] = 'ok'
+
+                section.save()
+                section_results.append({
+                    'id': section.id,
+                    'key': section.key,
+                    'name': section.name or section.key,
+                    'languages': lang_results,
+                })
+
+            except Exception as e:
+                errors.append(f'Section {section_id}: {str(e)}')
+
+        return JsonResponse({
+            'success': True,
+            'results': {
+                'pages': page_results,
+                'sections': section_results,
+            },
+            'errors': errors,
+        })
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+
+
 # === Blueprint AI Endpoints ===
 
 @superuser_required

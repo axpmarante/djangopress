@@ -2247,6 +2247,68 @@ Keep the translations natural and fluent — these are website UI strings.
             )
             raise
 
+    def bulk_translate_page(self, page, target_languages, model=None):
+        """
+        Translate a page's per-language HTML to multiple languages.
+        Uses the default language HTML as source.
+
+        Args:
+            page: Page instance
+            target_languages: List of language codes to translate into
+            model: LLM model name (defaults to gemini-flash)
+
+        Returns:
+            Dict mapping language code -> translated HTML string
+        """
+        from core.models import SiteSettings
+
+        site_settings = SiteSettings.objects.first()
+        default_lang = site_settings.get_default_language() if site_settings else 'pt'
+
+        source_html = (page.html_content_i18n or {}).get(default_lang, '')
+        if not source_html:
+            raise ValueError("No source HTML in default language")
+
+        results = {}
+        for lang in target_languages:
+            if lang == default_lang:
+                continue
+            translated = self.translate_html(source_html, default_lang, lang, model=model)
+            results[lang] = translated
+
+        return results
+
+    def bulk_translate_section(self, section, target_languages, model=None):
+        """
+        Translate a GlobalSection's per-language HTML to multiple languages.
+        Uses the default language HTML as source.
+
+        Args:
+            section: GlobalSection instance
+            target_languages: List of language codes to translate into
+            model: LLM model name (defaults to gemini-flash)
+
+        Returns:
+            Dict mapping language code -> translated HTML string
+        """
+        from core.models import SiteSettings
+
+        site_settings = SiteSettings.objects.first()
+        default_lang = site_settings.get_default_language() if site_settings else 'pt'
+
+        source_html = (section.html_template_i18n or {}).get(default_lang, '')
+        if not source_html:
+            raise ValueError("No source HTML in default language")
+
+        results = {}
+        for lang in target_languages:
+            if lang == default_lang:
+                continue
+            translated = self.translate_html(source_html, default_lang, lang, model=model)
+            results[lang] = translated
+
+        return results
+
     @staticmethod
     def _build_library_catalog(default_language: str = 'pt') -> List[Dict]:
         """Build a metadata-only catalog of all active library images."""

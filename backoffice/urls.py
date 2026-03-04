@@ -41,6 +41,10 @@ urlpatterns = [
 
     # Pages Management
     path('pages/', views.PagesView.as_view(), name='pages'),
+    path('pages/explorer/', views.PagesExplorerView.as_view(), name='pages_explorer'),
+    path('api/page-sections/<int:page_id>/', api_views.get_page_sections, name='api_page_sections'),
+    path('api/page-screenshots/<int:page_id>/', api_views.get_page_section_screenshots, name='api_page_screenshots'),
+    path('api/update-page-settings/<int:page_id>/', api_views.update_page_settings, name='api_update_page_settings'),
     path('page/<int:page_id>/edit/', views.PageEditView.as_view(), name='page_edit'),
     path('page/<int:page_id>/images/', views.ProcessImagesView.as_view(), name='process_images'),
 
@@ -73,9 +77,9 @@ urlpatterns = [
     path('settings/footer/', views.FooterEditView.as_view(), name='footer_edit'),
 
     # AI Content Studio
-    path('ai/', views.AIManagementView.as_view(), name='ai_management'),
     path('ai/generate/page/', views.AIGeneratePageView.as_view(), name='ai_generate_page'),
     path('ai/bulk/pages/', views.AIBulkPagesView.as_view(), name='ai_bulk_pages'),
+    path('ai/bulk-translate/', views.AIBulkTranslateView.as_view(), name='ai_bulk_translate'),
     path('ai/refine/page/', views.AIRefinePageView.as_view(), name='ai_refine_page'),
     path('ai/refine/page/<str:page_slug>/', views.AIRefinePageView.as_view(), name='ai_refine_page_with_slug'),
     path('ai/chat/refine/<int:page_id>/', views.AIChatRefineView.as_view(), name='ai_chat_refine'),
