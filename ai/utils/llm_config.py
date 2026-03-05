@@ -260,6 +260,7 @@ class LLMBase:
             self,
             messages: List[Dict[str, str]],
             tool_name: str = None,
+            on_stream=None,
             **kwargs
     ) -> StandardizedLLMResponse:
         """Get chat completion with model-specific configs"""
@@ -462,26 +463,52 @@ class LLMBase:
                     print(f"   Model: {resolved_model}")
                     print(f"   Contents: {len(contents)} message(s)")
 
-                    response = client.models.generate_content(
-                        model=resolved_model,
-                        contents=contents,
-                        config=generation_config
-                    )
+                    if on_stream:
+                        # Streaming path: yield chunks as they arrive
+                        response_content = ""
+                        for chunk in client.models.generate_content_stream(
+                            model=resolved_model,
+                            contents=contents,
+                            config=generation_config
+                        ):
+                            chunk_text = ""
+                            try:
+                                if hasattr(chunk, 'text') and chunk.text:
+                                    chunk_text = chunk.text
+                                elif hasattr(chunk, 'candidates') and chunk.candidates:
+                                    for part in chunk.candidates[0].content.parts:
+                                        if hasattr(part, 'text') and part.text:
+                                            chunk_text += part.text
+                            except Exception:
+                                pass
+                            if chunk_text:
+                                response_content += chunk_text
+                                try:
+                                    on_stream(response_content, len(response_content))
+                                except Exception:
+                                    pass  # Never let callback errors break generation
+                    else:
+                        # Non-streaming path (unchanged)
+                        response = client.models.generate_content(
+                            model=resolved_model,
+                            contents=contents,
+                            config=generation_config
+                        )
 
-                    response_content = ""
-                    try:
-                        if hasattr(response, 'text') and response.text:
-                            response_content = response.text
-                        elif hasattr(response, 'candidates') and response.candidates:
-                            candidate = response.candidates[0]
-                            if hasattr(candidate, 'content') and hasattr(candidate.content, 'parts'):
-                                for part in candidate.content.parts:
-                                    if hasattr(part, 'text') and part.text:
-                                        response_content += part.text
+                        response_content = ""
+                        try:
+                            if hasattr(response, 'text') and response.text:
+                                response_content = response.text
+                            elif hasattr(response, 'candidates') and response.candidates:
+                                candidate = response.candidates[0]
+                                if hasattr(candidate, 'content') and hasattr(candidate.content, 'parts'):
+                                    for part in candidate.content.parts:
+                                        if hasattr(part, 'text') and part.text:
+                                            response_content += part.text
 
-                    except Exception as content_error:
-                        print(f"  ⚠️ Error extracting content: {content_error}")
-                        response_content = "I apologize, but I'm having trouble processing your request."
+                        except Exception as content_error:
+                            print(f"  ⚠️ Error extracting content: {content_error}")
+                            response_content = "I apologize, but I'm having trouble processing your request."
 
                 except Exception as gemini_error:
                     print("\n" + "=" * 80)
@@ -557,6 +584,46 @@ class LLMBase:
             print(f"❗ Error Message: {str(e)}")
             print("=" * 80 + "\n")
             raise
+
+    def get_completion_with_tools(self, contents, system_instruction, tools,
+                                  tool_name='gemini-flash'):
+        """Call Gemini with native function calling.
+
+        Args:
+            contents: List of Gemini Content dicts (conversation history).
+            system_instruction: System instruction string.
+            tools: List of types.Tool objects with FunctionDeclarations.
+            tool_name: Model config key (e.g. 'gemini-flash').
+
+        Returns:
+            The raw Gemini GenerateContentResponse.
+        """
+        config_entry = MODEL_CONFIG.get(tool_name)
+        if not config_entry or config_entry.provider != ModelProvider.GOOGLE:
+            raise ValueError(f'Native FC only supported for Google models, got: {tool_name}')
+
+        client = self._clients.get(ModelProvider.GOOGLE)
+        if not client:
+            raise RuntimeError('Google client not initialized')
+
+        from google.genai import types
+
+        config = types.GenerateContentConfig(
+            system_instruction=system_instruction,
+            tools=tools,
+            temperature=config_entry.temperature,
+            max_output_tokens=config_entry.max_output_tokens,
+            top_p=config_entry.provider_params.get('generation_config', {}).get('top_p', 0.95),
+            top_k=config_entry.provider_params.get('generation_config', {}).get('top_k', 40),
+        )
+
+        response = client.models.generate_content(
+            model=config_entry.model_name,
+            contents=contents,
+            config=config,
+        )
+
+        return response
 
     def get_vision_completion(
             self,
@@ -1057,7 +1124,7 @@ class LLMConfig:
     """Configuration class for LLM models"""
 
     def __init__(self):
-        self.default_model = 'gemini-pro'
+        self.default_model = 'gemini-flash'
 
     def get_available_models(self):
         """Return list of (model_id, display_name) tuples for available models"""
