@@ -4,127 +4,284 @@
 
 {% block content %}
 <div class="space-y-6">
-    <!-- Header with Create Button -->
+    <!-- Header -->
     <div class="flex items-center justify-between">
-        <div>
+        <div class="flex items-center gap-3">
             <h2 class="text-3xl font-bold text-gray-900">News Posts</h2>
-            <p class="text-gray-600 mt-1">Manage all your news articles</p>
+            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-sm font-medium bg-gray-100 text-gray-700">{{ total_posts }}</span>
         </div>
-        <a href="{% url 'backoffice:news_create' %}"
-           class="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center">
-            <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
-            </svg>
-            New News Post
-        </a>
-    </div>
-
-    <!-- News Posts List -->
-    {% if news_posts %}
-    <div class="bg-white rounded-lg shadow overflow-hidden">
-        <table class="min-w-full divide-y divide-gray-200">
-            <thead class="bg-gray-50">
-                <tr>
-                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Post</th>
-                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Published</th>
-                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Created</th>
-                    <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-                </tr>
-            </thead>
-            <tbody class="bg-white divide-y divide-gray-200">
-                {% for post in news_posts %}
-                <tr class="hover:bg-gray-50">
-                    <td class="px-6 py-4">
-                        <div class="flex items-center">
-                            {% if post.featured_image %}
-                            <img src="{{ post.featured_image.url }}" alt="{{ post }}"
-                                 class="w-12 h-12 object-cover rounded-lg mr-4">
-                            {% else %}
-                            <div class="w-12 h-12 bg-gray-200 rounded-lg mr-4 flex items-center justify-center">
-                                <svg class="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z"/>
-                                </svg>
-                            </div>
-                            {% endif %}
-                            <div>
-                                <p class="text-sm font-medium text-gray-900">{{ post }}</p>
-                                {% if post.category %}
-                                <p class="text-xs text-blue-600">{{ post.category }}</p>
-                                {% endif %}
-                            </div>
-                        </div>
-                    </td>
-                    <td class="px-6 py-4">
-                        {% if post.is_published %}
-                        <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">Published</span>
-                        {% else %}
-                        <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-100 text-gray-800">Draft</span>
-                        {% endif %}
-                    </td>
-                    <td class="px-6 py-4 text-sm text-gray-900">
-                        {% if post.published_date %}
-                            {{ post.published_date|date:"M d, Y" }}
-                        {% else %}
-                            <span class="text-gray-400">-</span>
-                        {% endif %}
-                    </td>
-                    <td class="px-6 py-4 text-sm text-gray-500">{{ post.created_at|date:"M d, Y" }}</td>
-                    <td class="px-6 py-4 text-right text-sm font-medium space-x-2">
-                        <a href="{% url 'backoffice:news_edit' pk=post.pk %}"
-                           class="text-blue-600 hover:text-blue-900">Edit</a>
-                        <a href="{% url 'backoffice:news_gallery' pk=post.pk %}"
-                           class="text-purple-600 hover:text-purple-900">Gallery</a>
-                        <a href="{% url 'backoffice:news_delete' pk=post.pk %}"
-                           class="text-red-600 hover:text-red-900">Delete</a>
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
-
-    <!-- Pagination -->
-    {% if is_paginated %}
-    <div class="flex items-center justify-between bg-white px-6 py-3 rounded-lg shadow">
-        <div class="text-sm text-gray-700">
-            Showing {{ page_obj.start_index }} to {{ page_obj.end_index }} of {{ page_obj.paginator.count }} news posts
-        </div>
-        <div class="flex space-x-2">
-            {% if page_obj.has_previous %}
-            <a href="?page={{ page_obj.previous_page_number }}"
-               class="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50">
-                Previous
+        <div class="flex items-center gap-2">
+            {% if user.is_superuser %}
+            <a href="{% url 'backoffice:news_ai_generate' %}"
+               class="inline-flex items-center px-3 py-2 text-sm rounded-lg text-white bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 transition-colors">
+                <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                </svg>
+                Generate with AI
             </a>
             {% endif %}
-            {% if page_obj.has_next %}
-            <a href="?page={{ page_obj.next_page_number }}"
-               class="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50">
-                Next
-            </a>
-            {% endif %}
-        </div>
-    </div>
-    {% endif %}
-
-    {% else %}
-    <!-- Empty State -->
-    <div class="bg-white rounded-lg shadow p-12 text-center">
-        <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z"/>
-        </svg>
-        <h3 class="mt-2 text-sm font-medium text-gray-900">No news posts</h3>
-        <p class="mt-1 text-sm text-gray-500">Get started by creating your first news post.</p>
-        <div class="mt-6">
             <a href="{% url 'backoffice:news_create' %}"
-               class="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700">
-                <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+               class="inline-flex items-center px-3 py-2 text-sm rounded-lg text-white bg-blue-600 hover:bg-blue-700 transition-colors">
+                <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
                 </svg>
-                New News Post
+                New Post
             </a>
         </div>
+    </div>
+
+    <!-- Statistics -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div class="bg-white rounded-lg shadow-sm border border-gray-100 p-4">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 bg-blue-50 rounded-lg flex items-center justify-center">
+                    <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z"/>
+                    </svg>
+                </div>
+                <div>
+                    <p class="text-2xl font-bold text-gray-900">{{ total_posts }}</p>
+                    <p class="text-xs text-gray-500">Total Posts</p>
+                </div>
+            </div>
+        </div>
+        <div class="bg-white rounded-lg shadow-sm border border-gray-100 p-4">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 bg-green-50 rounded-lg flex items-center justify-center">
+                    <svg class="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                    </svg>
+                </div>
+                <div>
+                    <p class="text-2xl font-bold text-gray-900">{{ published_posts }}</p>
+                    <p class="text-xs text-gray-500">Published</p>
+                </div>
+            </div>
+        </div>
+        <div class="bg-white rounded-lg shadow-sm border border-gray-100 p-4">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 bg-purple-50 rounded-lg flex items-center justify-center">
+                    <svg class="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A2 2 0 013 12V7a4 4 0 014-4z"/>
+                    </svg>
+                </div>
+                <div>
+                    <p class="text-2xl font-bold text-gray-900">{{ categories_count }}</p>
+                    <p class="text-xs text-gray-500">Categories</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {% if news_posts %}
+    <!-- Search -->
+    <div class="relative">
+        <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+        </svg>
+        <input type="text" id="postSearch" placeholder="Search posts by title or slug..."
+               class="w-full pl-10 pr-4 py-2.5 text-sm border border-gray-200 rounded-lg bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+               oninput="filterPosts(this.value)">
+    </div>
+
+    <!-- Posts List -->
+    <style>
+        .post-row .post-actions { opacity: 0; transition: opacity 150ms; }
+        .post-row:hover .post-actions { opacity: 1; }
+    </style>
+    <div class="bg-white rounded-lg shadow-sm border border-gray-100 divide-y divide-gray-100" id="postsList">
+        {% for post in news_posts %}
+        <div class="post-row flex items-center justify-between px-5 py-4 hover:bg-gray-50 transition-colors cursor-pointer"
+             data-title="{{ post.default_title|lower }}"
+             data-slugs="{% for lang_code, slug_val in post.slug_i18n.items %}{{ slug_val }} {% endfor %}{{ post.default_slug }}"
+             onclick="window.location='{% url 'backoffice:news_edit' pk=post.pk %}'">
+            <!-- Left: Status + Title + Meta -->
+            <div class="flex items-center gap-3 min-w-0 flex-1">
+                {% if post.is_published %}
+                <span class="w-2.5 h-2.5 rounded-full bg-green-500 flex-shrink-0" title="Published"></span>
+                {% else %}
+                <span class="w-2.5 h-2.5 rounded-full bg-gray-300 flex-shrink-0" title="Draft"></span>
+                {% endif %}
+
+                <div class="min-w-0 flex-1">
+                    <div class="flex items-center gap-2">
+                        <span class="text-sm font-semibold text-gray-900 truncate">{{ post.default_title }}</span>
+                        {% if not post.is_published %}
+                        <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-gray-100 text-gray-500 flex-shrink-0">Draft</span>
+                        {% endif %}
+                        {% if post.category %}
+                        <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-50 text-blue-600 flex-shrink-0">{{ post.category }}</span>
+                        {% endif %}
+                        {% if post.lang_status %}
+                        <span class="inline-flex items-center gap-0.5 flex-shrink-0">
+                            {% for lang, has_html in post.lang_status %}
+                            <span class="inline-flex items-center px-1 py-0.5 rounded text-[10px] font-medium {% if has_html %}bg-green-100 text-green-700{% else %}bg-gray-100 text-gray-400{% endif %}" title="{{ lang }}{% if has_html %}: has content{% else %}: no content{% endif %}">{{ lang }}</span>
+                            {% endfor %}
+                        </span>
+                        {% endif %}
+                    </div>
+                    <div class="flex items-center gap-2 mt-1 text-xs text-gray-400">
+                        {% if post.slug_i18n %}
+                        {% for lang_code, slug_val in post.slug_i18n.items %}
+                        <span class="inline-flex items-center">
+                            <span class="font-medium text-gray-500 uppercase" style="font-size: 10px;">{{ lang_code }}</span>
+                            <span class="ml-0.5 text-gray-400">/news/{{ slug_val }}</span>
+                        </span>
+                        {% if not forloop.last %}<span class="text-gray-300">&middot;</span>{% endif %}
+                        {% endfor %}
+                        {% else %}
+                        <span class="text-gray-400">/news/{{ post.default_slug }}</span>
+                        {% endif %}
+                        {% if post.published_date %}
+                        <span class="text-gray-300">&middot;</span>
+                        <span class="text-gray-400">{{ post.published_date|date:"M j, Y" }}</span>
+                        {% endif %}
+                        <span class="text-gray-300">&middot;</span>
+                        <span class="text-gray-400">{{ post.updated_at|timesince }} ago</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right: Actions (visible on hover) -->
+            <div class="post-actions flex items-center gap-1 flex-shrink-0 ml-4" onclick="event.stopPropagation();">
+                <a href="{% url 'backoffice:news_edit' pk=post.pk %}"
+                   class="inline-flex items-center px-2.5 py-1.5 text-xs font-medium text-blue-700 bg-blue-50 rounded-md hover:bg-blue-100 transition-colors">
+                    Edit
+                </a>
+                <a href="{{ post.get_absolute_url }}"
+                   target="_blank"
+                   class="inline-flex items-center px-2.5 py-1.5 text-xs font-medium text-gray-600 bg-gray-50 rounded-md hover:bg-gray-100 transition-colors">
+                    {% if post.is_published %}View{% else %}Preview{% endif %}
+                </a>
+                <div class="relative" x-data="{ open: false }">
+                    <button @click="open = !open"
+                            class="inline-flex items-center p-1.5 text-gray-400 rounded-md hover:bg-gray-100 hover:text-gray-600 transition-colors">
+                        <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                            <path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z"/>
+                        </svg>
+                    </button>
+                    <div x-show="open" @click.away="open = false" x-transition
+                         class="absolute right-0 mt-1 w-44 bg-white border border-gray-200 rounded-lg shadow-lg z-10 py-1">
+                        {% if user.is_superuser %}
+                        <a href="{% url 'backoffice:news_ai_refine' pk=post.pk %}"
+                           class="block px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors">
+                            AI Refine
+                        </a>
+                        <a href="{% url 'backoffice:news_images' pk=post.pk %}"
+                           class="block px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors">
+                            Process Images
+                        </a>
+                        {% endif %}
+                        <button @click="open = false; confirmDelete('{{ post.pk }}', '{{ post.default_title|escapejs }}')"
+                                class="w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors">
+                            Delete post
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <!-- No results message (hidden by default) -->
+    <div id="noResults" class="hidden bg-white rounded-lg shadow-sm border border-gray-100 p-8 text-center">
+        <p class="text-sm text-gray-500">No posts match your search.</p>
+    </div>
+    {% else %}
+    <!-- Empty State -->
+    <div class="bg-white rounded-lg shadow-sm border border-gray-100 p-12 text-center">
+        <div class="w-14 h-14 mx-auto mb-4 bg-gray-50 rounded-xl flex items-center justify-center">
+            <svg class="w-7 h-7 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z"/>
+            </svg>
+        </div>
+        <h3 class="text-base font-semibold text-gray-900 mb-1">No news posts yet</h3>
+        <p class="text-sm text-gray-500 mb-6">Get started by creating your first news post.</p>
+        <a href="{% url 'backoffice:news_create' %}"
+           class="inline-flex items-center px-4 py-2 text-sm rounded-lg text-white bg-blue-600 hover:bg-blue-700 transition-colors">
+            Create Your First Post
+        </a>
     </div>
     {% endif %}
 </div>
+
+<!-- Delete Confirmation Modal -->
+<div id="deleteModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden overflow-y-auto h-full w-full z-50">
+    <div class="relative top-20 mx-auto p-5 border w-full max-w-md shadow-lg rounded-md bg-white">
+        <div class="flex items-center justify-between pb-4 border-b">
+            <h3 class="text-xl font-semibold text-gray-900">Confirm Delete</h3>
+            <button onclick="closeDeleteModal()" class="text-gray-400 hover:text-gray-500">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                </svg>
+            </button>
+        </div>
+
+        <div class="mt-6">
+            <p class="text-sm text-gray-700">
+                Are you sure you want to delete the post "<span id="deletePostName" class="font-semibold"></span>"?
+            </p>
+            <p class="text-sm text-red-600 mt-2">
+                This action cannot be undone.
+            </p>
+        </div>
+
+        <form method="POST" class="mt-6">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="delete">
+            <input type="hidden" name="post_id" id="deletePostId">
+
+            <div class="flex items-center justify-end space-x-3">
+                <button type="button" onclick="closeDeleteModal()"
+                        class="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50">
+                    Cancel
+                </button>
+                <button type="submit"
+                        class="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700">
+                    Delete Post
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+function confirmDelete(postId, postName) {
+    document.getElementById('deletePostId').value = postId;
+    document.getElementById('deletePostName').textContent = postName;
+    document.getElementById('deleteModal').classList.remove('hidden');
+}
+
+function closeDeleteModal() {
+    document.getElementById('deleteModal').classList.add('hidden');
+}
+
+function filterPosts(query) {
+    const q = query.toLowerCase().trim();
+    const rows = document.querySelectorAll('.post-row');
+    const list = document.getElementById('postsList');
+    const noResults = document.getElementById('noResults');
+    let visible = 0;
+
+    rows.forEach(row => {
+        const title = row.dataset.title || '';
+        const slugs = row.dataset.slugs || '';
+        const match = !q || title.includes(q) || slugs.includes(q);
+        row.style.display = match ? '' : 'none';
+        if (match) visible++;
+    });
+
+    if (list) list.style.display = visible ? '' : 'none';
+    if (noResults) noResults.classList.toggle('hidden', visible > 0);
+}
+
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') closeDeleteModal();
+});
+
+document.getElementById('deleteModal').addEventListener('click', function(e) {
+    if (e.target === this) closeDeleteModal();
+});
+</script>
+
 {% endblock %}

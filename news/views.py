@@ -15,15 +15,59 @@ from core.models import SiteImage, SiteSettings
 # ─── News Posts ───────────────────────────────────────────────────────────────
 
 
-class NewsListView(LoginRequiredMixin, ListView):
-    """List all news posts"""
-    model = NewsPost
+class NewsListView(LoginRequiredMixin, TemplateView):
+    """List all news posts — pages-style UI"""
     template_name = 'backoffice/news_list.html'
-    context_object_name = 'news_posts'
-    paginate_by = 20
 
-    def get_queryset(self):
-        return NewsPost.objects.select_related('category').order_by('-created_at')
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+
+        posts = NewsPost.objects.select_related('category').order_by('-created_at')
+        context['total_posts'] = posts.count()
+        context['published_posts'] = posts.filter(is_published=True).count()
+
+        # Categories count
+        context['categories_count'] = NewsCategory.objects.filter(is_active=True).count()
+
+        # Language info
+        site_settings = SiteSettings.objects.first()
+        if site_settings:
+            context['languages'] = site_settings.get_enabled_languages()
+            language_codes = site_settings.get_language_codes()
+        else:
+            context['languages'] = [('pt', 'Portuguese'), ('en', 'English')]
+            language_codes = ['pt', 'en']
+
+        # Annotate posts with language status and resolved title
+        default_lang = site_settings.get_default_language() if site_settings else 'pt'
+        for post in posts:
+            html_i18n = post.html_content_i18n or {}
+            post.lang_status = [
+                (lang, bool(html_i18n.get(lang)))
+                for lang in language_codes
+            ]
+            post.default_title = post.get_i18n_field('title', default_lang) or f'Post #{post.pk}'
+            slugs = post.slug_i18n or {}
+            post.default_slug = slugs.get(default_lang, '')
+
+        context['news_posts'] = posts
+        context['language_codes'] = language_codes
+        context['default_lang'] = default_lang
+        return context
+
+    def post(self, request, *args, **kwargs):
+        """Handle delete action"""
+        action = request.POST.get('action')
+        if action == 'delete':
+            post_id = request.POST.get('post_id')
+            try:
+                post = NewsPost.objects.get(pk=post_id)
+                title = str(post)
+                post.delete()
+                messages.success(request, f'News post "{title}" deleted successfully!')
+            except NewsPost.DoesNotExist:
+                messages.error(request, 'News post not found.')
+        return redirect('backoffice:news_list')
 
 
 class NewsCreateView(LoginRequiredMixin, CreateView):
@@ -279,6 +323,8 @@ class LayoutUpdateView(LoginRequiredMixin, UpdateView):
         context = super().get_context_data(**kwargs)
         context['form_title'] = f'Edit Layout: {self.object.key}'
         context['submit_text'] = 'Update Layout'
+        # Pass the dict — template uses |json_script to safely serialize it
+        context['form_html_content_raw'] = self.object.html_content_i18n or {}
         return context
 
     def form_valid(self, form):

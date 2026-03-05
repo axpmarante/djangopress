@@ -29,9 +29,8 @@ class NewsPostForm(forms.ModelForm):
                 'class': 'w-full px-4 py-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent',
                 'type': 'datetime-local'
             }),
-            'featured_image': forms.FileInput(attrs={
+            'featured_image': forms.Select(attrs={
                 'class': 'w-full px-4 py-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent',
-                'accept': 'image/*'
             }),
         }
         help_texts = {
@@ -45,6 +44,7 @@ class NewsPostForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields['published_date'].required = False
+        self.fields['featured_image'].queryset = SiteImage.objects.filter(is_active=True).order_by('-id')
 
         # Load existing gallery images if editing
         if self.instance and self.instance.pk:

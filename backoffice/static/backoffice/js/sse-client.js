@@ -4,9 +4,9 @@
  * Usage:
  *   const sse = new SSEClient('/ai/api/generate-page/stream/', {
  *       csrfToken: '{{ csrf_token }}',
- *       onProgress: (data) => { /* {step, status, ...extras} */ },
- *       onComplete: (data) => { /* {success, page_data} or full result */ },
- *       onError: (data) => { /* {error: "message"} */ },
+ *       onProgress: (data) => { ... },   // {step, status, ...extras}
+ *       onComplete: (data) => { ... },   // {success, page_data} or full result
+ *       onError: (data) => { ... },      // {error: "message"}
  *   });
  *   sse.start(formData);   // FormData or plain object
  *   sse.abort();           // Cancel if needed

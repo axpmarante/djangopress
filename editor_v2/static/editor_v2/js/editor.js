@@ -17,6 +17,7 @@ import * as versions         from './modules/versions.js';
 import * as sectionInserter  from './modules/section-inserter.js';
 import * as sectionModal     from './modules/section-modal.js';
 import * as processImages    from './modules/process-images.js';
+import * as viewport         from './modules/viewport.js';
 
 document.addEventListener('DOMContentLoaded', () => {
     changes.init();
@@ -31,6 +32,7 @@ document.addEventListener('DOMContentLoaded', () => {
     sectionInserter.init();
     sectionModal.init();
     processImages.init();
+    viewport.init();
 
     console.log('Editor v2 active');
 });

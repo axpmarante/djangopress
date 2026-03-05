@@ -54,6 +54,26 @@ body[data-edit-mode="v2"] {
   width: calc(100% - var(--ev2-sidebar-width));
   min-height: 100vh;
   padding-top: var(--ev2-topbar-height);
+  transition: max-width 0.3s ease;
+}
+
+/* Viewport preview modes */
+.editor-v2-content.viewport-tablet,
+.editor-v2-content.viewport-mobile {
+  border-right: 1px solid var(--ev2-border);
+  box-shadow: 4px 0 16px rgba(0, 0, 0, 0.06);
+}
+
+.editor-v2-content.viewport-tablet {
+  max-width: 768px;
+}
+
+.editor-v2-content.viewport-mobile {
+  max-width: 375px;
+}
+
+body.ev2-viewport-constrained {
+  background: #f1f5f9;
 }
 
 /* --------------------------------------------------------------------------
@@ -846,6 +866,40 @@ body[data-edit-mode="v2"] {
   gap: 8px;
   flex: 1;
   overflow: hidden;
+}
+
+/* Viewport Switcher */
+.ev2-viewport-switcher {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  background: var(--ev2-bg-subtle);
+  border-radius: var(--ev2-radius);
+  padding: 3px;
+}
+
+.ev2-viewport-btn {
+  width: 32px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  color: var(--ev2-text-muted);
+  border-radius: 4px;
+  transition: var(--ev2-transition);
+}
+
+.ev2-viewport-btn:hover {
+  color: var(--ev2-text);
+}
+
+.ev2-viewport-btn.active {
+  background: var(--ev2-bg);
+  color: var(--ev2-primary);
+  box-shadow: var(--ev2-shadow-sm);
 }
 
 .ev2-topbar-right {

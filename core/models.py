@@ -1188,6 +1188,58 @@ class MenuItem(models.Model):
         return url
 
 
+class ContentVersion(models.Model):
+    """Generic version snapshot for any model using VersionableMixin."""
+    content_type = models.ForeignKey(
+        'contenttypes.ContentType',
+        on_delete=models.CASCADE,
+        related_name='content_versions',
+    )
+    object_id = models.PositiveIntegerField()
+    version_number = models.IntegerField()
+    snapshot = models.JSONField(
+        default=dict,
+        help_text='Snapshot of versioned fields: {field_name: value}',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    created_by = models.ForeignKey(
+        django_settings.AUTH_USER_MODEL,
+        null=True, blank=True,
+        on_delete=models.SET_NULL,
+    )
+    change_summary = models.CharField(max_length=255, blank=True, default='')
+
+    class Meta:
+        verbose_name = 'Content Version'
+        verbose_name_plural = 'Content Versions'
+        ordering = ['-created_at']
+        unique_together = ('content_type', 'object_id', 'version_number')
+        indexes = [
+            models.Index(fields=['content_type', 'object_id']),
+        ]
+
+    def __str__(self):
+        return f'{self.content_type} #{self.object_id} v{self.version_number}'
+
+    @classmethod
+    def next_version_number(cls, content_type, object_id):
+        current = cls.objects.filter(
+            content_type=content_type, object_id=object_id
+        ).aggregate(Max('version_number'))['version_number__max'] or 0
+        return current + 1
+
+    def restore(self):
+        """Restore the associated object to this version's snapshot."""
+        from django.contrib.contenttypes.models import ContentType
+        ct = ContentType.objects.get_for_id(self.content_type_id)
+        model_class = ct.model_class()
+        obj = model_class.objects.get(pk=self.object_id)
+        for field, value in self.snapshot.items():
+            setattr(obj, field, value)
+        obj.save()
+        return obj
+
+
 class Blueprint(models.Model):
     """Site-level content plan / wireframe"""
     name = models.CharField(max_length=200, default='Main Blueprint')

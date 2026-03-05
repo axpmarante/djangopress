@@ -1,12 +1,15 @@
+from django.core.cache import cache
 from django.db import models
 from django.utils.text import slugify
 from django.utils.translation import gettext_lazy as _
-from core.mixins import I18nModelMixin
+from core.mixins import I18nModelMixin, VersionableMixin
 from core.models import SiteImage
 
 
 class NewsCategory(I18nModelMixin, models.Model):
     """Category for organizing news posts."""
+    SLUG_CACHE_KEY = 'news_category_slug_index'
+
     name_i18n = models.JSONField(
         'Name (All Languages)',
         default=dict,
@@ -55,9 +58,57 @@ class NewsCategory(I18nModelMixin, models.Model):
             }
         super().save(*args, **kwargs)
 
+    @classmethod
+    def get_by_slug(cls, slug, lang=None):
+        """Look up an active category by slug using a cached index."""
+        index = cache.get(cls.SLUG_CACHE_KEY)
+        if index is None:
+            index = cls._build_slug_index()
 
-class NewsPost(I18nModelMixin, models.Model):
+        key = f'{lang}:{slug}' if lang else None
+        cat_id = index.get(key) if key else None
+
+        # Fallback: check all languages
+        if cat_id is None:
+            for k, v in index.items():
+                if k.endswith(f':{slug}'):
+                    cat_id = v
+                    break
+
+        if cat_id is not None:
+            try:
+                cat = cls.objects.get(pk=cat_id)
+                if cat.is_active:
+                    return cat
+            except cls.DoesNotExist:
+                pass
+
+        return None
+
+    @classmethod
+    def _build_slug_index(cls):
+        """Build {lang:slug -> id} index for all active categories."""
+        index = {}
+        for cat in cls.objects.filter(is_active=True):
+            for lang, slug in (cat.slug_i18n or {}).items():
+                if slug:
+                    index[f'{lang}:{slug}'] = cat.pk
+        cache.set(cls.SLUG_CACHE_KEY, index, 3600)
+        return index
+
+    @classmethod
+    def invalidate_slug_index(cls):
+        """Clear the slug lookup index from cache."""
+        cache.delete(cls.SLUG_CACHE_KEY)
+
+
+class NewsPost(VersionableMixin, I18nModelMixin, models.Model):
     """Model for news posts"""
+    SLUG_CACHE_KEY = 'news_post_slug_index'
+    VERSIONED_FIELDS = [
+        'title_i18n', 'slug_i18n', 'excerpt_i18n',
+        'html_content_i18n', 'meta_description_i18n', 'is_published',
+    ]
 
     # JSON Translation Fields
     title_i18n = models.JSONField(
@@ -100,7 +151,14 @@ class NewsPost(I18nModelMixin, models.Model):
         related_name='posts',
         verbose_name=_("Category")
     )
-    featured_image = models.ImageField(_("Featured Image"), upload_to='news/', blank=True, null=True)
+    featured_image = models.ForeignKey(
+        SiteImage,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='news_featured_posts',
+        verbose_name=_("Featured Image"),
+    )
     gallery_images = models.ManyToManyField(
         SiteImage,
         through='NewsGalleryImage',
@@ -144,6 +202,47 @@ class NewsPost(I18nModelMixin, models.Model):
                 lang: slugify(title) for lang, title in self.title_i18n.items() if title
             }
         super().save(*args, **kwargs)
+
+    @classmethod
+    def get_by_slug(cls, slug, lang=None):
+        """Look up a published post by slug using a cached index."""
+        index = cache.get(cls.SLUG_CACHE_KEY)
+        if index is None:
+            index = cls._build_slug_index()
+
+        key = f'{lang}:{slug}' if lang else None
+        post_id = index.get(key) if key else None
+
+        # Fallback: check all languages
+        if post_id is None:
+            for k, v in index.items():
+                if k.endswith(f':{slug}'):
+                    post_id = v
+                    break
+
+        if post_id is not None:
+            try:
+                return cls.objects.select_related('category').get(pk=post_id, is_published=True)
+            except cls.DoesNotExist:
+                pass
+
+        return None
+
+    @classmethod
+    def _build_slug_index(cls):
+        """Build {lang:slug -> id} index for all published posts."""
+        index = {}
+        for post in cls.objects.filter(is_published=True):
+            for lang, slug in (post.slug_i18n or {}).items():
+                if slug:
+                    index[f'{lang}:{slug}'] = post.pk
+        cache.set(cls.SLUG_CACHE_KEY, index, 3600)
+        return index
+
+    @classmethod
+    def invalidate_slug_index(cls):
+        """Clear the slug lookup index from cache."""
+        cache.delete(cls.SLUG_CACHE_KEY)
 
 
 class NewsLayout(models.Model):

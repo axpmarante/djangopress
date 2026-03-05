@@ -1,0 +1,497 @@
+{% extends 'backoffice/base.html' %}
+
+{% block title %}Pages Explorer{% endblock %}
+
+{% block content %}
+<div class="h-[calc(100vh-7rem)]">
+    <!-- Header -->
+    <div class="flex items-center justify-between mb-4">
+        <div class="flex items-center gap-3">
+            <h2 class="text-3xl font-bold text-gray-900">Pages</h2>
+            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-sm font-medium bg-gray-100 text-gray-700">{{ total_pages }}</span>
+        </div>
+        <div class="flex items-center gap-2">
+            <!-- View Toggle -->
+            <a href="{% url 'backoffice:pages' %}"
+               class="inline-flex items-center px-3 py-2 text-sm border border-gray-300 rounded-lg text-gray-700 bg-white hover:bg-gray-50 transition-colors"
+               title="List view">
+                <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
+                </svg>
+                List
+            </a>
+            {% if user.is_superuser %}
+            <a href="{% url 'backoffice:ai_generate_page' %}"
+               class="inline-flex items-center px-3 py-2 text-sm rounded-lg text-white bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 transition-colors">
+                <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                </svg>
+                Generate with AI
+            </a>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Two-Panel Layout -->
+    <div class="flex gap-4 h-[calc(100%-4rem)]">
+        <!-- Left Panel: Page List -->
+        <div class="w-72 flex-shrink-0 bg-white rounded-lg shadow-sm border border-gray-100 flex flex-col overflow-hidden">
+            <!-- Search -->
+            <div class="px-3 py-3 border-b border-gray-100">
+                <div class="relative">
+                    <svg class="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                    </svg>
+                    <input type="text" id="sidebarSearch" placeholder="Search pages..."
+                           class="w-full pl-8 pr-3 py-1.5 text-sm border border-gray-200 rounded-md bg-gray-50 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:bg-white transition-colors"
+                           oninput="filterSidebarPages(this.value)">
+                </div>
+            </div>
+
+            <!-- Page List -->
+            <div class="flex-1 overflow-y-auto" id="sidebarPageList">
+                {% for page in pages %}
+                <div class="sidebar-page-item border-b border-gray-50 cursor-pointer transition-colors hover:bg-gray-50"
+                     data-page-id="{{ page.id }}"
+                     data-title="{{ page.default_title|lower }}"
+                     data-slugs="{% for lc, sv in page.slug_i18n.items %}{{ sv }} {% endfor %}{{ page.default_slug }}"
+                     onclick="selectPage({{ page.id }})">
+                    <div class="px-4 py-3 flex items-center gap-2.5">
+                        {% if page.is_active %}
+                        <span class="w-2 h-2 rounded-full bg-green-500 flex-shrink-0"></span>
+                        {% else %}
+                        <span class="w-2 h-2 rounded-full bg-gray-300 flex-shrink-0"></span>
+                        {% endif %}
+                        <div class="min-w-0 flex-1">
+                            <div class="text-sm font-medium text-gray-900 truncate">{{ page.default_title }}</div>
+                            <div class="text-xs text-gray-400 truncate">/{{ page.default_slug }}</div>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+                {% if not pages %}
+                <div class="px-4 py-8 text-center text-sm text-gray-400">No pages yet</div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Right Panel: Page Detail -->
+        <div class="flex-1 bg-white rounded-lg shadow-sm border border-gray-100 overflow-hidden flex flex-col" id="detailPanel">
+            <!-- Empty State -->
+            <div id="emptyState" class="flex-1 flex items-center justify-center">
+                <div class="text-center">
+                    <div class="w-14 h-14 mx-auto mb-4 bg-gray-50 rounded-xl flex items-center justify-center">
+                        <svg class="w-7 h-7 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                        </svg>
+                    </div>
+                    <p class="text-sm text-gray-500">Select a page to view its details</p>
+                </div>
+            </div>
+
+            <!-- Page Detail (hidden until a page is selected) -->
+            <div id="pageDetail" class="hidden flex flex-col h-full">
+                <!-- Page Header -->
+                <div class="px-6 py-4 border-b border-gray-100 flex-shrink-0">
+                    <div class="flex items-center justify-between">
+                        <div class="min-w-0 flex-1">
+                            <div class="flex items-center gap-2.5">
+                                <h3 id="detailTitle" class="text-xl font-bold text-gray-900 truncate"></h3>
+                                <span id="detailStatus" class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium flex-shrink-0"></span>
+                            </div>
+                            <div id="detailSlugs" class="flex items-center gap-2 mt-1.5 text-xs text-gray-400"></div>
+                        </div>
+                        <div class="flex items-center gap-2 flex-shrink-0 ml-4">
+                            <a id="detailEditBtn" href="#"
+                               class="inline-flex items-center px-3 py-1.5 text-xs font-medium text-blue-700 bg-blue-50 rounded-md hover:bg-blue-100 transition-colors">
+                                <svg class="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+                                </svg>
+                                Edit
+                            </a>
+                            <a id="detailViewBtn" href="#" target="_blank"
+                               class="inline-flex items-center px-3 py-1.5 text-xs font-medium text-gray-600 bg-gray-50 rounded-md hover:bg-gray-100 transition-colors">
+                                <svg class="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>
+                                </svg>
+                                View
+                            </a>
+                            <a id="detailImagesBtn" href="#"
+                               class="inline-flex items-center px-3 py-1.5 text-xs font-medium text-purple-700 bg-purple-50 rounded-md hover:bg-purple-100 transition-colors">
+                                <svg class="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                                </svg>
+                                Images
+                            </a>
+                        </div>
+                    </div>
+                    <div id="detailUpdated" class="text-xs text-gray-400 mt-1"></div>
+                </div>
+
+                <!-- Loading State -->
+                <div id="detailLoading" class="hidden flex-1 flex items-center justify-center">
+                    <svg class="animate-spin w-6 h-6 text-blue-500" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                    </svg>
+                </div>
+
+                <!-- Scrollable content area -->
+                <div id="sectionsContainer" class="flex-1 overflow-y-auto px-6 py-4 space-y-5">
+
+                    <!-- Page Settings (inline editing) -->
+                    <div x-data="{ settingsOpen: false }">
+                        <button @click="settingsOpen = !settingsOpen" class="flex items-center justify-between w-full text-left group">
+                            <h4 class="text-sm font-semibold text-gray-700">Page Settings</h4>
+                            <svg class="w-4 h-4 text-gray-400 group-hover:text-gray-600 transform transition-transform" :class="{ 'rotate-180': settingsOpen }" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                            </svg>
+                        </button>
+
+                        <div x-show="settingsOpen" x-cloak x-transition class="mt-3 space-y-3" id="settingsForm">
+                            <!-- Dynamic fields rendered by JS based on languages -->
+                            <div id="settingsFields"></div>
+
+                            <!-- Status toggle -->
+                            <label class="flex items-center gap-2 cursor-pointer">
+                                <input type="checkbox" id="settingsActive" class="rounded border-gray-300 text-blue-600 focus:ring-blue-500">
+                                <span class="text-sm text-gray-700">Active</span>
+                            </label>
+
+                            <!-- SEO (nested collapsible) -->
+                            <div x-data="{ seoOpen: false }">
+                                <button @click="seoOpen = !seoOpen" class="text-xs text-gray-500 hover:text-gray-700 flex items-center gap-1">
+                                    <svg class="w-3 h-3 transform transition-transform" :class="{ 'rotate-90': seoOpen }" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                                    </svg>
+                                    SEO Settings
+                                </button>
+                                <div x-show="seoOpen" x-cloak x-transition class="mt-2 space-y-3" id="seoFields"></div>
+                            </div>
+
+                            <!-- Save / feedback -->
+                            <div class="flex items-center gap-2">
+                                <button onclick="savePageSettings()" id="saveSettingsBtn"
+                                        class="px-3 py-1.5 text-xs font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 transition-colors">
+                                    Save
+                                </button>
+                                <span id="settingsFeedback" class="text-xs text-green-600 hidden"></span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Sections -->
+                    <div>
+                        <div class="flex items-center gap-2 mb-4">
+                            <h4 class="text-sm font-semibold text-gray-700">Sections</h4>
+                            <span id="sectionCount" class="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full"></span>
+                        </div>
+                        <div id="sectionsList" class="space-y-4"></div>
+                        <div id="noSections" class="hidden py-8 text-center text-sm text-gray-400">
+                            This page has no sections yet. Use the editor to add content.
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let selectedPageId = null;
+let currentPageData = null;
+const LANGUAGES = [
+    {% for code, name in languages %}
+    { code: '{{ code }}', name: '{{ name|escapejs }}' }{% if not forloop.last %},{% endif %}
+    {% endfor %}
+];
+
+function getCSRFToken() {
+    return document.querySelector('[name=csrfmiddlewaretoken]')?.value ||
+           document.cookie.split('; ').find(row => row.startsWith('csrftoken='))?.split('=')[1];
+}
+
+function filterSidebarPages(query) {
+    const q = query.toLowerCase().trim();
+    document.querySelectorAll('.sidebar-page-item').forEach(item => {
+        const title = item.dataset.title || '';
+        const slugs = item.dataset.slugs || '';
+        const match = !q || title.includes(q) || slugs.includes(q);
+        item.style.display = match ? '' : 'none';
+    });
+}
+
+function selectPage(pageId) {
+    if (selectedPageId === pageId) return;
+    selectedPageId = pageId;
+
+    document.querySelectorAll('.sidebar-page-item').forEach(item => {
+        const isActive = parseInt(item.dataset.pageId) === pageId;
+        item.classList.toggle('bg-blue-50', isActive);
+        item.classList.toggle('border-l-2', isActive);
+        item.classList.toggle('border-l-blue-500', isActive);
+        item.classList.toggle('hover:bg-gray-50', !isActive);
+    });
+
+    document.getElementById('emptyState').classList.add('hidden');
+    document.getElementById('pageDetail').classList.remove('hidden');
+    document.getElementById('detailLoading').classList.remove('hidden');
+    document.getElementById('sectionsContainer').classList.add('hidden');
+
+    fetch(`/backoffice/api/page-sections/${pageId}/`)
+        .then(r => r.json())
+        .then(data => {
+            if (!data.success) {
+                document.getElementById('detailLoading').classList.add('hidden');
+                document.getElementById('sectionsContainer').classList.remove('hidden');
+                document.getElementById('sectionsList').innerHTML =
+                    `<div class="text-sm text-red-500">${data.error}</div>`;
+                return;
+            }
+
+            currentPageData = data.page;
+            renderPageHeader(data);
+            renderSettingsForm(data.page);
+            fetchScreenshots(pageId, data.sections.length);
+        })
+        .catch(err => {
+            document.getElementById('detailLoading').classList.add('hidden');
+            document.getElementById('sectionsContainer').classList.remove('hidden');
+            document.getElementById('sectionsList').innerHTML =
+                `<div class="text-sm text-red-500">Failed to load page: ${err.message}</div>`;
+        });
+}
+
+function renderSettingsForm(page) {
+    const titleI18n = page.title_i18n || {};
+    const slugI18n = page.slug_i18n || {};
+
+    // Build language fields
+    let fieldsHtml = '';
+    LANGUAGES.forEach(lang => {
+        fieldsHtml += `
+            <div class="space-y-2">
+                <div class="text-xs font-medium text-gray-500 uppercase">${lang.name} (${lang.code})</div>
+                <input type="text" id="settings-title-${lang.code}" value="${(titleI18n[lang.code] || '').replace(/"/g, '&quot;')}"
+                       placeholder="Title" class="w-full text-sm border border-gray-200 rounded-md px-3 py-1.5 focus:ring-blue-500 focus:border-blue-500">
+                <input type="text" id="settings-slug-${lang.code}" value="${(slugI18n[lang.code] || '').replace(/"/g, '&quot;')}"
+                       placeholder="slug" pattern="[a-z0-9\\-]+" class="w-full text-sm border border-gray-200 rounded-md px-3 py-1.5 focus:ring-blue-500 focus:border-blue-500 font-mono text-gray-600">
+            </div>
+        `;
+    });
+    document.getElementById('settingsFields').innerHTML = fieldsHtml;
+    document.getElementById('settingsActive').checked = page.is_active;
+
+    // SEO fields
+    const metaTitleI18n = page.meta_title_i18n || {};
+    const metaDescI18n = page.meta_description_i18n || {};
+    let seoHtml = '';
+    LANGUAGES.forEach(lang => {
+        seoHtml += `
+            <div class="space-y-2">
+                <div class="text-xs font-medium text-gray-500 uppercase">SEO — ${lang.code}</div>
+                <input type="text" id="settings-meta-title-${lang.code}" value="${(metaTitleI18n[lang.code] || '').replace(/"/g, '&quot;')}"
+                       placeholder="Meta title" maxlength="70" class="w-full text-sm border border-gray-200 rounded-md px-3 py-1.5 focus:ring-blue-500 focus:border-blue-500">
+                <textarea id="settings-meta-desc-${lang.code}" rows="2" maxlength="160"
+                          placeholder="Meta description" class="w-full text-sm border border-gray-200 rounded-md px-3 py-1.5 focus:ring-blue-500 focus:border-blue-500">${metaDescI18n[lang.code] || ''}</textarea>
+            </div>
+        `;
+    });
+    document.getElementById('seoFields').innerHTML = seoHtml;
+
+    // Hide feedback
+    document.getElementById('settingsFeedback').classList.add('hidden');
+}
+
+function savePageSettings() {
+    if (!selectedPageId) return;
+
+    const titleI18n = {};
+    const slugI18n = {};
+    const metaTitleI18n = {};
+    const metaDescI18n = {};
+
+    LANGUAGES.forEach(lang => {
+        titleI18n[lang.code] = document.getElementById(`settings-title-${lang.code}`)?.value || '';
+        slugI18n[lang.code] = document.getElementById(`settings-slug-${lang.code}`)?.value || '';
+        metaTitleI18n[lang.code] = document.getElementById(`settings-meta-title-${lang.code}`)?.value || '';
+        metaDescI18n[lang.code] = document.getElementById(`settings-meta-desc-${lang.code}`)?.value || '';
+    });
+
+    const btn = document.getElementById('saveSettingsBtn');
+    const feedback = document.getElementById('settingsFeedback');
+    btn.textContent = 'Saving...';
+    btn.disabled = true;
+    feedback.classList.add('hidden');
+
+    fetch(`/backoffice/api/update-page-settings/${selectedPageId}/`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCSRFToken(),
+        },
+        body: JSON.stringify({
+            title_i18n: titleI18n,
+            slug_i18n: slugI18n,
+            is_active: document.getElementById('settingsActive').checked,
+            meta_title_i18n: metaTitleI18n,
+            meta_description_i18n: metaDescI18n,
+        }),
+    })
+    .then(r => r.json())
+    .then(data => {
+        btn.textContent = 'Save';
+        btn.disabled = false;
+
+        if (data.success) {
+            feedback.textContent = 'Saved';
+            feedback.className = 'text-xs text-green-600';
+            feedback.classList.remove('hidden');
+
+            // Update header display
+            const defaultLang = LANGUAGES[0]?.code;
+            document.getElementById('detailTitle').textContent = titleI18n[defaultLang] || 'Untitled';
+
+            // Update sidebar item
+            const sidebarItem = document.querySelector(`.sidebar-page-item[data-page-id="${selectedPageId}"]`);
+            if (sidebarItem) {
+                const titleEl = sidebarItem.querySelector('.text-sm.font-medium');
+                const slugEl = sidebarItem.querySelector('.text-xs.text-gray-400');
+                if (titleEl) titleEl.textContent = titleI18n[defaultLang] || 'Untitled';
+                if (slugEl) slugEl.textContent = '/' + (slugI18n[defaultLang] || '');
+            }
+
+            setTimeout(() => feedback.classList.add('hidden'), 3000);
+        } else {
+            feedback.textContent = data.error || 'Save failed';
+            feedback.className = 'text-xs text-red-600';
+            feedback.classList.remove('hidden');
+        }
+    })
+    .catch(err => {
+        btn.textContent = 'Save';
+        btn.disabled = false;
+        feedback.textContent = 'Network error';
+        feedback.className = 'text-xs text-red-600';
+        feedback.classList.remove('hidden');
+    });
+}
+
+function renderPageHeader(data) {
+    const page = data.page;
+    const sections = data.sections;
+
+    document.getElementById('detailTitle').textContent = page.title;
+
+    const statusEl = document.getElementById('detailStatus');
+    if (page.is_active) {
+        statusEl.textContent = 'Active';
+        statusEl.className = 'inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700 flex-shrink-0';
+    } else {
+        statusEl.textContent = 'Draft';
+        statusEl.className = 'inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-500 flex-shrink-0';
+    }
+
+    const slugsEl = document.getElementById('detailSlugs');
+    let slugsHtml = '';
+    const slugEntries = Object.entries(page.slug_i18n || {});
+    slugEntries.forEach(([lang, slug], i) => {
+        slugsHtml += `<span class="inline-flex items-center"><span class="font-medium text-gray-500 uppercase" style="font-size: 10px;">${lang}</span><span class="ml-0.5 text-gray-400">/${slug}</span></span>`;
+        if (i < slugEntries.length - 1) slugsHtml += '<span class="text-gray-300">&middot;</span>';
+    });
+    slugsEl.innerHTML = slugsHtml;
+
+    const updated = new Date(page.updated_at);
+    const diffMs = Date.now() - updated;
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+    let timeAgo;
+    if (diffMins < 1) timeAgo = 'just now';
+    else if (diffMins < 60) timeAgo = `${diffMins}m ago`;
+    else if (diffHours < 24) timeAgo = `${diffHours}h ago`;
+    else timeAgo = `${diffDays}d ago`;
+    document.getElementById('detailUpdated').textContent = `Updated ${timeAgo}`;
+
+    document.getElementById('detailEditBtn').href = `/backoffice/page/${page.id}/edit/`;
+    const firstSlug = slugEntries.length > 0 ? slugEntries[0] : null;
+    const viewUrl = firstSlug ? `/${firstSlug[0]}/${firstSlug[1]}/` : '/';
+    document.getElementById('detailViewBtn').href = viewUrl + (page.is_active ? '' : '?preview=true');
+    document.getElementById('detailImagesBtn').href = `/backoffice/page/${page.id}/images/`;
+
+    const sectionCount = document.getElementById('sectionCount');
+    const sectionsList = document.getElementById('sectionsList');
+    const noSections = document.getElementById('noSections');
+
+    sectionCount.textContent = sections.length;
+
+    if (sections.length === 0) {
+        sectionsList.innerHTML = '';
+        noSections.classList.remove('hidden');
+        document.getElementById('detailLoading').classList.add('hidden');
+        document.getElementById('sectionsContainer').classList.remove('hidden');
+        return;
+    }
+
+    noSections.classList.add('hidden');
+
+    let html = '';
+    sections.forEach((section, index) => {
+        html += `
+            <div class="border border-gray-200 rounded-lg overflow-hidden" id="section-card-${index}">
+                <div class="px-4 py-2.5 bg-gray-50 border-b border-gray-200 flex items-center gap-2">
+                    <span class="text-xs font-mono text-gray-400">${index + 1}</span>
+                    <span class="text-sm font-medium text-gray-700">${section.name}</span>
+                </div>
+                <div class="bg-gray-50 flex items-center justify-center" style="min-height: 120px;" id="section-preview-${index}">
+                    <div class="flex flex-col items-center gap-2 text-gray-300">
+                        <svg class="animate-pulse w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                        </svg>
+                        <span class="text-xs">Capturing...</span>
+                    </div>
+                </div>
+            </div>
+        `;
+    });
+    sectionsList.innerHTML = html;
+
+    document.getElementById('detailLoading').classList.add('hidden');
+    document.getElementById('sectionsContainer').classList.remove('hidden');
+}
+
+function fetchScreenshots(pageId, expectedCount) {
+    if (selectedPageId !== pageId) return;
+
+    fetch(`/backoffice/api/page-screenshots/${pageId}/`)
+        .then(r => r.json())
+        .then(data => {
+            if (selectedPageId !== pageId) return;
+            if (!data.success) {
+                for (let i = 0; i < expectedCount; i++) {
+                    const el = document.getElementById(`section-preview-${i}`);
+                    if (el) el.innerHTML = `<div class="py-4 text-xs text-red-400 text-center">${data.error}</div>`;
+                }
+                return;
+            }
+            data.sections.forEach((section, index) => {
+                const el = document.getElementById(`section-preview-${index}`);
+                if (!el) return;
+                if (section.image) {
+                    el.innerHTML = `<img src="${section.image}" alt="${section.name}" class="w-full h-auto block">`;
+                    el.style.minHeight = '';
+                } else {
+                    el.innerHTML = `<div class="py-4 text-xs text-gray-400 text-center">No preview available</div>`;
+                }
+            });
+        })
+        .catch(err => {
+            if (selectedPageId !== pageId) return;
+            for (let i = 0; i < expectedCount; i++) {
+                const el = document.getElementById(`section-preview-${i}`);
+                if (el) el.innerHTML = `<div class="py-4 text-xs text-red-400 text-center">Failed to capture</div>`;
+            }
+        });
+}
+</script>
+{% endblock %}

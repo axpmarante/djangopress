@@ -1,4 +1,16 @@
 {% extends "base.html" %}
+{% load section_tags %}
+
+{% block title %}{% if seo_title %}{{ seo_title }}{% else %}{{ page_title }}{% endif %}{% endblock %}
+
+{% block extra_head %}
+<meta name="description" content="{% if seo_description %}{{ seo_description }}{% else %}{{ SITE_DESCRIPTION_I18N|get_translation:LANGUAGE_CODE }}{% endif %}">
+<meta property="og:title" content="{% if seo_title %}{{ seo_title }}{% else %}{{ page_title }}{% endif %}">
+<meta property="og:description" content="{% if seo_description %}{{ seo_description }}{% else %}{{ SITE_DESCRIPTION_I18N|get_translation:LANGUAGE_CODE }}{% endif %}">
+<meta property="og:type" content="{% if og_type %}{{ og_type }}{% else %}website{% endif %}">
+{% if og_image_url %}<meta property="og:image" content="{{ og_image_url }}">{% endif %}
+{% if canonical_url %}<link rel="canonical" href="{{ canonical_url }}">{% endif %}
+{% endblock %}
 
 {% block content %}
 {{ page_content }}
@@ -7,7 +19,6 @@
 {% block extra_js %}
 {% if edit_mode == 'v2' and editable_content_type_id %}
 <script>
-  // Extend EDITOR_CONFIG for news post editing
   window.EDITOR_CONFIG.contentTypeId = {{ editable_content_type_id }};
   window.EDITOR_CONFIG.objectId = {{ editable_object_id }};
 </script>

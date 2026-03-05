@@ -46,7 +46,7 @@ class Migration(migrations.Migration):
 
     dependencies = [
         ('news', '0006_add_slug_i18n_html_content_i18n_category'),
-        ('core', '__latest__'),
+        ('core', '0038_populate_i18n_html_fields'),
     ]
 
     operations = [

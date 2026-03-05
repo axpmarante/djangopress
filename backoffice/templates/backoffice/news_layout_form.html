@@ -33,14 +33,19 @@
                     HTML Content (All Languages)
                 </label>
                 <textarea name="html_content_i18n"
-                          id="{{ form.html_content_i18n.id_for_label }}"
+                          id="id_html_content_i18n"
                           rows="30"
                           class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm font-mono focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                          placeholder='{"pt": "<section>...</section>", "en": "<section>...</section>"}'>{{ form.html_content_i18n.value }}</textarea>
+                          placeholder='{"pt": "<section>...</section>", "en": "<section>...</section>"}'></textarea>
+                {{ form_html_content_raw|json_script:"layout-raw-json" }}
+                <script>
+                    document.getElementById('id_html_content_i18n').value =
+                        JSON.stringify(JSON.parse(document.getElementById('layout-raw-json').textContent), null, 2);
+                </script>
                 <p class="mt-1 text-xs text-gray-500">
                     JSON object mapping language codes to HTML strings. Each HTML template can use Django template syntax
-                    with context variables specific to the layout type (e.g. <code class="bg-gray-100 px-1 rounded">{{ "{{ posts }}" }}</code>,
-                    <code class="bg-gray-100 px-1 rounded">{{ "{{ post }}" }}</code>, <code class="bg-gray-100 px-1 rounded">{{ "{{ category }}" }}</code>).
+                    with context variables specific to the layout type (e.g. <code class="bg-gray-100 px-1 rounded">{% templatetag openvariable %} posts {% templatetag closevariable %}</code>,
+                    <code class="bg-gray-100 px-1 rounded">{% templatetag openvariable %} post {% templatetag closevariable %}</code>, <code class="bg-gray-100 px-1 rounded">{% templatetag openvariable %} category {% templatetag closevariable %}</code>).
                 </p>
                 {% if form.html_content_i18n.errors %}
                     <p class="mt-1 text-sm text-red-600">{{ form.html_content_i18n.errors.0 }}</p>

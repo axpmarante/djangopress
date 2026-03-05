@@ -41,7 +41,7 @@ FALLBACK_DETAIL = """
 </section>
 <section data-section="post-content" id="post-content">
 <div class="max-w-4xl mx-auto px-4 pb-16 prose prose-lg">
-  {{ post.html_content }}
+  {{ post.html_content|safe }}
 </div>
 </section>
 """
@@ -98,7 +98,7 @@ class NewsListView(TemplateView):
         context = super().get_context_data(**kwargs)
         lang, default_lang = _get_lang_and_default()
 
-        posts_qs = NewsPost.objects.filter(is_published=True).select_related('category')
+        posts_qs = NewsPost.objects.filter(is_published=True).select_related('category', 'featured_image')
         paginator = Paginator(posts_qs, self.paginate_by)
         page_number = self.request.GET.get('page', 1)
         page_obj = paginator.get_page(page_number)
@@ -119,6 +119,7 @@ class NewsListView(TemplateView):
         })
         context['page_content'] = template.render(render_context)
         context['page_title'] = 'News'
+        context['seo_title'] = 'News'
         return context
 
 
@@ -132,13 +133,8 @@ class NewsDetailView(TemplateView):
         lang, default_lang = _get_lang_and_default()
         slug = self.kwargs['slug']
 
-        # Find post by slug_i18n
-        post = None
-        for p in NewsPost.objects.filter(is_published=True).select_related('category'):
-            slugs = p.slug_i18n or {}
-            if slugs.get(lang) == slug or slugs.get(default_lang) == slug or slug in slugs.values():
-                post = p
-                break
+        # Find post by slug_i18n (cached index)
+        post = NewsPost.get_by_slug(slug, lang) or NewsPost.get_by_slug(slug, default_lang)
 
         if not post:
             raise Http404("News post not found")
@@ -155,6 +151,15 @@ class NewsDetailView(TemplateView):
         context['page_content'] = template.render(render_context)
         context['page_title'] = post.title
         context['news_post'] = post
+
+        # SEO
+        context['seo_title'] = post.title
+        meta_desc = (post.meta_description_i18n or {}).get(lang) or (post.meta_description_i18n or {}).get(default_lang) or post.excerpt or ''
+        context['seo_description'] = meta_desc
+        context['og_type'] = 'article'
+        if post.featured_image:
+            context['og_image_url'] = self.request.build_absolute_uri(post.featured_image.url)
+        context['canonical_url'] = self.request.build_absolute_uri(post.get_absolute_url(lang))
 
         # Enable edit mode for staff users with ?edit=true or ?edit=v2
         edit_param = self.request.GET.get('edit')
@@ -182,20 +187,15 @@ class NewsCategoryView(TemplateView):
         lang, default_lang = _get_lang_and_default()
         slug = self.kwargs['slug']
 
-        # Find category by slug_i18n
-        category = None
-        for cat in NewsCategory.objects.filter(is_active=True):
-            slugs = cat.slug_i18n or {}
-            if slugs.get(lang) == slug or slugs.get(default_lang) == slug or slug in slugs.values():
-                category = cat
-                break
+        # Find category by slug_i18n (cached index)
+        category = NewsCategory.get_by_slug(slug, lang) or NewsCategory.get_by_slug(slug, default_lang)
 
         if not category:
             raise Http404("Category not found")
 
         posts_qs = NewsPost.objects.filter(
             is_published=True, category=category
-        ).select_related('category')
+        ).select_related('category', 'featured_image')
         paginator = Paginator(posts_qs, self.paginate_by)
         page_number = self.request.GET.get('page', 1)
         page_obj = paginator.get_page(page_number)
@@ -217,5 +217,10 @@ class NewsCategoryView(TemplateView):
             **context,
         })
         context['page_content'] = template.render(render_context)
-        context['page_title'] = category.get_i18n_field('name', lang)
+        cat_name = category.get_i18n_field('name', lang)
+        context['page_title'] = cat_name
+        context['seo_title'] = f'News — {cat_name}'
+        cat_desc = (category.description_i18n or {}).get(lang) or (category.description_i18n or {}).get(default_lang) or ''
+        if cat_desc:
+            context['seo_description'] = cat_desc
         return context

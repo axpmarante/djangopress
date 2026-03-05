@@ -2379,6 +2379,13 @@ def chat_refine_news_api(request):
             )
             session.save()
 
+        # Create version before AI mutation
+        if hasattr(post, 'create_version'):
+            post.create_version(
+                user=request.user if request.user.is_authenticated else None,
+                change_summary=f'Before AI refinement: {message[:80]}',
+            )
+
         # Capture old HTML for diff
         from django.utils.translation import get_language
         from core.models import SiteSettings
@@ -2507,6 +2514,13 @@ def chat_refine_news_stream(request):
                 created_by=request.user if request.user.is_authenticated else None,
             )
             session.save()
+
+        # Create version before AI mutation
+        if hasattr(post, 'create_version'):
+            post.create_version(
+                user=request.user if request.user.is_authenticated else None,
+                change_summary=f'Before AI refinement: {message[:80]}',
+            )
 
         # Capture old HTML for diff
         from django.utils.translation import get_language

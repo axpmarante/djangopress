@@ -25,7 +25,7 @@ class LatestPostsNode(template.Node):
         settings = SiteSettings.load()
         default_lang = settings.get_default_language() if settings else 'pt'
 
-        posts = list(NewsPost.objects.filter(is_published=True).select_related('category')[:self.count])
+        posts = list(NewsPost.objects.filter(is_published=True).select_related('category', 'featured_image')[:self.count])
         for post in posts:
             _resolve_post_fields(post, lang, default_lang)
             post.title = post._resolved_title
@@ -66,15 +66,9 @@ class PostsByCategoryNode(template.Node):
         settings = SiteSettings.load()
         default_lang = settings.get_default_language() if settings else 'pt'
 
-        # Find category by slug in any language
+        # Find category by slug (cached index)
         slug = self.category_slug
-        categories = NewsCategory.objects.filter(is_active=True)
-        category = None
-        for cat in categories:
-            slugs = cat.slug_i18n or {}
-            if slug in slugs.values():
-                category = cat
-                break
+        category = NewsCategory.get_by_slug(slug, lang)
 
         if not category:
             context[self.var_name] = []
@@ -82,7 +76,7 @@ class PostsByCategoryNode(template.Node):
 
         posts = list(
             NewsPost.objects.filter(is_published=True, category=category)
-            .select_related('category')[:self.count]
+            .select_related('category', 'featured_image')[:self.count]
         )
         for post in posts:
             _resolve_post_fields(post, lang, default_lang)
