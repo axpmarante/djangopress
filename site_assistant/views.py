@@ -10,7 +10,7 @@ from ai.utils.llm_config import MODEL_CONFIG
 from core.models import Page
 
 from .models import AssistantSession
-from .services import AssistantService, DESTRUCTIVE_TOOLS
+from .services import AssistantService
 
 
 class AssistantPageView(SuperuserRequiredMixin, View):
@@ -41,7 +41,7 @@ class AssistantPageView(SuperuserRequiredMixin, View):
 @superuser_required
 @require_http_methods(["POST"])
 def chat_api(request):
-    """Handle a chat message: LLM call + tool execution."""
+    """Handle a chat message: router + native FC executor."""
     try:
         data = json.loads(request.body)
     except json.JSONDecodeError:
@@ -92,42 +92,6 @@ def chat_api(request):
         'response': result['response'],
         'actions': result['actions'],
         'steps': result.get('steps', []),
-        'pending_confirmation': result['pending_confirmation'],
-        'set_active_page': result['set_active_page'],
-    })
-
-
-@superuser_required
-@require_http_methods(["POST"])
-def confirm_api(request):
-    """Execute a previously confirmed destructive action."""
-    try:
-        data = json.loads(request.body)
-    except json.JSONDecodeError:
-        return JsonResponse({'success': False, 'error': 'Invalid JSON'}, status=400)
-
-    session_id = data.get('session_id')
-    tool_name = data.get('tool')
-    params = data.get('params', {})
-
-    if not session_id or not tool_name:
-        return JsonResponse({'success': False, 'error': 'Missing session_id or tool'}, status=400)
-
-    if tool_name not in DESTRUCTIVE_TOOLS:
-        return JsonResponse({'success': False, 'error': 'Not a destructive tool'}, status=400)
-
-    try:
-        session = AssistantSession.objects.get(pk=session_id, created_by=request.user)
-    except AssistantSession.DoesNotExist:
-        return JsonResponse({'success': False, 'error': 'Session not found'}, status=404)
-
-    service = AssistantService(session)
-    result = service.execute_confirmed_action(tool_name, params, user=request.user)
-
-    return JsonResponse({
-        'success': True,
-        'response': result['response'],
-        'actions': result['actions'],
         'set_active_page': result.get('set_active_page'),
     })
 

@@ -138,8 +138,8 @@
             <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-5">
                 <h3 class="text-sm font-semibold text-gray-900 mb-3">Quick Links</h3>
                 <div class="space-y-2 text-sm">
-                    <a href="{% url 'backoffice:ai_management' %}" class="block text-emerald-600 hover:text-emerald-800 font-medium">
-                        AI Content Studio &rarr;
+                    <a href="{% url 'backoffice:pages' %}" class="block text-emerald-600 hover:text-emerald-800 font-medium">
+                        Pages &rarr;
                     </a>
                     <a href="{% url 'backoffice:media' %}" class="block text-gray-600 hover:text-gray-800">
                         Media Library &rarr;
@@ -201,23 +201,6 @@ function renderMessage(msg) {
     chat.scrollTop = chat.scrollHeight;
 }
 
-function renderConfirmation(data) {
-    const chat = document.getElementById('chatMessages');
-    chat.insertAdjacentHTML('beforeend', `
-        <div class="flex justify-start" id="confirmCard">
-            <div class="max-w-[75%] bg-amber-50 border border-amber-200 text-amber-900 rounded-lg px-4 py-3 shadow-sm">
-                <p class="text-sm font-medium mb-3">Confirmation Required</p>
-                <p class="text-sm mb-3">${escapeHtml(data.response)}</p>
-                <div class="flex gap-2">
-                    <button onclick="confirmAction()" class="px-4 py-1.5 bg-red-600 text-white text-sm rounded-lg hover:bg-red-700 font-medium">Confirm</button>
-                    <button onclick="cancelAction()" class="px-4 py-1.5 bg-gray-200 text-gray-700 text-sm rounded-lg hover:bg-gray-300">Cancel</button>
-                </div>
-            </div>
-        </div>
-    `);
-    chat.scrollTop = chat.scrollHeight;
-}
-
 function renderSteps(steps) {
     const chat = document.getElementById('chatMessages');
     const stepsId = 'steps-' + Date.now();
@@ -254,8 +237,6 @@ function renderSteps(steps) {
 }
 
 // --- Chat ---
-let pendingConfirmation = null;
-
 async function sendMessage(event) {
     event.preventDefault();
     const input = document.getElementById('messageInput');
@@ -305,18 +286,12 @@ async function sendMessage(event) {
                 renderSteps(result.steps);
             }
 
-            // Handle pending confirmation
-            if (result.pending_confirmation) {
-                pendingConfirmation = result.pending_confirmation;
-                renderConfirmation({ response: result.response });
-            } else {
-                renderMessage({
-                    role: 'assistant',
-                    content: result.response,
-                    timestamp: new Date().toISOString(),
-                    actions: result.actions
-                });
-            }
+            renderMessage({
+                role: 'assistant',
+                content: result.response,
+                timestamp: new Date().toISOString(),
+                actions: result.actions
+            });
         } else {
             renderMessage({
                 role: 'assistant',
@@ -333,66 +308,6 @@ async function sendMessage(event) {
             timestamp: new Date().toISOString()
         });
     }
-}
-
-async function confirmAction() {
-    if (!pendingConfirmation || !currentSessionId) return;
-
-    const card = document.getElementById('confirmCard');
-    if (card) card.remove();
-
-    try {
-        const response = await fetch('/site-assistant/api/confirm/', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': getCookie('csrftoken')
-            },
-            body: JSON.stringify({
-                session_id: currentSessionId,
-                tool: pendingConfirmation.tool,
-                params: pendingConfirmation.params
-            })
-        });
-        const result = await response.json();
-
-        if (result.success) {
-            renderMessage({
-                role: 'assistant',
-                content: result.response,
-                timestamp: new Date().toISOString(),
-                actions: result.actions
-            });
-            if (result.set_active_page !== undefined) {
-                activePageId = result.set_active_page;
-                document.getElementById('pageSelect').value = result.set_active_page || '';
-            }
-        } else {
-            renderMessage({
-                role: 'assistant',
-                content: 'Error: ' + (result.error || 'Failed'),
-                timestamp: new Date().toISOString()
-            });
-        }
-    } catch (error) {
-        renderMessage({
-            role: 'assistant',
-            content: 'Error: ' + error.message,
-            timestamp: new Date().toISOString()
-        });
-    }
-    pendingConfirmation = null;
-}
-
-function cancelAction() {
-    pendingConfirmation = null;
-    const card = document.getElementById('confirmCard');
-    if (card) card.remove();
-    renderMessage({
-        role: 'assistant',
-        content: 'Action cancelled.',
-        timestamp: new Date().toISOString()
-    });
 }
 
 // --- Sessions ---

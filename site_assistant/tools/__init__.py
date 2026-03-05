@@ -15,6 +15,43 @@ except ImportError:
 
 DESTRUCTIVE_TOOLS = {'delete_page', 'delete_menu_item', 'delete_form'}
 
+# Confirmation words (multi-language) — user must say one of these
+# in their last message before a destructive tool is allowed
+CONFIRMATION_WORDS = {
+    'yes', 'sim', 'confirmo', 'confirmar', 'confirm', 'ok', 'sure',
+    'go ahead', 'do it',
+}
+
+
+def _has_recent_confirmation(context):
+    """Check if the user's most recent message confirms a destructive action.
+
+    Looks at the session's message history for the last user message and
+    checks if it contains a confirmation word.
+    """
+    session = context.get('session')
+    if not session or not session.messages:
+        return False
+
+    # Find the last user message
+    for msg in reversed(session.messages):
+        if msg.get('role') == 'user':
+            content = msg.get('content', '').lower().strip()
+            # Strip punctuation for word-boundary matching
+            import re
+            clean_content = re.sub(r'[^\w\s]', ' ', content)
+            words_in_message = set(clean_content.split())
+            for word in CONFIRMATION_WORDS:
+                if ' ' in word:
+                    # Multi-word: check as substring in cleaned content
+                    if word in clean_content:
+                        return True
+                elif word in words_in_message:
+                    return True
+            return False
+
+    return False
+
 
 class ToolRegistry:
     """Dispatches tool calls to their implementations."""
@@ -41,6 +78,18 @@ class ToolRegistry:
                 'success': False,
                 'message': f'Tool "{tool_name}" requires an active page. Use set_active_page first.'
             }
+
+        # Destructive action safety net
+        if tool_name in DESTRUCTIVE_TOOLS:
+            if not _has_recent_confirmation(context):
+                return {
+                    'success': False,
+                    'message': (
+                        f'BLOCKED: "{tool_name}" is destructive and requires user confirmation. '
+                        f'Ask the user to confirm before calling this tool. '
+                        f'Do NOT call the tool again until the user explicitly confirms.'
+                    ),
+                }
 
         try:
             return func(params, context)

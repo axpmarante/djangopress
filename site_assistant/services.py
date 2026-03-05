@@ -1,35 +1,29 @@
-"""AssistantService — orchestrates LLM calls and tool execution."""
+"""AssistantService — two-phase executor with native Gemini function calling.
 
-import json
-import re
+Phase 1: Router classifies intents (gemini-lite)
+Phase 2: Executor runs native FC loop (gemini-flash)
+"""
+
 import logging
 
 from ai.utils.llm_config import LLMBase
-from .prompts import build_system_prompt, build_user_prompt
+from .prompts import build_router_snapshot, build_executor_prompt, build_active_page_context
+from .router import Router
+from .tool_declarations import build_tool_declarations
 from .tools import ToolRegistry
 
 logger = logging.getLogger(__name__)
 
-# Tools that require user confirmation before executing
-DESTRUCTIVE_TOOLS = {'delete_page', 'delete_menu_item'}
-
-# Tools that perform write/mutation operations
-WRITE_TOOLS = {
-    'create_page', 'update_page_meta', 'delete_page', 'reorder_pages',
-    'create_menu_item', 'update_menu_item', 'delete_menu_item',
-    'update_settings', 'update_translations', 'update_element_styles',
-    'update_element_attribute', 'remove_section', 'reorder_sections',
-    'refine_section', 'refine_page',
-}
-
-# Keywords in response text that indicate the LLM claims a write action
-WRITE_CLAIM_KEYWORDS = {
-    'created', 'updated', 'changed', 'modified', 'deleted', 'removed',
-    'added', 'renamed', 'reordered', 'set up', 'configured',
-}
-
 MAX_TOOL_ITERATIONS = 8
-MAX_VERIFICATION_RETRIES = 1
+
+# Tools that mutate page context — refresh system instruction after these
+PAGE_CONTEXT_MUTATIONS = {
+    'set_active_page', 'create_page',
+    'refine_section', 'refine_page',
+    'remove_section', 'reorder_sections',
+    'update_element_styles', 'update_element_attribute',
+    'refine_header', 'refine_footer',
+}
 
 
 class AssistantService:
@@ -39,490 +33,291 @@ class AssistantService:
         self.llm = LLMBase()
 
     def handle_message(self, message, user=None):
-        """
-        Process a user message through a tool loop: call LLM, parse response,
-        execute tools. If the LLM outputs only <actions> (no <response>),
-        feed tool results back and loop. When <response> appears, return.
+        """Process a user message through the two-phase flow.
+
+        Phase 1: Router classifies intents or returns a direct response.
+        Phase 2: Executor runs native FC loop with tool declarations.
 
         Returns dict with:
             - response: str (assistant's message)
-            - actions: list of {tool, params, result} (all actions across iterations)
-            - steps: list of {iteration, actions} (intermediate tool-call rounds)
-            - pending_confirmation: dict or None
+            - actions: list of {tool, params, result} dicts
+            - steps: list of {iteration, actions} dicts
             - set_active_page: int or None
         """
-        model = self.session.model_used or 'gemini-flash'
-
-        # Build initial messages
-        system_prompt = build_system_prompt(self.session)
-        history = self.session.get_history_for_prompt()
-        user_prompt = build_user_prompt(message, history)
-
-        messages = [
-            {'role': 'system', 'content': system_prompt},
-            {'role': 'user', 'content': user_prompt},
-        ]
-
         # Store user message
         self.session.add_message('user', message)
+
+        # Build snapshot for router
+        snapshot = build_router_snapshot(self.session)
+
+        # Phase 1: Router classification
+        history = self.session.get_history_for_prompt()
+        try:
+            router_result = Router.classify(message, snapshot, history=history)
+        except Exception as e:
+            logger.exception('Router classification failed')
+            router_result = {
+                'intents': ['pages', 'navigation', 'settings'],
+                'needs_active_page': False,
+                'direct_response': None,
+            }
+
+        # Direct response — no tools needed
+        if router_result.get('direct_response'):
+            response_text = router_result['direct_response']
+            self.session.add_message('assistant', response_text)
+            self._auto_title(message)
+            return {
+                'response': response_text,
+                'actions': [],
+                'steps': [],
+                'set_active_page': None,
+            }
+
+        # Phase 2: Executor with native FC
+        intents = router_result.get('intents', [])
+
+        # If router says we need active page but none is set, add 'pages' intent
+        # so set_active_page tool is available
+        if router_result.get('needs_active_page') and not self.session.active_page:
+            if 'pages' not in intents:
+                intents.append('pages')
+
+        # Always include 'pages' so set_active_page is available
+        if 'pages' not in intents:
+            intents.append('pages')
+
+        return self._execute_phase2(message, intents, snapshot, user=user)
+
+    def _execute_phase2(self, message, intents, snapshot, user=None):
+        """Execute the native Gemini FC loop.
+
+        Builds the executor prompt, assembles tool declarations from intents,
+        calls the LLM, executes tool calls, feeds results back, and loops
+        until the LLM returns text (no more function calls) or max iterations.
+
+        Returns the same shape dict as handle_message().
+        """
+        from google.genai import types
+
+        # Build system instruction and tools
+        system_instruction = build_executor_prompt(self.session, snapshot)
+        tools = build_tool_declarations(intents)
+
+        # Build contents (conversation history + current message)
+        contents = self._build_contents(message)
 
         context = {
             'session': self.session,
             'user': user,
             'active_page': self.session.active_page,
-            'model': model,
+            'model': 'gemini-flash',
         }
 
         all_executed_actions = []
         steps = []
         set_active_page = None
         iteration = 0
+        current_intents = set(intents)
 
-        while iteration <= MAX_TOOL_ITERATIONS:
-            # Call LLM
+        while iteration < MAX_TOOL_ITERATIONS:
+            # Call LLM with native FC
             try:
-                response = self.llm.get_completion(messages, tool_name=model)
-                raw_content = response.choices[0].message.content
+                response = self.llm.get_completion_with_tools(
+                    contents=contents,
+                    system_instruction=system_instruction,
+                    tools=tools,
+                    tool_name='gemini-flash',
+                )
             except Exception as e:
-                logger.exception('LLM call failed at iteration %d', iteration)
+                logger.exception('LLM FC call failed at iteration %d', iteration)
+                error_msg = f'Sorry, I encountered an error: {str(e)}'
+                self.session.add_message('assistant', error_msg)
                 return {
-                    'response': f'Sorry, I encountered an error: {str(e)}',
+                    'response': error_msg,
                     'actions': all_executed_actions,
                     'steps': steps,
-                    'pending_confirmation': None,
                     'set_active_page': set_active_page,
                 }
 
-            # Parse
-            parsed = self._parse_response(raw_content)
-            has_response = parsed['has_response']
-            response_text = parsed['response']
-            actions_data = parsed['actions']
-            pending = parsed['pending_confirmation']
-
-            # --- Exit conditions ---
-
-            # Destructive confirmation — return immediately
-            if pending:
-                self.session.add_message('assistant', response_text, actions=[{
-                    'tool': pending['tool'],
-                    'status': 'pending_confirmation',
-                }])
+            # Extract the model's content
+            if not response.candidates:
+                error_msg = 'No response from the model.'
+                self.session.add_message('assistant', error_msg)
                 return {
-                    'response': response_text,
+                    'response': error_msg,
                     'actions': all_executed_actions,
                     'steps': steps,
-                    'pending_confirmation': pending,
                     'set_active_page': set_active_page,
                 }
 
-            # Final response or max iterations reached
-            if has_response or iteration == MAX_TOOL_ITERATIONS:
-                if not has_response and iteration == MAX_TOOL_ITERATIONS:
-                    logger.warning('Max tool iterations reached, forcing response')
+            model_content = response.candidates[0].content
 
-                # Execute any final actions
-                final_actions, page_switch = self._execute_actions(
-                    actions_data, context
-                )
-                all_executed_actions.extend(final_actions)
-                if page_switch:
-                    set_active_page = page_switch
-                    self._refresh_context(context, page_switch)
+            # Check what the response contains
+            function_calls = []
+            text_parts = []
+            for part in (model_content.parts or []):
+                if part.function_call:
+                    function_calls.append(part.function_call)
+                elif part.text:
+                    text_parts.append(part.text)
 
-                # Verify actions match claims
-                response_text, needs_retry = self._verify_actions(
-                    response_text, all_executed_actions
-                )
+            # No function calls — we have a final text response
+            if not function_calls:
+                response_text = '\n'.join(text_parts) if text_parts else ''
+                if not response_text:
+                    response_text = 'Done.'
 
-                if needs_retry:
-                    # Retry once with correction prompt
-                    messages.append({'role': 'assistant', 'content': raw_content})
-                    messages.append({'role': 'user', 'content': (
-                        'Your response claims you performed an action, but no tool '
-                        'was executed. You MUST include the tool call in <actions> '
-                        'to actually perform it. Try again.'
-                    )})
-
-                    retry_result = self._retry_for_verification(
-                        messages, model, context, all_executed_actions, steps,
-                        set_active_page
-                    )
-                    if retry_result:
-                        return retry_result
-
-                    # Retry also failed — append warning
-                    response_text += (
-                        '\n\nNote: The requested action could not be completed. '
-                        'Please try again with a more specific request.'
-                    )
-
-                # Save and return
-                self.session.add_message(
-                    'assistant', response_text, actions=all_executed_actions
-                )
+                self.session.add_message('assistant', response_text, actions=all_executed_actions or None)
                 self._auto_title(message)
-
                 return {
                     'response': response_text,
                     'actions': all_executed_actions,
                     'steps': steps,
-                    'pending_confirmation': None,
                     'set_active_page': set_active_page,
                 }
 
-            # --- Tool call mode (no <response>) — execute and loop ---
-            logger.info(
-                'Tool loop iteration %d: %d actions',
-                iteration + 1, len(actions_data)
-            )
+            # Execute function calls
+            function_response_parts = []
+            iteration_actions = []
+            needs_context_refresh = False
 
-            executed, page_switch = self._execute_actions(actions_data, context)
-            all_executed_actions.extend(executed)
-            if page_switch:
-                set_active_page = page_switch
-                self._refresh_context(context, page_switch)
+            for fc in function_calls:
+                fc_name = fc.name
+                fc_args = dict(fc.args) if fc.args else {}
 
-            # Record step
+                # Handle meta-tool: request_additional_tools
+                if fc_name == 'request_additional_tools':
+                    categories = fc_args.get('categories', [])
+                    new_categories = [c for c in categories if c not in current_intents]
+                    current_intents.update(categories)
+                    tools = build_tool_declarations(list(current_intents))
+                    result = {
+                        'success': True,
+                        'message': f'Added tool categories: {", ".join(new_categories)}' if new_categories else 'All requested categories already available.',
+                    }
+                    function_response_parts.append(
+                        types.Part.from_function_response(name=fc_name, response=result)
+                    )
+                    iteration_actions.append({
+                        'tool': fc_name,
+                        'params': fc_args,
+                        'success': True,
+                        'message': result['message'],
+                    })
+                    continue
+
+                # Execute the tool
+                result = ToolRegistry.execute(fc_name, fc_args, context)
+
+                action_record = {
+                    'tool': fc_name,
+                    'params': fc_args,
+                    'success': result.get('success', False),
+                    'message': result.get('message', ''),
+                }
+                # Include query result data for the frontend
+                for key in ('pages', 'page', 'menu_items', 'settings', 'images',
+                            'stats', 'page_id', 'menu_item_id', 'form_id',
+                            'forms', 'submissions', 'posts', 'post', 'categories'):
+                    if key in result:
+                        action_record[key] = result[key]
+
+                iteration_actions.append(action_record)
+
+                # Track page switches
+                if result.get('set_active_page'):
+                    set_active_page = result['set_active_page']
+                    self._refresh_context(context, set_active_page)
+
+                # Check if context refresh is needed
+                if fc_name in PAGE_CONTEXT_MUTATIONS and result.get('success', False):
+                    needs_context_refresh = True
+
+                # Build function response part
+                function_response_parts.append(
+                    types.Part.from_function_response(name=fc_name, response=result)
+                )
+
+            all_executed_actions.extend(iteration_actions)
             steps.append({
                 'iteration': iteration + 1,
-                'actions': executed,
+                'actions': iteration_actions,
             })
 
-            # Append assistant output + tool results to messages
-            messages.append({'role': 'assistant', 'content': raw_content})
-            tool_results_text = self._format_tool_results(executed)
-            messages.append({'role': 'user', 'content': tool_results_text})
+            # Append model's response content and function results to contents
+            contents.append(model_content)
+            contents.append(types.Content(role='user', parts=function_response_parts))
 
-            # Rebuild system prompt (page context may have changed)
-            messages[0] = {
-                'role': 'system',
-                'content': build_system_prompt(self.session),
-            }
+            # Refresh system instruction if page context changed
+            if needs_context_refresh:
+                # Refresh session's active page from DB
+                self.session.refresh_from_db()
+                snapshot = build_router_snapshot(self.session)
+                system_instruction = build_executor_prompt(self.session, snapshot)
+                # Rebuild tools with updated declarations (need to pass new system_instruction)
+                tools = build_tool_declarations(list(current_intents))
 
             iteration += 1
 
-        # Should not reach here, but safety return
+        # Max iterations reached — force a text response
+        logger.warning('Max FC iterations reached (%d)', MAX_TOOL_ITERATIONS)
+        response_text = 'I completed the available operations. Let me know if you need anything else.'
+        self.session.add_message('assistant', response_text, actions=all_executed_actions or None)
+        self._auto_title(message)
         return {
-            'response': 'I was unable to complete the request within the allowed number of steps.',
+            'response': response_text,
             'actions': all_executed_actions,
             'steps': steps,
-            'pending_confirmation': None,
             'set_active_page': set_active_page,
         }
 
-    def execute_confirmed_action(self, tool_name, params, user=None):
-        """Execute a previously confirmed destructive action."""
-        context = {
-            'session': self.session,
-            'user': user,
-            'active_page': self.session.active_page,
-            'model': self.session.model_used or 'gemini-flash',
-        }
+    def _build_contents(self, message):
+        """Convert session history to Gemini contents format.
 
-        result = ToolRegistry.execute(tool_name, params, context)
+        Returns a list of Content objects with role user/model,
+        plus the current message as the final user content.
+        """
+        from google.genai import types
 
-        action_record = {
-            'tool': tool_name,
-            'params': params,
-            'success': result.get('success', False),
-            'message': result.get('message', ''),
-        }
-        self.session.add_message(
-            'assistant', result.get('message', 'Action executed.'),
-            actions=[action_record]
+        contents = []
+        # Get history messages (excluding the just-added current message)
+        messages = self.session.messages[:-1]  # The last one is the current user message we just added
+
+        for msg in messages:
+            role = msg.get('role', '')
+            content = msg.get('content', '')
+            if not content:
+                continue
+
+            if role == 'user':
+                contents.append(
+                    types.Content(role='user', parts=[types.Part.from_text(text=content)])
+                )
+            elif role == 'assistant':
+                contents.append(
+                    types.Content(role='model', parts=[types.Part.from_text(text=content)])
+                )
+
+        # Add current message
+        contents.append(
+            types.Content(role='user', parts=[types.Part.from_text(text=message)])
         )
 
-        return {
-            'response': result.get('message', ''),
-            'actions': [action_record],
-            'set_active_page': result.get('set_active_page'),
-        }
-
-    def _execute_actions(self, actions_data, context):
-        """Execute a list of tool actions. Returns (executed_actions, set_active_page)."""
-        executed = []
-        set_active_page = None
-
-        for action in actions_data:
-            tool_name = action.get('tool')
-            params = action.get('params', {})
-
-            result = ToolRegistry.execute(tool_name, params, context)
-            action_record = {
-                'tool': tool_name,
-                'params': params,
-                'success': result.get('success', False),
-                'message': result.get('message', ''),
-            }
-            # Include query result data for the frontend
-            for key in ('pages', 'page', 'menu_items', 'settings', 'images',
-                        'contacts', 'stats', 'page_id', 'menu_item_id'):
-                if key in result:
-                    action_record[key] = result[key]
-            executed.append(action_record)
-
-            # Track page switches
-            if result.get('set_active_page'):
-                set_active_page = result['set_active_page']
-                self._refresh_context(context, set_active_page)
-
-        return executed, set_active_page
+        return contents
 
     def _refresh_context(self, context, page_id):
         """Refresh active_page in context after a page switch."""
         from core.models import Page
         try:
-            context['active_page'] = Page.objects.get(pk=page_id)
+            page = Page.objects.get(pk=page_id)
+            context['active_page'] = page
+            self.session.set_active_page(page)
         except Page.DoesNotExist:
             pass
-
-    def _format_tool_results(self, executed_actions):
-        """Format tool results as compact text for injection back to LLM."""
-        if not executed_actions:
-            return 'Tool results:\nNo actions were executed.'
-
-        parts = ['Tool results:\n']
-        for action in executed_actions:
-            tool = action.get('tool', 'unknown')
-            success = action.get('success', False)
-            status = 'Success' if success else 'Failed'
-            message = action.get('message', '')
-
-            parts.append(f'### {tool} → {status}')
-            if message:
-                parts.append(message)
-
-            # Include key data so the LLM can reference it
-            if action.get('pages'):
-                lines = []
-                for p in action['pages']:
-                    title = p.get('title', {})
-                    if isinstance(title, dict):
-                        title_str = title.get('en') or title.get('pt') or str(title)
-                    else:
-                        title_str = str(title)
-                    active = 'Yes' if p.get('is_active') else 'No'
-                    lines.append(f"  ID:{p['id']} | {title_str} | Active:{active}")
-                parts.append('\n'.join(lines))
-
-            if action.get('page'):
-                p = action['page']
-                title = p.get('title', {})
-                if isinstance(title, dict):
-                    title_str = title.get('en') or title.get('pt') or str(title)
-                else:
-                    title_str = str(title)
-                parts.append(f"Page: \"{title_str}\" (ID: {p.get('id', '?')})")
-                if p.get('sections'):
-                    parts.append(f"Sections: {', '.join(p['sections'])}")
-                if p.get('translations'):
-                    for lang, trans in p['translations'].items():
-                        sample = list(trans.items())[:5]
-                        sample_str = ', '.join(
-                            f'{k}="{v[:40]}"' for k, v in sample
-                        )
-                        extra = f' (+{len(trans)-5} more)' if len(trans) > 5 else ''
-                        parts.append(f"  {lang}: {sample_str}{extra}")
-
-            if action.get('menu_items'):
-                for m in action['menu_items']:
-                    label = m.get('label', {})
-                    if isinstance(label, dict):
-                        label_str = label.get('en') or label.get('pt') or str(label)
-                    else:
-                        label_str = str(label)
-                    parts.append(f"  #{m['id']}: {label_str}")
-                    for c in m.get('children', []):
-                        cl = c.get('label', {})
-                        if isinstance(cl, dict):
-                            cl_str = cl.get('en') or cl.get('pt') or str(cl)
-                        else:
-                            cl_str = str(cl)
-                        parts.append(f"    └ #{c['id']}: {cl_str}")
-
-            if action.get('stats'):
-                for k, v in action['stats'].items():
-                    parts.append(f"  {k}: {v}")
-
-            if action.get('settings'):
-                for k, v in action['settings'].items():
-                    val = json.dumps(v) if isinstance(v, (dict, list)) else str(v)
-                    parts.append(f"  {k}: {val[:80]}")
-
-            if action.get('page_id'):
-                parts.append(f"Created page ID: {action['page_id']}")
-
-            if action.get('menu_item_id'):
-                parts.append(f"Created menu item ID: {action['menu_item_id']}")
-
-            parts.append('')  # blank line between actions
-
-        return '\n'.join(parts)
-
-    def _verify_actions(self, response_text, all_executed_actions):
-        """
-        Check if response claims match actual tool executions.
-        Returns (possibly_modified_response_text, needs_retry).
-        """
-        response_lower = response_text.lower()
-
-        # Does the response claim a write action?
-        claims_write = any(kw in response_lower for kw in WRITE_CLAIM_KEYWORDS)
-        if not claims_write:
-            return response_text, False
-
-        # Were any write tools actually executed successfully?
-        successful_writes = [
-            a for a in all_executed_actions
-            if a.get('tool') in WRITE_TOOLS and a.get('success')
-        ]
-
-        if successful_writes:
-            # Check for partial failures
-            failed = [a for a in all_executed_actions if not a.get('success')]
-            if failed:
-                failures = ', '.join(
-                    f"{a['tool']}: {a['message']}" for a in failed
-                )
-                response_text += f'\n\nSome actions failed: {failures}'
-            return response_text, False
-
-        # Hallucination: claims write but no write tools executed
-        return response_text, True
-
-    def _retry_for_verification(self, messages, model, context,
-                                 all_executed_actions, steps, set_active_page):
-        """
-        Retry LLM call after hallucination detection.
-        Returns a complete result dict if retry succeeds, None otherwise.
-        """
-        try:
-            response = self.llm.get_completion(messages, tool_name=model)
-            raw_content = response.choices[0].message.content
-        except Exception as e:
-            logger.exception('Verification retry LLM call failed')
-            return None
-
-        parsed = self._parse_response(raw_content)
-        if not parsed['has_response']:
-            # Retry produced another tool-only call — execute it
-            executed, page_switch = self._execute_actions(
-                parsed['actions'], context
-            )
-            all_executed_actions.extend(executed)
-            if page_switch:
-                set_active_page = page_switch
-
-            # Check if write tools ran this time
-            successful_writes = [
-                a for a in executed
-                if a.get('tool') in WRITE_TOOLS and a.get('success')
-            ]
-            if successful_writes:
-                response_text = 'Action completed.'
-                self.session.add_message(
-                    'assistant', response_text, actions=all_executed_actions
-                )
-                return {
-                    'response': response_text,
-                    'actions': all_executed_actions,
-                    'steps': steps,
-                    'pending_confirmation': None,
-                    'set_active_page': set_active_page,
-                }
-            return None
-
-        # Retry produced a response — execute any actions
-        response_text = parsed['response']
-        executed, page_switch = self._execute_actions(
-            parsed['actions'], context
-        )
-        all_executed_actions.extend(executed)
-        if page_switch:
-            set_active_page = page_switch
-
-        # Check if write tools ran
-        successful_writes = [
-            a for a in executed
-            if a.get('tool') in WRITE_TOOLS and a.get('success')
-        ]
-        if successful_writes:
-            self.session.add_message(
-                'assistant', response_text, actions=all_executed_actions
-            )
-            self._auto_title_from_session()
-            return {
-                'response': response_text,
-                'actions': all_executed_actions,
-                'steps': steps,
-                'pending_confirmation': None,
-                'set_active_page': set_active_page,
-            }
-
-        return None
 
     def _auto_title(self, message):
         """Auto-title session on first exchange."""
         if len(self.session.messages) == 2 and not self.session.title:
             self.session.title = message[:100]
             self.session.save(update_fields=['title'])
-
-    def _auto_title_from_session(self):
-        """Auto-title from first user message in session."""
-        if not self.session.title and self.session.messages:
-            for msg in self.session.messages:
-                if msg.get('role') == 'user':
-                    self.session.title = msg['content'][:100]
-                    self.session.save(update_fields=['title'])
-                    break
-
-    def _parse_response(self, raw):
-        """Parse XML-tagged LLM response into components."""
-        result = {
-            'response': '',
-            'has_response': False,
-            'actions': [],
-            'pending_confirmation': None,
-        }
-
-        # Extract <response>
-        response_match = re.search(r'<response>(.*?)</response>', raw, re.DOTALL)
-        if response_match:
-            result['response'] = response_match.group(1).strip()
-            result['has_response'] = True
-        else:
-            # No <response> tag — check if there's non-tag text (fallback)
-            stripped = re.sub(
-                r'<(?:actions|pending_confirmation)>.*?</(?:actions|pending_confirmation)>',
-                '', raw, flags=re.DOTALL
-            ).strip()
-            if stripped:
-                result['response'] = stripped
-                # Don't set has_response — this is fallback text, not an explicit response
-
-        # Extract <pending_confirmation>
-        pending_match = re.search(
-            r'<pending_confirmation>(.*?)</pending_confirmation>', raw, re.DOTALL
-        )
-        if pending_match:
-            try:
-                result['pending_confirmation'] = json.loads(
-                    pending_match.group(1).strip()
-                )
-                result['has_response'] = True  # Confirmation always ends the loop
-            except json.JSONDecodeError:
-                logger.warning('Failed to parse pending_confirmation JSON')
-
-        # Extract <actions>
-        actions_match = re.search(r'<actions>(.*?)</actions>', raw, re.DOTALL)
-        if actions_match:
-            try:
-                result['actions'] = json.loads(actions_match.group(1).strip())
-                if not isinstance(result['actions'], list):
-                    result['actions'] = []
-            except json.JSONDecodeError:
-                logger.warning('Failed to parse actions JSON')
-                result['actions'] = []
-
-        return result

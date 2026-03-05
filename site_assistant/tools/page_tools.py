@@ -138,7 +138,6 @@ def refine_page(params, context):
     return {'success': True, 'message': 'Refined entire page with AI'}
 
 
-# Registry — update_translations REMOVED (was dead code)
 PAGE_TOOLS = {
     'update_element_styles': update_element_styles,
     'update_element_attribute': update_element_attribute,
