@@ -4,3 +4,4 @@ from .menu import MenuService
 from .settings import SettingsService
 from .forms import FormService
 from .media import MediaService
+from .global_sections import GlobalSectionService
