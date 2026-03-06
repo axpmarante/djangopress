@@ -1,10 +1,25 @@
 from django.shortcuts import render
 from django.contrib import messages
+from django.middleware.locale import LocaleMiddleware as DjangoLocaleMiddleware
 from django.utils.translation import gettext_lazy as _
 from django.utils import translation
 from django.conf import settings
 from django.core.cache import cache
 from .models import SiteSettings
+
+# Paths outside i18n_patterns that should never get language-prefix redirects
+NON_I18N_PATHS = ('/django-admin/', '/backoffice/', '/ai/', '/editor-v2/',
+                   '/site-assistant/', '/i18n/', '/set-language/', '/forms/',
+                   '/sitemap.xml', '/media/', '/static/', '/robots.txt')
+
+
+class LocaleMiddleware(DjangoLocaleMiddleware):
+    """Django's LocaleMiddleware but skip redirect for non-i18n paths."""
+
+    def __call__(self, request):
+        if any(request.path_info.startswith(p) for p in NON_I18N_PATHS):
+            return self.get_response(request)
+        return super().__call__(request)
 
 
 class DomainMiddleware:
@@ -79,7 +94,7 @@ class DynamicLanguageMiddleware:
     def __init__(self, get_response):
         self.get_response = get_response
         # Paths that should bypass language handling
-        self.bypass_paths = ['/django-admin/', '/backoffice/', '/ai/', '/editor-v2/', '/site-assistant/', '/i18n/', '/set-language/', '/forms/', '/sitemap.xml', '/media/', '/static/']
+        self.bypass_paths = NON_I18N_PATHS
 
     def __call__(self, request):
         from django.urls import resolve, Resolver404
