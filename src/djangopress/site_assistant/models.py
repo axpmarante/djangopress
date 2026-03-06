@@ -7,7 +7,7 @@ class AssistantSession(models.Model):
     title = models.CharField(max_length=200, blank=True, default='')
     messages = models.JSONField(default=list)
     active_page = models.ForeignKey(
-        'djangopress.core.Page', null=True, blank=True, on_delete=models.SET_NULL
+        'core.Page', null=True, blank=True, on_delete=models.SET_NULL
     )
     model_used = models.CharField(max_length=50, default='gemini-flash')
     created_by = models.ForeignKey(

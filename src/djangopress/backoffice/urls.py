@@ -1,7 +1,7 @@
 from django.urls import path
 from django.contrib.auth import views as auth_views
 from . import views, api_views
-from news import views as news_views
+from djangopress.news import views as news_views
 
 app_name = 'backoffice'
 

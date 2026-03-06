@@ -35,7 +35,7 @@ class AICallLog(models.Model):
     model_name = models.CharField(max_length=100)
     provider = models.CharField(max_length=20)
     page = models.ForeignKey(
-        'djangopress.core.Page', on_delete=models.SET_NULL, null=True, blank=True,
+        'core.Page', on_delete=models.SET_NULL, null=True, blank=True,
         related_name='ai_call_logs',
     )
     section_name = models.CharField(max_length=100, blank=True, default='')
@@ -96,7 +96,7 @@ def log_ai_call(action, model_name, provider, system_prompt='', user_prompt='',
 class RefinementSession(models.Model):
     """A conversational refinement session for a page."""
     page = models.ForeignKey(
-        'djangopress.core.Page',
+        'core.Page',
         on_delete=models.CASCADE,
         related_name='refinement_sessions',
         null=True, blank=True,
