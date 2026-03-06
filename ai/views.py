@@ -13,6 +13,7 @@ from django.views.decorators.csrf import csrf_exempt
 from core.models import Page
 from .services import ContentGenerationService
 from .models import log_ai_call
+from .utils.llm_config import get_ai_model
 from .utils.sse import run_with_progress, sse_response, sse_event
 
 
@@ -62,7 +63,7 @@ def generate_page_api(request):
         if request.content_type and 'multipart' in request.content_type:
             brief = request.POST.get('brief')
             language = request.POST.get('language', 'pt')
-            model = request.POST.get('model', 'gemini-pro')
+            model = request.POST.get('model') or get_ai_model('generation')
             blueprint_page_id = request.POST.get('blueprint_page_id')
             reference_images = []
             for f in request.FILES.getlist('reference_images'):
@@ -71,7 +72,7 @@ def generate_page_api(request):
             data = json.loads(request.body)
             brief = data.get('brief')
             language = data.get('language', 'pt')
-            model = data.get('model', 'gemini-pro')
+            model = data.get('model') or get_ai_model('generation')
             blueprint_page_id = data.get('blueprint_page_id')
             reference_images = []
 
@@ -131,7 +132,7 @@ def generate_page_stream(request):
         if request.content_type and 'multipart' in request.content_type:
             brief = request.POST.get('brief')
             language = request.POST.get('language', 'pt')
-            model = request.POST.get('model', 'gemini-pro')
+            model = request.POST.get('model') or get_ai_model('generation')
             blueprint_page_id = request.POST.get('blueprint_page_id')
             reference_images = []
             for f in request.FILES.getlist('reference_images'):
@@ -140,7 +141,7 @@ def generate_page_stream(request):
             data = json.loads(request.body)
             brief = data.get('brief')
             language = data.get('language', 'pt')
-            model = data.get('model', 'gemini-pro')
+            model = data.get('model') or get_ai_model('generation')
             blueprint_page_id = data.get('blueprint_page_id')
             reference_images = []
 
@@ -196,7 +197,7 @@ def refine_header_api(request):
     try:
         data = json.loads(request.body)
         instructions = data.get('instructions')
-        model = data.get('model', 'gemini-pro')
+        model = data.get('model') or get_ai_model('header_footer')
 
         if not instructions:
             return JsonResponse({
@@ -250,7 +251,7 @@ def refine_footer_api(request):
     try:
         data = json.loads(request.body)
         instructions = data.get('instructions')
-        model = data.get('model', 'gemini-pro')
+        model = data.get('model') or get_ai_model('header_footer')
 
         if not instructions:
             return JsonResponse({
@@ -417,7 +418,7 @@ def analyze_bulk_pages_api(request):
         data = json.loads(request.body)
         description = data.get('description')
         language = data.get('language', 'pt')
-        model = data.get('model', 'gemini-pro')
+        model = data.get('model') or get_ai_model('generation')
 
         if not description:
             return JsonResponse({
@@ -580,7 +581,7 @@ def refine_page_with_html_api(request):
             instructions = request.POST.get('instructions')
             section_name = request.POST.get('section_name')
             language = request.POST.get('language', 'pt')
-            model = request.POST.get('model', 'gemini-pro')
+            model = request.POST.get('model') or get_ai_model('refinement_section')
             reference_images = []
             for f in request.FILES.getlist('reference_images'):
                 reference_images.append({'bytes': f.read(), 'mime_type': f.content_type})
@@ -590,7 +591,7 @@ def refine_page_with_html_api(request):
             instructions = data.get('instructions')
             section_name = data.get('section_name')
             language = data.get('language', 'pt')
-            model = data.get('model', 'gemini-pro')
+            model = data.get('model') or get_ai_model('refinement_section')
             reference_images = []
 
         if not page_id or not instructions:
@@ -668,7 +669,7 @@ def chat_refine_page_api(request):
             session_id = request.POST.get('session_id')
             if session_id:
                 session_id = int(session_id)
-            model = request.POST.get('model', 'gemini-pro')
+            model = request.POST.get('model') or get_ai_model('refinement_page')
             handle_images = request.POST.get('handle_images') in ('true', '1', 'on')
             reference_images = []
             for f in request.FILES.getlist('reference_images'):
@@ -678,7 +679,7 @@ def chat_refine_page_api(request):
             page_id = data.get('page_id')
             message = data.get('message')
             session_id = data.get('session_id')
-            model = data.get('model', 'gemini-pro')
+            model = data.get('model') or get_ai_model('refinement_page')
             handle_images = bool(data.get('handle_images', False))
             reference_images = []
 
@@ -848,7 +849,7 @@ def chat_refine_page_stream(request):
             session_id = request.POST.get('session_id')
             if session_id:
                 session_id = int(session_id)
-            model = request.POST.get('model', 'gemini-pro')
+            model = request.POST.get('model') or get_ai_model('refinement_page')
             handle_images = request.POST.get('handle_images') in ('true', '1', 'on')
             reference_images = []
             for f in request.FILES.getlist('reference_images'):
@@ -858,7 +859,7 @@ def chat_refine_page_stream(request):
             page_id = data.get('page_id')
             message = data.get('message')
             session_id = data.get('session_id')
-            model = data.get('model', 'gemini-pro')
+            model = data.get('model') or get_ai_model('refinement_page')
             handle_images = bool(data.get('handle_images', False))
             reference_images = []
 
@@ -1004,7 +1005,7 @@ def refine_header_stream(request):
     try:
         data = json.loads(request.body)
         instructions = data.get('instructions')
-        model = data.get('model', 'gemini-pro')
+        model = data.get('model') or get_ai_model('header_footer')
 
         if not instructions:
             return sse_response(iter([
@@ -1086,7 +1087,7 @@ def refine_footer_stream(request):
     try:
         data = json.loads(request.body)
         instructions = data.get('instructions')
-        model = data.get('model', 'gemini-pro')
+        model = data.get('model') or get_ai_model('header_footer')
 
         if not instructions:
             return sse_response(iter([
@@ -1178,7 +1179,7 @@ def generate_design_guide_ai_api(request):
         if request.content_type and 'multipart' in request.content_type:
             page_ids_raw = request.POST.getlist('page_ids')
             page_ids = [int(pid) for pid in page_ids_raw if pid]
-            model = request.POST.get('model', 'gemini-pro')
+            model = request.POST.get('model') or get_ai_model('generation')
             existing_guide = request.POST.get('existing_guide', '')
             style_instructions = request.POST.get('style_instructions', '')
             reference_images = []
@@ -1187,7 +1188,7 @@ def generate_design_guide_ai_api(request):
         else:
             data = json.loads(request.body)
             page_ids = data.get('page_ids', [])
-            model = data.get('model', 'gemini-pro')
+            model = data.get('model') or get_ai_model('generation')
             existing_guide = data.get('existing_guide', '')
             style_instructions = data.get('style_instructions', '')
             reference_images = []
@@ -1466,7 +1467,7 @@ def analyze_page_images_api(request):
         data = json.loads(request.body)
         page_id = data.get('page_id')
         images = data.get('images', [])
-        model = data.get('model', 'gemini-pro')
+        model = data.get('model') or get_ai_model('image_analysis')
 
         if not page_id or not images:
             return JsonResponse({
@@ -1650,7 +1651,7 @@ def bulk_translate_api(request):
         page_ids = data.get('page_ids', [])
         section_ids = data.get('section_ids', [])
         target_languages = data.get('target_languages', [])
-        model = data.get('model', 'gemini-flash')
+        model = data.get('model') or get_ai_model('translation')
 
         if not target_languages:
             return JsonResponse({
@@ -1794,7 +1795,7 @@ def suggest_page_sections_api(request):
 
         data = json.loads(request.body)
         bp_page_id = data.get('blueprint_page_id')
-        model = data.get('model', 'gemini-pro')
+        model = data.get('model') or get_ai_model('generation')
 
         if not bp_page_id:
             return JsonResponse({'success': False, 'error': 'blueprint_page_id is required'}, status=400)
@@ -1895,7 +1896,7 @@ def fill_section_content_api(request):
         section_title = data.get('section_title', '')
         other_sections = data.get('other_sections', [])
         context = data.get('context', '')
-        model = data.get('model', 'gemini-pro')
+        model = data.get('model') or get_ai_model('generation')
 
         if not bp_page_id or not section_title:
             return JsonResponse({'success': False, 'error': 'blueprint_page_id and section_title are required'}, status=400)
@@ -2040,7 +2041,7 @@ def describe_images_api(request):
         if not image_ids:
             return JsonResponse({'success': False, 'error': 'No image IDs provided'}, status=400)
 
-        service = ContentGenerationService(model_name='gemini-flash')
+        service = ContentGenerationService(model_name=get_ai_model('image_analysis'))
         results = service.describe_images(image_ids=image_ids)
 
         return JsonResponse({
@@ -2101,7 +2102,7 @@ def enhance_prompt_api(request):
 
         from .utils.llm_config import LLMBase
         llm = LLMBase()
-        model = 'gemini-flash'
+        model = get_ai_model('refinement_page')
         actual_model, provider = _get_model_info(model)
         t0 = time.time()
 
@@ -2227,7 +2228,7 @@ def generate_news_post_api(request):
         if request.content_type and 'multipart' in request.content_type:
             brief = request.POST.get('brief')
             language = request.POST.get('language', 'pt')
-            model = request.POST.get('model', 'gemini-pro')
+            model = request.POST.get('model') or get_ai_model('generation')
             reference_images = []
             for f in request.FILES.getlist('reference_images'):
                 reference_images.append({'bytes': f.read(), 'mime_type': f.content_type})
@@ -2235,7 +2236,7 @@ def generate_news_post_api(request):
             data = json.loads(request.body)
             brief = data.get('brief')
             language = data.get('language', 'pt')
-            model = data.get('model', 'gemini-pro')
+            model = data.get('model') or get_ai_model('generation')
             reference_images = []
 
         if not brief:
@@ -2273,7 +2274,7 @@ def generate_news_post_stream(request):
         if request.content_type and 'multipart' in request.content_type:
             brief = request.POST.get('brief')
             language = request.POST.get('language', 'pt')
-            model = request.POST.get('model', 'gemini-pro')
+            model = request.POST.get('model') or get_ai_model('generation')
             reference_images = []
             for f in request.FILES.getlist('reference_images'):
                 reference_images.append({'bytes': f.read(), 'mime_type': f.content_type})
@@ -2281,7 +2282,7 @@ def generate_news_post_stream(request):
             data = json.loads(request.body)
             brief = data.get('brief')
             language = data.get('language', 'pt')
-            model = data.get('model', 'gemini-pro')
+            model = data.get('model') or get_ai_model('generation')
             reference_images = []
 
         if not brief:
@@ -2328,7 +2329,7 @@ def chat_refine_news_api(request):
             session_id = request.POST.get('session_id')
             if session_id:
                 session_id = int(session_id)
-            model = request.POST.get('model', 'gemini-pro')
+            model = request.POST.get('model') or get_ai_model('refinement_page')
             handle_images = request.POST.get('handle_images') in ('true', '1', 'on')
             reference_images = []
             for f in request.FILES.getlist('reference_images'):
@@ -2338,7 +2339,7 @@ def chat_refine_news_api(request):
             post_id = data.get('post_id')
             message = data.get('message')
             session_id = data.get('session_id')
-            model = data.get('model', 'gemini-pro')
+            model = data.get('model') or get_ai_model('refinement_page')
             handle_images = bool(data.get('handle_images', False))
             reference_images = []
 
@@ -2467,7 +2468,7 @@ def chat_refine_news_stream(request):
             session_id = request.POST.get('session_id')
             if session_id:
                 session_id = int(session_id)
-            model = request.POST.get('model', 'gemini-pro')
+            model = request.POST.get('model') or get_ai_model('refinement_page')
             handle_images = request.POST.get('handle_images') in ('true', '1', 'on')
             reference_images = []
             for f in request.FILES.getlist('reference_images'):
@@ -2477,7 +2478,7 @@ def chat_refine_news_stream(request):
             post_id = data.get('post_id')
             message = data.get('message')
             session_id = data.get('session_id')
-            model = data.get('model', 'gemini-pro')
+            model = data.get('model') or get_ai_model('refinement_page')
             handle_images = bool(data.get('handle_images', False))
             reference_images = []
 
@@ -2688,3 +2689,313 @@ def list_news_refinement_sessions_api(request, post_id):
             for s in sessions
         ]
     })
+
+
+# ─── Design Consistency Endpoints ────────────────────────────────────────────
+
+
+@superuser_required
+@require_http_methods(["POST"])
+def analyze_consistency_stream(request):
+    """
+    SSE streaming endpoint for design consistency analysis.
+
+    POST /ai/api/analyze-consistency/stream/
+    Body: {"custom_rules": "...", "model": "gemini-flash"}
+
+    Streams progress events, then a complete event with the full report.
+    """
+    try:
+        data = json.loads(request.body)
+        custom_rules = data.get('custom_rules', '')
+        model = data.get('model') or get_ai_model('consistency')
+
+        q = queue.Queue()
+        sentinel = object()
+
+        def on_progress(event_data):
+            q.put(('progress', event_data))
+
+        def worker():
+            try:
+                service = ContentGenerationService()
+                report = service.analyze_design_consistency(
+                    custom_rules=custom_rules,
+                    model_override=model,
+                    on_progress=on_progress,
+                )
+
+                # Compute summary
+                total_issues = 0
+                severity_counts = {'high': 0, 'medium': 0, 'low': 0}
+                categories = {}
+                affected_pages = 0
+
+                for entry in report:
+                    issues = entry.get('issues', [])
+                    if issues:
+                        affected_pages += 1
+                        total_issues += len(issues)
+                        for issue in issues:
+                            sev = issue.get('severity', 'medium')
+                            severity_counts[sev] = severity_counts.get(sev, 0) + 1
+                            cat = issue.get('category', 'other')
+                            categories[cat] = categories.get(cat, 0) + 1
+
+                q.put(('complete', {
+                    'success': True,
+                    'report': report,
+                    'summary': {
+                        'total_issues': total_issues,
+                        'severity': severity_counts,
+                        'categories': categories,
+                        'affected_pages': affected_pages,
+                        'total_pages': len(report),
+                    },
+                }))
+            except Exception as e:
+                q.put(('error', str(e)))
+            finally:
+                q.put(sentinel)
+
+        thread = threading.Thread(target=worker, daemon=True)
+        thread.start()
+
+        def generate():
+            while True:
+                try:
+                    item = q.get(timeout=300)
+                except queue.Empty:
+                    yield sse_event({'error': 'Analysis timed out'}, event='error')
+                    return
+                if item is sentinel:
+                    return
+                event_type, payload = item
+                if event_type == 'progress':
+                    yield sse_event(payload, event='progress')
+                elif event_type == 'complete':
+                    yield sse_event(payload, event='complete')
+                elif event_type == 'error':
+                    yield sse_event({'error': payload}, event='error')
+
+        return sse_response(generate())
+    except Exception as e:
+        return sse_response(iter([
+            sse_event({'error': str(e)}, event='error')
+        ]))
+
+
+@superuser_required
+@require_http_methods(["POST"])
+def fix_consistency_stream(request):
+    """
+    SSE streaming endpoint for fixing design inconsistencies.
+
+    POST /ai/api/fix-consistency/stream/
+    Body: {
+        "fixes": [
+            {"page_id": 1, "issues": [...]},
+            {"section_key": "main-header", "issues": [...]}
+        ],
+        "custom_rules": "...",
+        "model": "gemini-flash"
+    }
+
+    Streams per-page progress events, then a complete event with results.
+    """
+    try:
+        data = json.loads(request.body)
+        fixes = data.get('fixes', [])
+        custom_rules = data.get('custom_rules', '')
+        model = data.get('model') or get_ai_model('consistency')
+
+        if not fixes:
+            return sse_response(iter([
+                sse_event({'error': 'No fixes specified'}, event='error')
+            ]))
+
+        q = queue.Queue()
+        sentinel = object()
+
+        def on_progress(event_data):
+            q.put(('progress', event_data))
+
+        def worker():
+            try:
+                from core.models import SiteSettings, Page, GlobalSection
+
+                site_settings = SiteSettings.objects.first()
+                default_lang = site_settings.get_default_language() if site_settings else 'pt'
+                languages = site_settings.get_language_codes() if site_settings else ['pt']
+                other_languages = [l for l in languages if l != default_lang]
+
+                service = ContentGenerationService()
+                results = []
+                total = len(fixes)
+
+                for idx, fix_item in enumerate(fixes):
+                    page_id = fix_item.get('page_id')
+                    section_key = fix_item.get('section_key')
+                    issues = fix_item.get('issues', [])
+                    label = fix_item.get('label', f'Item {idx + 1}')
+
+                    on_progress({
+                        'step': 'fixing',
+                        'status': 'running',
+                        'current': idx + 1,
+                        'total': total,
+                        'label': label,
+                    })
+
+                    try:
+                        # Fix via AI
+                        result = service.fix_design_consistency(
+                            page_id=page_id,
+                            section_key=section_key,
+                            issues=issues,
+                            custom_rules=custom_rules,
+                            model_override=model,
+                        )
+
+                        fixed_html = result['html']
+
+                        if page_id:
+                            page = Page.objects.get(id=page_id)
+                            # Create version backup
+                            page.create_version(change_summary='Before design consistency fix')
+
+                            # Save fixed HTML
+                            html_i18n = dict(page.html_content_i18n or {})
+                            html_i18n[default_lang] = fixed_html
+                            page.html_content_i18n = html_i18n
+                            page.save(update_fields=['html_content_i18n'])
+
+                            # Auto-translate
+                            if other_languages:
+                                on_progress({
+                                    'step': 'translating',
+                                    'status': 'running',
+                                    'current': idx + 1,
+                                    'total': total,
+                                    'label': label,
+                                })
+                                translated = service.bulk_translate_page(page, other_languages)
+                                html_i18n = dict(page.html_content_i18n or {})
+                                html_i18n.update(translated)
+                                page.html_content_i18n = html_i18n
+                                page.save(update_fields=['html_content_i18n'])
+
+                            page_slug = ''
+                            slug_i18n = page.slug_i18n or {}
+                            page_slug = slug_i18n.get(default_lang, '') or page.slug or ''
+
+                            results.append({
+                                'page_id': page_id,
+                                'page_slug': page_slug,
+                                'label': label,
+                                'status': 'fixed',
+                                'issues_fixed': len(issues),
+                                'translated': len(other_languages),
+                            })
+
+                        elif section_key:
+                            section = GlobalSection.objects.get(key=section_key)
+
+                            # Save fixed HTML
+                            html_i18n = dict(section.html_template_i18n or {})
+                            html_i18n[default_lang] = fixed_html
+                            section.html_template_i18n = html_i18n
+                            section.save(update_fields=['html_template_i18n'])
+
+                            # Auto-translate
+                            if other_languages:
+                                on_progress({
+                                    'step': 'translating',
+                                    'status': 'running',
+                                    'current': idx + 1,
+                                    'total': total,
+                                    'label': label,
+                                })
+                                translated = service.bulk_translate_section(section, other_languages)
+                                html_i18n = dict(section.html_template_i18n or {})
+                                html_i18n.update(translated)
+                                section.html_template_i18n = html_i18n
+                                section.save(update_fields=['html_template_i18n'])
+
+                            results.append({
+                                'section_key': section_key,
+                                'label': label,
+                                'status': 'fixed',
+                                'issues_fixed': len(issues),
+                                'translated': len(other_languages),
+                            })
+
+                        on_progress({
+                            'step': 'fixed',
+                            'status': 'done',
+                            'current': idx + 1,
+                            'total': total,
+                            'label': label,
+                        })
+
+                    except Exception as e:
+                        results.append({
+                            'page_id': page_id,
+                            'section_key': section_key,
+                            'label': label,
+                            'status': 'error',
+                            'error': str(e),
+                        })
+                        on_progress({
+                            'step': 'fixed',
+                            'status': 'error',
+                            'current': idx + 1,
+                            'total': total,
+                            'label': label,
+                            'error': str(e),
+                        })
+
+                fixed_count = sum(1 for r in results if r['status'] == 'fixed')
+                error_count = sum(1 for r in results if r['status'] == 'error')
+                total_issues_fixed = sum(r.get('issues_fixed', 0) for r in results if r['status'] == 'fixed')
+
+                q.put(('complete', {
+                    'success': True,
+                    'results': results,
+                    'summary': {
+                        'fixed': fixed_count,
+                        'errors': error_count,
+                        'total': total,
+                        'total_issues_fixed': total_issues_fixed,
+                    },
+                }))
+            except Exception as e:
+                q.put(('error', str(e)))
+            finally:
+                q.put(sentinel)
+
+        thread = threading.Thread(target=worker, daemon=True)
+        thread.start()
+
+        def generate():
+            while True:
+                try:
+                    item = q.get(timeout=600)
+                except queue.Empty:
+                    yield sse_event({'error': 'Fix process timed out'}, event='error')
+                    return
+                if item is sentinel:
+                    return
+                event_type, payload = item
+                if event_type == 'progress':
+                    yield sse_event(payload, event='progress')
+                elif event_type == 'complete':
+                    yield sse_event(payload, event='complete')
+                elif event_type == 'error':
+                    yield sse_event({'error': payload}, event='error')
+
+        return sse_response(generate())
+    except Exception as e:
+        return sse_response(iter([
+            sse_event({'error': str(e)}, event='error')
+        ]))

@@ -143,11 +143,54 @@ MODEL_CONFIG = {
     ),
     'gemini-lite': ModelConfig(
         provider=ModelProvider.GOOGLE,
-        model_name="gemini-2.5-flash-lite",
+        model_name="gemini-3.1-flash-lite-preview",
         max_output_tokens=32000,
         temperature=0.3,
     )
 }
+
+# Default model assignments per task category
+AI_MODEL_DEFAULTS = {
+    'generation': 'gemini-pro',
+    'refinement_page': 'gemini-pro',
+    'refinement_section': 'gemini-flash',
+    'refinement_element': 'gemini-flash',
+    'header_footer': 'gemini-flash',
+    'translation': 'gemini-lite',
+    'metadata': 'gemini-lite',
+    'image_analysis': 'gemini-flash',
+    'assistant_router': 'gemini-lite',
+    'assistant_executor': 'gemini-flash',
+    'consistency': 'gemini-flash',
+}
+
+
+def get_ai_model(task):
+    """Get the configured model for a given AI task.
+
+    Reads from SiteSettings.ai_model_config, falls back to AI_MODEL_DEFAULTS.
+    Validates that the returned model exists in MODEL_CONFIG.
+
+    Args:
+        task: One of the keys in AI_MODEL_DEFAULTS.
+
+    Returns:
+        A model key string (e.g. 'gemini-flash').
+    """
+    default = AI_MODEL_DEFAULTS.get(task, 'gemini-flash')
+    try:
+        from core.models import SiteSettings
+        settings = SiteSettings.load()
+        config = settings.ai_model_config or {}
+        model = config.get(task, default)
+        # Backward compat: old 'refinement' key applies to all refinement_* sub-keys
+        if model == default and task.startswith('refinement_') and 'refinement' in config:
+            model = config['refinement']
+        if model not in MODEL_CONFIG:
+            return default
+        return model
+    except Exception:
+        return default
 
 
 class StandardizedLLMResponse:

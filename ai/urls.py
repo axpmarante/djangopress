@@ -64,4 +64,8 @@ urlpatterns = [
     path('api/chat-refine-news/stream/', views.chat_refine_news_stream, name='chat_refine_news_stream'),
     path('api/save-news-post/', views.save_news_post_api, name='save_news_post'),
     path('api/news-refinement-sessions/<int:post_id>/', views.list_news_refinement_sessions_api, name='list_news_refinement_sessions'),
+
+    # Design consistency
+    path('api/analyze-consistency/stream/', views.analyze_consistency_stream, name='analyze_consistency_stream'),
+    path('api/fix-consistency/stream/', views.fix_consistency_stream, name='fix_consistency_stream'),
 ]

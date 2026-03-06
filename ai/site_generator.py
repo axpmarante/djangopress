@@ -17,6 +17,8 @@ from typing import Dict, List, Optional, Tuple
 
 from bs4 import BeautifulSoup
 
+from ai.utils.llm_config import get_ai_model
+
 logger = logging.getLogger(__name__)
 
 
@@ -216,7 +218,7 @@ class SiteGenerator:
         self.dry_run = options.get('dry_run', False)
         self.skip_images = options.get('skip_images', False)
         self.skip_design_guide = options.get('skip_design_guide', False)
-        self.model = options.get('model', 'gemini-pro')
+        self.model = options.get('model') or get_ai_model('generation')
         self.image_strategy = options.get('image_strategy', None)
         self.delay = options.get('delay', 2)
         self.generated_pages = []
@@ -530,7 +532,7 @@ BUTTONS:
             {'role': 'system', 'content': system_prompt},
             {'role': 'user', 'content': user_prompt},
         ]
-        response = llm.get_completion(messages, tool_name='gemini-flash')
+        response = llm.get_completion(messages, tool_name=get_ai_model('generation'))
         content = response.choices[0].message.content
         data = self._extract_design_json(content)
 
@@ -875,7 +877,7 @@ for generating pages to ensure visual consistency."""
                 {'role': 'system', 'content': system_prompt},
                 {'role': 'user', 'content': user_prompt},
             ]
-            response = llm.get_completion(messages, tool_name='gemini-flash')
+            response = llm.get_completion(messages, tool_name=get_ai_model('generation'))
             guide = response.choices[0].message.content
 
             # Strip markdown code fences
@@ -884,7 +886,7 @@ for generating pages to ensure visual consistency."""
 
             settings.design_guide = guide
             settings.save()
-            self.log(f"  Design guide generated ({len(guide)} chars) using gemini-flash")
+            self.log(f"  Design guide generated ({len(guide)} chars)")
 
         except Exception as e:
             self.log(f"  Design guide generation failed: {e}")
@@ -956,7 +958,7 @@ for generating pages to ensure visual consistency."""
             result = service.refine_global_section(
                 section_key='main-header',
                 refinement_instructions=instructions,
-                model_override='gemini-flash',
+                model_override=get_ai_model('header_footer'),
                 on_progress=progress_cb,
             )
 
@@ -998,7 +1000,7 @@ for generating pages to ensure visual consistency."""
             result = service.refine_global_section(
                 section_key='main-footer',
                 refinement_instructions=instructions,
-                model_override='gemini-flash',
+                model_override=get_ai_model('header_footer'),
                 on_progress=progress_cb,
             )
 

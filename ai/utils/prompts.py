@@ -822,6 +822,7 @@ Do NOT undo any of these previous changes unless specifically asked to.
         multi_option: bool = False,
         component_references: str = '',
         include_component_index: bool = True,
+        has_reference_images: bool = False,
     ) -> tuple:
         """
         Generate prompt for section-only refinement.
@@ -893,6 +894,17 @@ Edit ONLY the `<section data-section="{section_name}">` section based on the use
 
 {component_index}
 {component_references}"""
+
+        if has_reference_images:
+            system_prompt += """
+
+## Reference Images
+The user has provided reference design images. Use them as visual inspiration for:
+- Layout structure and section arrangement
+- Color scheme and visual style
+- Typography and spacing patterns
+- Overall aesthetic and mood
+Match the design style shown in the images while following all other technical requirements."""
 
         pages_info = PromptTemplates._format_pages_info(pages, languages or [])
 
@@ -1462,3 +1474,167 @@ RULES:
 
 HTML:
 {html}"""
+
+    @staticmethod
+    def get_consistency_analysis_prompt(
+        design_system: dict,
+        design_guide: str,
+        pages_html: list,
+        sections_html: list,
+        custom_rules: str = '',
+    ) -> tuple:
+        """
+        Generate prompt for analyzing design consistency across all pages.
+
+        Args:
+            design_system: Dict of design tokens (colors, fonts, spacing, buttons)
+            design_guide: Freeform markdown design guide
+            pages_html: List of dicts with id, title, html
+            sections_html: List of dicts with key, name, html
+            custom_rules: Optional user-defined rules
+
+        Returns:
+            Tuple of (system_prompt, user_prompt)
+        """
+        design_json = json.dumps(design_system, indent=2, ensure_ascii=False)
+
+        system_prompt = """You are a web design QA auditor. Analyze pages for design inconsistencies against the design system.
+
+## What to Check
+1. **Colors** — hardcoded hex/rgb values instead of design system colors, inconsistent color usage across pages
+2. **Typography** — inconsistent font families, heading sizes that don't follow the scale, mismatched text sizes for similar elements
+3. **Buttons** — different button styles (padding, border-radius, colors, hover states) across pages
+4. **Spacing** — inconsistent padding/margin patterns between similar sections
+5. **Shadows & Borders** — mismatched shadow or border-radius values across cards, sections
+6. **Layout** — inconsistent container widths, grid patterns, or section structures
+7. **CTAs** — different call-to-action patterns, inconsistent link styling
+8. **Custom Rules** — any additional rules provided by the user
+
+## Severity Levels
+- **high** — Visually jarring inconsistency that visitors would notice (e.g. completely different button styles on adjacent pages)
+- **medium** — Noticeable inconsistency that reduces polish (e.g. hardcoded color instead of design token)
+- **low** — Minor inconsistency, cosmetic only (e.g. slightly different spacing)
+
+## Output Format
+Return a JSON array. Each entry represents one page or section with its issues.
+If a page has no issues, omit it from the array.
+
+```json
+[
+  {
+    "page_id": 1,
+    "page_title": "Home",
+    "issues": [
+      {
+        "severity": "high",
+        "category": "buttons",
+        "element": "section[data-section='hero'] .btn",
+        "description": "Uses bg-blue-500 instead of the primary color bg-emerald-600",
+        "suggestion": "Replace bg-blue-500 hover:bg-blue-600 with bg-emerald-600 hover:bg-emerald-700"
+      }
+    ]
+  }
+]
+```
+
+For GlobalSections (header/footer), use `"page_id": null` and add `"section_key": "main-header"`.
+
+Return ONLY the JSON array. No markdown, no explanations."""
+
+        pages_block = ""
+        for p in pages_html:
+            pages_block += f"\n### Page: {p['title']} (ID: {p['id']})\n```html\n{p['html']}\n```\n"
+
+        sections_block = ""
+        for s in sections_html:
+            sections_block += f"\n### GlobalSection: {s['name']} (key: {s['key']})\n```html\n{s['html']}\n```\n"
+
+        custom_rules_block = ""
+        if custom_rules:
+            custom_rules_block = f"\n## Custom Rules\nApply these additional rules:\n{custom_rules}\n"
+
+        design_guide_block = ""
+        if design_guide:
+            design_guide_block = f"\n## Design Guide\n{design_guide}\n"
+
+        user_prompt = f"""## Design System
+
+```json
+{design_json}
+```
+{design_guide_block}{custom_rules_block}
+## Pages to Analyze
+{pages_block}{sections_block}
+Analyze all pages and sections for design inconsistencies against the design system. Return the JSON array."""
+
+        return (system_prompt, user_prompt)
+
+    @staticmethod
+    def get_consistency_fix_prompt(
+        design_system: dict,
+        design_guide: str,
+        page_html: str,
+        issues: list,
+        custom_rules: str = '',
+    ) -> tuple:
+        """
+        Generate prompt for fixing design inconsistencies on a single page.
+
+        Args:
+            design_system: Dict of design tokens
+            design_guide: Freeform markdown design guide
+            page_html: The page's HTML to fix
+            issues: List of issue dicts to fix
+            custom_rules: Optional user-defined rules
+
+        Returns:
+            Tuple of (system_prompt, user_prompt)
+        """
+        design_json = json.dumps(design_system, indent=2, ensure_ascii=False)
+        issues_json = json.dumps(issues, indent=2, ensure_ascii=False)
+
+        system_prompt = """You are a web design consistency fixer. Fix the specific design inconsistencies listed below.
+
+## Rules
+- ONLY change Tailwind CSS classes and inline styles to fix the listed issues
+- Do NOT change text content, wording, or copy
+- Do NOT change HTML structure (adding/removing elements, reordering)
+- Do NOT change data-section, id, or data-* attributes
+- Do NOT change Alpine.js directives (x-data, x-show, @click, etc.)
+- Do NOT change Django template tags ({% url %}, {% csrf_token %}, etc.)
+- Do NOT change image src URLs or alt text
+- Do NOT change href URLs
+- Preserve ALL existing functionality
+- Return the complete fixed HTML
+
+Return ONLY the fixed HTML. No markdown code blocks, no explanations."""
+
+        design_guide_block = ""
+        if design_guide:
+            design_guide_block = f"\n## Design Guide\n{design_guide}\n"
+
+        custom_rules_block = ""
+        if custom_rules:
+            custom_rules_block = f"\n## Custom Rules\n{custom_rules}\n"
+
+        user_prompt = f"""## Design System Reference
+
+```json
+{design_json}
+```
+{design_guide_block}{custom_rules_block}
+## Issues to Fix
+
+```json
+{issues_json}
+```
+
+## HTML to Fix
+
+```html
+{page_html}
+```
+
+Fix ONLY the listed issues. Return the complete fixed HTML."""
+
+        return (system_prompt, user_prompt)

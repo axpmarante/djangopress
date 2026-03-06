@@ -7,7 +7,7 @@ import re
 import time
 from concurrent.futures import ThreadPoolExecutor
 from typing import Dict, List, Any, Optional, Union
-from .utils.llm_config import LLMBase, MODEL_CONFIG
+from .utils.llm_config import LLMBase, MODEL_CONFIG, get_ai_model
 from .utils.prompts import PromptTemplates
 from .utils.components import ComponentRegistry
 from .models import log_ai_call
@@ -16,7 +16,7 @@ from .models import log_ai_call
 class ContentGenerationService:
     """Service for generating CMS content using LLM"""
 
-    def __init__(self, model_name: str = 'gemini-flash'):
+    def __init__(self, model_name=None):
         """
         Initialize the content generation service
 
@@ -26,7 +26,7 @@ class ContentGenerationService:
                        Default: 'gemini-pro' (high quality, balanced speed)
         """
         self.llm = LLMBase()
-        self.model_name = model_name
+        self.model_name = model_name or get_ai_model('refinement_section')
 
     @staticmethod
     def _get_model_info(tool_name: str) -> tuple:
@@ -135,7 +135,7 @@ Return the complete, corrected JSON now:"""
             messages = [{"role": "user", "content": fix_prompt}]
             response = self.llm.get_completion(
                 messages=messages,
-                tool_name='gemini-flash'
+                tool_name=get_ai_model('refinement_section')
             )
 
             if response and hasattr(response, 'choices') and len(response.choices) > 0:
@@ -230,8 +230,8 @@ Return the complete, corrected JSON now:"""
         """
         print(f"\n--- Generating page metadata (title/slug) ---")
 
-        # Always use gemini-lite for metadata — title/slug generation is a trivial task
-        model = 'gemini-lite'
+        # Always use a lightweight model for metadata — title/slug generation is a trivial task
+        model = get_ai_model('metadata')
 
         system_prompt, user_prompt = PromptTemplates.get_page_metadata_prompt(
             brief=brief,
@@ -890,6 +890,7 @@ Return the complete, corrected JSON now:"""
         skip_briefing: bool = False,
         skip_pages_list: bool = False,
         skip_design_guide: bool = False,
+        reference_images: list = None,
         on_progress=None,
     ) -> Dict:
         """
@@ -997,19 +998,28 @@ Return the complete, corrected JSON now:"""
             multi_option=multi_option,
             component_references=component_references,
             include_component_index=not skip_component_selection,
+            has_reference_images=bool(reference_images),
         )
 
-        messages = [
-            {'role': 'system', 'content': system_prompt},
-            {'role': 'user', 'content': user_prompt}
-        ]
-
         notify("refine_html", "running", model=model)
-        stream_cb = self._make_stream_callback(on_progress, 'refine_html')
         actual_model, provider_str = self._get_model_info(model)
         t0 = time.time()
         try:
-            response = self.llm.get_completion(messages, tool_name=model, on_stream=stream_cb)
+            if reference_images:
+                print(f"Using vision call with {len(reference_images)} reference image(s)")
+                combined_prompt = system_prompt + "\n\n" + user_prompt
+                response = self.llm.get_vision_completion(
+                    prompt=combined_prompt,
+                    images=reference_images,
+                    tool_name=model
+                )
+            else:
+                messages = [
+                    {'role': 'system', 'content': system_prompt},
+                    {'role': 'user', 'content': user_prompt}
+                ]
+                stream_cb = self._make_stream_callback(on_progress, 'refine_html')
+                response = self.llm.get_completion(messages, tool_name=model, on_stream=stream_cb)
             usage = self._extract_usage(response)
             log_ai_call(
                 action='refine_section', model_name=actual_model, provider=provider_str,
@@ -1465,7 +1475,7 @@ Return the complete, corrected JSON now:"""
         """
         from concurrent.futures import ThreadPoolExecutor, as_completed
         from core.models import Page, SiteImage, SiteSettings
-        from .utils.llm_config import optimize_generated_image, LLMService
+        from .utils.llm_config import optimize_generated_image, LLMBase as LLMService
         from django.core.files.base import ContentFile
         from django.utils.text import slugify
 
@@ -1517,7 +1527,7 @@ Return the complete, corrected JSON now:"""
 
         def _generate_single_image(decision):
             """Generate a single image in a thread — returns (decision, url) or (decision, None, error)."""
-            from .utils.llm_config import LLMService, optimize_generated_image
+            from .utils.llm_config import LLMBase as LLMService, optimize_generated_image
             from core.models import SiteImage
             from django.core.files.base import ContentFile
             from django.utils.text import slugify
@@ -1855,10 +1865,10 @@ Keep the translations natural and fluent — these are website UI strings.
 
         messages = [{'role': 'user', 'content': prompt}]
 
-        actual_model, provider = self._get_model_info('gemini-flash')
+        actual_model, provider = self._get_model_info(get_ai_model('translation'))
         t0 = time.time()
         try:
-            response = self.llm.get_completion(messages, tool_name='gemini-flash')
+            response = self.llm.get_completion(messages, tool_name=get_ai_model('translation'))
             usage = self._extract_usage(response)
             content = response.choices[0].message.content
             log_ai_call(
@@ -1898,7 +1908,7 @@ Keep the translations natural and fluent — these are website UI strings.
             source_lang=source_lang,
             target_lang=target_lang,
         )
-        model = model or 'gemini-flash'
+        model = model or get_ai_model('translation')
 
         messages = [
             {'role': 'user', 'content': prompt}
@@ -2038,10 +2048,10 @@ Keep the translations natural and fluent — these are website UI strings.
             {'role': 'user', 'content': user_prompt},
         ]
 
-        actual_model, provider = self._get_model_info('gemini-flash')
+        actual_model, provider = self._get_model_info(get_ai_model('image_analysis'))
         t0 = time.time()
         try:
-            response = self.llm.get_completion(messages, tool_name='gemini-flash')
+            response = self.llm.get_completion(messages, tool_name=get_ai_model('image_analysis'))
             usage = self._extract_usage(response)
             content = response.choices[0].message.content
             log_ai_call(
@@ -2124,8 +2134,8 @@ Keep the translations natural and fluent — these are website UI strings.
             library_catalog=library_catalog,
         )
 
-        # Always use gemini-flash for image analysis — fast and sufficient for prompt suggestions
-        model = 'gemini-flash'
+        # Always use a fast model for image analysis — sufficient for prompt suggestions
+        model = get_ai_model('image_analysis')
         messages = [
             {'role': 'system', 'content': system_prompt},
             {'role': 'user', 'content': user_prompt}
@@ -2244,14 +2254,14 @@ Keep the translations natural and fluent — these are website UI strings.
 
                 prompt = '\n'.join(prompt_parts)
 
-                # Call Gemini Flash vision
-                actual_model, provider_str = self._get_model_info('gemini-flash')
+                # Call vision model for image description
+                actual_model, provider_str = self._get_model_info(get_ai_model('image_analysis'))
                 t0 = time.time()
                 response = self.llm.get_vision_completion(
                     prompt=prompt,
                     file_bytes=image_bytes,
                     file_mime_type=mime_type,
-                    tool_name='gemini-flash',
+                    tool_name=get_ai_model('image_analysis'),
                 )
 
                 # Parse response
@@ -2309,3 +2319,271 @@ Keep the translations natural and fluent — these are website UI strings.
                 })
 
         return results
+
+    @staticmethod
+    def _build_design_system_dict(site_settings) -> Dict:
+        """Build a dict of design tokens from SiteSettings for consistency analysis."""
+        ds = {}
+        if not site_settings:
+            return ds
+
+        ds['colors'] = {
+            'primary': getattr(site_settings, 'primary_color', '') or '',
+            'secondary': getattr(site_settings, 'secondary_color', '') or '',
+            'accent': getattr(site_settings, 'accent_color', '') or '',
+            'background': getattr(site_settings, 'background_color', '') or '',
+            'text': getattr(site_settings, 'text_color', '') or '',
+            'heading': getattr(site_settings, 'heading_color', '') or '',
+        }
+
+        ds['typography'] = {
+            'heading_font': getattr(site_settings, 'heading_font', '') or '',
+            'body_font': getattr(site_settings, 'body_font', '') or '',
+        }
+        for level in range(1, 7):
+            font = getattr(site_settings, f'h{level}_font', '') or ''
+            size = getattr(site_settings, f'h{level}_size', '') or ''
+            if font or size:
+                ds['typography'][f'h{level}'] = {'font': font, 'size': size}
+
+        ds['layout'] = {
+            'container_width': getattr(site_settings, 'container_width', '') or '',
+            'border_radius': getattr(site_settings, 'border_radius_preset', '') or '',
+            'spacing': getattr(site_settings, 'spacing_scale', '') or '',
+            'shadow': getattr(site_settings, 'shadow_preset', '') or '',
+        }
+
+        ds['buttons'] = {
+            'style': getattr(site_settings, 'button_style', '') or '',
+            'size': getattr(site_settings, 'button_size', '') or '',
+            'primary': {
+                'bg': getattr(site_settings, 'primary_button_bg', '') or '',
+                'text': getattr(site_settings, 'primary_button_text', '') or '',
+                'hover': getattr(site_settings, 'primary_button_hover', '') or '',
+                'border': getattr(site_settings, 'primary_button_border', '') or '',
+            },
+            'secondary': {
+                'bg': getattr(site_settings, 'secondary_button_bg', '') or '',
+                'text': getattr(site_settings, 'secondary_button_text', '') or '',
+                'hover': getattr(site_settings, 'secondary_button_hover', '') or '',
+                'border': getattr(site_settings, 'secondary_button_border', '') or '',
+            },
+        }
+
+        return ds
+
+    def analyze_design_consistency(
+        self,
+        custom_rules: str = '',
+        model_override: str = None,
+        on_progress=None,
+    ) -> List[Dict]:
+        """
+        Analyze all pages and GlobalSections for design inconsistencies.
+
+        Args:
+            custom_rules: Optional user-defined rules
+            model_override: Override the default model
+            on_progress: Progress callback
+
+        Returns:
+            List of page/section analysis dicts with issues
+        """
+        def notify(step, status, **extra):
+            if on_progress:
+                try:
+                    on_progress({"step": step, "status": status, **extra})
+                except Exception:
+                    pass
+
+        from core.models import SiteSettings, Page, GlobalSection
+
+        notify("analyzing", "running")
+
+        site_settings = SiteSettings.objects.first()
+        default_lang = site_settings.get_default_language() if site_settings else 'pt'
+
+        # Build design system dict
+        design_system = self._build_design_system_dict(site_settings)
+        design_guide = site_settings.design_guide if site_settings else ''
+
+        # Collect pages HTML
+        pages_html = []
+        for page in Page.objects.filter(is_active=True).order_by('sort_order', 'id'):
+            html_i18n = page.html_content_i18n or {}
+            html = html_i18n.get(default_lang, '')
+            if html:
+                pages_html.append({
+                    'id': page.id,
+                    'title': page.get_title(default_lang) or page.default_title or f'Page {page.id}',
+                    'html': html,
+                })
+
+        # Collect GlobalSections HTML
+        sections_html = []
+        for section in GlobalSection.objects.filter(is_active=True):
+            html_i18n = section.html_template_i18n or {}
+            html = html_i18n.get(default_lang, '')
+            if html:
+                sections_html.append({
+                    'key': section.key,
+                    'name': section.name or section.key,
+                    'html': html,
+                })
+
+        if not pages_html and not sections_html:
+            notify("analyzing", "done")
+            return []
+
+        notify("analyzing", "running", pages=len(pages_html), sections=len(sections_html))
+
+        # Build prompt
+        system_prompt, user_prompt = PromptTemplates.get_consistency_analysis_prompt(
+            design_system=design_system,
+            design_guide=design_guide,
+            pages_html=pages_html,
+            sections_html=sections_html,
+            custom_rules=custom_rules,
+        )
+
+        model = model_override or get_ai_model('consistency')
+        messages = [
+            {'role': 'system', 'content': system_prompt},
+            {'role': 'user', 'content': user_prompt},
+        ]
+
+        actual_model, provider = self._get_model_info(model)
+        stream_cb = self._make_stream_callback(on_progress, 'analyzing')
+        t0 = time.time()
+        try:
+            response = self.llm.get_completion(messages, tool_name=model, on_stream=stream_cb)
+            usage = self._extract_usage(response)
+            content = response.choices[0].message.content
+            log_ai_call(
+                action='consistency_analysis', model_name=actual_model, provider=provider,
+                system_prompt=system_prompt, user_prompt=user_prompt,
+                response_text=content,
+                duration_ms=int((time.time() - t0) * 1000), **usage,
+            )
+        except Exception as e:
+            log_ai_call(
+                action='consistency_analysis', model_name=actual_model, provider=provider,
+                system_prompt=system_prompt, user_prompt=user_prompt,
+                duration_ms=int((time.time() - t0) * 1000),
+                success=False, error_message=str(e),
+            )
+            raise
+
+        report = self._extract_json_from_response(content)
+
+        # Ensure it's a list
+        if isinstance(report, dict):
+            for key in ('pages', 'results', 'report'):
+                if key in report and isinstance(report[key], list):
+                    report = report[key]
+                    break
+            else:
+                report = [report]
+
+        notify("analyzing", "done", total_issues=sum(len(p.get('issues', [])) for p in report))
+        return report
+
+    def fix_design_consistency(
+        self,
+        page_id: int = None,
+        section_key: str = None,
+        issues: list = None,
+        custom_rules: str = '',
+        model_override: str = None,
+        on_progress=None,
+    ) -> Dict:
+        """
+        Fix design inconsistencies on a single page or GlobalSection.
+
+        Args:
+            page_id: Page ID to fix (mutually exclusive with section_key)
+            section_key: GlobalSection key to fix
+            issues: List of issue dicts to fix
+            custom_rules: Optional user-defined rules
+            model_override: Override the default model
+            on_progress: Progress callback
+
+        Returns:
+            Dict with 'html' containing the fixed HTML
+        """
+        def notify(step, status, **extra):
+            if on_progress:
+                try:
+                    on_progress({"step": step, "status": status, **extra})
+                except Exception:
+                    pass
+
+        from core.models import SiteSettings, Page, GlobalSection
+
+        site_settings = SiteSettings.objects.first()
+        default_lang = site_settings.get_default_language() if site_settings else 'pt'
+        design_system = self._build_design_system_dict(site_settings)
+        design_guide = site_settings.design_guide if site_settings else ''
+
+        # Load HTML
+        if page_id:
+            page = Page.objects.get(id=page_id)
+            html_i18n = page.html_content_i18n or {}
+            html = html_i18n.get(default_lang, '')
+            label = page.get_title(default_lang) or f'Page {page_id}'
+        elif section_key:
+            section = GlobalSection.objects.get(key=section_key)
+            html_i18n = section.html_template_i18n or {}
+            html = html_i18n.get(default_lang, '')
+            label = section.name or section_key
+        else:
+            raise ValueError("Either page_id or section_key is required")
+
+        if not html:
+            raise ValueError(f"No HTML found for {label}")
+
+        notify("fixing", "running", label=label)
+
+        system_prompt, user_prompt = PromptTemplates.get_consistency_fix_prompt(
+            design_system=design_system,
+            design_guide=design_guide,
+            page_html=html,
+            issues=issues or [],
+            custom_rules=custom_rules,
+        )
+
+        model = model_override or get_ai_model('consistency')
+        messages = [
+            {'role': 'system', 'content': system_prompt},
+            {'role': 'user', 'content': user_prompt},
+        ]
+
+        actual_model, provider = self._get_model_info(model)
+        stream_cb = self._make_stream_callback(on_progress, 'fixing')
+        t0 = time.time()
+        try:
+            response = self.llm.get_completion(messages, tool_name=model, on_stream=stream_cb)
+            usage = self._extract_usage(response)
+            content = response.choices[0].message.content
+            log_ai_call(
+                action='consistency_fix', model_name=actual_model, provider=provider,
+                system_prompt=system_prompt, user_prompt=user_prompt,
+                response_text=content,
+                duration_ms=int((time.time() - t0) * 1000), **usage,
+            )
+        except Exception as e:
+            log_ai_call(
+                action='consistency_fix', model_name=actual_model, provider=provider,
+                system_prompt=system_prompt, user_prompt=user_prompt,
+                duration_ms=int((time.time() - t0) * 1000),
+                success=False, error_message=str(e),
+            )
+            raise
+
+        fixed_html = self._extract_html_from_response(content)
+
+        if not fixed_html or len(fixed_html.strip()) < 50:
+            raise ValueError("Fix returned empty or too-short HTML")
+
+        notify("fixing", "done", label=label)
+        return {'html': fixed_html}
