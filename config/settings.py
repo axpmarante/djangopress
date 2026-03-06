@@ -66,6 +66,7 @@ MIDDLEWARE = [
     'core.middleware.LocaleMiddleware',  # Custom: skips redirect for non-i18n paths
     'core.middleware.DynamicLanguageMiddleware',  # Override default language from database
     'django.middleware.common.CommonMiddleware',
+    'core.rate_limit.RateLimitMiddleware',  # Rate limiting (login, AI endpoints)
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
