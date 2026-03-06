@@ -104,18 +104,21 @@ class GlobalSectionService:
         }
 
     @staticmethod
-    def refine(key, instructions, model='gemini-pro', user=None):
+    def refine(key, instructions, model=None, user=None):
         """AI-refine a GlobalSection. Delegates to ContentGenerationService.
 
         Args:
             key: Section key.
             instructions: Refinement instructions for the AI.
-            model: LLM model name (default 'gemini-pro').
+            model: LLM model name. Defaults to configured header_footer model.
             user: User requesting the refinement (for audit).
 
         Returns:
             dict with 'success', 'message', 'assistant_message', or 'error'.
         """
+        from ai.utils.llm_config import get_ai_model
+        model = model or get_ai_model('header_footer')
+
         result = GlobalSectionService.get(key)
         if not result['success']:
             return result

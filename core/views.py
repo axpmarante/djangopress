@@ -27,11 +27,22 @@ class PageView(TemplateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
 
-        # Get the page slug from URL or default to 'home' for root path
-        page_slug = kwargs.get('slug', 'home')
+        # Get the page slug from URL or resolve homepage
+        page_slug = kwargs.get('slug')
+        if not page_slug:
+            site_settings = SiteSettings.load()
+            homepage = None
+            if site_settings and site_settings.homepage_id:
+                homepage = site_settings.homepage
+            if not homepage:
+                homepage = Page.objects.filter(is_active=True).order_by('sort_order', 'pk').first()
+            if homepage:
+                current_lang = get_language() or 'pt'
+                page_slug = homepage.get_slug(current_lang)
+            if not page_slug:
+                raise Http404("No pages exist yet")
 
         # Get current language
-        from django.utils.translation import get_language
         current_lang = get_language()
 
         # Preview mode: staff can see inactive pages with ?preview=true

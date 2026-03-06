@@ -22,7 +22,7 @@ def _translate_text(text, source_lang, target_lang):
     Uses gemini-lite. Falls back to original text if translation fails.
     """
     try:
-        from ai.utils.llm_config import LLMBase
+        from ai.utils.llm_config import LLMBase, get_ai_model
         llm = LLMBase()
         messages = [
             {'role': 'system', 'content': (
@@ -31,7 +31,7 @@ def _translate_text(text, source_lang, target_lang):
             )},
             {'role': 'user', 'content': text},
         ]
-        response = llm.get_completion(messages, tool_name='gemini-lite')
+        response = llm.get_completion(messages, tool_name=get_ai_model('metadata'))
         translated = response.choices[0].message.content.strip()
         return translated if translated else text
     except Exception:

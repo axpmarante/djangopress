@@ -121,6 +121,16 @@ class SiteSettings(models.Model):
         help_text='{"pt": "Morada PT", "en": "Address EN"}'
     )
 
+    # Homepage
+    homepage = models.ForeignKey(
+        'Page',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='+',
+        help_text="Page to use as the site front page. If not set, the first page by sort order is used."
+    )
+
     # Site Domain (used for GCS folder organization)
     domain = models.CharField(
         "Site Domain",
@@ -345,6 +355,14 @@ class SiteSettings(models.Model):
 
     # Misc
     maintenance_mode = models.BooleanField("Maintenance Mode", default=False)
+
+    # AI Model Configuration
+    ai_model_config = models.JSONField(
+        'AI Model Configuration',
+        default=dict,
+        blank=True,
+        help_text='Per-task AI model overrides. Keys: generation, refinement, header_footer, translation, metadata, image_analysis, assistant_router, assistant_executor.'
+    )
 
     class Meta:
         verbose_name = "Site Settings"
@@ -923,14 +941,25 @@ class Page(models.Model):
         # Get slug for the specified language
         slug = self.get_slug(lang)
 
+        # Check if this page is the homepage
+        is_homepage = False
+        try:
+            if site_settings and site_settings.homepage_id:
+                is_homepage = (self.pk == site_settings.homepage_id)
+            else:
+                first_page = Page.objects.filter(is_active=True).order_by('sort_order', 'pk').first()
+                is_homepage = (first_page and self.pk == first_page.pk)
+        except:
+            is_homepage = False
+
         # Default language: no prefix
         if lang == default_lang:
-            if slug == 'home':
+            if is_homepage:
                 return '/'
             return f'/{slug}/'
 
         # Non-default language: include prefix
-        if slug == 'home':
+        if is_homepage:
             return f'/{lang}/'
         return f'/{lang}/{slug}/'
 
