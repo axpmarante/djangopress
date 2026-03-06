@@ -1,0 +1,1 @@
+djangopress @ git+https://github.com/axpmarante/djangopress.git@v2.0.0
