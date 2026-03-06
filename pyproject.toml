@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "djangopress"
+version = "2.0.0"
+description = "AI-powered Django CMS"
+requires-python = ">=3.12"
+dependencies = [
+    "Django>=6.0",
+    "gunicorn",
+    "whitenoise",
+    "django-anymail",
+    "django-environ",
+    "django-storages[google]",
+    "psycopg[binary]",
+    "openai",
+    "anthropic",
+    "google-genai",
+    "Pillow",
+    "beautifulsoup4",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+djangopress = [
+    "*/templates/**/*",
+    "*/static/**/*",
+    "*/migrations/*.py",
+    "templates/**/*",
+    "static/**/*",
+    "briefings/*.md",
+]
