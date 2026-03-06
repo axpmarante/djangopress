@@ -11,9 +11,11 @@ class CoreConfig(AppConfig):
 
         # Auto-fix: swap Django's LocaleMiddleware with our custom one that
         # skips redirects for non-i18n paths (backoffice, ai, editor, etc.)
-        old = 'django.middleware.locale.LocaleMiddleware'
+        old_django = 'django.middleware.locale.LocaleMiddleware'
+        old_unprefixed = 'core.middleware.LocaleMiddleware'
         new = 'djangopress.core.middleware.LocaleMiddleware'
-        if old in settings.MIDDLEWARE:
+        if old_django in settings.MIDDLEWARE or old_unprefixed in settings.MIDDLEWARE:
             settings.MIDDLEWARE = [
-                new if m == old else m for m in settings.MIDDLEWARE
+                new if m in (old_django, old_unprefixed) else m
+                for m in settings.MIDDLEWARE
             ]
