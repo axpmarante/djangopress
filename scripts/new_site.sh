@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Create a new DjangoPress site from the template repository.
+# Create a new DjangoPress site from the site_template scaffold.
 #
 # Usage:
 #   ./scripts/new_site.sh <project-name> [briefing-file]
@@ -10,12 +10,13 @@
 #   ./scripts/new_site.sh windmill-restaurant briefings/example-restaurant.md
 #
 # This script:
-#   1. Clones the djangopress template into ../<project-name>/
+#   1. Copies site_template/ into ../<project-name>/
 #   2. Copies API keys from the current project's .env (reuses provider keys)
 #   3. Generates a unique SECRET_KEY
-#   4. Creates a virtual environment and installs dependencies
+#   4. Creates a virtual environment and installs dependencies (pulls djangopress from GitHub)
 #   5. Runs migrations
 #   6. Optionally copies a briefing file into the new project
+#   7. Initializes a fresh git repo
 
 set -euo pipefail
 
@@ -35,14 +36,21 @@ fi
 # --- Paths ---
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 SOURCE_DIR="$(dirname "$SCRIPT_DIR")"
+TEMPLATE_DIR="$SOURCE_DIR/site_template"
 PARENT_DIR="$(dirname "$SOURCE_DIR")"
 TARGET_DIR="$PARENT_DIR/$PROJECT_NAME"
 
 echo "=== DjangoPress: New Site Setup ==="
 echo ""
-echo "  Source:  $SOURCE_DIR"
-echo "  Target:  $TARGET_DIR"
+echo "  Template: $TEMPLATE_DIR"
+echo "  Target:   $TARGET_DIR"
 echo ""
+
+# --- Check template exists ---
+if [ ! -d "$TEMPLATE_DIR" ]; then
+    echo "ERROR: site_template directory not found: $TEMPLATE_DIR"
+    exit 1
+fi
 
 # --- Check target doesn't exist ---
 if [ -d "$TARGET_DIR" ]; then
@@ -57,31 +65,12 @@ if [ -n "$BRIEFING_FILE" ] && [ ! -f "$BRIEFING_FILE" ]; then
     exit 1
 fi
 
-# --- Step 1: Clone the template ---
-echo "--- Step 1: Creating project from template ---"
-
-if command -v gh &> /dev/null; then
-    echo "  Using GitHub CLI..."
-    cd "$PARENT_DIR"
-    gh repo create "$PROJECT_NAME" \
-        --template axpmarante/djangopress \
-        --private \
-        --clone \
-        --description "DjangoPress site: $PROJECT_NAME" \
-        2>&1 || {
-            echo "  gh repo create failed. Falling back to local clone..."
-            git clone "$SOURCE_DIR" "$TARGET_DIR"
-        }
-else
-    echo "  GitHub CLI not found. Using local clone..."
-    git clone "$SOURCE_DIR" "$TARGET_DIR"
-fi
+# --- Step 1: Copy site_template ---
+echo "--- Step 1: Copying site template ---"
+cp -R "$TEMPLATE_DIR" "$TARGET_DIR"
+echo "  Template copied"
 
 cd "$TARGET_DIR"
-
-# Set upstream remote
-echo "  Setting upstream remote..."
-git remote add upstream https://github.com/axpmarante/djangopress.git 2>/dev/null || true
 
 # --- Step 2: Configure .env ---
 echo ""
@@ -147,7 +136,7 @@ echo "--- Step 3: Installing dependencies ---"
 python3 -m venv venv
 source venv/bin/activate
 pip install -q -r requirements.txt
-echo "  Dependencies installed"
+echo "  Dependencies installed (djangopress pulled from GitHub)"
 
 # --- Step 4: Database ---
 echo ""
@@ -165,6 +154,14 @@ if [ -n "$BRIEFING_FILE" ]; then
     BRIEFING_NAME=$(basename "$BRIEFING_FILE")
     echo "  Copied to: briefings/$BRIEFING_NAME"
 fi
+
+# --- Step 6: Initialize git repo ---
+echo ""
+echo "--- Step 6: Initializing git repository ---"
+git init -q
+git add -A
+git commit -q -m "Initial commit from DjangoPress site template"
+echo "  Git repository initialized"
 
 # --- Done ---
 echo ""
