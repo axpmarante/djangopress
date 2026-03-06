@@ -194,21 +194,6 @@
                 {% endif %}
             </div>
 
-            <!-- AI Model -->
-            {% if ai_models %}
-            <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-5">
-                <h3 class="text-sm font-semibold text-gray-900 mb-3">AI Model</h3>
-                <select id="modelSelect"
-                        class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500 focus:border-transparent">
-                    {% for model in ai_models %}
-                    <option value="{{ model.0 }}" {% if model.0 == default_model %}selected{% endif %}>
-                        {{ model.1 }}
-                    </option>
-                    {% endfor %}
-                </select>
-            </div>
-            {% endif %}
-
             <!-- Process Images -->
             <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-5">
                 <h3 class="text-sm font-semibold text-gray-900 mb-3">Images</h3>
@@ -405,8 +390,6 @@ async function sendMessage(event) {
     const message = input.value.trim();
     if (!message) return;
 
-    const model = document.getElementById('modelSelect')?.value || 'gemini-pro';
-
     // Render user bubble immediately
     const userMsg = {
         role: 'user',
@@ -433,7 +416,6 @@ async function sendMessage(event) {
     const fd = new FormData();
     fd.append('page_id', PAGE_ID);
     fd.append('message', message);
-    fd.append('model', model);
     if (currentSessionId) fd.append('session_id', currentSessionId);
     selectedFiles.forEach(f => fd.append('reference_images', f));
 

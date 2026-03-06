@@ -204,22 +204,6 @@
                 </div>
             </div>
 
-            <!-- AI Model -->
-            {% if ai_models %}
-            <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-5">
-                <h3 class="text-sm font-semibold text-gray-900 mb-3">AI Model</h3>
-                <select id="modelSelect"
-                        class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all">
-                    {% for model_id, model_name in ai_models %}
-                    <option value="{{ model_id }}" {% if model_id == 'gemini-flash' %}selected{% endif %}>
-                        {{ model_name }}
-                    </option>
-                    {% endfor %}
-                </select>
-                <p class="mt-2 text-xs text-gray-500">gemini-flash is recommended for translation tasks.</p>
-            </div>
-            {% endif %}
-
             <!-- Action Button -->
             <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-5">
                 <button id="translateBtn" onclick="startTranslation()"
@@ -344,9 +328,6 @@ async function startTranslation() {
         return;
     }
 
-    const modelSelect = document.getElementById('modelSelect');
-    const model = modelSelect ? modelSelect.value : 'gemini-flash';
-
     const totalItems = pageIds.length + sectionIds.length;
     const translateBtn = document.getElementById('translateBtn');
     translateBtn.disabled = true;
@@ -368,8 +349,7 @@ async function startTranslation() {
             body: JSON.stringify({
                 page_ids: pageIds,
                 section_ids: sectionIds,
-                target_languages: targetLanguages,
-                model: model
+                target_languages: targetLanguages
             })
         });
 

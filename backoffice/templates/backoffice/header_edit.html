@@ -240,23 +240,6 @@
                         <div id="imagePreviews" class="grid grid-cols-4 gap-3 mt-3"></div>
                     </div>
 
-                    <!-- AI Model Selection -->
-                    {% if ai_models %}
-                    <div>
-                        <label class="block text-sm font-medium text-gray-900 mb-2">
-                            AI Model
-                        </label>
-                        <select id="ai_model"
-                                class="w-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-purple-500 focus:border-purple-500">
-                            {% for model in ai_models %}
-                            <option value="{{ model.0 }}" {% if model.0 == default_model %}selected{% endif %}>
-                                {{ model.1 }}
-                            </option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                    {% endif %}
-
                     <!-- Warning -->
                     <div class="bg-amber-50 border border-amber-200 rounded-lg p-4">
                         <div class="flex">
@@ -413,8 +396,6 @@ async function refineHeader() {
         return;
     }
 
-    const model = document.getElementById('ai_model')?.value;
-
     closeAIModal();
     showLoading();
 
@@ -429,10 +410,9 @@ async function refineHeader() {
     if (refFiles.length > 0) {
         body = new FormData();
         body.append('instructions', instructions);
-        body.append('model', model);
         refFiles.forEach(f => body.append('reference_images', f));
     } else {
-        body = { instructions: instructions, model: model };
+        body = { instructions: instructions };
     }
 
     const sse = new SSEClient("{% url 'ai:refine_header_stream' %}", {

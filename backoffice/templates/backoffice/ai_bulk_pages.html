@@ -62,23 +62,6 @@ Make it professional and engaging for young athletes and their families."></text
                         <p class="mt-2 text-xs text-gray-500">Describe what pages you need. The AI will automatically create multi-language titles and slugs. Pages will be created empty - you can add sections to each page later.</p>
                     </div>
 
-                    <!-- AI Model Selection -->
-                    {% if ai_models %}
-                    <div>
-                        <label for="modelSelect" class="block text-sm font-medium text-gray-900 mb-2">
-                            AI Model
-                        </label>
-                        <select id="modelSelect" name="model"
-                                class="w-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-all">
-                            {% for model_id, model_name in ai_models %}
-                            <option value="{{ model_id }}" {% if model_id == default_model %}selected{% endif %}>
-                                {{ model_name }}
-                            </option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                    {% endif %}
-
                     <!-- Examples -->
                     <div class="bg-gradient-to-r from-orange-50 to-red-50 border border-orange-200 rounded-lg p-4">
                         <div class="flex items-start">
@@ -277,7 +260,6 @@ document.getElementById('bulkPagesForm').addEventListener('submit', async functi
 
     const formData = new FormData(this);
     const description = formData.get('description');
-    const model = formData.get('model');
 
     if (!description.trim()) {
         alert('Please describe what pages you need');
@@ -298,8 +280,7 @@ document.getElementById('bulkPagesForm').addEventListener('submit', async functi
                 'X-CSRFToken': getCookie('csrftoken')
             },
             body: JSON.stringify({
-                description: description,
-                model: model
+                description: description
             })
         });
 

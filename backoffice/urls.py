@@ -83,6 +83,7 @@ urlpatterns = [
     path('settings/seo/', views.SettingsSEOView.as_view(), name='settings_seo'),
     path('settings/design/', views.SettingsDesignSystemView.as_view(), name='settings_design'),
     path('settings/integrations/', views.SettingsIntegrationsView.as_view(), name='settings_integrations'),
+    path('settings/ai-models/', views.SettingsAIModelsView.as_view(), name='settings_ai_models'),
     path('settings/header/', views.HeaderEditView.as_view(), name='header_edit'),
     path('settings/footer/', views.FooterEditView.as_view(), name='footer_edit'),
 
@@ -90,6 +91,7 @@ urlpatterns = [
     path('ai/generate/page/', views.AIGeneratePageView.as_view(), name='ai_generate_page'),
     path('ai/bulk/pages/', views.AIBulkPagesView.as_view(), name='ai_bulk_pages'),
     path('ai/bulk-translate/', views.AIBulkTranslateView.as_view(), name='ai_bulk_translate'),
+    path('ai/design-consistency/', views.DesignConsistencyView.as_view(), name='design_consistency'),
     path('ai/refine/page/', views.AIRefinePageView.as_view(), name='ai_refine_page'),
     path('ai/refine/page/<str:page_slug>/', views.AIRefinePageView.as_view(), name='ai_refine_page_with_slug'),
     path('ai/chat/refine/<int:page_id>/', views.AIChatRefineView.as_view(), name='ai_chat_refine'),

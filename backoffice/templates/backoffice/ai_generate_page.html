@@ -91,23 +91,6 @@
                         <div id="imagePreviews" class="grid grid-cols-4 gap-3 mt-3"></div>
                     </div>
 
-                    <!-- AI Model Selection -->
-                    {% if ai_models %}
-                    <div>
-                        <label for="modelSelect" class="block text-sm font-medium text-gray-900 mb-2">
-                            AI Model
-                        </label>
-                        <select id="modelSelect" name="model"
-                                class="w-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all">
-                            {% for model_id, model_name in ai_models %}
-                            <option value="{{ model_id }}" {% if model_id == default_model %}selected{% endif %}>
-                                {{ model_name }}
-                            </option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                    {% endif %}
-
                     <!-- Action Buttons -->
                     <div class="flex items-center justify-between pt-4 border-t">
                         <a href="{% url 'backoffice:dashboard' %}"
@@ -431,7 +414,6 @@ document.getElementById('generatePageForm').addEventListener('submit', async fun
 
     const formData = new FormData();
     formData.append('brief', rawFormData.get('brief'));
-    formData.append('model', rawFormData.get('model'));
     if (blueprintPageId) formData.append('blueprint_page_id', blueprintPageId);
     selectedFiles.forEach(f => formData.append('reference_images', f));
 

@@ -35,13 +35,6 @@
     <div class="bg-white rounded-lg shadow p-4">
         <div class="flex items-center justify-between flex-wrap gap-3">
             <div class="flex items-center gap-3 flex-wrap">
-                {% if ai_models %}
-                <select id="aiModel" class="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-purple-500 focus:border-purple-500">
-                    {% for model in ai_models %}
-                    <option value="{{ model.0 }}" {% if model.0 == default_model %}selected{% endif %}>{{ model.1 }}</option>
-                    {% endfor %}
-                </select>
-                {% endif %}
                 <button id="aiSuggestBtn" onclick="aiSuggestPrompts()"
                         class="px-4 py-2 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-md hover:from-purple-700 hover:to-blue-700 flex items-center text-sm font-medium">
                     <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -488,9 +481,6 @@ async function aiSuggestPrompts() {
         name: img.name
     }));
 
-    const modelEl = document.getElementById('aiModel');
-    const model = modelEl ? modelEl.value : 'gemini-pro';
-
     try {
         const response = await fetch('/ai/api/analyze-page-images/', {
             method: 'POST',
@@ -498,7 +488,7 @@ async function aiSuggestPrompts() {
                 'Content-Type': 'application/json',
                 'X-CSRFToken': getCSRFToken()
             },
-            body: JSON.stringify({ page_id: PAGE_ID, images, model })
+            body: JSON.stringify({ page_id: PAGE_ID, images })
         });
         const result = await response.json();
 

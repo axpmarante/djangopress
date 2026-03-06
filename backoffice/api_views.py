@@ -1167,20 +1167,20 @@ def run_benchmark(request):
         data = {}
 
     model = data.get('model', 'gemini-pro')
-    briefing = data.get('briefing', 'briefings/benchmark.md')
+    briefing = data.get('briefing', 'benchmark.md')
     skip_images = data.get('skip_images', True)
 
     # Build command
     project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     script_path = os.path.join(project_root, 'scripts', 'benchmark_generate.py')
-    briefing_path = os.path.join(project_root, briefing)
+    briefing_path = os.path.join(project_root, 'briefings', briefing)
 
     if not os.path.isfile(script_path):
-        return JsonResponse({'success': False, 'error': 'Benchmark script not found'}, status=404)
+        return JsonResponse({'success': False, 'error': 'Benchmark script not found'}, status=400)
     if not os.path.isfile(briefing_path):
-        return JsonResponse({'success': False, 'error': f'Briefing file not found: {briefing}'}, status=404)
+        return JsonResponse({'success': False, 'error': f'Briefing file not found: {briefing}'}, status=400)
 
-    cmd = [sys.executable, script_path, briefing, '--model', model, '--delay', '0']
+    cmd = [sys.executable, script_path, os.path.join('briefings', briefing), '--model', model, '--delay', '0']
     if not skip_images:
         cmd.append('--with-images')
 

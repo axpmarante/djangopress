@@ -32,21 +32,10 @@
                         Use AI to generate or update the design guide by analyzing your settings, existing pages, and reference design images.
                     </p>
 
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                        <div>
-                            <label for="id_ai_guide_model" class="block text-xs font-medium text-gray-700 mb-1">AI Model</label>
-                            <select id="id_ai_guide_model"
-                                    class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500">
-                                {% for model_id, model_name in ai_models %}
-                                <option value="{{ model_id }}" {% if model_id == default_model %}selected{% endif %}>{{ model_name }}</option>
-                                {% endfor %}
-                            </select>
-                        </div>
-                        <div>
-                            <label for="id_ai_guide_images" class="block text-xs font-medium text-gray-700 mb-1">Reference Images (optional)</label>
-                            <input type="file" id="id_ai_guide_images" multiple accept="image/*"
-                                   class="block w-full text-sm text-gray-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-purple-50 file:text-purple-700 hover:file:bg-purple-100">
-                        </div>
+                    <div class="mb-4">
+                        <label for="id_ai_guide_images" class="block text-xs font-medium text-gray-700 mb-1">Reference Images (optional)</label>
+                        <input type="file" id="id_ai_guide_images" multiple accept="image/*"
+                               class="block w-full text-sm text-gray-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-purple-50 file:text-purple-700 hover:file:bg-purple-100">
                     </div>
 
                     <div>
@@ -502,14 +491,10 @@ function aiGenerateDesignGuide() {
     const imageInput = document.getElementById('id_ai_guide_images');
     const imageFiles = imageInput ? imageInput.files : [];
 
-    const modelSelect = document.getElementById('id_ai_guide_model');
-    const model = modelSelect ? modelSelect.value : 'gemini-pro';
-
     const existingGuide = textarea.value.trim();
     const styleInstructions = (document.getElementById('id_ai_style_instructions')?.value || '').trim();
 
     const formData = new FormData();
-    formData.append('model', model);
     if (existingGuide) formData.append('existing_guide', existingGuide);
     if (styleInstructions) formData.append('style_instructions', styleInstructions);
     pageIds.forEach(pid => formData.append('page_ids', pid));

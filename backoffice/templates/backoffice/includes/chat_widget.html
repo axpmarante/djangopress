@@ -289,7 +289,6 @@ function chatWidget() {
             try {
                 const payload = {
                     message: text,
-                    model: 'gemini-flash',
                 };
                 if (this.sessionId) payload.session_id = this.sessionId;
 

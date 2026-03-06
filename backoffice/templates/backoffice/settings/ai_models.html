@@ -1,0 +1,99 @@
+{% extends 'backoffice/base.html' %}
+
+{% block title %}AI Models{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <!-- Breadcrumb + Header -->
+    <div>
+        <nav class="text-sm text-gray-500 mb-2">
+            <a href="{% url 'backoffice:settings' %}" class="hover:text-blue-600">Settings</a>
+            <span class="mx-1">/</span>
+            <span class="text-gray-900">AI Models</span>
+        </nav>
+        <div>
+            <h2 class="text-3xl font-bold text-gray-900">AI Models</h2>
+            <p class="text-gray-600 mt-1">Configure which AI model is used for each task</p>
+        </div>
+    </div>
+
+    <form method="post">
+        {% csrf_token %}
+
+        {% for group in task_groups %}
+        <div class="bg-white rounded-lg shadow overflow-hidden mb-6">
+            <div class="px-6 py-4 bg-gray-50 border-b border-gray-200">
+                <h3 class="text-lg font-semibold text-gray-900">{{ group.title }}</h3>
+            </div>
+            <div class="p-6 divide-y divide-gray-100">
+                {% for task in group.tasks %}
+                <div class="{% if not forloop.first %}pt-5{% endif %} {% if not forloop.last %}pb-5{% endif %}">
+                    <div class="flex items-start justify-between gap-6">
+                        <div class="flex-1 min-w-0">
+                            <label for="model_{{ task.key }}" class="text-sm font-medium text-gray-900">{{ task.label }}</label>
+                            <p class="text-xs text-gray-500 mt-0.5">{{ task.description }}</p>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <select name="model_{{ task.key }}" id="model_{{ task.key }}"
+                                    class="block w-48 rounded-md border-gray-300 shadow-sm text-sm focus:border-blue-500 focus:ring-blue-500">
+                                {% for model in available_models %}
+                                <option value="{{ model.key }}">{{ model.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endfor %}
+
+        <div class="flex items-center justify-between">
+            <button type="button" onclick="resetDefaults()" class="text-sm text-gray-500 hover:text-gray-700 underline">
+                Reset to defaults
+            </button>
+            <div class="flex items-center gap-3">
+                <a href="{% url 'backoffice:settings' %}" class="px-6 py-2 text-sm font-medium text-gray-700 hover:text-gray-900">Cancel</a>
+                <button type="submit" class="px-6 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700">
+                    Save Changes
+                </button>
+            </div>
+        </div>
+    </form>
+</div>
+
+<script>
+const DEFAULTS = {{ defaults_json|safe }};
+const CURRENT = {{ current_config_json|safe }};
+
+document.addEventListener('DOMContentLoaded', function() {
+    // Set current selections
+    for (const [task, defaultModel] of Object.entries(DEFAULTS)) {
+        const select = document.getElementById('model_' + task);
+        if (!select) continue;
+        const model = CURRENT[task] || defaultModel;
+        for (const option of select.options) {
+            if (option.value === model) {
+                option.selected = true;
+            }
+            if (option.value === defaultModel) {
+                option.textContent += ' (default)';
+            }
+        }
+    }
+});
+
+function resetDefaults() {
+    for (const [task, defaultModel] of Object.entries(DEFAULTS)) {
+        const select = document.getElementById('model_' + task);
+        if (!select) continue;
+        for (const option of select.options) {
+            if (option.value === defaultModel) {
+                option.selected = true;
+                break;
+            }
+        }
+    }
+}
+</script>
+{% endblock %}

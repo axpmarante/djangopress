@@ -141,18 +141,10 @@ function getCSRFToken() {
 }
 
 /**
- * Get selected AI model
- */
-function getSelectedModel() {
-    return document.querySelector('input[name="aiModel"]:checked').value;
-}
-
-/**
  * Generate Content
  */
 async function generateContent() {
     const type = currentGenerationType;
-    const model = getSelectedModel();
 
     // Show loading
     document.getElementById('aiForm').classList.add('hidden');
@@ -168,8 +160,7 @@ async function generateContent() {
             data = {
                 brief: document.getElementById('briefPage').value,
                 page_type: 'general',  // Default value, backend will handle appropriately
-                language: 'pt',  // Use site default language (Portuguese)
-                model: model
+                language: 'pt'  // Use site default language (Portuguese)
             };
         } else if (type === 'section') {
             endpoint = '/ai/api/generate-section/';
@@ -178,16 +169,14 @@ async function generateContent() {
                 section_type: document.getElementById('sectionType').value || null,
                 page_slug: currentPageSlug || document.getElementById('pageSlug')?.value || null,
                 insert_position: document.getElementById('insertPosition').value ? parseInt(document.getElementById('insertPosition').value) : null,
-                language: 'pt',  // Use site default language (Portuguese)
-                model: model
+                language: 'pt'  // Use site default language (Portuguese)
             };
         } else if (type === 'refine') {
             endpoint = '/ai/api/refine-section/';
             data = {
                 section_id: parseInt(document.getElementById('refineSectionId').value),
                 instructions: document.getElementById('refineInstructions').value,
-                language: 'pt',  // Use site default language (Portuguese)
-                model: model
+                language: 'pt'  // Use site default language (Portuguese)
             };
         }
 

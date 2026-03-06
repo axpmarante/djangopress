@@ -98,24 +98,6 @@
                         <div id="imagePreviews" class="grid grid-cols-4 gap-3 mt-3"></div>
                     </div>
 
-                    <!-- AI Model Selection -->
-                    <div id="modelContainer" class="hidden">
-                        {% if ai_models %}
-                        <label class="block text-sm font-medium text-gray-900 mb-2">
-                            AI Model
-                        </label>
-                        <select id="modelSelect" name="model"
-                                class="w-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-cyan-500 focus:border-transparent transition-all">
-                            {% for model in ai_models %}
-                            <option value="{{ model.0 }}" {% if model.0 == default_model %}selected{% endif %}>
-                                {{ model.1 }}
-                            </option>
-                            {% endfor %}
-                        </select>
-                        <p class="mt-2 text-xs text-gray-500">Select the AI model to use for refinement</p>
-                        {% endif %}
-                    </div>
-
                     <!-- Warning -->
                     <div id="warningContainer" class="hidden bg-amber-50 border border-amber-200 rounded-lg p-4">
                         <div class="flex">
@@ -296,7 +278,6 @@ async function loadPageInfo(pageId) {
         document.getElementById('pageInfoContainer').classList.add('hidden');
         document.getElementById('instructionsContainer').classList.add('hidden');
         document.getElementById('imageContainer').classList.add('hidden');
-        document.getElementById('modelContainer').classList.add('hidden');
         document.getElementById('warningContainer').classList.add('hidden');
         document.getElementById('actionContainer').classList.add('hidden');
         document.getElementById('chatRefineLink').classList.add('hidden');
@@ -358,7 +339,6 @@ async function loadPageInfo(pageId) {
             document.getElementById('pageInfoContainer').classList.remove('hidden');
             document.getElementById('instructionsContainer').classList.remove('hidden');
             document.getElementById('imageContainer').classList.remove('hidden');
-            document.getElementById('modelContainer').classList.remove('hidden');
             document.getElementById('actionContainer').classList.remove('hidden');
         }
     } catch (error) {
@@ -377,7 +357,6 @@ document.getElementById('refinePageForm').addEventListener('submit', async funct
 
     const rawFormData = new FormData(this);
     const instructions = rawFormData.get('instructions');
-    const model = rawFormData.get('model');
 
     showLoading();
     simulateProgress();
@@ -390,7 +369,6 @@ document.getElementById('refinePageForm').addEventListener('submit', async funct
             const fd = new FormData();
             fd.append('page_id', selectedPageId);
             fd.append('instructions', instructions);
-            fd.append('model', model);
             selectedFiles.forEach(f => fd.append('reference_images', f));
             fetchOptions = {
                 method: 'POST',
@@ -407,8 +385,7 @@ document.getElementById('refinePageForm').addEventListener('submit', async funct
                 },
                 body: JSON.stringify({
                     page_id: parseInt(selectedPageId),
-                    instructions: instructions,
-                    model: model
+                    instructions: instructions
                 })
             };
         }

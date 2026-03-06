@@ -145,30 +145,21 @@
             </div>
         </div>
 
-        <!-- Model Selection -->
+        <!-- Model Selection (Centralized) -->
+        {% if request.user.is_superuser %}
         <div class="bg-white rounded-lg shadow p-6">
-            <h3 class="text-lg font-semibold text-gray-900 mb-4">Model Selection</h3>
-
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div class="flex items-center justify-between">
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Design Model</label>
-                    <select name="design_model" class="w-full border border-gray-300 rounded-md px-3 py-2">
-                        <option value="claude" {% if settings.design_model == 'claude' or not settings %}selected{% endif %}>Claude Sonnet 4.5</option>
-                        <option value="gpt-5" {% if settings.design_model == 'gpt-5' %}selected{% endif %}>GPT-5</option>
-                        <option value="gemini-pro" {% if settings.design_model == 'gemini-pro' %}selected{% endif %}>Gemini Pro</option>
-                    </select>
+                    <h3 class="text-lg font-semibold text-gray-900">AI Models</h3>
+                    <p class="text-sm text-gray-500 mt-1">Model selection is configured centrally in Settings</p>
                 </div>
-
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Content Model</label>
-                    <select name="content_model" class="w-full border border-gray-300 rounded-md px-3 py-2">
-                        <option value="gemini-flash" {% if settings.content_model == 'gemini-flash' or not settings %}selected{% endif %}>Gemini Flash</option>
-                        <option value="gemini-pro" {% if settings.content_model == 'gemini-pro' %}selected{% endif %}>Gemini Pro</option>
-                        <option value="claude" {% if settings.content_model == 'claude' %}selected{% endif %}>Claude Sonnet 4.5</option>
-                    </select>
-                </div>
+                <a href="{% url 'backoffice:settings_ai_models' %}"
+                   class="px-4 py-2 bg-violet-600 text-white rounded-md hover:bg-violet-700 text-sm font-medium transition-colors">
+                    Configure Models
+                </a>
             </div>
         </div>
+        {% endif %}
 
         <!-- Action Buttons -->
         <div class="flex items-center justify-between bg-gray-50 rounded-lg p-4">

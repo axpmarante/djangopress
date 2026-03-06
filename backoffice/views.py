@@ -638,6 +638,7 @@ class SettingsGeneralView(LoginRequiredMixin, TemplateView):
         context['settings'] = site_settings
         context['site_name_i18n_json'] = json.dumps(site_settings.site_name_i18n or {})
         context['site_description_i18n_json'] = json.dumps(site_settings.site_description_i18n or {})
+        context['pages'] = Page.objects.filter(is_active=True).order_by('sort_order', 'pk')
         return context
 
     def post(self, request, *args, **kwargs):
@@ -654,6 +655,13 @@ class SettingsGeneralView(LoginRequiredMixin, TemplateView):
         settings.project_briefing = request.POST.get('project_briefing', '')
         settings.domain = request.POST.get('domain', settings.domain)
         settings.maintenance_mode = 'maintenance_mode' in request.POST
+
+        # Homepage
+        homepage_id = request.POST.get('homepage', '')
+        if homepage_id:
+            settings.homepage_id = int(homepage_id)
+        else:
+            settings.homepage_id = None
 
         if 'logo' in request.FILES:
             settings.logo = request.FILES['logo']
@@ -780,7 +788,8 @@ class SettingsDesignSystemView(LoginRequiredMixin, TemplateView):
             context['default_model'] = config.default_model
         except Exception:
             context['ai_models'] = []
-            context['default_model'] = 'gemini-pro'
+            from ai.utils.llm_config import get_ai_model
+            context['default_model'] = get_ai_model('generation')
 
         # Color fields
         context['color_fields'] = [
@@ -894,6 +903,70 @@ class SettingsIntegrationsView(LoginRequiredMixin, TemplateView):
             {'name': 'Google Cloud Storage', 'configured': bool(get_env('GS_BUCKET_NAME')), 'description': 'Media file storage'},
         ]
         return context
+
+
+class SettingsAIModelsView(LoginRequiredMixin, SuperuserRequiredMixin, TemplateView):
+    """AI model configuration — superuser only."""
+    template_name = 'backoffice/settings/ai_models.html'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        site_settings, _ = SiteSettings.objects.get_or_create(pk=1)
+        context['settings'] = site_settings
+
+        from ai.utils.llm_config import MODEL_CONFIG, AI_MODEL_DEFAULTS
+        context['available_models'] = [
+            {'key': k, 'name': f"{k} ({v.provider.value})", 'provider': v.provider.value}
+            for k, v in MODEL_CONFIG.items()
+        ]
+        context['task_groups'] = [
+            {
+                'title': 'Content Generation',
+                'tasks': [
+                    {'key': 'generation', 'label': 'Page Generation', 'description': 'Creating new pages, site generation, bulk pages'},
+                    {'key': 'refinement_page', 'label': 'Page Refinement', 'description': 'Full-page refinement and chat-based editing'},
+                    {'key': 'refinement_section', 'label': 'Section Refinement', 'description': 'Individual section refinement in the editor'},
+                    {'key': 'refinement_element', 'label': 'Element Refinement', 'description': 'Single element text/style refinement'},
+                    {'key': 'header_footer', 'label': 'Header & Footer', 'description': 'Header and footer generation and refinement'},
+                ],
+            },
+            {
+                'title': 'Processing',
+                'tasks': [
+                    {'key': 'translation', 'label': 'Translation', 'description': 'HTML and text translation between languages'},
+                    {'key': 'metadata', 'label': 'Metadata', 'description': 'Page titles, slugs, and metadata generation'},
+                    {'key': 'image_analysis', 'label': 'Image Analysis', 'description': 'Image prompt suggestions, descriptions, and vision analysis'},
+                    {'key': 'consistency', 'label': 'Design Consistency', 'description': 'Analyze and fix design inconsistencies across pages'},
+                ],
+            },
+            {
+                'title': 'Site Assistant',
+                'tasks': [
+                    {'key': 'assistant_router', 'label': 'Intent Router', 'description': 'Classifies user intents (lightweight)'},
+                    {'key': 'assistant_executor', 'label': 'Executor', 'description': 'Executes tools and generates responses'},
+                ],
+            },
+        ]
+        context['defaults'] = AI_MODEL_DEFAULTS
+        context['current_config'] = site_settings.ai_model_config or {}
+        context['defaults_json'] = json.dumps(AI_MODEL_DEFAULTS)
+        context['current_config_json'] = json.dumps(site_settings.ai_model_config or {})
+        return context
+
+    def post(self, request, *args, **kwargs):
+        settings, _ = SiteSettings.objects.get_or_create(pk=1)
+        from ai.utils.llm_config import MODEL_CONFIG, AI_MODEL_DEFAULTS
+
+        config = {}
+        for task_key in AI_MODEL_DEFAULTS:
+            model = request.POST.get(f'model_{task_key}', '')
+            if model and model in MODEL_CONFIG:
+                config[task_key] = model
+
+        settings.ai_model_config = config
+        settings.save(update_fields=['ai_model_config'])
+        messages.success(request, 'AI model configuration updated!')
+        return redirect('backoffice:settings_ai_models')
 
 
 from django.http import JsonResponse
@@ -1158,6 +1231,48 @@ class AIBulkTranslateView(SuperuserRequiredMixin, TemplateView):
         return context
 
 
+class DesignConsistencyView(SuperuserRequiredMixin, TemplateView):
+    """Design Consistency Analyzer — analyze and fix design inconsistencies across pages."""
+    template_name = 'backoffice/design_consistency.html'
+
+    def get_context_data(self, **kwargs):
+        from core.models import GlobalSection
+        context = super().get_context_data(**kwargs)
+
+        site_settings = SiteSettings.load()
+        default_lang = site_settings.get_default_language() if site_settings else 'pt'
+
+        pages = Page.objects.filter(is_active=True).order_by('sort_order', 'id')
+        pages_data = []
+        for page in pages:
+            html_i18n = page.html_content_i18n or {}
+            has_html = bool(html_i18n.get(default_lang))
+            if has_html:
+                pages_data.append({
+                    'id': page.id,
+                    'title': page.get_title(default_lang) or page.default_title or f'Page {page.id}',
+                    'slug': page.get_slug(default_lang) or '',
+                })
+
+        sections = GlobalSection.objects.filter(is_active=True)
+        sections_data = []
+        for section in sections:
+            html_i18n = section.html_template_i18n or {}
+            has_html = bool(html_i18n.get(default_lang))
+            if has_html:
+                sections_data.append({
+                    'key': section.key,
+                    'name': section.name or section.key,
+                })
+
+        context['pages_data'] = pages_data
+        context['sections_data'] = sections_data
+        context['total_scannable'] = len(pages_data) + len(sections_data)
+        context['design_guide_preview'] = (site_settings.design_guide or '')[:200] if site_settings else ''
+        context['default_language'] = default_lang
+        return context
+
+
 class AIRefinePageView(SuperuserRequiredMixin, TemplateView):
     """AI Content Studio - Refine Page"""
     template_name = 'backoffice/ai_refine_page.html'
@@ -1273,7 +1388,8 @@ class AIChatRefineView(SuperuserRequiredMixin, TemplateView):
             context['default_model'] = config.default_model
         except Exception:
             context['ai_models'] = []
-            context['default_model'] = 'gemini-pro'
+            from ai.utils.llm_config import get_ai_model
+            context['default_model'] = get_ai_model('generation')
 
         # Language info for translation propagation
         from core.models import SiteSettings
@@ -1399,7 +1515,8 @@ class HeaderEditView(LoginRequiredMixin, TemplateView):
             context['default_model'] = config.default_model
         except:
             context['ai_models'] = []
-            context['default_model'] = 'gemini-pro'
+            from ai.utils.llm_config import get_ai_model
+            context['default_model'] = get_ai_model('generation')
 
         return context
 
@@ -1456,7 +1573,8 @@ class FooterEditView(LoginRequiredMixin, TemplateView):
             context['default_model'] = config.default_model
         except:
             context['ai_models'] = []
-            context['default_model'] = 'gemini-pro'
+            from ai.utils.llm_config import get_ai_model
+            context['default_model'] = get_ai_model('generation')
 
         return context
 
@@ -1516,7 +1634,8 @@ class BlueprintView(SuperuserRequiredMixin, TemplateView):
             context['default_model'] = config.default_model
         except Exception:
             context['ai_models'] = []
-            context['default_model'] = 'gemini-pro'
+            from ai.utils.llm_config import get_ai_model
+            context['default_model'] = get_ai_model('generation')
 
         return context
 
@@ -1803,9 +1922,9 @@ class BenchmarkListView(SuperuserRequiredMixin, TemplateView):
 
         context['reports'] = reports
 
-        # Available models for run benchmark
-        from ai.utils.llm_config import MODEL_CONFIG
-        context['available_models'] = list(MODEL_CONFIG.keys())
+        # Default model for benchmark (from AI settings)
+        from ai.utils.llm_config import get_ai_model
+        context['default_model'] = get_ai_model('generation')
 
         # Available briefings
         briefings_dir = os.path.join(settings.BASE_DIR, 'briefings')
@@ -2047,10 +2166,12 @@ class BenchmarkCompareView(SuperuserRequiredMixin, TemplateView):
 @csrf_exempt
 def auto_login(request):
     """Auto-login endpoint for the DjangoPress Manager dashboard."""
-    if request.method != 'POST':
-        return redirect('backoffice:login')
     if request.META.get('REMOTE_ADDR') not in ('127.0.0.1', '::1'):
         return HttpResponseForbidden('Local access only')
+    if request.method == 'GET':
+        if request.user.is_authenticated:
+            return redirect('backoffice:dashboard')
+        return redirect('backoffice:login')
     username = request.POST.get('username', '')
     password = request.POST.get('password', '')
     user = authenticate(request, username=username, password=password)

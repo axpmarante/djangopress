@@ -73,18 +73,6 @@ I need several news articles for our company blog:
                     </div>
                     {% endif %}
 
-                    {% if ai_models %}
-                    <div>
-                        <label class="block text-sm font-medium text-gray-900 mb-2">AI Model</label>
-                        <select id="modelSelect" name="model"
-                                class="w-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all">
-                            {% for model_id, model_name in ai_models %}
-                            <option value="{{ model_id }}" {% if model_id == default_model %}selected{% endif %}>{{ model_name }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                    {% endif %}
-
                     <div class="flex items-center justify-between pt-4 border-t">
                         <a href="{% url 'backoffice:news_list' %}"
                            class="px-6 py-3 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors">Cancel</a>
@@ -188,7 +176,6 @@ function getDisplayTitle(titleObj) {
 document.getElementById('bulkForm').addEventListener('submit', async function(e) {
     e.preventDefault();
     const description = document.getElementById('description').value.trim();
-    const model = document.getElementById('modelSelect')?.value || 'gemini-pro';
     if (!description) { alert('Please describe what posts you need'); return; }
 
     showLoading('Analyzing your request...', 'AI is determining what news posts you need');
@@ -198,7 +185,7 @@ document.getElementById('bulkForm').addEventListener('submit', async function(e)
         const response = await fetch('/ai/api/analyze-bulk-pages/', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
-            body: JSON.stringify({ description: description, model: model })
+            body: JSON.stringify({ description: description })
         });
         const data = await response.json();
 
