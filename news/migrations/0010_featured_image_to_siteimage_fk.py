@@ -4,6 +4,22 @@ import django.db.models.deletion
 from django.db import migrations, models
 
 
+def clear_non_numeric_featured_image(apps, schema_editor):
+    """Null out empty strings and non-numeric values so the ALTER to FK doesn't fail."""
+    from django.db import connection
+    with connection.cursor() as cursor:
+        if connection.vendor == 'sqlite':
+            cursor.execute(
+                "UPDATE news_newspost SET featured_image = NULL "
+                "WHERE featured_image = '' OR (featured_image IS NOT NULL AND typeof(featured_image) = 'text')"
+            )
+        else:
+            cursor.execute(
+                "UPDATE news_newspost SET featured_image = NULL "
+                "WHERE featured_image = '' OR (featured_image IS NOT NULL AND featured_image !~ '^[0-9]+$')"
+            )
+
+
 class Migration(migrations.Migration):
 
     dependencies = [
@@ -14,10 +30,7 @@ class Migration(migrations.Migration):
     operations = [
         # Clear empty string and non-numeric values from the old ImageField column
         # so the ALTER to FK doesn't fail on constraint checks
-        migrations.RunSQL(
-            "UPDATE news_newspost SET featured_image = NULL WHERE featured_image = '' OR featured_image IS NOT NULL AND typeof(featured_image) = 'text'",
-            migrations.RunSQL.noop,
-        ),
+        migrations.RunPython(clear_non_numeric_featured_image, migrations.RunPython.noop),
         migrations.AlterField(
             model_name='newspost',
             name='featured_image',
