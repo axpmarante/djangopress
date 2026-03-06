@@ -5,7 +5,7 @@ import re
 import time
 import logging
 
-from ai.utils.llm_config import LLMBase
+from djangopress.ai.utils.llm_config import LLMBase
 from . import tools as agent_tools
 from .prompts import build_system_prompt, build_user_prompt
 
@@ -46,8 +46,8 @@ class RefinementAgent:
         Returns:
             Dict with 'options' (list of {'html': str}) and 'assistant_message'
         """
-        from core.models import SiteSettings
-        from ai.services import ContentGenerationService
+        from djangopress.core.models import SiteSettings
+        from djangopress.ai.services import ContentGenerationService
 
         t0 = time.time()
 

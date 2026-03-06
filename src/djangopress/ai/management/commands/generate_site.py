@@ -53,7 +53,7 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
-        from ai.site_generator import SiteGenerator
+        from djangopress.ai.site_generator import SiteGenerator
 
         briefing_path = options['briefing']
 

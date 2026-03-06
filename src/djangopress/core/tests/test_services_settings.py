@@ -1,8 +1,8 @@
 """Tests for core.services.settings — SettingsService."""
 
 from django.test import TestCase
-from core.models import Page, SiteSettings, MenuItem, SiteImage, DynamicForm, FormSubmission
-from core.services.settings import SettingsService
+from djangopress.core.models import Page, SiteSettings, MenuItem, SiteImage, DynamicForm, FormSubmission
+from djangopress.core.services.settings import SettingsService
 
 
 class SettingsServiceGetTest(TestCase):

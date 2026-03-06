@@ -17,7 +17,7 @@ from typing import Dict, List, Optional, Tuple
 
 from bs4 import BeautifulSoup
 
-from ai.utils.llm_config import get_ai_model
+from djangopress.ai.utils.llm_config import get_ai_model
 
 logger = logging.getLogger(__name__)
 
@@ -369,7 +369,7 @@ class SiteGenerator:
         """Configure SiteSettings from the parsed plan."""
         import django
         django.setup()
-        from core.models import SiteSettings
+        from djangopress.core.models import SiteSettings
 
         self.log(f"\n--- Configuring SiteSettings --- {self._elapsed()}")
 
@@ -450,8 +450,8 @@ class SiteGenerator:
 
     def configure_design_system(self, plan: Dict, settings):
         """Use an LLM to choose design system values based on the briefing."""
-        from ai.utils.llm_config import LLMBase
-        from core.models import GOOGLE_FONTS_CHOICES
+        from djangopress.ai.utils.llm_config import LLMBase
+        from djangopress.core.models import GOOGLE_FONTS_CHOICES
 
         self.log("  Configuring design system via LLM...")
 
@@ -648,8 +648,8 @@ BUTTONS:
 
     def generate_pages(self, plan: Dict):
         """Generate all pages from the plan (home first, then rest in parallel)."""
-        from ai.services import ContentGenerationService
-        from core.models import Page, SiteSettings
+        from djangopress.ai.services import ContentGenerationService
+        from djangopress.core.models import Page, SiteSettings
 
         import django
         django.setup()
@@ -672,8 +672,8 @@ BUTTONS:
 
         def _generate_single_page(i, page_spec):
             """Generate a single page — safe to call from a thread."""
-            from ai.services import ContentGenerationService
-            from core.models import Page
+            from djangopress.ai.services import ContentGenerationService
+            from djangopress.core.models import Page
 
             thread_service = ContentGenerationService(model_name=self.model)
             page_name = page_spec['name']
@@ -831,8 +831,8 @@ BUTTONS:
 
     def generate_design_guide(self, plan: Dict = None):
         """Generate a design guide from the project briefing and design system settings."""
-        from core.models import SiteSettings
-        from ai.utils.llm_config import LLMBase
+        from djangopress.core.models import SiteSettings
+        from djangopress.ai.utils.llm_config import LLMBase
 
         self.log(f"\n--- Generating Design Guide --- {self._elapsed()}")
 
@@ -908,7 +908,7 @@ for generating pages to ensure visual consistency."""
 
     def create_menu_items(self):
         """Create MenuItem records for all generated pages."""
-        from core.models import MenuItem
+        from djangopress.core.models import MenuItem
 
         if not self.generated_pages:
             return
@@ -929,8 +929,8 @@ for generating pages to ensure visual consistency."""
 
     def generate_header(self, plan: Dict):
         """Generate the site header GlobalSection."""
-        from ai.services import ContentGenerationService
-        from core.models import GlobalSection
+        from djangopress.ai.services import ContentGenerationService
+        from djangopress.core.models import GlobalSection
 
         self.log("\n--- Generating Header ---")
 
@@ -973,8 +973,8 @@ for generating pages to ensure visual consistency."""
 
     def generate_footer(self, plan: Dict):
         """Generate the site footer GlobalSection."""
-        from ai.services import ContentGenerationService
-        from core.models import GlobalSection
+        from djangopress.ai.services import ContentGenerationService
+        from djangopress.core.models import GlobalSection
 
         self.log("\n--- Generating Footer ---")
 
@@ -1015,8 +1015,8 @@ for generating pages to ensure visual consistency."""
 
     def process_all_images(self):
         """Process images on all generated pages."""
-        from ai.services import ContentGenerationService
-        from core.models import SiteSettings
+        from djangopress.ai.services import ContentGenerationService
+        from djangopress.core.models import SiteSettings
 
         if not self.generated_pages:
             return
@@ -1137,7 +1137,7 @@ for generating pages to ensure visual consistency."""
 
     def ensure_contact_form(self):
         """Verify the default contact form exists."""
-        from core.models import DynamicForm
+        from djangopress.core.models import DynamicForm
 
         form = DynamicForm.objects.filter(slug='contact').first()
         if form:
@@ -1158,7 +1158,7 @@ for generating pages to ensure visual consistency."""
 
     def print_summary(self) -> Dict:
         """Print a summary of what was generated."""
-        from core.models import GlobalSection
+        from djangopress.core.models import GlobalSection
 
         total_elapsed = time.time() - self._overall_start if self._overall_start else 0
         mins = int(total_elapsed // 60)

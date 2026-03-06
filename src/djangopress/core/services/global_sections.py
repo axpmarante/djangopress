@@ -1,6 +1,6 @@
 """GlobalSectionService — header/footer and global section management."""
 
-from core.models import GlobalSection
+from djangopress.core.models import GlobalSection
 
 
 class GlobalSectionService:
@@ -63,7 +63,7 @@ class GlobalSectionService:
             return result
 
         section = result['section']
-        from core.models import SiteSettings
+        from djangopress.core.models import SiteSettings
         settings = SiteSettings.load()
         lang = lang or (settings.get_default_language() if settings else 'pt')
 
@@ -89,7 +89,7 @@ class GlobalSectionService:
             return result
 
         section = result['section']
-        from core.models import SiteSettings
+        from djangopress.core.models import SiteSettings
         settings = SiteSettings.load()
         lang = lang or (settings.get_default_language() if settings else 'pt')
 
@@ -116,14 +116,14 @@ class GlobalSectionService:
         Returns:
             dict with 'success', 'message', 'assistant_message', or 'error'.
         """
-        from ai.utils.llm_config import get_ai_model
+        from djangopress.ai.utils.llm_config import get_ai_model
         model = model or get_ai_model('header_footer')
 
         result = GlobalSectionService.get(key)
         if not result['success']:
             return result
 
-        from ai.services import ContentGenerationService
+        from djangopress.ai.services import ContentGenerationService
         service = ContentGenerationService(model_name=model)
         ai_result = service.refine_global_section(
             section_key=key,
@@ -133,7 +133,7 @@ class GlobalSectionService:
 
         # Save the refined HTML
         section = GlobalSection.objects.get(key=key)
-        from core.models import SiteSettings
+        from djangopress.core.models import SiteSettings
         settings = SiteSettings.load()
         default_lang = settings.get_default_language() if settings else 'pt'
 

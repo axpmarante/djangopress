@@ -1,6 +1,6 @@
 """Site-wide tools — thin adapters to core services."""
 
-from core.services import (
+from djangopress.core.services import (
     PageService, MenuService, SettingsService, FormService, MediaService,
 )
 
@@ -250,7 +250,7 @@ def get_stats(params, context):
 # ---- HEADER/FOOTER (new tools) ----
 
 def refine_header(params, context):
-    from core.services import GlobalSectionService
+    from djangopress.core.services import GlobalSectionService
     instructions = params.get('instructions', '')
     if not instructions:
         return {'success': False, 'message': 'Missing instructions'}
@@ -261,7 +261,7 @@ def refine_header(params, context):
 
 
 def refine_footer(params, context):
-    from core.services import GlobalSectionService
+    from djangopress.core.services import GlobalSectionService
     instructions = params.get('instructions', '')
     if not instructions:
         return {'success': False, 'message': 'Missing instructions'}

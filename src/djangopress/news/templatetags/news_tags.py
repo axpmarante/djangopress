@@ -1,7 +1,7 @@
 # news/templatetags/news_tags.py
 from django import template
 from django.utils.translation import get_language
-from core.models import SiteSettings
+from djangopress.core.models import SiteSettings
 
 register = template.Library()
 
@@ -20,7 +20,7 @@ class LatestPostsNode(template.Node):
         self.var_name = var_name
 
     def render(self, context):
-        from news.models import NewsPost
+        from djangopress.news.models import NewsPost
         lang = get_language()
         settings = SiteSettings.load()
         default_lang = settings.get_default_language() if settings else 'pt'
@@ -61,7 +61,7 @@ class PostsByCategoryNode(template.Node):
         self.var_name = var_name
 
     def render(self, context):
-        from news.models import NewsPost, NewsCategory
+        from djangopress.news.models import NewsPost, NewsCategory
         lang = get_language()
         settings = SiteSettings.load()
         default_lang = settings.get_default_language() if settings else 'pt'
@@ -110,7 +110,7 @@ class NewsCategoriesNode(template.Node):
         self.var_name = var_name
 
     def render(self, context):
-        from news.models import NewsCategory
+        from djangopress.news.models import NewsCategory
         lang = get_language()
         settings = SiteSettings.load()
         default_lang = settings.get_default_language() if settings else 'pt'

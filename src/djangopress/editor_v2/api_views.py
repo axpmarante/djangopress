@@ -11,12 +11,12 @@ from django.http import JsonResponse
 from django.utils.translation import get_language
 from django.views.decorators.http import require_http_methods
 from django.contrib.admin.views.decorators import staff_member_required
-from core.decorators import superuser_required
+from djangopress.core.decorators import superuser_required
 from django.views.decorators.csrf import csrf_exempt
-from core.models import Page, PageVersion, SiteImage, SiteSettings
-from ai.models import RefinementSession
-from ai.utils.llm_config import get_ai_model
-from ai.utils.sse import sse_event, sse_response
+from djangopress.core.models import Page, PageVersion, SiteImage, SiteSettings
+from djangopress.ai.models import RefinementSession
+from djangopress.ai.utils.llm_config import get_ai_model
+from djangopress.ai.utils.sse import sse_event, sse_response
 from bs4 import BeautifulSoup
 
 
@@ -295,7 +295,7 @@ def _enrich_instructions(instructions, page):
         return instructions
 
     try:
-        from ai.utils.llm_config import LLMBase
+        from djangopress.ai.utils.llm_config import LLMBase
 
         # Build page title for context
         page_title = page.default_title if hasattr(page, 'default_title') else str(page.title_i18n)
@@ -791,7 +791,7 @@ def refine_section(request):
         # Add user message to session
         session.add_user_message(instructions)
 
-        from ai.services import ContentGenerationService
+        from djangopress.ai.services import ContentGenerationService
         service = ContentGenerationService(model_name=model)
         result = service.refine_section_only(
             page_id=page_id,
@@ -986,7 +986,7 @@ def refine_element(request):
 
         session.add_user_message(instructions)
 
-        from ai.services import ContentGenerationService
+        from djangopress.ai.services import ContentGenerationService
         service = ContentGenerationService(model_name=model)
         result = service.refine_element_only(
             page_id=page_id,
@@ -1204,7 +1204,7 @@ def refine_multi(request):
 
         if use_agent and mode != 'create':
             try:
-                from ai.refinement_agent.agent import RefinementAgent
+                from djangopress.ai.refinement_agent.agent import RefinementAgent
                 agent = RefinementAgent()
                 result = agent.handle(
                     instruction=instructions,
@@ -1224,7 +1224,7 @@ def refine_multi(request):
                 use_agent = False
 
         if not use_agent or mode == 'create':
-            from ai.services import ContentGenerationService
+            from djangopress.ai.services import ContentGenerationService
             service = ContentGenerationService(model_name=get_ai_model('generation'))
 
             if mode == 'create':
@@ -1399,7 +1399,7 @@ def apply_option(request):
             html_i18n = dict(page.html_content_i18n or {})
             print(f"Auto-translating {scope} to {other_languages} ({len(html)} chars)...")
 
-            from ai.services import ContentGenerationService
+            from djangopress.ai.services import ContentGenerationService
             service = ContentGenerationService(model_name=get_ai_model('translation'))
 
             for target_lang in other_languages:
@@ -1722,7 +1722,7 @@ def refine_page(request):
         )
 
         # Call AI — full page refinement
-        from ai.services import ContentGenerationService
+        from djangopress.ai.services import ContentGenerationService
         service = ContentGenerationService()
         result = service.refine_page_with_html(
             page_id=page_id,
@@ -2109,7 +2109,7 @@ def refine_page_stream(request):
 
         def worker():
             try:
-                from ai.services import ContentGenerationService
+                from djangopress.ai.services import ContentGenerationService
                 service = ContentGenerationService()
                 result = service.refine_page_with_html(
                     page_id=page_id,
@@ -2253,7 +2253,7 @@ def refine_multi_stream(request):
 
                 if use_agent and mode != 'create':
                     try:
-                        from ai.refinement_agent.agent import RefinementAgent
+                        from djangopress.ai.refinement_agent.agent import RefinementAgent
                         agent = RefinementAgent()
                         result = agent.handle(
                             instruction=instructions,
@@ -2272,7 +2272,7 @@ def refine_multi_stream(request):
                         use_agent = False
 
                 if result is None:
-                    from ai.services import ContentGenerationService
+                    from djangopress.ai.services import ContentGenerationService
                     service = ContentGenerationService(model_name=get_ai_model('refinement_section'))
 
                     if mode == 'create':

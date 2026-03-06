@@ -1,7 +1,7 @@
 """SettingsService — site settings management."""
 
 import logging
-from core.models import SiteSettings, Page, SiteImage, MenuItem, FormSubmission
+from djangopress.core.models import SiteSettings, Page, SiteImage, MenuItem, FormSubmission
 
 logger = logging.getLogger(__name__)
 

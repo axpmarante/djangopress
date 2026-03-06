@@ -9,7 +9,7 @@ from django.utils.text import slugify
 
 def _get_language_config():
     """Get enabled languages and default language from SiteSettings."""
-    from core.models import SiteSettings
+    from djangopress.core.models import SiteSettings
     settings = SiteSettings.load()
     default_lang = settings.get_default_language() if settings else 'pt'
     all_langs = settings.get_language_codes() if settings else [default_lang]
@@ -22,7 +22,7 @@ def _translate_text(text, source_lang, target_lang):
     Uses gemini-lite. Falls back to original text if translation fails.
     """
     try:
-        from ai.utils.llm_config import LLMBase, get_ai_model
+        from djangopress.ai.utils.llm_config import LLMBase, get_ai_model
         llm = LLMBase()
         messages = [
             {'role': 'system', 'content': (

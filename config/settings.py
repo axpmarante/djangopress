@@ -47,12 +47,12 @@ INSTALLED_APPS = [
     'django.contrib.sitemaps',
     'anymail',
     'storages',
-    'ai',
-    'backoffice',
-    'editor_v2',
-    'core',
-    'news',
-    'site_assistant',
+    'djangopress.ai',
+    'djangopress.backoffice',
+    'djangopress.editor_v2',
+    'djangopress.core',
+    'djangopress.news',
+    'djangopress.site_assistant',
 ]
 
 # Add whitenoise.runserver_nostatic only in production
@@ -63,16 +63,16 @@ MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
-    'core.middleware.LocaleMiddleware',  # Custom: skips redirect for non-i18n paths
-    'core.middleware.DynamicLanguageMiddleware',  # Override default language from database
+    'djangopress.core.middleware.LocaleMiddleware',  # Custom: skips redirect for non-i18n paths
+    'djangopress.core.middleware.DynamicLanguageMiddleware',  # Override default language from database
     'django.middleware.common.CommonMiddleware',
-    'core.rate_limit.RateLimitMiddleware',  # Rate limiting (login, AI endpoints)
+    'djangopress.core.rate_limit.RateLimitMiddleware',  # Rate limiting (login, AI endpoints)
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    'core.middleware.DomainMiddleware',
-    'core.middleware.MaintenanceModeMiddleware',
+    'djangopress.core.middleware.DomainMiddleware',
+    'djangopress.core.middleware.MaintenanceModeMiddleware',
 ]
 
 ROOT_URLCONF = 'config.urls'
@@ -89,7 +89,7 @@ TEMPLATES = [
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
                 'django.template.context_processors.i18n',
-                'core.context_processors.site_settings',
+                'djangopress.core.context_processors.site_settings',
             ],
             'debug': DEBUG,  # Enable template debug mode
         },
@@ -188,13 +188,13 @@ if env('GS_BUCKET_NAME', default=''):
 
     STORAGES = {
         "default": {
-            "BACKEND": "config.storage_backends.DomainBasedStorage",
+            "BACKEND": "djangopress.storage_backends.DomainBasedStorage",
         },
         "staticfiles": {
             "BACKEND": _staticfiles_backend,
         },
     }
-    DEFAULT_FILE_STORAGE = 'config.storage_backends.DomainBasedStorage'
+    DEFAULT_FILE_STORAGE = 'djangopress.storage_backends.DomainBasedStorage'
 else:
     MEDIA_URL = '/media/'
     MEDIA_ROOT = BASE_DIR / 'media'

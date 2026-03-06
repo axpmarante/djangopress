@@ -18,7 +18,7 @@ def cta_section(title=None, text=None, button_text=None, button_url=None):
 @register.simple_tag
 def site_image(key, default=None, css_class=None):
     """Render an image by its key with optional fallback and CSS class"""
-    from core.models import SiteImage
+    from djangopress.core.models import SiteImage
     from django.utils.safestring import mark_safe
 
     try:
@@ -171,7 +171,7 @@ def load_global_section(context, key, fallback_template=None):
 
     If section doesn't exist and fallback_template is provided, uses fallback.
     """
-    from core.models import GlobalSection
+    from djangopress.core.models import GlobalSection
     from django.template.loader import render_to_string
     from django.template import Template, Context
 
@@ -183,7 +183,7 @@ def load_global_section(context, key, fallback_template=None):
         section = GlobalSection.objects.get(key=key, is_active=True)
 
         # Get default language from SiteSettings
-        from core.models import SiteSettings
+        from djangopress.core.models import SiteSettings
         site_settings = SiteSettings.load()
         default_lang = site_settings.get_default_language() if site_settings else 'pt'
 

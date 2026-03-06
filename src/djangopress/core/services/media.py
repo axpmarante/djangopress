@@ -2,7 +2,7 @@
 
 import logging
 from django.db.models import Q
-from core.models import SiteImage
+from djangopress.core.models import SiteImage
 
 logger = logging.getLogger(__name__)
 

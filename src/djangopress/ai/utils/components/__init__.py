@@ -146,7 +146,7 @@ class ComponentRegistry:
             user_prompt_parts.append(f"\nExisting page HTML:\n{html_preview}")
         user_prompt = "\n".join(user_prompt_parts)
 
-        from ai.utils.llm_config import MODEL_CONFIG
+        from djangopress.ai.utils.llm_config import MODEL_CONFIG
         config = MODEL_CONFIG.get('gemini-lite')
         model_name = config.model_name if config else 'gemini-lite'
 
@@ -172,7 +172,7 @@ class ComponentRegistry:
                     "select_components: no JSON array found in response: %s",
                     response_text[:200],
                 )
-                from ai.models import log_ai_call
+                from djangopress.ai.models import log_ai_call
                 log_ai_call(
                     action='select_components',
                     model_name=model_name,
@@ -195,7 +195,7 @@ class ComponentRegistry:
                     "select_components: invalid JSON in response: %s",
                     match.group(0),
                 )
-                from ai.models import log_ai_call
+                from djangopress.ai.models import log_ai_call
                 log_ai_call(
                     action='select_components',
                     model_name=model_name,
@@ -218,7 +218,7 @@ class ComponentRegistry:
                     "select_components: LLM returned unknown components: %s", invalid
                 )
 
-            from ai.models import log_ai_call
+            from djangopress.ai.models import log_ai_call
             log_ai_call(
                 action='select_components',
                 model_name=model_name,
@@ -238,7 +238,7 @@ class ComponentRegistry:
             duration_ms = int(time.time() * 1000) - start_ms
             logger.exception("select_components: LLM call failed")
             try:
-                from ai.models import log_ai_call
+                from djangopress.ai.models import log_ai_call
                 log_ai_call(
                     action='select_components',
                     model_name=model_name,

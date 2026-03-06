@@ -7,8 +7,8 @@ from django.conf.urls.static import static
 from django.conf.urls.i18n import i18n_patterns
 from django.contrib.sitemaps.views import sitemap
 from django.http import HttpResponse
-from core.sitemaps import PageSitemap
-from core.views import set_language, form_submit
+from djangopress.core.sitemaps import PageSitemap
+from djangopress.core.views import set_language, form_submit
 
 sitemaps = {
     'pages': PageSitemap,
@@ -26,10 +26,10 @@ def robots_txt(request):
 
 urlpatterns = [
     path('django-admin/', admin.site.urls),  # Django admin (fallback/advanced)
-    path('ai/', include('ai.urls')),  # AI content generation
-    path('backoffice/', include('backoffice.urls')),  # Custom backoffice
-    path('editor-v2/', include('editor_v2.urls')),  # Inline editor
-    path('site-assistant/', include('site_assistant.urls')),  # Site Assistant
+    path('ai/', include('djangopress.ai.urls')),  # AI content generation
+    path('backoffice/', include('djangopress.backoffice.urls')),  # Custom backoffice
+    path('editor-v2/', include('djangopress.editor_v2.urls')),  # Inline editor
+    path('site-assistant/', include('djangopress.site_assistant.urls')),  # Site Assistant
     path('i18n/', include('django.conf.urls.i18n')),  # Django's built-in (keep for any other i18n URLs)
     path('set-language/', set_language, name='set_language'),  # Must be AFTER i18n/ to override the name
     path('forms/<slug:slug>/submit/', form_submit, name='form_submit'),
@@ -47,7 +47,7 @@ if settings.DEBUG:
 # Our DynamicLanguageMiddleware handles unprefixed URLs by routing them to the default language
 # This allows the default language to be changed in the database without code changes
 urlpatterns += i18n_patterns(
-    path('', include('news.urls')),    # News public routes (before catch-all)
-    path('', include('core.urls')),    # Core page catch-all (must be last)
+    path('', include('djangopress.news.urls')),    # News public routes (before catch-all)
+    path('', include('djangopress.core.urls')),    # Core page catch-all (must be last)
     prefix_default_language=True,  # All languages use prefixes (middleware handles unprefixed URLs)
 )

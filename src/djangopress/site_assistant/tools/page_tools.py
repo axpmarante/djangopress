@@ -1,8 +1,8 @@
 """Page-level tools — require an active page in the session."""
 
-from ai.utils.llm_config import get_ai_model
-from core.models import Page
-from core.services import PageService
+from djangopress.ai.utils.llm_config import get_ai_model
+from djangopress.core.models import Page
+from djangopress.core.services import PageService
 
 
 def _get_page(context):
@@ -93,7 +93,7 @@ def refine_section(params, context):
 
     model = get_ai_model('refinement_section')
     ref_images = context.get('reference_images')
-    from ai.services import ContentGenerationService
+    from djangopress.ai.services import ContentGenerationService
     service = ContentGenerationService(model_name=model)
     result = service.refine_section_only(
         page_id=page.id, section_name=section_name,
@@ -125,7 +125,7 @@ def refine_page(params, context):
 
     model = get_ai_model('refinement_page')
     ref_images = context.get('reference_images')
-    from ai.services import ContentGenerationService
+    from djangopress.ai.services import ContentGenerationService
     service = ContentGenerationService(model_name=model)
     result = service.refine_page_with_html(
         page_id=page.id, instructions=instructions,

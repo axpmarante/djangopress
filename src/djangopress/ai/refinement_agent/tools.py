@@ -18,7 +18,7 @@ def inspect_html(params, context):
 def get_design_guide(params, context):
     """Fetch the site's design guide."""
     if 'design_guide' not in context:
-        from core.models import SiteSettings
+        from djangopress.core.models import SiteSettings
         settings = context.get('site_settings') or SiteSettings.objects.first()
         context['design_guide'] = settings.design_guide if settings else ''
     guide = context['design_guide']
@@ -30,7 +30,7 @@ def get_design_guide(params, context):
 def get_briefing(params, context):
     """Fetch the project briefing."""
     if 'briefing' not in context:
-        from core.models import SiteSettings
+        from djangopress.core.models import SiteSettings
         settings = context.get('site_settings') or SiteSettings.objects.first()
         context['briefing'] = settings.get_project_briefing() if settings else ''
     briefing = context['briefing']
@@ -41,7 +41,7 @@ def get_briefing(params, context):
 
 def get_pages_list(params, context):
     """List all active pages with titles and slugs."""
-    from core.models import Page
+    from djangopress.core.models import Page
     pages = Page.objects.filter(is_active=True).order_by('id')
     lines = []
     for p in pages:
@@ -144,7 +144,7 @@ def update_text(params, context):
 
 def refine_with_ai(params, context):
     """Delegate to ContentGenerationService.refine_section_only() with agent-chosen params."""
-    from ai.services import ContentGenerationService
+    from djangopress.ai.services import ContentGenerationService
 
     model = params.get('model', 'gemini-flash')
     include_components = params.get('include_components', False)

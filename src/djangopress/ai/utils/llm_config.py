@@ -179,7 +179,7 @@ def get_ai_model(task):
     """
     default = AI_MODEL_DEFAULTS.get(task, 'gemini-flash')
     try:
-        from core.models import SiteSettings
+        from djangopress.core.models import SiteSettings
         settings = SiteSettings.load()
         config = settings.ai_model_config or {}
         model = config.get(task, default)

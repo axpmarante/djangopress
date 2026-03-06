@@ -6,11 +6,11 @@ from django.test import TestCase
 
 class LLMFunctionCallingTest(TestCase):
 
-    @patch('ai.utils.llm_config.GOOGLE_AVAILABLE', True)
+    @patch('djangopress.ai.utils.llm_config.GOOGLE_AVAILABLE', True)
     def test_get_completion_with_tools_builds_config(self):
         """Verify tools are passed to Gemini's GenerateContentConfig."""
         from google.genai import types
-        from ai.utils.llm_config import LLMBase
+        from djangopress.ai.utils.llm_config import LLMBase
 
         tool_declarations = [
             types.Tool(function_declarations=[
@@ -43,7 +43,7 @@ class LLMFunctionCallingTest(TestCase):
 
     def test_non_google_model_raises(self):
         """Non-Google models should raise ValueError."""
-        from ai.utils.llm_config import LLMBase
+        from djangopress.ai.utils.llm_config import LLMBase
         llm = LLMBase()
         with self.assertRaises(ValueError):
             llm.get_completion_with_tools(

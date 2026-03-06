@@ -24,7 +24,7 @@ class DomainBasedStorage(GoogleCloudStorage):
         # Always use SiteSettings.domain as the canonical folder name
         domain = 'default'
         try:
-            from core.models import SiteSettings
+            from djangopress.core.models import SiteSettings
             site_settings = SiteSettings.objects.first()
             if site_settings and site_settings.domain:
                 domain = site_settings.domain

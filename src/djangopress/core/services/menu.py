@@ -1,7 +1,7 @@
 """MenuService — navigation management."""
 
 import logging
-from core.models import MenuItem, Page
+from djangopress.core.models import MenuItem, Page
 from .i18n import build_i18n_field
 
 logger = logging.getLogger(__name__)

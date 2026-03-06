@@ -2,19 +2,19 @@
 
 from unittest.mock import patch, MagicMock
 from django.test import TestCase
-from site_assistant.router import Router
+from djangopress.site_assistant.router import Router
 
 
 class RouterClassifyTest(TestCase):
 
     def setUp(self):
-        from core.models import SiteSettings
+        from djangopress.core.models import SiteSettings
         s = SiteSettings.load()
         s.enabled_languages = [{'code': 'pt', 'name': 'PT'}]
         s.default_language = 'pt'
         s.save()
 
-    @patch('site_assistant.router.LLMBase')
+    @patch('djangopress.site_assistant.router.LLMBase')
     def test_greeting_returns_direct_response(self, MockLLM):
         mock_response = MagicMock()
         mock_response.choices = [MagicMock()]
@@ -25,7 +25,7 @@ class RouterClassifyTest(TestCase):
         self.assertEqual(result['direct_response'], 'Olá!')
         self.assertIn('greeting', result['intents'])
 
-    @patch('site_assistant.router.LLMBase')
+    @patch('djangopress.site_assistant.router.LLMBase')
     def test_page_edit_returns_intents(self, MockLLM):
         mock_response = MagicMock()
         mock_response.choices = [MagicMock()]
@@ -37,7 +37,7 @@ class RouterClassifyTest(TestCase):
         self.assertTrue(result['needs_active_page'])
         self.assertIsNone(result['direct_response'])
 
-    @patch('site_assistant.router.LLMBase')
+    @patch('djangopress.site_assistant.router.LLMBase')
     def test_multi_intent(self, MockLLM):
         mock_response = MagicMock()
         mock_response.choices = [MagicMock()]
@@ -48,14 +48,14 @@ class RouterClassifyTest(TestCase):
         self.assertIn('pages', result['intents'])
         self.assertIn('navigation', result['intents'])
 
-    @patch('site_assistant.router.LLMBase')
+    @patch('djangopress.site_assistant.router.LLMBase')
     def test_fallback_on_error(self, MockLLM):
         MockLLM.return_value.get_completion.side_effect = Exception('API error')
         result = Router.classify('test', snapshot={'default_language': 'pt', 'site_name': 'Test', 'pages': []}, history='')
         self.assertIsNone(result['direct_response'])
         self.assertTrue(len(result['intents']) > 0)
 
-    @patch('site_assistant.router.LLMBase')
+    @patch('djangopress.site_assistant.router.LLMBase')
     def test_malformed_json_fallback(self, MockLLM):
         mock_response = MagicMock()
         mock_response.choices = [MagicMock()]

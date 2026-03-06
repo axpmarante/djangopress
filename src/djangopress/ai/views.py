@@ -8,9 +8,9 @@ import time
 from django.shortcuts import render
 from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
-from core.decorators import superuser_required
+from djangopress.core.decorators import superuser_required
 from django.views.decorators.csrf import csrf_exempt
-from core.models import Page
+from djangopress.core.models import Page
 from .services import ContentGenerationService
 from .models import log_ai_call
 from .utils.llm_config import get_ai_model
@@ -86,7 +86,7 @@ def generate_page_api(request):
         outline = None
         if blueprint_page_id:
             try:
-                from core.models import BlueprintPage
+                from djangopress.core.models import BlueprintPage
                 bp_page = BlueprintPage.objects.get(pk=int(blueprint_page_id))
                 if bp_page.sections:
                     outline = bp_page.sections
@@ -154,7 +154,7 @@ def generate_page_stream(request):
         outline = None
         if blueprint_page_id:
             try:
-                from core.models import BlueprintPage
+                from djangopress.core.models import BlueprintPage
                 bp_page = BlueprintPage.objects.get(pk=int(blueprint_page_id))
                 if bp_page.sections:
                     outline = bp_page.sections
@@ -214,7 +214,7 @@ def refine_header_api(request):
         )
 
         # Save the refined header to the database
-        from core.models import GlobalSection
+        from djangopress.core.models import GlobalSection
         section = GlobalSection.objects.get(key='main-header')
         section.html_template_i18n = section_data.get('html_template_i18n', section.html_template_i18n or {})
         section.save()
@@ -268,7 +268,7 @@ def refine_footer_api(request):
         )
 
         # Save the refined footer to the database
-        from core.models import GlobalSection
+        from djangopress.core.models import GlobalSection
         section = GlobalSection.objects.get(key='main-footer')
         section.html_template_i18n = section_data.get('html_template_i18n', section.html_template_i18n or {})
         section.save()
@@ -309,7 +309,7 @@ def save_generated_page_api(request):
     }
     """
     try:
-        from core.models import SiteSettings
+        from djangopress.core.models import SiteSettings
 
         data = json.loads(request.body)
         slug = data.get('slug')
@@ -369,7 +369,7 @@ def save_generated_page_api(request):
         blueprint_page_id = data.get('blueprint_page_id')
         if blueprint_page_id:
             try:
-                from core.models import BlueprintPage
+                from djangopress.core.models import BlueprintPage
                 bp_page = BlueprintPage.objects.get(pk=int(blueprint_page_id))
                 bp_page.page = page
                 bp_page.save(update_fields=['page'])
@@ -435,7 +435,7 @@ def analyze_bulk_pages_api(request):
         print(f"Model: {model}")
 
         # Get enabled languages from SiteSettings
-        from core.models import SiteSettings
+        from djangopress.core.models import SiteSettings
         site_settings = SiteSettings.objects.first()
         site_name = site_settings.get_site_name(language) if site_settings else 'Website'
         site_description = site_settings.get_site_description(language) if site_settings else ''
@@ -570,7 +570,7 @@ def refine_page_with_html_api(request):
     }
     """
     try:
-        from core.models import Page
+        from djangopress.core.models import Page
         from .services import ContentGenerationService
 
         # Support both multipart (with images) and JSON body
@@ -718,7 +718,7 @@ def chat_refine_page_api(request):
 
         # Capture old HTML for diff (from html_content_i18n with fallback)
         from django.utils.translation import get_language
-        from core.models import SiteSettings
+        from djangopress.core.models import SiteSettings
         site_settings = SiteSettings.objects.first()
         default_lang = site_settings.get_default_language() if site_settings else 'pt'
         current_lang = get_language() or default_lang
@@ -895,7 +895,7 @@ def chat_refine_page_stream(request):
 
         # Capture old HTML for diff (from html_content_i18n with fallback)
         from django.utils.translation import get_language
-        from core.models import SiteSettings
+        from djangopress.core.models import SiteSettings
         site_settings = SiteSettings.objects.first()
         default_lang = site_settings.get_default_language() if site_settings else 'pt'
         current_lang = get_language() or default_lang
@@ -1030,7 +1030,7 @@ def refine_header_stream(request):
                 )
 
                 # Save the refined header to the database
-                from core.models import GlobalSection
+                from djangopress.core.models import GlobalSection
                 section = GlobalSection.objects.get(key='main-header')
                 section.html_template_i18n = section_data.get('html_template_i18n', section.html_template_i18n or {})
                 section.save()
@@ -1112,7 +1112,7 @@ def refine_footer_stream(request):
                 )
 
                 # Save the refined footer to the database
-                from core.models import GlobalSection
+                from djangopress.core.models import GlobalSection
                 section = GlobalSection.objects.get(key='main-footer')
                 section.html_template_i18n = section_data.get('html_template_i18n', section.html_template_i18n or {})
                 section.save()
@@ -1172,7 +1172,7 @@ def generate_design_guide_ai_api(request):
     Returns: { "success": true, "design_guide": "..." }
     """
     try:
-        from core.models import SiteSettings, Page
+        from djangopress.core.models import SiteSettings, Page
         from .utils.llm_config import LLMBase, MODEL_CONFIG, ModelProvider
 
         # Parse input
@@ -1644,7 +1644,7 @@ def bulk_translate_api(request):
     }
     """
     try:
-        from core.models import Page, GlobalSection, SiteSettings
+        from djangopress.core.models import Page, GlobalSection, SiteSettings
         from django.utils.text import slugify
 
         data = json.loads(request.body)
@@ -1789,7 +1789,7 @@ def suggest_page_sections_api(request):
     Returns: {"success": true, "sections": [...]}
     """
     try:
-        from core.models import SiteSettings, BlueprintPage
+        from djangopress.core.models import SiteSettings, BlueprintPage
         from .utils.llm_config import LLMBase
         from .utils.prompts import PromptTemplates
 
@@ -1886,7 +1886,7 @@ def fill_section_content_api(request):
     Returns: {"success": true, "content": "...markdown..."}
     """
     try:
-        from core.models import SiteSettings, BlueprintPage
+        from djangopress.core.models import SiteSettings, BlueprintPage
         from .utils.llm_config import LLMBase
         from .utils.prompts import PromptTemplates
 
@@ -2318,7 +2318,7 @@ def chat_refine_news_api(request):
         from .models import RefinementSession
         from .utils.diff_utils import compute_section_changes, build_change_summary
         from django.contrib.contenttypes.models import ContentType
-        from news.models import NewsPost
+        from djangopress.news.models import NewsPost
 
         # Parse input
         if request.content_type and 'multipart' in request.content_type:
@@ -2389,7 +2389,7 @@ def chat_refine_news_api(request):
 
         # Capture old HTML for diff
         from django.utils.translation import get_language
-        from core.models import SiteSettings
+        from djangopress.core.models import SiteSettings
         site_settings = SiteSettings.objects.first()
         default_lang = site_settings.get_default_language() if site_settings else 'pt'
         current_lang = get_language() or default_lang
@@ -2457,7 +2457,7 @@ def chat_refine_news_stream(request):
         from .models import RefinementSession
         from .utils.diff_utils import compute_section_changes, build_change_summary
         from django.contrib.contenttypes.models import ContentType
-        from news.models import NewsPost
+        from djangopress.news.models import NewsPost
 
         # Parse input
         if request.content_type and 'multipart' in request.content_type:
@@ -2525,7 +2525,7 @@ def chat_refine_news_stream(request):
 
         # Capture old HTML for diff
         from django.utils.translation import get_language
-        from core.models import SiteSettings
+        from djangopress.core.models import SiteSettings
         site_settings = SiteSettings.objects.first()
         default_lang = site_settings.get_default_language() if site_settings else 'pt'
         current_lang = get_language() or default_lang
@@ -2628,7 +2628,7 @@ def save_news_post_api(request):
     }
     """
     try:
-        from news.models import NewsPost, NewsCategory
+        from djangopress.news.models import NewsPost, NewsCategory
 
         data = json.loads(request.body)
         page_data = data.get('page_data', {})
@@ -2670,7 +2670,7 @@ def list_news_refinement_sessions_api(request, post_id):
     """Return refinement sessions for a news post."""
     from .models import RefinementSession
     from django.contrib.contenttypes.models import ContentType
-    from news.models import NewsPost
+    from djangopress.news.models import NewsPost
 
     ct = ContentType.objects.get_for_model(NewsPost)
     sessions = RefinementSession.objects.filter(
@@ -2822,7 +2822,7 @@ def fix_consistency_stream(request):
 
         def worker():
             try:
-                from core.models import SiteSettings, Page, GlobalSection
+                from djangopress.core.models import SiteSettings, Page, GlobalSection
 
                 site_settings = SiteSettings.objects.first()
                 default_lang = site_settings.get_default_language() if site_settings else 'pt'

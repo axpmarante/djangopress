@@ -2,8 +2,8 @@ from django.core.cache import cache
 from django.db import models
 from django.utils.text import slugify
 from django.utils.translation import gettext_lazy as _
-from core.mixins import I18nModelMixin, VersionableMixin
-from core.models import SiteImage
+from djangopress.core.mixins import I18nModelMixin, VersionableMixin
+from djangopress.core.models import SiteImage
 
 
 class NewsCategory(I18nModelMixin, models.Model):
@@ -44,7 +44,7 @@ class NewsCategory(I18nModelMixin, models.Model):
         lang = lang or get_language()
         slug = (self.slug_i18n or {}).get(lang, '')
         if not slug:
-            from core.models import SiteSettings
+            from djangopress.core.models import SiteSettings
             settings = SiteSettings.load()
             default = settings.get_default_language() if settings else 'pt'
             slug = (self.slug_i18n or {}).get(default, '')
@@ -184,7 +184,7 @@ class NewsPost(VersionableMixin, I18nModelMixin, models.Model):
     def get_absolute_url(self, lang=None):
         from django.urls import reverse
         from django.utils.translation import get_language
-        from core.models import SiteSettings
+        from djangopress.core.models import SiteSettings
         lang = lang or get_language()
         slug = (self.slug_i18n or {}).get(lang, '')
         if not slug:

@@ -1,7 +1,7 @@
 from django.conf import settings as django_settings
 from django.utils.translation import get_language
 
-from ai.utils import unsplash
+from djangopress.ai.utils import unsplash
 from .models import SiteSettings, SiteImage, MenuItem, FormSubmission
 
 

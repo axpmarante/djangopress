@@ -9,7 +9,7 @@ class I18nModelMixin:
     """
 
     def get_i18n_field(self, field_name, lang=None):
-        from core.models import SiteSettings
+        from djangopress.core.models import SiteSettings
         lang = lang or get_language()
         settings = SiteSettings.load()
         default = settings.get_default_language() if settings else 'pt'
@@ -36,7 +36,7 @@ class VersionableMixin:
             ContentVersion instance
         """
         from django.contrib.contenttypes.models import ContentType
-        from core.models import ContentVersion
+        from djangopress.core.models import ContentVersion
 
         ct = ContentType.objects.get_for_model(self.__class__)
         version_number = ContentVersion.next_version_number(ct, self.pk)
@@ -68,7 +68,7 @@ class VersionableMixin:
     def get_versions(self):
         """Return all versions for this object, newest first."""
         from django.contrib.contenttypes.models import ContentType
-        from core.models import ContentVersion
+        from djangopress.core.models import ContentVersion
 
         ct = ContentType.objects.get_for_model(self.__class__)
         return ContentVersion.objects.filter(
@@ -78,7 +78,7 @@ class VersionableMixin:
     def restore_to_version(self, version_number):
         """Restore this object to a specific version."""
         from django.contrib.contenttypes.models import ContentType
-        from core.models import ContentVersion
+        from djangopress.core.models import ContentVersion
 
         ct = ContentType.objects.get_for_model(self.__class__)
         try:

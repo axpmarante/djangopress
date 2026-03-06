@@ -4,7 +4,7 @@ from django.views.generic import TemplateView
 from django.http import Http404
 from django.template import Template, RequestContext
 from django.utils.translation import get_language
-from core.models import SiteSettings
+from djangopress.core.models import SiteSettings
 
 
 # Minimal fallback layouts when no NewsLayout exists
@@ -56,7 +56,7 @@ def _get_lang_and_default():
 
 def _get_layout_html(key, lang, default_lang):
     """Load layout HTML from NewsLayout, with fallback."""
-    from news.models import NewsLayout
+    from djangopress.news.models import NewsLayout
     try:
         layout = NewsLayout.objects.get(key=key)
         html_i18n = layout.html_content_i18n or {}
@@ -92,7 +92,7 @@ class NewsListView(TemplateView):
     paginate_by = 12
 
     def get_context_data(self, **kwargs):
-        from news.models import NewsPost
+        from djangopress.news.models import NewsPost
         from django.core.paginator import Paginator
 
         context = super().get_context_data(**kwargs)
@@ -127,7 +127,7 @@ class NewsDetailView(TemplateView):
     template_name = 'news/base_news.html'
 
     def get_context_data(self, **kwargs):
-        from news.models import NewsPost
+        from djangopress.news.models import NewsPost
 
         context = super().get_context_data(**kwargs)
         lang, default_lang = _get_lang_and_default()
@@ -180,7 +180,7 @@ class NewsCategoryView(TemplateView):
     paginate_by = 12
 
     def get_context_data(self, **kwargs):
-        from news.models import NewsPost, NewsCategory
+        from djangopress.news.models import NewsPost, NewsCategory
         from django.core.paginator import Paginator
 
         context = super().get_context_data(**kwargs)

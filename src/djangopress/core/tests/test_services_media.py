@@ -1,8 +1,8 @@
 """Tests for core.services.media — MediaService."""
 
 from django.test import TestCase
-from core.models import SiteImage
-from core.services.media import MediaService
+from djangopress.core.models import SiteImage
+from djangopress.core.services.media import MediaService
 
 
 class MediaServiceListTest(TestCase):

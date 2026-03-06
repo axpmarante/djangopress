@@ -11,13 +11,13 @@ from unittest.mock import patch, MagicMock, PropertyMock
 from django.test import TestCase
 from django.contrib.auth import get_user_model
 
-from core.models import Page, SiteSettings
-from site_assistant.models import AssistantSession
-from site_assistant.prompts import (
+from djangopress.core.models import Page, SiteSettings
+from djangopress.site_assistant.models import AssistantSession
+from djangopress.site_assistant.prompts import (
     build_active_page_context, build_router_snapshot, build_executor_prompt,
 )
-from site_assistant.services import AssistantService, PAGE_CONTEXT_MUTATIONS
-from site_assistant.tools import (
+from djangopress.site_assistant.services import AssistantService, PAGE_CONTEXT_MUTATIONS
+from djangopress.site_assistant.tools import (
     ToolRegistry, DESTRUCTIVE_TOOLS, _has_recent_confirmation,
 )
 
@@ -255,7 +255,7 @@ class AssistantServiceDirectResponseTest(TestCase):
             model_used='gemini-flash',
         )
 
-    @patch('site_assistant.services.Router.classify')
+    @patch('djangopress.site_assistant.services.Router.classify')
     def test_direct_response_returns_without_fc(self, mock_classify):
         mock_classify.return_value = {
             'intents': ['greeting'],
@@ -319,8 +319,8 @@ class AssistantServiceFCLoopTest(TestCase):
         mock_response.candidates = [candidate]
         return mock_response
 
-    @patch('site_assistant.services.Router.classify')
-    @patch('site_assistant.services.LLMBase')
+    @patch('djangopress.site_assistant.services.Router.classify')
+    @patch('djangopress.site_assistant.services.LLMBase')
     def test_text_only_response(self, MockLLM, mock_classify):
         """LLM returns text without function calls."""
         mock_classify.return_value = {
@@ -340,8 +340,8 @@ class AssistantServiceFCLoopTest(TestCase):
         self.assertEqual(result['actions'], [])
         self.assertEqual(result['steps'], [])
 
-    @patch('site_assistant.services.Router.classify')
-    @patch('site_assistant.services.LLMBase')
+    @patch('djangopress.site_assistant.services.Router.classify')
+    @patch('djangopress.site_assistant.services.LLMBase')
     def test_single_tool_call_then_text(self, MockLLM, mock_classify):
         """LLM calls a tool, gets result, then responds with text."""
         mock_classify.return_value = {
@@ -377,8 +377,8 @@ class AssistantServiceFCLoopTest(TestCase):
         self.assertTrue(result['actions'][0]['success'])
         self.assertEqual(len(result['steps']), 1)
 
-    @patch('site_assistant.services.Router.classify')
-    @patch('site_assistant.services.LLMBase')
+    @patch('djangopress.site_assistant.services.Router.classify')
+    @patch('djangopress.site_assistant.services.LLMBase')
     def test_llm_error_returns_error_message(self, MockLLM, mock_classify):
         mock_classify.return_value = {
             'intents': ['pages'],
@@ -394,8 +394,8 @@ class AssistantServiceFCLoopTest(TestCase):
         self.assertIn('error', result['response'].lower())
         self.assertEqual(result['actions'], [])
 
-    @patch('site_assistant.services.Router.classify')
-    @patch('site_assistant.services.LLMBase')
+    @patch('djangopress.site_assistant.services.Router.classify')
+    @patch('djangopress.site_assistant.services.LLMBase')
     def test_request_additional_tools(self, MockLLM, mock_classify):
         """LLM requests additional tool categories via meta-tool."""
         mock_classify.return_value = {
@@ -422,8 +422,8 @@ class AssistantServiceFCLoopTest(TestCase):
         self.assertEqual(len(result['actions']), 1)
         self.assertEqual(result['actions'][0]['tool'], 'request_additional_tools')
 
-    @patch('site_assistant.services.Router.classify')
-    @patch('site_assistant.services.LLMBase')
+    @patch('djangopress.site_assistant.services.Router.classify')
+    @patch('djangopress.site_assistant.services.LLMBase')
     def test_no_candidates_returns_error(self, MockLLM, mock_classify):
         mock_classify.return_value = {
             'intents': ['pages'],
@@ -440,8 +440,8 @@ class AssistantServiceFCLoopTest(TestCase):
 
         self.assertEqual(result['response'], 'No response from the model.')
 
-    @patch('site_assistant.services.Router.classify')
-    @patch('site_assistant.services.LLMBase')
+    @patch('djangopress.site_assistant.services.Router.classify')
+    @patch('djangopress.site_assistant.services.LLMBase')
     def test_auto_title_on_first_exchange(self, MockLLM, mock_classify):
         mock_classify.return_value = {
             'intents': ['greeting'],

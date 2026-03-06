@@ -46,7 +46,7 @@ class Command(BaseCommand):
         dry_run = options['dry_run']
 
         if not to_folder:
-            from core.models import SiteSettings
+            from djangopress.core.models import SiteSettings
             site_settings = SiteSettings.objects.first()
             if site_settings and site_settings.domain:
                 to_folder = site_settings.domain.replace('.', '-').replace(':', '-')

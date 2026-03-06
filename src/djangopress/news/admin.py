@@ -1,5 +1,5 @@
 from django.contrib import admin
-from core.admin import TranslationJSONField  # Import custom widget from core
+from djangopress.core.admin import TranslationJSONField  # Import custom widget from core
 from .models import NewsPost, NewsGalleryImage, NewsCategory, NewsLayout
 
 

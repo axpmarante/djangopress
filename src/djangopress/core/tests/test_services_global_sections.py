@@ -1,8 +1,8 @@
 """Tests for core.services.global_sections — GlobalSectionService."""
 
 from django.test import TestCase
-from core.models import GlobalSection, SiteSettings
-from core.services.global_sections import GlobalSectionService
+from djangopress.core.models import GlobalSection, SiteSettings
+from djangopress.core.services.global_sections import GlobalSectionService
 
 
 class GlobalSectionServiceGetTest(TestCase):

@@ -533,7 +533,7 @@ Return a JSON object:
         Returns:
             Tuple of (system_prompt, user_prompt)
         """
-        from ai.utils.components import ComponentRegistry
+        from djangopress.ai.utils.components import ComponentRegistry
         component_index = ComponentRegistry.get_index()
 
         lang_name = {'pt': 'Portuguese', 'en': 'English', 'es': 'Spanish', 'fr': 'French', 'de': 'German', 'it': 'Italian'}.get(default_language, default_language.upper())
@@ -651,7 +651,7 @@ Return ONLY the raw HTML for this page. All text must be real content in {lang_n
         Returns:
             Tuple of (system_prompt, user_prompt)
         """
-        from ai.utils.components import ComponentRegistry
+        from djangopress.ai.utils.components import ComponentRegistry
         component_index = ComponentRegistry.get_index()
 
         lang_name = {'pt': 'Portuguese', 'en': 'English', 'es': 'Spanish', 'fr': 'French', 'de': 'German', 'it': 'Italian'}.get(default_language, default_language.upper())
@@ -833,7 +833,7 @@ Do NOT undo any of these previous changes unless specifically asked to.
             Tuple of (system_prompt, user_prompt)
         """
         if include_component_index:
-            from ai.utils.components import ComponentRegistry
+            from djangopress.ai.utils.components import ComponentRegistry
             component_index = ComponentRegistry.get_index()
         else:
             component_index = ''
@@ -983,7 +983,7 @@ Return ONLY the updated `<section data-section="{section_name}">...</section>` b
         Returns:
             Tuple of (system_prompt, user_prompt)
         """
-        from ai.utils.components import ComponentRegistry
+        from djangopress.ai.utils.components import ComponentRegistry
         component_index = ComponentRegistry.get_index()
 
         lang_name = {'pt': 'Portuguese', 'en': 'English', 'es': 'Spanish', 'fr': 'French', 'de': 'German', 'it': 'Italian'}.get(default_language, default_language.upper())
@@ -1119,7 +1119,7 @@ Return ONLY 3 variations of the new section, separated by <!-- OPTION_1 -->, <!-
             Tuple of (system_prompt, user_prompt)
         """
         if include_component_index:
-            from ai.utils.components import ComponentRegistry
+            from djangopress.ai.utils.components import ComponentRegistry
             component_index = ComponentRegistry.get_index()
         else:
             component_index = ''

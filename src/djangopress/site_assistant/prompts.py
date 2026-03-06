@@ -10,8 +10,8 @@ import re
 from bs4 import BeautifulSoup
 from django.apps import apps
 from django.urls import reverse, NoReverseMatch
-from core.models import SiteSettings
-from core.services import SettingsService
+from djangopress.core.models import SiteSettings
+from djangopress.core.services import SettingsService
 
 
 def build_active_page_context(page):

@@ -6,10 +6,10 @@ from django.contrib import messages
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse_lazy
 from django.http import JsonResponse
-from core.decorators import SuperuserRequiredMixin
+from djangopress.core.decorators import SuperuserRequiredMixin
 from .models import NewsPost, NewsGalleryImage, NewsCategory, NewsLayout
 from .forms import NewsPostForm, NewsCategoryForm
-from core.models import SiteImage, SiteSettings
+from djangopress.core.models import SiteImage, SiteSettings
 
 
 # ─── News Posts ───────────────────────────────────────────────────────────────
@@ -346,7 +346,7 @@ class NewsGenerateView(SuperuserRequiredMixin, TemplateView):
         context['categories'] = NewsCategory.objects.filter(is_active=True).order_by('order')
 
         try:
-            from ai.utils.llm_config import LLMConfig
+            from djangopress.ai.utils.llm_config import LLMConfig
             config = LLMConfig()
             context['ai_models'] = config.get_available_models()
             context['default_model'] = config.default_model
@@ -367,7 +367,7 @@ class NewsBulkView(SuperuserRequiredMixin, TemplateView):
         context['categories'] = NewsCategory.objects.filter(is_active=True).order_by('order')
 
         try:
-            from ai.utils.llm_config import LLMConfig
+            from djangopress.ai.utils.llm_config import LLMConfig
             config = LLMConfig()
             context['ai_models'] = config.get_available_models()
             context['default_model'] = config.default_model
@@ -383,7 +383,7 @@ class NewsRefineView(SuperuserRequiredMixin, TemplateView):
     template_name = 'backoffice/ai_refine_news.html'
 
     def get_context_data(self, **kwargs):
-        from ai.models import RefinementSession
+        from djangopress.ai.models import RefinementSession
         from django.contrib.contenttypes.models import ContentType
 
         context = super().get_context_data(**kwargs)
@@ -424,13 +424,13 @@ class NewsRefineView(SuperuserRequiredMixin, TemplateView):
 
         # AI models
         try:
-            from ai.utils.llm_config import LLMConfig
+            from djangopress.ai.utils.llm_config import LLMConfig
             config = LLMConfig()
             context['ai_models'] = config.get_available_models()
             context['default_model'] = config.default_model
         except Exception:
             context['ai_models'] = []
-            from ai.utils.llm_config import get_ai_model
+            from djangopress.ai.utils.llm_config import get_ai_model
             context['default_model'] = get_ai_model('generation')
 
         # Language info
@@ -469,7 +469,7 @@ class NewsImagesView(SuperuserRequiredMixin, TemplateView):
             context['post'] = post
 
             try:
-                from ai.utils.llm_config import LLMConfig
+                from djangopress.ai.utils.llm_config import LLMConfig
                 config = LLMConfig()
                 context['ai_models'] = config.get_available_models()
                 context['default_model'] = config.default_model

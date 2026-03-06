@@ -6,7 +6,7 @@ Phase 2: Executor runs native FC loop (gemini-flash)
 
 import logging
 
-from ai.utils.llm_config import LLMBase, get_ai_model
+from djangopress.ai.utils.llm_config import LLMBase, get_ai_model
 from .prompts import build_router_snapshot, build_executor_prompt, build_active_page_context
 from .router import Router
 from .tool_declarations import build_tool_declarations
@@ -313,7 +313,7 @@ class AssistantService:
 
     def _refresh_context(self, context, page_id):
         """Refresh active_page in context after a page switch."""
-        from core.models import Page
+        from djangopress.core.models import Page
         try:
             page = Page.objects.get(pk=page_id)
             context['active_page'] = page

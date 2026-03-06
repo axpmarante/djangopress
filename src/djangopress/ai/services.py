@@ -322,7 +322,7 @@ Return the complete, corrected JSON now:"""
         print(f"Language: {language}")
 
         # Get site context
-        from core.models import SiteSettings, Page
+        from djangopress.core.models import SiteSettings, Page
         site_settings = SiteSettings.objects.first()
         default_language = site_settings.get_default_language() if site_settings else 'pt'
         site_name = site_settings.get_site_name(default_language) if site_settings else 'Website'
@@ -471,14 +471,14 @@ Return the complete, corrected JSON now:"""
         # Get existing GlobalSection
         notify("load_section", "running")
         try:
-            from core.models import GlobalSection
+            from djangopress.core.models import GlobalSection
             from django.utils.translation import get_language
             section = GlobalSection.objects.get(key=section_key)
         except GlobalSection.DoesNotExist:
             raise ValueError(f"GlobalSection with key '{section_key}' not found")
 
         # Convert to dict — read from html_template_i18n with fallback
-        from core.models import SiteSettings, Page
+        from djangopress.core.models import SiteSettings, Page
         site_settings = SiteSettings.objects.first()
         default_language = site_settings.get_default_language() if site_settings else 'pt'
         current_lang = default_language  # get_language() unreliable in AJAX context
@@ -514,7 +514,7 @@ Return the complete, corrected JSON now:"""
         design_guide = site_settings.design_guide if site_settings else ''
 
         # Get menu items for header/footer context (top-level with children)
-        from core.models import MenuItem
+        from djangopress.core.models import MenuItem
         menu_items_data = []
         for item in MenuItem.objects.filter(is_active=True, parent__isnull=True).select_related('page').prefetch_related('children', 'children__page').order_by('sort_order', 'id'):
             item_data = {
@@ -710,7 +710,7 @@ Return the complete, corrected JSON now:"""
 
         # Get page or use content_override
         notify("prepare", "running")
-        from core.models import Page, SiteSettings
+        from djangopress.core.models import Page, SiteSettings
         from django.utils.translation import get_language
 
         page = None
@@ -915,7 +915,7 @@ Return the complete, corrected JSON now:"""
                 except Exception:
                     pass
 
-        from core.models import Page, SiteSettings
+        from djangopress.core.models import Page, SiteSettings
         from django.utils.translation import get_language
         from bs4 import BeautifulSoup
 
@@ -1121,7 +1121,7 @@ Return the complete, corrected JSON now:"""
         Returns:
             Dict with 'options' (list of {'html': str}) and 'assistant_message'
         """
-        from core.models import Page, SiteSettings
+        from djangopress.core.models import Page, SiteSettings
         from django.utils.translation import get_language
         from bs4 import BeautifulSoup
 
@@ -1275,7 +1275,7 @@ Return the complete, corrected JSON now:"""
                 except Exception:
                     pass
 
-        from core.models import Page, SiteSettings
+        from djangopress.core.models import Page, SiteSettings
         from django.utils.translation import get_language
         from bs4 import BeautifulSoup
 
@@ -1474,7 +1474,7 @@ Return the complete, corrected JSON now:"""
             Dict with 'processed', 'failed', and 'report' keys
         """
         from concurrent.futures import ThreadPoolExecutor, as_completed
-        from core.models import Page, SiteImage, SiteSettings
+        from djangopress.core.models import Page, SiteImage, SiteSettings
         from .utils.llm_config import optimize_generated_image, LLMBase as LLMService
         from django.core.files.base import ContentFile
         from django.utils.text import slugify
@@ -1528,7 +1528,7 @@ Return the complete, corrected JSON now:"""
         def _generate_single_image(decision):
             """Generate a single image in a thread — returns (decision, url) or (decision, None, error)."""
             from .utils.llm_config import LLMBase as LLMService, optimize_generated_image
-            from core.models import SiteImage
+            from djangopress.core.models import SiteImage
             from django.core.files.base import ContentFile
             from django.utils.text import slugify
 
@@ -1753,7 +1753,7 @@ Return the complete, corrected JSON now:"""
         Returns:
             Dict with 'translated_pages', 'translated_sections', 'errors'
         """
-        from core.models import Page, GlobalSection, SiteSettings
+        from djangopress.core.models import Page, GlobalSection, SiteSettings
         from django.utils.text import slugify
 
         site_settings = SiteSettings.objects.first()
@@ -1949,7 +1949,7 @@ Keep the translations natural and fluent — these are website UI strings.
         Returns:
             Dict mapping language code -> translated HTML string
         """
-        from core.models import SiteSettings
+        from djangopress.core.models import SiteSettings
 
         site_settings = SiteSettings.objects.first()
         default_lang = site_settings.get_default_language() if site_settings else 'pt'
@@ -1980,7 +1980,7 @@ Keep the translations natural and fluent — these are website UI strings.
         Returns:
             Dict mapping language code -> translated HTML string
         """
-        from core.models import SiteSettings
+        from djangopress.core.models import SiteSettings
 
         site_settings = SiteSettings.objects.first()
         default_lang = site_settings.get_default_language() if site_settings else 'pt'
@@ -2001,7 +2001,7 @@ Keep the translations natural and fluent — these are website UI strings.
     @staticmethod
     def _build_library_catalog(default_language: str = 'pt') -> List[Dict]:
         """Build a metadata-only catalog of all active library images."""
-        from core.models import SiteImage
+        from djangopress.core.models import SiteImage
 
         catalog = []
         for img in SiteImage.objects.filter(is_active=True).order_by('-id'):
@@ -2093,7 +2093,7 @@ Keep the translations natural and fluent — these are website UI strings.
         Returns:
             List of suggestion dicts with index, prompt, aspect_ratio, library_matches
         """
-        from core.models import Page, SiteSettings, SiteImage
+        from djangopress.core.models import Page, SiteSettings, SiteImage
 
         print(f"\n=== Analyzing Page Images ===")
         print(f"Page ID: {page_id}")
@@ -2194,7 +2194,7 @@ Keep the translations natural and fluent — these are website UI strings.
         Returns:
             List of result dicts with id, description, title_i18n, alt_text_i18n, status
         """
-        from core.models import SiteImage, SiteSettings
+        from djangopress.core.models import SiteImage, SiteSettings
         import mimetypes
 
         site_settings = SiteSettings.objects.first()
@@ -2396,7 +2396,7 @@ Keep the translations natural and fluent — these are website UI strings.
                 except Exception:
                     pass
 
-        from core.models import SiteSettings, Page, GlobalSection
+        from djangopress.core.models import SiteSettings, Page, GlobalSection
 
         notify("analyzing", "running")
 
@@ -2518,7 +2518,7 @@ Keep the translations natural and fluent — these are website UI strings.
                 except Exception:
                     pass
 
-        from core.models import SiteSettings, Page, GlobalSection
+        from djangopress.core.models import SiteSettings, Page, GlobalSection
 
         site_settings = SiteSettings.objects.first()
         default_lang = site_settings.get_default_language() if site_settings else 'pt'

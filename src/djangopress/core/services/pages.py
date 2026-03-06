@@ -9,7 +9,7 @@ Consolidates business logic from:
 
 import logging
 from bs4 import BeautifulSoup
-from core.models import Page
+from djangopress.core.models import Page
 from .i18n import build_i18n_field, auto_generate_slugs
 
 logger = logging.getLogger(__name__)
@@ -131,7 +131,7 @@ class PageService:
         except Page.DoesNotExist:
             return {'success': False, 'error': f'Page {page_id} not found'}
 
-        from core.models import SiteSettings
+        from djangopress.core.models import SiteSettings
         settings = SiteSettings.load()
         default_lang = settings.get_default_language() if settings else 'pt'
 
@@ -440,7 +440,7 @@ class PageService:
         Returns:
             dict with 'success', 'message' or 'error'.
         """
-        from core.models import SiteSettings
+        from djangopress.core.models import SiteSettings
         settings = SiteSettings.load()
         lang = lang or (settings.get_default_language() if settings else 'pt')
 

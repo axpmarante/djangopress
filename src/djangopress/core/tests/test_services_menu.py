@@ -2,8 +2,8 @@
 
 from unittest.mock import patch
 from django.test import TestCase
-from core.models import Page, SiteSettings, MenuItem
-from core.services.menu import MenuService
+from djangopress.core.models import Page, SiteSettings, MenuItem
+from djangopress.core.services.menu import MenuService
 
 
 class MenuServiceListTest(TestCase):
@@ -83,7 +83,7 @@ class MenuServiceCreateTest(TestCase):
         self.assertTrue(result['success'])
         self.assertEqual(result['menu_item'].url, 'https://example.com')
 
-    @patch('core.services.i18n._translate_text', return_value='About')
+    @patch('djangopress.core.services.i18n._translate_text', return_value='About')
     def test_create_with_single_label(self, mock_translate):
         result = MenuService.create(label='Sobre', page_id=self.page.id)
         self.assertTrue(result['success'])

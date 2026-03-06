@@ -23,11 +23,11 @@ from django.core.serializers import deserialize
 from django.utils.text import slugify
 from django.db import connection
 from bs4 import BeautifulSoup
-from core.models import SiteSettings, SiteImage, Page, MenuItem, Blueprint, BlueprintPage
+from djangopress.core.models import SiteSettings, SiteImage, Page, MenuItem, Blueprint, BlueprintPage
 
 logger = logging.getLogger(__name__)
-from core.utils import resize_and_compress_image
-from core.decorators import superuser_required
+from djangopress.core.utils import resize_and_compress_image
+from djangopress.core.decorators import superuser_required
 
 
 @staff_member_required
@@ -1307,7 +1307,7 @@ def _check_sync_auth(request):
 
 def _truncate_sync_tables():
     """Delete all rows from sync tables in FK-safe order."""
-    from core.management.commands.push_data import SYNC_TABLES_ORDERED
+    from djangopress.core.management.commands.push_data import SYNC_TABLES_ORDERED
 
     is_sqlite = connection.vendor == 'sqlite'
     with connection.cursor() as cursor:
@@ -1385,7 +1385,7 @@ def data_sync_export(request):
         return auth_err
 
     try:
-        from core.management.commands.push_data import build_fixture
+        from djangopress.core.management.commands.push_data import build_fixture
         fixture = build_fixture()
         return JsonResponse(fixture, safe=False)
     except Exception as e:

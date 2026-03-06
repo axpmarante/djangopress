@@ -6,7 +6,7 @@ categories the executor needs, or responds directly for greetings/questions.
 
 import json
 import logging
-from ai.utils.llm_config import LLMBase, get_ai_model
+from djangopress.ai.utils.llm_config import LLMBase, get_ai_model
 
 logger = logging.getLogger(__name__)
 

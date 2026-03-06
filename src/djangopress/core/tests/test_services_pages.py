@@ -2,8 +2,8 @@
 
 from unittest.mock import patch
 from django.test import TestCase
-from core.models import Page, SiteSettings
-from core.services.pages import PageService
+from djangopress.core.models import Page, SiteSettings
+from djangopress.core.services.pages import PageService
 
 
 class PageServiceListTest(TestCase):
@@ -124,7 +124,7 @@ class PageServiceCreateTest(TestCase):
         s.default_language = 'pt'
         s.save()
 
-    @patch('core.services.i18n._translate_text', return_value='About Us')
+    @patch('djangopress.core.services.i18n._translate_text', return_value='About Us')
     def test_create_with_single_value(self, mock_translate):
         result = PageService.create(title='Sobre Nós')
         self.assertTrue(result['success'])
@@ -504,18 +504,18 @@ class PageServiceSlugUniquenessTest(TestCase):
         )
 
     def test_unique_slugs_pass(self):
-        from core.services.pages import _check_slug_uniqueness
+        from djangopress.core.services.pages import _check_slug_uniqueness
         error = _check_slug_uniqueness({'pt': 'new-page', 'en': 'new-page'})
         self.assertIsNone(error)
 
     def test_duplicate_slug_detected(self):
-        from core.services.pages import _check_slug_uniqueness
+        from djangopress.core.services.pages import _check_slug_uniqueness
         error = _check_slug_uniqueness({'pt': 'existing', 'en': 'different'})
         self.assertIsNotNone(error)
         self.assertIn('existing', error)
 
     def test_exclude_self_allows_update(self):
-        from core.services.pages import _check_slug_uniqueness
+        from djangopress.core.services.pages import _check_slug_uniqueness
         error = _check_slug_uniqueness(
             {'pt': 'existing', 'en': 'existing'},
             exclude_page_id=self.page.id,

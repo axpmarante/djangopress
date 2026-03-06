@@ -21,13 +21,13 @@ from io import StringIO
 # Models to sync — order matters for foreign key dependencies.
 # This list is imported by pull_data and data_sync_export.
 DUMP_MODELS = [
-    'core.SiteSettings',
-    'core.DynamicForm',
-    'core.FormSubmission',
-    'core.SiteImage',
-    'core.Page',
-    'core.GlobalSection',
-    'core.MenuItem',
+    'djangopress.core.SiteSettings',
+    'djangopress.core.DynamicForm',
+    'djangopress.core.FormSubmission',
+    'djangopress.core.SiteImage',
+    'djangopress.core.Page',
+    'djangopress.core.GlobalSection',
+    'djangopress.core.MenuItem',
     # PageVersion handled separately (filtered to last 3 per page)
 ]
 
@@ -48,7 +48,7 @@ MAX_VERSIONS_PER_PAGE = 3
 
 def build_fixture():
     """Serialize DUMP_MODELS + filtered PageVersions to a JSON string."""
-    from core.models import Page, PageVersion
+    from djangopress.core.models import Page, PageVersion
 
     # Dump main models
     buf = StringIO()
@@ -65,7 +65,7 @@ def build_fixture():
         for v in versions:
             buf2 = StringIO()
             call_command(
-                'dumpdata', 'core.PageVersion',
+                'dumpdata', 'djangopress.core.PageVersion',
                 pks=str(v.pk), format='json', indent=None, stdout=buf2,
             )
             entries = json.loads(buf2.getvalue())

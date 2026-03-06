@@ -1,6 +1,6 @@
 from django import forms
 from .models import NewsPost, NewsCategory
-from core.models import SiteImage
+from djangopress.core.models import SiteImage
 
 
 class NewsPostForm(forms.ModelForm):

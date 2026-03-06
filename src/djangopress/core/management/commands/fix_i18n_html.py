@@ -14,7 +14,7 @@ import re
 
 from django.core.management.base import BaseCommand
 
-from core.models import Page, GlobalSection, PageVersion, SiteSettings
+from djangopress.core.models import Page, GlobalSection, PageVersion, SiteSettings
 
 TRANS_PATTERN = re.compile(r'\{\{\s*trans\.\w+\s*\}\}')
 

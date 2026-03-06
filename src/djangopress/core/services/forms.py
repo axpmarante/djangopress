@@ -1,7 +1,7 @@
 """FormService — dynamic form management."""
 
 import logging
-from core.models import DynamicForm, FormSubmission
+from djangopress.core.models import DynamicForm, FormSubmission
 
 logger = logging.getLogger(__name__)
 

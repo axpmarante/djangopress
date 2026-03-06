@@ -1,13 +1,13 @@
 import json
 
-from core.decorators import superuser_required, SuperuserRequiredMixin
+from djangopress.core.decorators import superuser_required, SuperuserRequiredMixin
 from django.http import JsonResponse
 from django.shortcuts import render, get_object_or_404
 from django.views import View
 from django.views.decorators.http import require_http_methods
 
-from ai.utils.llm_config import MODEL_CONFIG, get_ai_model
-from core.models import Page
+from djangopress.ai.utils.llm_config import MODEL_CONFIG, get_ai_model
+from djangopress.core.models import Page
 
 from .models import AssistantSession
 from .services import AssistantService

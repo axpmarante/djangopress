@@ -2,7 +2,7 @@
 
 
 def list_news_posts(params, context):
-    from news.services import NewsService
+    from djangopress.news.services import NewsService
     return NewsService.list(
         limit=params.get('limit', 20),
         published_only=params.get('published_only', False),
@@ -11,7 +11,7 @@ def list_news_posts(params, context):
 
 
 def get_news_post(params, context):
-    from news.services import NewsService
+    from djangopress.news.services import NewsService
     post_id = params.get('post_id')
     title = params.get('title')
     if not post_id and not title:
@@ -39,7 +39,7 @@ def get_news_post(params, context):
 
 
 def create_news_post(params, context):
-    from news.services import NewsService
+    from djangopress.news.services import NewsService
     result = NewsService.create(
         title=params.get('title'),
         title_i18n=params.get('title_i18n'),
@@ -56,7 +56,7 @@ def create_news_post(params, context):
 
 
 def update_news_post(params, context):
-    from news.services import NewsService
+    from djangopress.news.services import NewsService
     post_id = params.get('post_id')
     if not post_id:
         return {'success': False, 'message': 'Missing post_id'}
@@ -74,7 +74,7 @@ def update_news_post(params, context):
 
 
 def list_news_categories(params, context):
-    from news.services import NewsService
+    from djangopress.news.services import NewsService
     return NewsService.list_categories()
 
 

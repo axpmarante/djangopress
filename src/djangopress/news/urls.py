@@ -1,5 +1,5 @@
 from django.urls import path
-from news.public_views import NewsListView, NewsDetailView, NewsCategoryView
+from djangopress.news.public_views import NewsListView, NewsDetailView, NewsCategoryView
 
 app_name = 'news'
 

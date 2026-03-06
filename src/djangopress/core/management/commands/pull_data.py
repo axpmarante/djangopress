@@ -16,7 +16,7 @@ from django.core.cache import cache
 from django.db import connection
 from django.core.serializers import deserialize
 
-from core.management.commands.push_data import SYNC_TABLES_ORDERED
+from djangopress.core.management.commands.push_data import SYNC_TABLES_ORDERED
 
 
 class Command(BaseCommand):

@@ -1,8 +1,8 @@
 """Tests for core.services.forms — FormService."""
 
 from django.test import TestCase
-from core.models import DynamicForm, FormSubmission, SiteSettings
-from core.services.forms import FormService
+from djangopress.core.models import DynamicForm, FormSubmission, SiteSettings
+from djangopress.core.services.forms import FormService
 
 
 class FormServiceListTest(TestCase):

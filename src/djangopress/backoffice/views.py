@@ -4,7 +4,7 @@ from django.views.generic import TemplateView, ListView, CreateView
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth import authenticate, login
 from django.contrib.auth.decorators import login_required
-from core.decorators import SuperuserRequiredMixin
+from djangopress.core.decorators import SuperuserRequiredMixin
 from django.http import HttpResponseForbidden
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
@@ -13,10 +13,10 @@ from django.shortcuts import redirect
 from django.urls import reverse_lazy
 
 from django.conf.global_settings import LANGUAGES as ALL_LANGUAGES
-from core.models import SiteSettings, SiteImage, Page, GOOGLE_FONTS_CHOICES, GlobalSection, Blueprint, BlueprintPage, DynamicForm, FormSubmission
-from core.utils import resize_and_compress_image
+from djangopress.core.models import SiteSettings, SiteImage, Page, GOOGLE_FONTS_CHOICES, GlobalSection, Blueprint, BlueprintPage, DynamicForm, FormSubmission
+from djangopress.core.utils import resize_and_compress_image
 from django.utils.text import slugify
-from news.models import NewsPost
+from djangopress.news.models import NewsPost
 
 
 class MediaDetailView(LoginRequiredMixin, TemplateView):
@@ -455,7 +455,7 @@ class PageEditView(LoginRequiredMixin, TemplateView):
     template_name = 'backoffice/page_edit.html'
 
     def get_context_data(self, **kwargs):
-        from core.models import PageVersion, SiteSettings
+        from djangopress.core.models import PageVersion, SiteSettings
         context = super().get_context_data(**kwargs)
         page_id = kwargs.get('page_id')
 
@@ -505,7 +505,7 @@ class PageEditView(LoginRequiredMixin, TemplateView):
 
             # Get AI configuration
             try:
-                from ai.utils.llm_config import LLMConfig
+                from djangopress.ai.utils.llm_config import LLMConfig
                 config = LLMConfig()
                 context['ai_models'] = config.get_available_models()
                 context['default_model'] = config.default_model
@@ -526,7 +526,7 @@ class PageEditView(LoginRequiredMixin, TemplateView):
 
     def post(self, request, *args, **kwargs):
         """Handle page update"""
-        from core.models import SiteSettings
+        from djangopress.core.models import SiteSettings
         page_id = kwargs.get('page_id')
 
         try:
@@ -614,7 +614,7 @@ class SettingsView(LoginRequiredMixin, TemplateView):
         context['settings'] = site_settings
 
         # Integrations summary for hub card
-        from ai.utils.llm_config import get_env
+        from djangopress.ai.utils.llm_config import get_env
         integrations = [
             bool(get_env('GEMINI_API_KEY')),
             bool(get_env('OPENAI_API_KEY')),
@@ -782,13 +782,13 @@ class SettingsDesignSystemView(LoginRequiredMixin, TemplateView):
         ]
 
         try:
-            from ai.utils.llm_config import LLMConfig
+            from djangopress.ai.utils.llm_config import LLMConfig
             config = LLMConfig()
             context['ai_models'] = config.get_available_models()
             context['default_model'] = config.default_model
         except Exception:
             context['ai_models'] = []
-            from ai.utils.llm_config import get_ai_model
+            from djangopress.ai.utils.llm_config import get_ai_model
             context['default_model'] = get_ai_model('generation')
 
         # Color fields
@@ -894,7 +894,7 @@ class SettingsIntegrationsView(LoginRequiredMixin, TemplateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        from ai.utils.llm_config import get_env
+        from djangopress.ai.utils.llm_config import get_env
         context['integrations'] = [
             {'name': 'Google Gemini', 'configured': bool(get_env('GEMINI_API_KEY')), 'description': 'AI generation (Gemini models)'},
             {'name': 'OpenAI', 'configured': bool(get_env('OPENAI_API_KEY')), 'description': 'AI generation (GPT models)'},
@@ -914,7 +914,7 @@ class SettingsAIModelsView(LoginRequiredMixin, SuperuserRequiredMixin, TemplateV
         site_settings, _ = SiteSettings.objects.get_or_create(pk=1)
         context['settings'] = site_settings
 
-        from ai.utils.llm_config import MODEL_CONFIG, AI_MODEL_DEFAULTS
+        from djangopress.ai.utils.llm_config import MODEL_CONFIG, AI_MODEL_DEFAULTS
         context['available_models'] = [
             {'key': k, 'name': f"{k} ({v.provider.value})", 'provider': v.provider.value}
             for k, v in MODEL_CONFIG.items()
@@ -955,7 +955,7 @@ class SettingsAIModelsView(LoginRequiredMixin, SuperuserRequiredMixin, TemplateV
 
     def post(self, request, *args, **kwargs):
         settings, _ = SiteSettings.objects.get_or_create(pk=1)
-        from ai.utils.llm_config import MODEL_CONFIG, AI_MODEL_DEFAULTS
+        from djangopress.ai.utils.llm_config import MODEL_CONFIG, AI_MODEL_DEFAULTS
 
         config = {}
         for task_key in AI_MODEL_DEFAULTS:
@@ -970,7 +970,7 @@ class SettingsAIModelsView(LoginRequiredMixin, SuperuserRequiredMixin, TemplateV
 
 
 from django.http import JsonResponse
-from core.models import MenuItem
+from djangopress.core.models import MenuItem
 
 
 class MenuView(LoginRequiredMixin, TemplateView):
@@ -1108,7 +1108,7 @@ class AIGeneratePageView(SuperuserRequiredMixin, TemplateView):
 
         # Get AI configuration (if available)
         try:
-            from ai.utils.llm_config import LLMConfig
+            from djangopress.ai.utils.llm_config import LLMConfig
             config = LLMConfig()
             context['ai_models'] = config.get_available_models()
             context['default_model'] = config.default_model
@@ -1120,7 +1120,7 @@ class AIGeneratePageView(SuperuserRequiredMixin, TemplateView):
         blueprint_page_id = self.request.GET.get('blueprint_page_id')
         if blueprint_page_id:
             try:
-                from core.models import BlueprintPage
+                from djangopress.core.models import BlueprintPage
                 bp_page = BlueprintPage.objects.get(pk=int(blueprint_page_id))
                 context['blueprint_page'] = bp_page
                 context['blueprint_page_id'] = bp_page.pk
@@ -1158,7 +1158,7 @@ class AIBulkPagesView(SuperuserRequiredMixin, TemplateView):
 
         # Get AI configuration (if available)
         try:
-            from ai.utils.llm_config import LLMConfig
+            from djangopress.ai.utils.llm_config import LLMConfig
             config = LLMConfig()
             context['ai_models'] = config.get_available_models()
             context['default_model'] = config.default_model
@@ -1174,7 +1174,7 @@ class AIBulkTranslateView(SuperuserRequiredMixin, TemplateView):
     template_name = 'backoffice/ai_bulk_translate.html'
 
     def get_context_data(self, **kwargs):
-        from core.models import GlobalSection
+        from djangopress.core.models import GlobalSection
         context = super().get_context_data(**kwargs)
 
         site_settings = SiteSettings.load()
@@ -1220,7 +1220,7 @@ class AIBulkTranslateView(SuperuserRequiredMixin, TemplateView):
 
         # Get AI configuration
         try:
-            from ai.utils.llm_config import LLMConfig
+            from djangopress.ai.utils.llm_config import LLMConfig
             config = LLMConfig()
             context['ai_models'] = config.get_available_models()
             context['default_model'] = config.default_model
@@ -1236,7 +1236,7 @@ class DesignConsistencyView(SuperuserRequiredMixin, TemplateView):
     template_name = 'backoffice/design_consistency.html'
 
     def get_context_data(self, **kwargs):
-        from core.models import GlobalSection
+        from djangopress.core.models import GlobalSection
         context = super().get_context_data(**kwargs)
 
         site_settings = SiteSettings.load()
@@ -1326,7 +1326,7 @@ class AIRefinePageView(SuperuserRequiredMixin, TemplateView):
 
         # Get AI configuration (if available)
         try:
-            from ai.utils.llm_config import LLMConfig
+            from djangopress.ai.utils.llm_config import LLMConfig
             config = LLMConfig()
             context['ai_models'] = config.get_available_models()
             context['default_model'] = config.default_model
@@ -1342,8 +1342,8 @@ class AIChatRefineView(SuperuserRequiredMixin, TemplateView):
     template_name = 'backoffice/ai_chat_refine.html'
 
     def get_context_data(self, **kwargs):
-        from core.models import PageVersion
-        from ai.models import RefinementSession
+        from djangopress.core.models import PageVersion
+        from djangopress.ai.models import RefinementSession
         import re
 
         context = super().get_context_data(**kwargs)
@@ -1382,17 +1382,17 @@ class AIChatRefineView(SuperuserRequiredMixin, TemplateView):
 
         # AI models
         try:
-            from ai.utils.llm_config import LLMConfig
+            from djangopress.ai.utils.llm_config import LLMConfig
             config = LLMConfig()
             context['ai_models'] = config.get_available_models()
             context['default_model'] = config.default_model
         except Exception:
             context['ai_models'] = []
-            from ai.utils.llm_config import get_ai_model
+            from djangopress.ai.utils.llm_config import get_ai_model
             context['default_model'] = get_ai_model('generation')
 
         # Language info for translation propagation
-        from core.models import SiteSettings
+        from djangopress.core.models import SiteSettings
         site_settings = SiteSettings.objects.first()
         if site_settings:
             default_lang = site_settings.get_default_language()
@@ -1419,7 +1419,7 @@ class AIChatRefineView(SuperuserRequiredMixin, TemplateView):
 @require_http_methods(["POST"])
 def restore_page_version(request, version_id):
     """Restore a page to a specific version"""
-    from core.models import PageVersion
+    from djangopress.core.models import PageVersion
 
     try:
         version = PageVersion.objects.get(pk=version_id)
@@ -1466,7 +1466,7 @@ class ProcessImagesView(SuperuserRequiredMixin, TemplateView):
 
             # Get AI configuration
             try:
-                from ai.utils.llm_config import LLMConfig
+                from djangopress.ai.utils.llm_config import LLMConfig
                 config = LLMConfig()
                 context['ai_models'] = config.get_available_models()
                 context['default_model'] = config.default_model
@@ -1509,13 +1509,13 @@ class HeaderEditView(LoginRequiredMixin, TemplateView):
 
         # Add AI configuration
         try:
-            from ai.utils.llm_config import LLMConfig
+            from djangopress.ai.utils.llm_config import LLMConfig
             config = LLMConfig()
             context['ai_models'] = config.get_available_models()
             context['default_model'] = config.default_model
         except:
             context['ai_models'] = []
-            from ai.utils.llm_config import get_ai_model
+            from djangopress.ai.utils.llm_config import get_ai_model
             context['default_model'] = get_ai_model('generation')
 
         return context
@@ -1567,13 +1567,13 @@ class FooterEditView(LoginRequiredMixin, TemplateView):
 
         # Add AI configuration
         try:
-            from ai.utils.llm_config import LLMConfig
+            from djangopress.ai.utils.llm_config import LLMConfig
             config = LLMConfig()
             context['ai_models'] = config.get_available_models()
             context['default_model'] = config.default_model
         except:
             context['ai_models'] = []
-            from ai.utils.llm_config import get_ai_model
+            from djangopress.ai.utils.llm_config import get_ai_model
             context['default_model'] = get_ai_model('generation')
 
         return context
@@ -1628,13 +1628,13 @@ class BlueprintView(SuperuserRequiredMixin, TemplateView):
 
         # AI models
         try:
-            from ai.utils.llm_config import LLMConfig
+            from djangopress.ai.utils.llm_config import LLMConfig
             config = LLMConfig()
             context['ai_models'] = config.get_available_models()
             context['default_model'] = config.default_model
         except Exception:
             context['ai_models'] = []
-            from ai.utils.llm_config import get_ai_model
+            from djangopress.ai.utils.llm_config import get_ai_model
             context['default_model'] = get_ai_model('generation')
 
         return context
@@ -1645,7 +1645,7 @@ class AICallLogsView(SuperuserRequiredMixin, TemplateView):
     template_name = 'backoffice/ai_call_logs.html'
 
     def get_context_data(self, **kwargs):
-        from ai.models import AICallLog, ACTION_CHOICES
+        from djangopress.ai.models import AICallLog, ACTION_CHOICES
         from django.db.models import Sum, Count, Q
 
         context = super().get_context_data(**kwargs)
@@ -1923,7 +1923,7 @@ class BenchmarkListView(SuperuserRequiredMixin, TemplateView):
         context['reports'] = reports
 
         # Default model for benchmark (from AI settings)
-        from ai.utils.llm_config import get_ai_model
+        from djangopress.ai.utils.llm_config import get_ai_model
         context['default_model'] = get_ai_model('generation')
 
         # Available briefings

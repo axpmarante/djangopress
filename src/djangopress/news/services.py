@@ -25,7 +25,7 @@ class NewsService:
         Returns:
             dict with 'success', 'posts' (list of dicts), 'message'.
         """
-        from news.models import NewsPost
+        from djangopress.news.models import NewsPost
         qs = NewsPost.objects.select_related(
             'category', 'featured_image',
         ).order_by('-published_date', '-created_at')
@@ -61,7 +61,7 @@ class NewsService:
         Returns:
             dict with 'success', 'post' (NewsPost instance), or 'error'.
         """
-        from news.models import NewsPost
+        from djangopress.news.models import NewsPost
 
         if not post_id and not title:
             return {'success': False, 'error': 'Provide post_id or title'}
@@ -112,12 +112,12 @@ class NewsService:
         Returns:
             dict with 'success', 'post' (NewsPost instance), 'message', or 'error'.
         """
-        from news.models import NewsPost, NewsCategory
+        from djangopress.news.models import NewsPost, NewsCategory
 
         if not title and not title_i18n:
             return {'success': False, 'error': 'Provide title or title_i18n'}
 
-        from core.services.i18n import build_i18n_field, auto_generate_slugs
+        from djangopress.core.services.i18n import build_i18n_field, auto_generate_slugs
 
         try:
             title_i18n = build_i18n_field(value=title, value_i18n=title_i18n)
@@ -152,7 +152,7 @@ class NewsService:
 
         # Set featured image
         if featured_image_id:
-            from core.models import SiteImage
+            from djangopress.core.models import SiteImage
             try:
                 post.featured_image = SiteImage.objects.get(pk=featured_image_id)
             except SiteImage.DoesNotExist:
@@ -186,7 +186,7 @@ class NewsService:
         Returns:
             dict with 'success', 'post' (NewsPost instance), 'message', or 'error'.
         """
-        from news.models import NewsPost, NewsCategory
+        from djangopress.news.models import NewsPost, NewsCategory
 
         if not post_id:
             return {'success': False, 'error': 'Missing post_id'}
@@ -224,7 +224,7 @@ class NewsService:
         # Featured image FK
         if 'featured_image_id' in kwargs:
             if kwargs['featured_image_id']:
-                from core.models import SiteImage
+                from djangopress.core.models import SiteImage
                 try:
                     post.featured_image = SiteImage.objects.get(pk=kwargs['featured_image_id'])
                 except SiteImage.DoesNotExist:
@@ -264,7 +264,7 @@ class NewsService:
         Returns:
             dict with 'success', 'message', or 'error'.
         """
-        from news.models import NewsPost
+        from djangopress.news.models import NewsPost
 
         try:
             post = NewsPost.objects.get(pk=post_id)
@@ -282,7 +282,7 @@ class NewsService:
         Returns:
             dict with 'success', 'categories' (list of dicts), 'message'.
         """
-        from news.models import NewsCategory
+        from djangopress.news.models import NewsCategory
         categories = NewsCategory.objects.all().order_by('order', 'pk')
         data = []
         for cat in categories:
