@@ -6,7 +6,7 @@ Phase 2: Executor runs native FC loop (gemini-flash)
 
 import logging
 
-from ai.utils.llm_config import LLMBase
+from ai.utils.llm_config import LLMBase, get_ai_model
 from .prompts import build_router_snapshot, build_executor_prompt, build_active_page_context
 from .router import Router
 from .tool_declarations import build_tool_declarations
@@ -32,7 +32,7 @@ class AssistantService:
         self.session = session
         self.llm = LLMBase()
 
-    def handle_message(self, message, user=None):
+    def handle_message(self, message, user=None, reference_images=None):
         """Process a user message through the two-phase flow.
 
         Phase 1: Router classifies intents or returns a direct response.
@@ -87,9 +87,9 @@ class AssistantService:
         if 'pages' not in intents:
             intents.append('pages')
 
-        return self._execute_phase2(message, intents, snapshot, user=user)
+        return self._execute_phase2(message, intents, snapshot, user=user, reference_images=reference_images)
 
-    def _execute_phase2(self, message, intents, snapshot, user=None):
+    def _execute_phase2(self, message, intents, snapshot, user=None, reference_images=None):
         """Execute the native Gemini FC loop.
 
         Builds the executor prompt, assembles tool declarations from intents,
@@ -101,7 +101,9 @@ class AssistantService:
         from google.genai import types
 
         # Build system instruction and tools
-        system_instruction = build_executor_prompt(self.session, snapshot)
+        system_instruction = build_executor_prompt(
+            self.session, snapshot, has_reference_images=bool(reference_images)
+        )
         tools = build_tool_declarations(intents)
 
         # Build contents (conversation history + current message)
@@ -111,7 +113,8 @@ class AssistantService:
             'session': self.session,
             'user': user,
             'active_page': self.session.active_page,
-            'model': 'gemini-flash',
+            'model': get_ai_model('assistant_executor'),
+            'reference_images': reference_images,
         }
 
         all_executed_actions = []
@@ -127,7 +130,7 @@ class AssistantService:
                     contents=contents,
                     system_instruction=system_instruction,
                     tools=tools,
-                    tool_name='gemini-flash',
+                    tool_name=get_ai_model('assistant_executor'),
                 )
             except Exception as e:
                 logger.exception('LLM FC call failed at iteration %d', iteration)
@@ -254,7 +257,9 @@ class AssistantService:
                 # Refresh session's active page from DB
                 self.session.refresh_from_db()
                 snapshot = build_router_snapshot(self.session)
-                system_instruction = build_executor_prompt(self.session, snapshot)
+                system_instruction = build_executor_prompt(
+                    self.session, snapshot, has_reference_images=bool(reference_images)
+                )
                 # Rebuild tools with updated declarations (need to pass new system_instruction)
                 tools = build_tool_declarations(list(current_intents))
 

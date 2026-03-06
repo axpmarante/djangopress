@@ -410,7 +410,6 @@ async function aiSuggest() {
       body: JSON.stringify(withEditableId({
         page_id: config().pageId,
         images: imageData,
-        model: 'gemini-pro',
       })),
     });
     const data = await resp.json();

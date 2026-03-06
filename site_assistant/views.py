@@ -6,7 +6,7 @@ from django.shortcuts import render, get_object_or_404
 from django.views import View
 from django.views.decorators.http import require_http_methods
 
-from ai.utils.llm_config import MODEL_CONFIG
+from ai.utils.llm_config import MODEL_CONFIG, get_ai_model
 from core.models import Page
 
 from .models import AssistantSession
@@ -34,7 +34,7 @@ class AssistantPageView(SuperuserRequiredMixin, View):
             'pages': pages,
             'sessions': sessions,
             'models': models,
-            'default_model': 'gemini-flash',
+            'default_model': get_ai_model('assistant_executor'),
         })
 
 
@@ -42,18 +42,29 @@ class AssistantPageView(SuperuserRequiredMixin, View):
 @require_http_methods(["POST"])
 def chat_api(request):
     """Handle a chat message: router + native FC executor."""
-    try:
-        data = json.loads(request.body)
-    except json.JSONDecodeError:
-        return JsonResponse({'success': False, 'error': 'Invalid JSON'}, status=400)
+    # Support both multipart (with images) and JSON body
+    reference_images = []
+    if request.content_type and 'multipart' in request.content_type:
+        message = request.POST.get('message', '').strip()
+        session_id = request.POST.get('session_id') or None
+        model = request.POST.get('model') or get_ai_model('assistant_executor')
+        active_page_id = request.POST.get('active_page_id') or None
+        if active_page_id:
+            active_page_id = int(active_page_id)
+        for f in request.FILES.getlist('reference_images'):
+            reference_images.append({'bytes': f.read(), 'mime_type': f.content_type})
+    else:
+        try:
+            data = json.loads(request.body)
+        except json.JSONDecodeError:
+            return JsonResponse({'success': False, 'error': 'Invalid JSON'}, status=400)
+        message = data.get('message', '').strip()
+        session_id = data.get('session_id')
+        model = data.get('model') or get_ai_model('assistant_executor')
+        active_page_id = data.get('active_page_id')
 
-    message = data.get('message', '').strip()
     if not message:
         return JsonResponse({'success': False, 'error': 'Empty message'}, status=400)
-
-    session_id = data.get('session_id')
-    model = data.get('model', 'gemini-flash')
-    active_page_id = data.get('active_page_id')
 
     # Get or create session
     if session_id:
@@ -84,7 +95,7 @@ def chat_api(request):
 
     # Process message
     service = AssistantService(session)
-    result = service.handle_message(message, user=request.user)
+    result = service.handle_message(message, user=request.user, reference_images=reference_images or None)
 
     return JsonResponse({
         'success': True,

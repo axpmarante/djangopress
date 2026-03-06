@@ -6,7 +6,7 @@ categories the executor needs, or responds directly for greetings/questions.
 
 import json
 import logging
-from ai.utils.llm_config import LLMBase
+from ai.utils.llm_config import LLMBase, get_ai_model
 
 logger = logging.getLogger(__name__)
 
@@ -89,7 +89,7 @@ class Router:
         ]
 
         try:
-            response = llm.get_completion(messages, tool_name='gemini-lite')
+            response = llm.get_completion(messages, tool_name=get_ai_model('assistant_router'))
             raw = response.choices[0].message.content.strip()
 
             # Parse JSON from response (handle markdown code blocks)

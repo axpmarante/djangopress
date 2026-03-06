@@ -68,6 +68,33 @@
                 </div>
             </div>
 
+            <!-- Reference Images (collapsible) -->
+            <div id="refImagesPanel" class="bg-white border-x border-gray-200 px-4 py-2 border-t border-gray-100">
+                <button type="button" onclick="toggleRefImages()" class="flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-700 transition-colors w-full">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                    </svg>
+                    <span id="refImagesLabel">Reference Images</span>
+                    <span id="refImagesBadge" class="hidden bg-emerald-100 text-emerald-700 text-xs font-medium px-1.5 py-0.5 rounded-full"></span>
+                    <svg id="refImagesChevron" class="w-3 h-3 ml-auto transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                    </svg>
+                </button>
+                <div id="refImagesContent" class="hidden mt-2">
+                    <div id="imageDropZone"
+                         class="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center hover:border-emerald-400 hover:bg-emerald-50 transition-colors cursor-pointer"
+                         onclick="document.getElementById('referenceImages').click()">
+                        <svg class="w-6 h-6 text-gray-400 mx-auto mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                        </svg>
+                        <p class="text-xs text-gray-600">Drop design screenshots here, or <span class="text-emerald-600 font-medium">browse</span></p>
+                        <p class="text-xs text-gray-400 mt-0.5">PNG, JPG, WebP — used as visual reference for AI refinement</p>
+                    </div>
+                    <input type="file" id="referenceImages" accept="image/*" multiple class="hidden" onchange="handleImageSelect(event)">
+                    <div id="imagePreviews" class="grid grid-cols-5 gap-2 mt-2"></div>
+                </div>
+            </div>
+
             <!-- Input area -->
             <div class="bg-white rounded-b-lg border border-gray-200 p-4">
                 <form id="chatForm" onsubmit="sendMessage(event)" class="flex items-end gap-3">
@@ -123,17 +150,6 @@
                 </div>
             </div>
 
-            <!-- AI Model -->
-            <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-5">
-                <h3 class="text-sm font-semibold text-gray-900 mb-3">AI Model</h3>
-                <select id="modelSelect"
-                        class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 focus:border-transparent">
-                    {% for m in models %}
-                    <option value="{{ m }}" {% if m == default_model %}selected{% endif %}>{{ m }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-
             <!-- Quick Links -->
             <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-5">
                 <h3 class="text-sm font-semibold text-gray-900 mb-3">Quick Links</h3>
@@ -156,6 +172,183 @@
 <script>
 let currentSessionId = {{ current_session.id|default:"null" }};
 let activePageId = {{ current_session.active_page_id|default:"null" }};
+let selectedFiles = [];
+
+// --- Reference Images ---
+function toggleRefImages() {
+    const content = document.getElementById('refImagesContent');
+    const chevron = document.getElementById('refImagesChevron');
+    content.classList.toggle('hidden');
+    chevron.classList.toggle('rotate-180');
+}
+
+function handleImageSelect(event) {
+    Array.from(event.target.files).forEach(f => {
+        if (f.type.startsWith('image/')) selectedFiles.push(f);
+    });
+    event.target.value = '';
+    renderImagePreviews();
+}
+
+function removeImage(index) {
+    selectedFiles.splice(index, 1);
+    renderImagePreviews();
+}
+
+function renderImagePreviews() {
+    const container = document.getElementById('imagePreviews');
+    const badge = document.getElementById('refImagesBadge');
+    container.innerHTML = '';
+    if (selectedFiles.length > 0) {
+        badge.textContent = selectedFiles.length;
+        badge.classList.remove('hidden');
+    } else {
+        badge.classList.add('hidden');
+    }
+    selectedFiles.forEach((file, i) => {
+        const url = URL.createObjectURL(file);
+        container.insertAdjacentHTML('beforeend', `
+            <div class="relative group">
+                <img src="${url}" class="w-full h-16 object-cover rounded border border-gray-200">
+                <button type="button" onclick="removeImage(${i})"
+                        class="absolute -top-1.5 -right-1.5 w-4 h-4 bg-red-500 text-white rounded-full flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity leading-none">&times;</button>
+                <p class="text-[10px] text-gray-500 truncate mt-0.5">${file.name}</p>
+            </div>
+        `);
+    });
+}
+
+// Drag and drop for reference images
+(function() {
+    const dz = document.getElementById('imageDropZone');
+    if (!dz) return;
+    ['dragenter','dragover'].forEach(e => dz.addEventListener(e, ev => { ev.preventDefault(); dz.classList.add('border-emerald-500','bg-emerald-50'); }));
+    ['dragleave','drop'].forEach(e => dz.addEventListener(e, ev => { ev.preventDefault(); dz.classList.remove('border-emerald-500','bg-emerald-50'); }));
+    dz.addEventListener('drop', ev => {
+        Array.from(ev.dataTransfer.files).forEach(f => { if (f.type.startsWith('image/')) selectedFiles.push(f); });
+        renderImagePreviews();
+    });
+})();
+
+// --- Action helpers ---
+const TOOL_ICONS = {
+    list_pages: 'search', get_page: 'search', get_settings: 'search', get_stats: 'search',
+    list_menu_items: 'search', list_images: 'search', list_forms: 'search', list_submissions: 'search',
+    list_news_posts: 'search', get_news_post: 'search', list_news_categories: 'search',
+    create_page: 'plus', create_menu_item: 'plus', create_form: 'plus',
+    create_news_post: 'plus', create_news_category: 'plus',
+    update_page: 'edit', update_menu_item: 'edit', update_settings: 'edit',
+    update_element_styles: 'edit', update_element_attribute: 'edit',
+    reorder_sections: 'edit', reorder_menu: 'edit', update_news_post: 'edit',
+    refine_section: 'sparkle', refine_page: 'sparkle', refine_header: 'sparkle', refine_footer: 'sparkle',
+    delete_page: 'trash', delete_menu_item: 'trash', delete_form: 'trash', delete_news_post: 'trash',
+    remove_section: 'trash',
+    set_active_page: 'target', request_additional_tools: 'gear',
+};
+
+const TOOL_SVG = {
+    search: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>',
+    plus: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>',
+    edit: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>',
+    sparkle: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"/>',
+    trash: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>',
+    target: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>',
+    gear: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>',
+};
+
+function toolIcon(name) {
+    const key = TOOL_ICONS[name] || 'gear';
+    return `<svg class="w-3 h-3 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">${TOOL_SVG[key]}</svg>`;
+}
+
+function toolDisplayName(name) {
+    return name.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+}
+
+function buildActionsSummary(actions, steps) {
+    if (!actions || actions.length === 0) return '';
+
+    const id = 'acts-' + Date.now() + Math.random().toString(36).slice(2, 6);
+    const successCount = actions.filter(a => a.success).length;
+    const failCount = actions.length - successCount;
+
+    // Build collapsed counts for the summary bar
+    const counts = {};
+    actions.forEach(a => {
+        const key = a.tool;
+        if (!counts[key]) counts[key] = { ok: 0, fail: 0 };
+        a.success ? counts[key].ok++ : counts[key].fail++;
+    });
+
+    // Summary bar: compact icons
+    const summaryPills = Object.entries(counts).map(([tool, c]) => {
+        const total = c.ok + c.fail;
+        const color = c.fail > 0 ? 'text-red-600' : 'text-emerald-700';
+        const countStr = total > 1 ? `<span class="font-semibold">${total}</span>` : '';
+        return `<span class="inline-flex items-center gap-0.5 ${color}">${toolIcon(tool)}${countStr}</span>`;
+    }).join('');
+
+    // Build timeline rows
+    let timelineRows = '';
+    if (steps && steps.length > 0) {
+        // Use step-by-step grouping
+        steps.forEach(step => {
+            step.actions.forEach(a => {
+                timelineRows += buildTimelineRow(a);
+            });
+        });
+    } else {
+        actions.forEach(a => {
+            timelineRows += buildTimelineRow(a);
+        });
+    }
+
+    // Find the last occurrence of each tool that has data to display
+    const seen = new Set();
+    const uniqueDataActions = [];
+    for (let i = actions.length - 1; i >= 0; i--) {
+        const a = actions[i];
+        if (!seen.has(a.tool)) {
+            seen.add(a.tool);
+            uniqueDataActions.unshift(a);
+        }
+    }
+    const dataHtml = uniqueDataActions.map(a => formatToolData(a)).filter(Boolean).join('');
+
+    // Status text
+    let statusText = `${actions.length} action${actions.length > 1 ? 's' : ''}`;
+    if (failCount > 0) {
+        statusText += ` <span class="text-red-500">(${failCount} failed)</span>`;
+    }
+
+    return `<div class="mt-3 border-t border-gray-200/60 pt-2">
+        <button onclick="document.getElementById('${id}').classList.toggle('hidden'); this.querySelector('.chevron').classList.toggle('rotate-90')"
+                class="flex items-center gap-2 w-full group">
+            <svg class="w-3.5 h-3.5 chevron transition-transform text-gray-400 group-hover:text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+            </svg>
+            <div class="flex items-center gap-1.5">${summaryPills}</div>
+            <span class="text-[11px] text-gray-400 ml-auto">${statusText}</span>
+        </button>
+        <div id="${id}" class="hidden mt-2 space-y-0">
+            <div class="relative pl-4 border-l-2 border-gray-200 space-y-0 ml-1">
+                ${timelineRows}
+            </div>
+            ${dataHtml}
+        </div>
+    </div>`;
+}
+
+function buildTimelineRow(action) {
+    const dotColor = action.success ? 'bg-emerald-500' : 'bg-red-400';
+    const textColor = action.success ? 'text-gray-700' : 'text-red-600';
+    const msg = action.message ? `<span class="text-gray-400 ml-1">— ${escapeHtml(action.message.substring(0, 80))}</span>` : '';
+    return `<div class="relative flex items-start gap-2 py-1 first:pt-0 last:pb-0">
+        <span class="absolute -left-[5.5px] top-[7px] w-2 h-2 rounded-full ${dotColor} ring-2 ring-white"></span>
+        <span class="inline-flex items-center gap-1 text-[11px] font-medium ${textColor}">${toolIcon(action.tool)} ${toolDisplayName(action.tool)}</span>
+        <span class="text-[11px] text-gray-400 truncate">${action.message ? escapeHtml(action.message.substring(0, 60)) : ''}</span>
+    </div>`;
+}
 
 // --- Message rendering ---
 function renderMessage(msg) {
@@ -173,66 +366,17 @@ function renderMessage(msg) {
             </div>
         `);
     } else {
-        // Action chips
-        let actionsHtml = '';
-        let dataHtml = '';
-        if (msg.actions && msg.actions.length > 0) {
-            const chips = msg.actions.map(a => {
-                const color = a.success ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800';
-                const icon = a.success ? '&#10003;' : '&#10007;';
-                return `<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${color}">${icon} ${escapeHtml(a.tool)}</span>`;
-            }).join('');
-            actionsHtml = `<div class="flex flex-wrap gap-1 mt-2">${chips}</div>`;
-            // Render tool result data
-            dataHtml = msg.actions.map(a => formatToolData(a)).filter(Boolean).join('');
-        }
-
+        const actionsBlock = buildActionsSummary(msg.actions, msg._steps);
         chat.insertAdjacentHTML('beforeend', `
             <div class="flex justify-start">
                 <div class="max-w-[85%] bg-gray-100 text-gray-900 rounded-lg px-4 py-3 shadow-sm">
                     <p class="text-sm whitespace-pre-wrap">${escapeHtml(msg.content)}</p>
-                    ${actionsHtml}
-                    ${dataHtml}
+                    ${actionsBlock}
                     <p class="text-xs text-gray-400 mt-1">${formatTime(msg.timestamp)}</p>
                 </div>
             </div>
         `);
     }
-    chat.scrollTop = chat.scrollHeight;
-}
-
-function renderSteps(steps) {
-    const chat = document.getElementById('chatMessages');
-    const stepsId = 'steps-' + Date.now();
-
-    const stepsHtml = steps.map(step => {
-        const chips = step.actions.map(a => {
-            const color = a.success ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800';
-            const icon = a.success ? '&#10003;' : '&#10007;';
-            return `<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${color}">${icon} ${escapeHtml(a.tool)}</span>`;
-        }).join('');
-        return `<div class="flex items-center gap-2">
-            <span class="text-xs text-gray-400 font-mono w-6 text-right shrink-0">Step ${step.iteration}</span>
-            <div class="flex flex-wrap gap-1">${chips}</div>
-        </div>`;
-    }).join('');
-
-    chat.insertAdjacentHTML('beforeend', `
-        <div class="flex justify-start">
-            <div class="max-w-[85%]">
-                <button onclick="this.nextElementSibling.classList.toggle('hidden'); this.querySelector('.chevron').classList.toggle('rotate-90')"
-                        class="flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-600 mb-1 transition-colors">
-                    <svg class="w-3 h-3 chevron rotate-90 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-                    </svg>
-                    ${steps.length} tool step${steps.length > 1 ? 's' : ''} completed
-                </button>
-                <div class="bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 space-y-1.5" id="${stepsId}">
-                    ${stepsHtml}
-                </div>
-            </div>
-        </div>
-    `);
     chat.scrollTop = chat.scrollHeight;
 }
 
@@ -243,7 +387,6 @@ async function sendMessage(event) {
     const message = input.value.trim();
     if (!message) return;
 
-    const model = document.getElementById('modelSelect')?.value || 'gemini-flash';
     const pageId = document.getElementById('pageSelect')?.value || null;
 
     renderMessage({ role: 'user', content: message, timestamp: new Date().toISOString() });
@@ -253,18 +396,30 @@ async function sendMessage(event) {
     document.getElementById('sendButton').disabled = true;
 
     try {
-        const payload = { message, model };
-        if (currentSessionId) payload.session_id = currentSessionId;
-        if (pageId) payload.active_page_id = parseInt(pageId);
+        let fetchOptions;
+        if (selectedFiles.length > 0) {
+            const formData = new FormData();
+            formData.append('message', message);
+            if (currentSessionId) formData.append('session_id', currentSessionId);
+            if (pageId) formData.append('active_page_id', pageId);
+            selectedFiles.forEach(f => formData.append('reference_images', f));
+            fetchOptions = {
+                method: 'POST',
+                headers: { 'X-CSRFToken': getCookie('csrftoken') },
+                body: formData
+            };
+        } else {
+            const payload = { message };
+            if (currentSessionId) payload.session_id = currentSessionId;
+            if (pageId) payload.active_page_id = parseInt(pageId);
+            fetchOptions = {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
+                body: JSON.stringify(payload)
+            };
+        }
 
-        const response = await fetch('/site-assistant/api/chat/', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': getCookie('csrftoken')
-            },
-            body: JSON.stringify(payload)
-        });
+        const response = await fetch('/site-assistant/api/chat/', fetchOptions);
         const result = await response.json();
 
         document.getElementById('typingIndicator').classList.add('hidden');
@@ -281,16 +436,12 @@ async function sendMessage(event) {
                 loadPageSections(result.set_active_page);
             }
 
-            // Render intermediate steps (tool-call rounds before final response)
-            if (result.steps && result.steps.length > 0) {
-                renderSteps(result.steps);
-            }
-
             renderMessage({
                 role: 'assistant',
                 content: result.response,
                 timestamp: new Date().toISOString(),
-                actions: result.actions
+                actions: result.actions,
+                _steps: result.steps
             });
         } else {
             renderMessage({
@@ -409,6 +560,26 @@ async function loadPageSections(pageId) {
 }
 
 // --- Tool data formatters ---
+function i18nVal(obj) {
+    if (!obj) return '—';
+    if (typeof obj !== 'object') return String(obj);
+    return obj.en || obj.pt || obj.es || obj.fr || Object.values(obj)[0] || '—';
+}
+
+function collapsibleData(label, innerHtml, startOpen) {
+    const id = 'data-' + Date.now() + Math.random().toString(36).slice(2, 6);
+    return `<div class="mt-2">
+        <button onclick="document.getElementById('${id}').classList.toggle('hidden'); this.querySelector('.chevron').classList.toggle('rotate-90')"
+                class="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700 transition-colors">
+            <svg class="w-3 h-3 chevron ${startOpen ? 'rotate-90' : ''} transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+            </svg>
+            ${label}
+        </button>
+        <div id="${id}" class="${startOpen ? '' : 'hidden'} mt-1">${innerHtml}</div>
+    </div>`;
+}
+
 function formatToolData(action) {
     if (!action.success) return '';
 
@@ -416,22 +587,30 @@ function formatToolData(action) {
     if (action.pages) {
         if (action.pages.length === 0) return '<p class="text-xs text-gray-500 mt-2 italic">No pages found.</p>';
         const rows = action.pages.map(p => {
-            const title = typeof p.title === 'object' ? (p.title.en || p.title.pt || '—') : (p.title || '—');
-            const slug = typeof p.slug === 'object' ? (p.slug.en || p.slug.pt || '—') : (p.slug || '—');
-            const status = p.is_active ? '<span class="text-green-600">Active</span>' : '<span class="text-gray-400">Inactive</span>';
-            return `<tr class="border-t border-gray-200"><td class="py-1 pr-3 font-medium">${escapeHtml(title)}</td><td class="py-1 pr-3 text-gray-500">/${escapeHtml(slug)}</td><td class="py-1 pr-3">${status}</td><td class="py-1 text-gray-400">#${p.id}</td></tr>`;
+            const dot = p.is_active
+                ? '<span class="inline-block w-1.5 h-1.5 rounded-full bg-green-500"></span>'
+                : '<span class="inline-block w-1.5 h-1.5 rounded-full bg-gray-300"></span>';
+            return `<tr class="border-t border-gray-100">
+                <td class="py-1.5 pr-2">${dot}</td>
+                <td class="py-1.5 pr-3 font-medium">${escapeHtml(i18nVal(p.title))}</td>
+                <td class="py-1.5 pr-3 text-gray-400 font-mono">/${escapeHtml(i18nVal(p.slug))}</td>
+                <td class="py-1.5 text-gray-400">#${p.id}</td>
+            </tr>`;
         }).join('');
-        return `<div class="mt-2 overflow-x-auto"><table class="text-xs w-full"><thead><tr class="text-left text-gray-500"><th class="pb-1 pr-3">Title</th><th class="pb-1 pr-3">Slug</th><th class="pb-1 pr-3">Status</th><th class="pb-1">ID</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+        const table = `<table class="text-xs w-full"><tbody>${rows}</tbody></table>`;
+        const label = `${action.pages.length} page${action.pages.length > 1 ? 's' : ''}`;
+        return action.pages.length > 6
+            ? collapsibleData(label, table, false)
+            : `<div class="mt-2">${table}</div>`;
     }
 
     // Single page info
     if (action.page) {
         const p = action.page;
-        const title = typeof p.title === 'object' ? (p.title.en || p.title.pt || '—') : (p.title || '—');
-        let html = `<div class="mt-2 text-xs space-y-1"><p><strong>Title:</strong> ${escapeHtml(title)}</p>`;
+        let html = `<div class="mt-2 text-xs"><span class="font-medium">${escapeHtml(i18nVal(p.title))}</span>`;
         if (p.sections && p.sections.length > 0) {
-            const badges = p.sections.map(s => `<span class="inline-flex px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700">${escapeHtml(s)}</span>`).join(' ');
-            html += `<p><strong>Sections:</strong> ${badges}</p>`;
+            const badges = p.sections.map(s => `<span class="inline-flex px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 text-[10px]">${escapeHtml(s)}</span>`).join(' ');
+            html += ` <span class="text-gray-400">|</span> ${badges}`;
         }
         html += '</div>';
         return html;
@@ -439,31 +618,26 @@ function formatToolData(action) {
 
     // Menu items
     if (action.menu_items) {
-        if (action.menu_items.length === 0) return '<p class="text-xs text-gray-500 mt-2 italic">No menu items found.</p>';
+        if (action.menu_items.length === 0) return '<p class="text-xs text-gray-500 mt-2 italic">No menu items.</p>';
         const items = action.menu_items.map(m => {
-            const label = typeof m.label === 'object' ? (m.label.en || m.label.pt || '—') : (m.label || '—');
-            let line = `<li class="py-0.5">${escapeHtml(label)} <span class="text-gray-400">#${m.id}</span>`;
+            const label = i18nVal(m.label);
+            let line = `<div class="flex items-center gap-1.5 py-0.5"><span class="text-gray-400 text-[10px]">#${m.id}</span> ${escapeHtml(label)}`;
             if (m.children && m.children.length > 0) {
-                const kids = m.children.map(c => {
-                    const cl = typeof c.label === 'object' ? (c.label.en || c.label.pt || '—') : (c.label || '—');
-                    return `<li class="ml-4 py-0.5">↳ ${escapeHtml(cl)} <span class="text-gray-400">#${c.id}</span></li>`;
-                }).join('');
-                line += `<ul>${kids}</ul>`;
+                line += ` <span class="text-gray-400 text-[10px]">(+${m.children.length} sub)</span>`;
             }
-            line += '</li>';
+            line += '</div>';
             return line;
         }).join('');
-        return `<ul class="mt-2 text-xs">${items}</ul>`;
+        return `<div class="mt-2 text-xs">${items}</div>`;
     }
 
     // Stats
     if (action.stats) {
-        const s = action.stats;
-        const items = Object.entries(s).map(([k, v]) => {
+        const items = Object.entries(action.stats).map(([k, v]) => {
             const label = k.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-            return `<div class="flex justify-between"><span class="text-gray-600">${label}</span><span class="font-semibold">${v}</span></div>`;
+            return `<div class="flex justify-between gap-4"><span class="text-gray-500">${label}</span><span class="font-semibold tabular-nums">${v}</span></div>`;
         }).join('');
-        return `<div class="mt-2 text-xs space-y-1 bg-white rounded p-2 border border-gray-200">${items}</div>`;
+        return `<div class="mt-2 text-xs space-y-0.5 bg-white rounded-md p-2 border border-gray-200">${items}</div>`;
     }
 
     // Settings
@@ -471,24 +645,53 @@ function formatToolData(action) {
         const rows = Object.entries(action.settings).map(([k, v]) => {
             const label = k.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
             const val = typeof v === 'object' ? JSON.stringify(v) : String(v);
-            return `<tr class="border-t border-gray-200"><td class="py-1 pr-3 text-gray-600">${escapeHtml(label)}</td><td class="py-1 font-medium">${escapeHtml(val.substring(0, 80))}</td></tr>`;
+            return `<div class="flex gap-2 py-0.5 border-t border-gray-100 first:border-0">
+                <span class="text-gray-500 shrink-0">${escapeHtml(label)}</span>
+                <span class="font-medium truncate">${escapeHtml(val.substring(0, 100))}</span>
+            </div>`;
         }).join('');
-        return `<div class="mt-2 overflow-x-auto"><table class="text-xs w-full"><tbody>${rows}</tbody></table></div>`;
+        const count = Object.keys(action.settings).length;
+        return count > 8
+            ? collapsibleData(`${count} settings`, `<div class="text-xs">${rows}</div>`, false)
+            : `<div class="mt-2 text-xs">${rows}</div>`;
     }
 
     // Images
     if (action.images) {
         if (action.images.length === 0) return '<p class="text-xs text-gray-500 mt-2 italic">No images found.</p>';
-        return `<p class="text-xs text-gray-500 mt-2">${action.images.length} image(s) found</p>`;
+        return `<p class="text-xs text-gray-500 mt-2">${action.images.length} image${action.images.length > 1 ? 's' : ''} found</p>`;
     }
 
     // Form Submissions
     if (action.submissions) {
-        if (action.submissions.length === 0) return '<p class="text-xs text-gray-500 mt-2 italic">No submissions found.</p>';
+        if (action.submissions.length === 0) return '<p class="text-xs text-gray-500 mt-2 italic">No submissions.</p>';
         const rows = action.submissions.map(s =>
-            `<tr class="border-t border-gray-200"><td class="py-1 pr-3">${escapeHtml(s.form)}</td><td class="py-1 pr-3 text-gray-500">${s.is_read ? 'Read' : 'Unread'}</td><td class="py-1 text-gray-400">${escapeHtml(s.created_at?.substring(0, 10) || '')}</td></tr>`
+            `<div class="flex items-center gap-2 py-0.5 border-t border-gray-100 first:border-0 text-xs">
+                <span class="font-medium">${escapeHtml(s.form)}</span>
+                <span class="${s.is_read ? 'text-gray-400' : 'text-amber-600 font-medium'}">${s.is_read ? 'Read' : 'Unread'}</span>
+                <span class="text-gray-400 ml-auto">${escapeHtml(s.created_at?.substring(0, 10) || '')}</span>
+            </div>`
         ).join('');
-        return `<div class="mt-2 overflow-x-auto"><table class="text-xs w-full"><tbody>${rows}</tbody></table></div>`;
+        return `<div class="mt-2">${rows}</div>`;
+    }
+
+    // News posts
+    if (action.posts) {
+        if (action.posts.length === 0) return '<p class="text-xs text-gray-500 mt-2 italic">No posts found.</p>';
+        const rows = action.posts.map(p => {
+            const dot = p.is_published
+                ? '<span class="inline-block w-1.5 h-1.5 rounded-full bg-green-500"></span>'
+                : '<span class="inline-block w-1.5 h-1.5 rounded-full bg-gray-300"></span>';
+            return `<tr class="border-t border-gray-100">
+                <td class="py-1.5 pr-2">${dot}</td>
+                <td class="py-1.5 pr-3 font-medium">${escapeHtml(i18nVal(p.title))}</td>
+                <td class="py-1.5 text-gray-400">#${p.id}</td>
+            </tr>`;
+        }).join('');
+        const table = `<table class="text-xs w-full"><tbody>${rows}</tbody></table>`;
+        return action.posts.length > 6
+            ? collapsibleData(`${action.posts.length} posts`, table, false)
+            : `<div class="mt-2">${table}</div>`;
     }
 
     return '';

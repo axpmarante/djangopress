@@ -1,5 +1,6 @@
 """Page-level tools — require an active page in the session."""
 
+from ai.utils.llm_config import get_ai_model
 from core.models import Page
 from core.services import PageService
 
@@ -90,12 +91,14 @@ def refine_section(params, context):
     if not section_name or not instructions:
         return {'success': False, 'message': 'Missing section_name or instructions'}
 
-    model = 'gemini-pro'
+    model = get_ai_model('refinement_section')
+    ref_images = context.get('reference_images')
     from ai.services import ContentGenerationService
     service = ContentGenerationService(model_name=model)
     result = service.refine_section_only(
         page_id=page.id, section_name=section_name,
         instructions=instructions, model_override=model,
+        reference_images=ref_images or None,
     )
 
     refined_html = result.get('options', [{}])[0].get('html', '')
@@ -120,13 +123,14 @@ def refine_page(params, context):
     if not instructions:
         return {'success': False, 'message': 'Missing instructions'}
 
-    model = 'gemini-pro'
+    model = get_ai_model('refinement_page')
+    ref_images = context.get('reference_images')
     from ai.services import ContentGenerationService
     service = ContentGenerationService(model_name=model)
     result = service.refine_page_with_html(
         page_id=page.id, instructions=instructions,
         model_override=model,
-        reference_images=params.get('reference_images') or None,
+        reference_images=ref_images or None,
         handle_images=params.get('handle_images', False),
     )
 

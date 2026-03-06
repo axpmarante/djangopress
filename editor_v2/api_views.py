@@ -15,6 +15,7 @@ from core.decorators import superuser_required
 from django.views.decorators.csrf import csrf_exempt
 from core.models import Page, PageVersion, SiteImage, SiteSettings
 from ai.models import RefinementSession
+from ai.utils.llm_config import get_ai_model
 from ai.utils.sse import sse_event, sse_response
 from bs4 import BeautifulSoup
 
@@ -279,7 +280,7 @@ def _format_lookup_results(tool_name, result):
 def _enrich_instructions(instructions, page):
     """
     Pre-process user instructions with lookup tools.
-    If the instruction references other pages/sections, uses gemini-flash
+    If the instruction references other pages/sections, uses an LLM
     to look them up and produce an enriched instruction for the refinement LLM.
     Returns the original or enriched instruction string.
     """
@@ -324,7 +325,7 @@ def _enrich_instructions(instructions, page):
         llm = LLMBase()
 
         for iteration in range(3):
-            response = llm.get_completion(messages, tool_name='gemini-flash')
+            response = llm.get_completion(messages, tool_name=get_ai_model('refinement_section'))
             raw = response.choices[0].message.content
 
             parsed = _parse_enrichment_response(raw)
@@ -354,7 +355,7 @@ def _enrich_instructions(instructions, page):
 
         # All 3 tool iterations used — one final LLM call to get the enriched instruction
         messages.append({'role': 'user', 'content': 'Now output the final enriched instruction in <refined_instructions> tags.'})
-        response = llm.get_completion(messages, tool_name='gemini-flash')
+        response = llm.get_completion(messages, tool_name=get_ai_model('refinement_section'))
         raw = response.choices[0].message.content
         parsed = _parse_enrichment_response(raw)
         if parsed['done']:
@@ -750,7 +751,7 @@ def refine_section(request):
         section_name = data.get('section_name')
         instructions = data.get('instructions', '').strip()
         conversation_history = data.get('conversation_history', [])
-        model = data.get('model', 'gemini-flash')
+        model = data.get('model') or get_ai_model('refinement_section')
         session_id = data.get('session_id')
 
         if not page_id or not section_name:
@@ -946,7 +947,7 @@ def refine_element(request):
         selector = data.get('selector')
         instructions = data.get('instructions', '').strip()
         conversation_history = data.get('conversation_history', [])
-        model = data.get('model', 'gemini-flash')
+        model = data.get('model') or get_ai_model('refinement_element')
         session_id = data.get('session_id')
 
         if not page_id or not selector:
@@ -1182,7 +1183,7 @@ def refine_multi(request):
                 prefix = f'[{section_name}]'
             session_kwargs = {
                 'title': f'{prefix} {instructions[:60]}',
-                'model_used': 'gemini-flash',
+                'model_used': get_ai_model('refinement_section'),
                 'created_by': request.user if request.user.is_authenticated else None,
             }
             if is_page:
@@ -1224,7 +1225,7 @@ def refine_multi(request):
 
         if not use_agent or mode == 'create':
             from ai.services import ContentGenerationService
-            service = ContentGenerationService(model_name='gemini-pro')
+            service = ContentGenerationService(model_name=get_ai_model('generation'))
 
             if mode == 'create':
                 result = service.generate_section(
@@ -1399,7 +1400,7 @@ def apply_option(request):
             print(f"Auto-translating {scope} to {other_languages} ({len(html)} chars)...")
 
             from ai.services import ContentGenerationService
-            service = ContentGenerationService(model_name='gemini-flash')
+            service = ContentGenerationService(model_name=get_ai_model('translation'))
 
             for target_lang in other_languages:
                 try:
@@ -1706,7 +1707,7 @@ def refine_page(request):
             session = RefinementSession(
                 page=page,
                 title=instructions[:80],
-                model_used='gemini-pro',
+                model_used=get_ai_model('refinement_page'),
                 created_by=request.user if request.user.is_authenticated else None,
             )
             session.save()
@@ -1720,13 +1721,13 @@ def refine_page(request):
             change_summary=f'Before editor refine-page: {instructions[:100]}'
         )
 
-        # Call AI — full page refinement (gemini-pro)
+        # Call AI — full page refinement
         from ai.services import ContentGenerationService
         service = ContentGenerationService()
         result = service.refine_page_with_html(
             page_id=page_id,
             instructions=instructions,
-            model_override='gemini-pro',
+            model_override=get_ai_model('refinement_page'),
             conversation_history=history or None,
         )
 
@@ -2086,7 +2087,7 @@ def refine_page_stream(request):
             session = RefinementSession(
                 page=page,
                 title=instructions[:80],
-                model_used='gemini-pro',
+                model_used=get_ai_model('refinement_page'),
                 created_by=request.user if request.user.is_authenticated else None,
             )
             session.save()
@@ -2113,7 +2114,7 @@ def refine_page_stream(request):
                 result = service.refine_page_with_html(
                     page_id=page_id,
                     instructions=instructions,
-                    model_override='gemini-pro',
+                    model_override=get_ai_model('refinement_page'),
                     conversation_history=history or None,
                     on_progress=on_progress,
                 )
@@ -2230,7 +2231,7 @@ def refine_multi_stream(request):
             session = RefinementSession(
                 page=page,
                 title=f'{prefix} {instructions[:60]}',
-                model_used='gemini-flash',
+                model_used=get_ai_model('refinement_section'),
                 created_by=request.user if request.user.is_authenticated else None,
             )
             session.save()
@@ -2272,7 +2273,7 @@ def refine_multi_stream(request):
 
                 if result is None:
                     from ai.services import ContentGenerationService
-                    service = ContentGenerationService(model_name='gemini-flash')
+                    service = ContentGenerationService(model_name=get_ai_model('refinement_section'))
 
                     if mode == 'create':
                         result = service.generate_section(

@@ -128,7 +128,7 @@ def build_router_snapshot(session):
     return snapshot
 
 
-def build_executor_prompt(session, snapshot):
+def build_executor_prompt(session, snapshot, has_reference_images=False):
     """Build the system instruction for the Phase 2 executor.
 
     This is a focused prompt (~800-1000 tokens) split into:
@@ -141,6 +141,7 @@ def build_executor_prompt(session, snapshot):
     Args:
         session: AssistantSession instance.
         snapshot: Dict from build_router_snapshot().
+        has_reference_images: Whether user uploaded reference images.
 
     Returns:
         System instruction string.
@@ -213,6 +214,11 @@ Rules:
 - Be concise. State what you did, not how.
 - When you need data (list_pages, get_settings, etc.), call the tool first, then respond based on results.
 - Provide all i18n fields in ALL enabled languages when creating/updating content.""")
+
+    # --- Reference Images ---
+    if has_reference_images:
+        parts.append("""
+Reference Images: The user has uploaded design reference images with this message. When you call refine_section or refine_page, the images will be automatically forwarded to the AI generation model as visual inspiration for layout, colors, typography, and overall aesthetic.""")
 
     # --- What You Cannot Do ---
     parts.append("""

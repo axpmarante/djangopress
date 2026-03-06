@@ -430,7 +430,8 @@ class NewsRefineView(SuperuserRequiredMixin, TemplateView):
             context['default_model'] = config.default_model
         except Exception:
             context['ai_models'] = []
-            context['default_model'] = 'gemini-pro'
+            from ai.utils.llm_config import get_ai_model
+            context['default_model'] = get_ai_model('generation')
 
         # Language info
         site_settings = SiteSettings.objects.first()
