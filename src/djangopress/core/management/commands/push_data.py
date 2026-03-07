@@ -33,6 +33,9 @@ DUMP_MODELS = [
 
 # DB table names in truncation order (children before parents).
 SYNC_TABLES_ORDERED = [
+    'core_blueprintpage',
+    'core_blueprint',
+    'core_contentversion',
     'core_pageversion',
     'core_menuitem',
     'core_globalsection',
