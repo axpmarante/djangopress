@@ -33,5 +33,9 @@ STATIC_ROOT = BASE_DIR / 'staticfiles'
 MEDIA_ROOT = BASE_DIR / 'media'
 LOCALE_PATHS = [BASE_DIR / 'locale']
 
+# --- Custom domain (uncomment and edit for production) ---
+# ALLOWED_HOSTS += ['.example.com']
+# CSRF_TRUSTED_ORIGINS += ['https://*.example.com']
+
 # --- Site-specific apps (uncomment to add) ---
 # INSTALLED_APPS += ['my_app']
