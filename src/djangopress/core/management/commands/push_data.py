@@ -21,11 +21,11 @@ from io import StringIO
 # Models to sync — order matters for foreign key dependencies.
 # This list is imported by pull_data and data_sync_export.
 DUMP_MODELS = [
-    'core.SiteSettings',
     'core.DynamicForm',
     'core.FormSubmission',
     'core.SiteImage',
     'core.Page',
+    'core.SiteSettings',      # after Page (homepage FK) and SiteImage
     'core.GlobalSection',
     'core.MenuItem',
     # PageVersion handled separately (filtered to last 3 per page)
