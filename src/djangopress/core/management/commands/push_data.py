@@ -49,13 +49,21 @@ SYNC_TABLES_ORDERED = [
 MAX_VERSIONS_PER_PAGE = 3
 
 
+def _get_all_models():
+    """Return DUMP_MODELS + any EXTRA_SYNC_MODELS from settings."""
+    extra = getattr(settings, 'EXTRA_SYNC_MODELS', [])
+    return DUMP_MODELS + list(extra)
+
+
 def build_fixture():
-    """Serialize DUMP_MODELS + filtered PageVersions to a JSON string."""
+    """Serialize DUMP_MODELS + EXTRA_SYNC_MODELS + filtered PageVersions to a JSON string."""
     from djangopress.core.models import Page, PageVersion
+
+    all_models = _get_all_models()
 
     # Dump main models
     buf = StringIO()
-    call_command('dumpdata', *DUMP_MODELS, format='json', indent=None, stdout=buf)
+    call_command('dumpdata', *all_models, format='json', indent=None, stdout=buf)
     fixture = json.loads(buf.getvalue())
 
     # Add last N PageVersions per page, with created_by nullified
