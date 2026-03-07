@@ -129,7 +129,7 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # ---------------------------------------------------------------------------
 STATIC_URL = '/static/'
-# STATICFILES_DIRS, STATIC_ROOT — child site defines these based on BASE_DIR
+STATICFILES_DIRS = [_PACKAGE_DIR / 'static']  # Package-level static files (lightbox, etc.)
 
 # STATICFILES_STORAGE depending on environment
 if ENVIRONMENT == 'development':

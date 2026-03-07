@@ -28,7 +28,7 @@ DATABASES = {
 
 # --- Paths ---
 TEMPLATES[0]['DIRS'] = [BASE_DIR / 'templates'] + TEMPLATES[0]['DIRS']
-STATICFILES_DIRS = [BASE_DIR / 'static'] if (BASE_DIR / 'static').exists() else []
+STATICFILES_DIRS = ([BASE_DIR / 'static'] if (BASE_DIR / 'static').exists() else []) + STATICFILES_DIRS
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 MEDIA_ROOT = BASE_DIR / 'media'
 LOCALE_PATHS = [BASE_DIR / 'locale']
