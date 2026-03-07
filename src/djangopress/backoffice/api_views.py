@@ -1313,20 +1313,15 @@ def _truncate_sync_tables():
     with connection.cursor() as cursor:
         if is_sqlite:
             cursor.execute('PRAGMA foreign_keys = OFF')
-        try:
-            for table in SYNC_TABLES_ORDERED:
-                cursor.execute(f'DELETE FROM "{table}"')
-        finally:
-            if is_sqlite:
+            try:
+                for table in SYNC_TABLES_ORDERED:
+                    cursor.execute(f'DELETE FROM "{table}"')
+            finally:
                 cursor.execute('PRAGMA foreign_keys = ON')
-
-    # Reset PostgreSQL sequences
-    if connection.vendor == 'postgresql':
-        with connection.cursor() as cursor:
-            for table in SYNC_TABLES_ORDERED:
-                cursor.execute(
-                    f"SELECT setval(pg_get_serial_sequence('{table}', 'id'), 1, false)"
-                )
+        else:
+            # PostgreSQL: TRUNCATE CASCADE handles FK constraints from any table
+            tables_csv = ', '.join(f'"{t}"' for t in SYNC_TABLES_ORDERED)
+            cursor.execute(f'TRUNCATE {tables_csv} RESTART IDENTITY CASCADE')
 
 
 def _load_fixture(fixture_data):
