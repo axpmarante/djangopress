@@ -9,7 +9,11 @@ WSGI_APPLICATION, STATIC_ROOT, MEDIA_ROOT, etc.
 """
 import os
 import warnings
+from pathlib import Path
 from django.utils.translation import gettext_lazy as _
+
+# Package root directory (where this settings.py lives)
+_PACKAGE_DIR = Path(__file__).resolve().parent
 
 
 # ---------------------------------------------------------------------------
@@ -82,7 +86,7 @@ MIDDLEWARE = [
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],  # Child site adds its own templates dir
+        'DIRS': [_PACKAGE_DIR / 'templates'],  # Package root templates (base.html, error pages)
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
