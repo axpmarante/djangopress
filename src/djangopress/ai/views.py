@@ -217,6 +217,10 @@ def refine_header_api(request):
         from djangopress.core.models import GlobalSection
         section = GlobalSection.objects.get(key='main-header')
         section.html_template_i18n = section_data.get('html_template_i18n', section.html_template_i18n or {})
+        if section_data.get('html_template'):
+            section.html_template = section_data['html_template']
+        if section_data.get('content'):
+            section.content = section_data['content']
         section.save()
 
         return JsonResponse({
@@ -271,6 +275,10 @@ def refine_footer_api(request):
         from djangopress.core.models import GlobalSection
         section = GlobalSection.objects.get(key='main-footer')
         section.html_template_i18n = section_data.get('html_template_i18n', section.html_template_i18n or {})
+        if section_data.get('html_template'):
+            section.html_template = section_data['html_template']
+        if section_data.get('content'):
+            section.content = section_data['content']
         section.save()
 
         return JsonResponse({
@@ -1033,6 +1041,10 @@ def refine_header_stream(request):
                 from djangopress.core.models import GlobalSection
                 section = GlobalSection.objects.get(key='main-header')
                 section.html_template_i18n = section_data.get('html_template_i18n', section.html_template_i18n or {})
+                if section_data.get('html_template'):
+                    section.html_template = section_data['html_template']
+                if section_data.get('content'):
+                    section.content = section_data['content']
                 section.save()
 
                 q.put(('complete', {
@@ -1115,6 +1127,10 @@ def refine_footer_stream(request):
                 from djangopress.core.models import GlobalSection
                 section = GlobalSection.objects.get(key='main-footer')
                 section.html_template_i18n = section_data.get('html_template_i18n', section.html_template_i18n or {})
+                if section_data.get('html_template'):
+                    section.html_template = section_data['html_template']
+                if section_data.get('content'):
+                    section.content = section_data['content']
                 section.save()
 
                 q.put(('complete', {

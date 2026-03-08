@@ -16,7 +16,7 @@ from .models import log_ai_call
 class ContentGenerationService:
     """Service for generating CMS content using LLM"""
 
-    def __init__(self, model_name=None):
+    def __init__(self, model_name=None, assistant_session=None):
         """
         Initialize the content generation service
 
@@ -24,9 +24,17 @@ class ContentGenerationService:
             model_name: Name of the LLM model to use (from MODEL_CONFIG)
                        Options: 'gpt-5', 'gpt-5-mini', 'claude', 'gemini-pro', 'gemini-flash', 'gemini-lite'
                        Default: 'gemini-pro' (high quality, balanced speed)
+            assistant_session: Optional AssistantSession to link AI calls to
         """
         self.llm = LLMBase()
         self.model_name = model_name or get_ai_model('refinement_section')
+        self.assistant_session = assistant_session
+
+    def _log(self, **kwargs):
+        """Wrapper around log_ai_call that auto-includes assistant_session."""
+        if self.assistant_session and 'assistant_session' not in kwargs:
+            kwargs['assistant_session'] = self.assistant_session
+        log_ai_call(**kwargs)
 
     @staticmethod
     def _get_model_info(tool_name: str) -> tuple:
@@ -249,7 +257,7 @@ Return the complete, corrected JSON now:"""
             response = self.llm.get_completion(messages, tool_name=model)
             usage = self._extract_usage(response)
             content = response.choices[0].message.content
-            log_ai_call(
+            self._log(
                 action='generate_metadata', model_name=actual_model, provider=provider,
                 system_prompt=system_prompt, user_prompt=user_prompt,
                 response_text=content,
@@ -273,7 +281,7 @@ Return the complete, corrected JSON now:"""
             return {'title_i18n': title_i18n, 'slug_i18n': slug_i18n}
 
         except Exception as e:
-            log_ai_call(
+            self._log(
                 action='generate_metadata', model_name=actual_model, provider=provider,
                 system_prompt=system_prompt, user_prompt=user_prompt,
                 duration_ms=int((time.time() - t0) * 1000),
@@ -394,14 +402,14 @@ Return the complete, corrected JSON now:"""
                 response = self.llm.get_completion(messages, tool_name=model, on_stream=stream_cb)
 
             usage = self._extract_usage(response)
-            log_ai_call(
+            self._log(
                 action='generate_page', model_name=actual_model, provider=provider,
                 system_prompt=system_prompt, user_prompt=user_prompt,
                 response_text=response.choices[0].message.content,
                 duration_ms=int((time.time() - t0) * 1000), **usage,
             )
         except Exception as e:
-            log_ai_call(
+            self._log(
                 action='generate_page', model_name=actual_model, provider=provider,
                 system_prompt=system_prompt, user_prompt=user_prompt,
                 duration_ms=int((time.time() - t0) * 1000),
@@ -595,14 +603,14 @@ Return the complete, corrected JSON now:"""
                     max_tokens=16384
                 )
             usage = self._extract_usage(response)
-            log_ai_call(
+            self._log(
                 action=action, model_name=actual_model, provider=provider,
                 system_prompt=system_prompt, user_prompt=user_prompt,
                 response_text=response.choices[0].message.content,
                 duration_ms=int((time.time() - t0) * 1000), **usage,
             )
         except Exception as e:
-            log_ai_call(
+            self._log(
                 action=action, model_name=actual_model, provider=provider,
                 system_prompt=system_prompt, user_prompt=user_prompt,
                 duration_ms=int((time.time() - t0) * 1000),
@@ -625,6 +633,19 @@ Return the complete, corrected JSON now:"""
         # Validate essential fields for GlobalSection
         if 'html_template' not in refined_data:
             raise ValueError("Refined section missing 'html_template' field")
+
+        # Validate that the refined output isn't truncated
+        refined_html = refined_data['html_template']
+        original_len = len(current_template)
+        refined_len = len(refined_html)
+        if original_len > 500 and refined_len < original_len * 0.4:
+            raise ValueError(
+                f"Refined {section_key} appears truncated "
+                f"({refined_len} chars vs {original_len} original — "
+                f"{int(refined_len / original_len * 100)}%). "
+                f"The LLM likely hit its output limit. "
+                f"Try a shorter instruction or simplify the template first."
+            )
 
         # Ensure content field exists
         if 'content' not in refined_data:
@@ -840,7 +861,7 @@ Return the complete, corrected JSON now:"""
                 response = self.llm.get_completion(messages, tool_name=model, on_stream=stream_cb)
 
             usage = self._extract_usage(response)
-            log_ai_call(
+            self._log(
                 action=log_action, model_name=actual_model, provider=provider_str,
                 system_prompt=system_prompt, user_prompt=user_prompt,
                 response_text=response.choices[0].message.content,
@@ -848,7 +869,7 @@ Return the complete, corrected JSON now:"""
                 page=page, section_name=section_name or '', **usage,
             )
         except Exception as e:
-            log_ai_call(
+            self._log(
                 action=log_action, model_name=actual_model, provider=provider_str,
                 system_prompt=system_prompt, user_prompt=user_prompt,
                 duration_ms=int((time.time() - t0) * 1000),
@@ -1021,7 +1042,7 @@ Return the complete, corrected JSON now:"""
                 stream_cb = self._make_stream_callback(on_progress, 'refine_html')
                 response = self.llm.get_completion(messages, tool_name=model, on_stream=stream_cb)
             usage = self._extract_usage(response)
-            log_ai_call(
+            self._log(
                 action='refine_section', model_name=actual_model, provider=provider_str,
                 system_prompt=system_prompt, user_prompt=user_prompt,
                 response_text=response.choices[0].message.content,
@@ -1029,7 +1050,7 @@ Return the complete, corrected JSON now:"""
                 page=page, section_name=section_name, **usage,
             )
         except Exception as e:
-            log_ai_call(
+            self._log(
                 action='refine_section', model_name=actual_model, provider=provider_str,
                 system_prompt=system_prompt, user_prompt=user_prompt,
                 duration_ms=int((time.time() - t0) * 1000),
@@ -1207,7 +1228,7 @@ Return the complete, corrected JSON now:"""
         try:
             response = self.llm.get_completion(messages, tool_name=model)
             usage = self._extract_usage(response)
-            log_ai_call(
+            self._log(
                 action='generate_section', model_name=actual_model, provider=provider_str,
                 system_prompt=system_prompt, user_prompt=user_prompt,
                 response_text=response.choices[0].message.content,
@@ -1215,7 +1236,7 @@ Return the complete, corrected JSON now:"""
                 page=page, section_name=f'new_after_{insert_after or "top"}', **usage,
             )
         except Exception as e:
-            log_ai_call(
+            self._log(
                 action='generate_section', model_name=actual_model, provider=provider_str,
                 system_prompt=system_prompt, user_prompt=user_prompt,
                 duration_ms=int((time.time() - t0) * 1000),
@@ -1377,7 +1398,7 @@ Return the complete, corrected JSON now:"""
         try:
             response = self.llm.get_completion(messages, tool_name=model)
             usage = self._extract_usage(response)
-            log_ai_call(
+            self._log(
                 action='refine_element', model_name=actual_model, provider=provider_str,
                 system_prompt=system_prompt, user_prompt=user_prompt,
                 response_text=response.choices[0].message.content,
@@ -1385,7 +1406,7 @@ Return the complete, corrected JSON now:"""
                 page=page, section_name=section_name, **usage,
             )
         except Exception as e:
-            log_ai_call(
+            self._log(
                 action='refine_element', model_name=actual_model, provider=provider_str,
                 system_prompt=system_prompt, user_prompt=user_prompt,
                 duration_ms=int((time.time() - t0) * 1000),
@@ -1871,7 +1892,7 @@ Keep the translations natural and fluent — these are website UI strings.
             response = self.llm.get_completion(messages, tool_name=get_ai_model('translation'))
             usage = self._extract_usage(response)
             content = response.choices[0].message.content
-            log_ai_call(
+            self._log(
                 action='bulk_translate', model_name=actual_model, provider=provider,
                 user_prompt=prompt, response_text=content,
                 duration_ms=int((time.time() - t0) * 1000), **usage,
@@ -1881,7 +1902,7 @@ Keep the translations natural and fluent — these are website UI strings.
                 return result
             return None
         except Exception as e:
-            log_ai_call(
+            self._log(
                 action='bulk_translate', model_name=actual_model, provider=provider,
                 user_prompt=prompt,
                 duration_ms=int((time.time() - t0) * 1000),
@@ -1920,7 +1941,7 @@ Keep the translations natural and fluent — these are website UI strings.
             response = self.llm.get_completion(messages, tool_name=model)
             usage = self._extract_usage(response)
             content = response.choices[0].message.content
-            log_ai_call(
+            self._log(
                 action='translate_html', model_name=actual_model, provider=provider,
                 user_prompt=prompt, response_text=content,
                 duration_ms=int((time.time() - t0) * 1000), **usage,
@@ -1928,7 +1949,7 @@ Keep the translations natural and fluent — these are website UI strings.
             translated_html = self._extract_html_from_response(content)
             return translated_html or content
         except Exception as e:
-            log_ai_call(
+            self._log(
                 action='translate_html', model_name=actual_model, provider=provider,
                 user_prompt=prompt,
                 duration_ms=int((time.time() - t0) * 1000),
@@ -2054,7 +2075,7 @@ Keep the translations natural and fluent — these are website UI strings.
             response = self.llm.get_completion(messages, tool_name=get_ai_model('image_analysis'))
             usage = self._extract_usage(response)
             content = response.choices[0].message.content
-            log_ai_call(
+            self._log(
                 action='auto_match_library', model_name=actual_model, provider=provider,
                 system_prompt=system_prompt, user_prompt=user_prompt,
                 response_text=content,
@@ -2067,7 +2088,7 @@ Keep the translations natural and fluent — these are website UI strings.
                     return int(image_id)
             return None
         except Exception as e:
-            log_ai_call(
+            self._log(
                 action='auto_match_library', model_name=actual_model, provider=provider,
                 system_prompt=system_prompt, user_prompt=user_prompt,
                 duration_ms=int((time.time() - t0) * 1000),
@@ -2146,14 +2167,14 @@ Keep the translations natural and fluent — these are website UI strings.
         try:
             response = self.llm.get_completion(messages, tool_name=model)
             usage = self._extract_usage(response)
-            log_ai_call(
+            self._log(
                 action='analyze_images', model_name=actual_model, provider=provider_str,
                 system_prompt=system_prompt, user_prompt=user_prompt,
                 response_text=response.choices[0].message.content,
                 duration_ms=int((time.time() - t0) * 1000), page=page, **usage,
             )
         except Exception as e:
-            log_ai_call(
+            self._log(
                 action='analyze_images', model_name=actual_model, provider=provider_str,
                 system_prompt=system_prompt, user_prompt=user_prompt,
                 duration_ms=int((time.time() - t0) * 1000), page=page,
@@ -2266,7 +2287,7 @@ Keep the translations natural and fluent — these are website UI strings.
 
                 # Parse response
                 content = response.content if hasattr(response, 'content') else response.choices[0].message.content
-                log_ai_call(
+                self._log(
                     action='describe_image', model_name=actual_model, provider=provider_str,
                     system_prompt='', user_prompt=prompt,
                     response_text=content,
@@ -2459,14 +2480,14 @@ Keep the translations natural and fluent — these are website UI strings.
             response = self.llm.get_completion(messages, tool_name=model, on_stream=stream_cb)
             usage = self._extract_usage(response)
             content = response.choices[0].message.content
-            log_ai_call(
+            self._log(
                 action='consistency_analysis', model_name=actual_model, provider=provider,
                 system_prompt=system_prompt, user_prompt=user_prompt,
                 response_text=content,
                 duration_ms=int((time.time() - t0) * 1000), **usage,
             )
         except Exception as e:
-            log_ai_call(
+            self._log(
                 action='consistency_analysis', model_name=actual_model, provider=provider,
                 system_prompt=system_prompt, user_prompt=user_prompt,
                 duration_ms=int((time.time() - t0) * 1000),
@@ -2565,14 +2586,14 @@ Keep the translations natural and fluent — these are website UI strings.
             response = self.llm.get_completion(messages, tool_name=model, on_stream=stream_cb)
             usage = self._extract_usage(response)
             content = response.choices[0].message.content
-            log_ai_call(
+            self._log(
                 action='consistency_fix', model_name=actual_model, provider=provider,
                 system_prompt=system_prompt, user_prompt=user_prompt,
                 response_text=content,
                 duration_ms=int((time.time() - t0) * 1000), **usage,
             )
         except Exception as e:
-            log_ai_call(
+            self._log(
                 action='consistency_fix', model_name=actual_model, provider=provider,
                 system_prompt=system_prompt, user_prompt=user_prompt,
                 duration_ms=int((time.time() - t0) * 1000),

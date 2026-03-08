@@ -133,16 +133,12 @@ class GlobalSectionService:
 
         # Save the refined HTML
         section = GlobalSection.objects.get(key=key)
-        from djangopress.core.models import SiteSettings
-        settings = SiteSettings.load()
-        default_lang = settings.get_default_language() if settings else 'pt'
-
-        html_i18n = dict(section.html_template_i18n or {})
-        refined_html = ai_result.get('options', [{}])[0].get('html_template', '')
-        if refined_html:
-            html_i18n[default_lang] = refined_html
-            section.html_template_i18n = html_i18n
-            section.save()
+        section.html_template_i18n = ai_result.get('html_template_i18n', section.html_template_i18n or {})
+        if ai_result.get('html_template'):
+            section.html_template = ai_result['html_template']
+        if ai_result.get('content'):
+            section.content = ai_result['content']
+        section.save()
 
         return {
             'success': True,

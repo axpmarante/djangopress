@@ -32,7 +32,7 @@
                         <option value="">New session</option>
                         {% for s in sessions %}
                         <option value="{{ s.id }}" {% if current_session and current_session.id == s.id %}selected{% endif %}>
-                            {{ s.title|truncatechars:50 }}
+                            #{{ s.id }} — {{ s.title|default:"Untitled"|truncatechars:45 }}
                         </option>
                         {% endfor %}
                     </select>
@@ -141,7 +141,7 @@
                     <button onclick="loadSession({{ s.id }})"
                             class="session-btn w-full text-left px-3 py-2 rounded-md text-sm hover:bg-emerald-50 transition-colors {% if current_session and current_session.id == s.id %}bg-emerald-50 text-emerald-700 font-medium{% else %}text-gray-700{% endif %}"
                             data-session-id="{{ s.id }}">
-                        <p class="truncate">{{ s.title|default:"Untitled"|truncatechars:40 }}</p>
+                        <p class="truncate"><span class="text-gray-400 font-mono text-xs">#{{ s.id }}</span> {{ s.title|default:"Untitled"|truncatechars:35 }}</p>
                         <p class="text-xs text-gray-400">{{ s.messages|length }} messages</p>
                     </button>
                     {% empty %}
@@ -520,7 +520,7 @@ function updateSessionSelector(sessionId) {
     if (!found) {
         const opt = document.createElement('option');
         opt.value = sessionId;
-        opt.textContent = `Session #${sessionId}`;
+        opt.textContent = `#${sessionId} — New session`;
         opt.selected = true;
         select.insertBefore(opt, select.options[1]);
     }

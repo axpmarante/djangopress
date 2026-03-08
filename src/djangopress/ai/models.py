@@ -54,6 +54,10 @@ class AICallLog(models.Model):
     error_message = models.TextField(blank=True, default='')
     routing_tier = models.CharField(max_length=20, blank=True, default='')
     routing_ms = models.IntegerField(default=0)
+    assistant_session = models.ForeignKey(
+        'site_assistant.AssistantSession', on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='ai_call_logs',
+    )
 
     class Meta:
         ordering = ['-created_at']
@@ -67,7 +71,7 @@ def log_ai_call(action, model_name, provider, system_prompt='', user_prompt='',
                 response_text='', prompt_tokens=0, completion_tokens=0,
                 total_tokens=0, duration_ms=0, success=True, error_message='',
                 page=None, section_name='', user=None,
-                routing_tier='', routing_ms=0):
+                routing_tier='', routing_ms=0, assistant_session=None):
     """Log an AI API call to the database."""
     try:
         AICallLog.objects.create(
@@ -88,6 +92,7 @@ def log_ai_call(action, model_name, provider, system_prompt='', user_prompt='',
             user=user,
             routing_tier=routing_tier,
             routing_ms=routing_ms,
+            assistant_session=assistant_session,
         )
     except Exception:
         traceback.print_exc()

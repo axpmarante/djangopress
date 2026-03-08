@@ -1649,17 +1649,20 @@ class AICallLogsView(SuperuserRequiredMixin, TemplateView):
         from django.db.models import Sum, Count, Q
 
         context = super().get_context_data(**kwargs)
-        qs = AICallLog.objects.all()
+        qs = AICallLog.objects.select_related('assistant_session').all()
 
         # Filters
         action = self.request.GET.get('action', '')
         model_name = self.request.GET.get('model', '')
+        session_id = self.request.GET.get('session', '')
         status = self.request.GET.get('status', '')
 
         if action:
             qs = qs.filter(action=action)
         if model_name:
             qs = qs.filter(model_name=model_name)
+        if session_id:
+            qs = qs.filter(assistant_session_id=session_id)
         if status == 'error':
             qs = qs.filter(success=False)
         elif status == 'ok':
@@ -1689,6 +1692,7 @@ class AICallLogsView(SuperuserRequiredMixin, TemplateView):
         context['current_action'] = action
         context['current_model'] = model_name
         context['current_status'] = status
+        context['current_session'] = session_id
 
         return context
 

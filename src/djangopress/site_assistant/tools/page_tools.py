@@ -94,7 +94,9 @@ def refine_section(params, context):
     model = get_ai_model('refinement_section')
     ref_images = context.get('reference_images')
     from djangopress.ai.services import ContentGenerationService
-    service = ContentGenerationService(model_name=model)
+    service = ContentGenerationService(
+        model_name=model, assistant_session=context.get('session'),
+    )
     result = service.refine_section_only(
         page_id=page.id, section_name=section_name,
         instructions=instructions, model_override=model,
@@ -126,7 +128,9 @@ def refine_page(params, context):
     model = get_ai_model('refinement_page')
     ref_images = context.get('reference_images')
     from djangopress.ai.services import ContentGenerationService
-    service = ContentGenerationService(model_name=model)
+    service = ContentGenerationService(
+        model_name=model, assistant_session=context.get('session'),
+    )
     result = service.refine_page_with_html(
         page_id=page.id, instructions=instructions,
         model_override=model,
