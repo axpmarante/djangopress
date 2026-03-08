@@ -110,6 +110,7 @@ These files rarely need changes for a new site — everything is DB-driven:
 - `core/` — the CMS engine (models, views, templatetags) — shared across all sites
 - `editor_v2/` — inline editing system — shared
 - `ai/` — AI generation/refinement — shared
+- `site_assistant/` — AI chat assistant — shared
 - `templates/base.html` — master layout — shared
 - `config/urls.py` — URL routing — shared
 
@@ -174,10 +175,11 @@ DjangoPress ships with Claude Code skills (`.claude/skills/`) that automate comm
 
 ```
 config/          → Django settings, root URLs, WSGI/ASGI, storage backends
-core/            → CMS engine: Page, SiteSettings, GlobalSection, SiteImage, PageVersion
+core/            → CMS engine: Page, SiteSettings, GlobalSection, SiteImage, ContentVersion
 backoffice/      → Admin dashboard: page management, settings, media library, AI tools
 editor_v2/       → Inline editor: ES modules, API views, AI chat refinement
 ai/              → LLM integration: generation, refinement, chat, bulk analysis, image processing
+site_assistant/  → AI chat assistant: manage entire site via natural language (superuser)
 news/            → Decoupled blog/news app (optional)
 templates/       → base.html + partials (admin toolbar only)
 static/          → CSS/JS assets
@@ -187,11 +189,12 @@ static/          → CSS/JS assets
 
 | Model | Purpose |
 |-------|---------|
-| `SiteSettings` | Singleton. Branding, contact info, social media (7 platforms), design system (colors, fonts, spacing, buttons), languages, project briefing, design guide, SEO, Open Graph defaults, custom code injection (head/body). Accessed via `SiteSettings.load()`. |
+| `SiteSettings` | Singleton. Branding, contact info, social media (7 platforms), design system (colors, fonts, spacing, buttons), languages, project briefing, design guide, SEO, Open Graph defaults, custom code injection (head/body), `homepage` (FK to Page), `ai_model_config` (JSON for per-task model overrides). Accessed via `SiteSettings.load()`. |
 | `Page` | A website page. `title_i18n` / `slug_i18n` (JSON), `html_content_i18n` (per-language Tailwind HTML: `{"pt": "<html>...", "en": "<html>..."}`). |
 | `GlobalSection` | Site-wide sections (header, footer). `key` (slug), `html_template_i18n` (per-language Django template HTML: `{"pt": "<html>...", "en": "<html>..."}`). |
-| `SiteImage` | Media library. Multi-language titles/alt text (`title_i18n`, `alt_text_i18n`), categories, tags. |
-| `PageVersion` | Page revision history for rollback. Auto-created before AI edits. |
+| `SiteImage` | Media library. Multi-language titles/alt text (`title_i18n`, `alt_text_i18n`), categories, tags. Supports images and file attachments. |
+| `ContentVersion` | Generic revision history for rollback. Uses `content_type` + `object_id` to version any model (Page, NewsPost, etc.). Auto-created before AI edits. |
+| `MenuItem` | Navigation menu items with hierarchy support. `label_i18n` (per-language labels), optional `page` FK or custom `url`, `parent` FK for sub-items. |
 | `DynamicForm` | DB-driven form definitions. `slug` determines submission URL (`/forms/<slug>/submit/`), `fields_schema` (JSON) for validation/labels, i18n success messages, optional confirmation email. A default `contact` form is seeded on migrate. |
 | `FormSubmission` | Form submissions stored as JSON (`data` field). Tracks source page, language, IP, read status. Managed at `/backoffice/forms/`. |
 
@@ -199,7 +202,14 @@ static/          → CSS/JS assets
 
 | Model | Purpose |
 |-------|---------|
-| `RefinementSession` | Chat-based refinement conversation. Stores message history (user + assistant), linked to a Page. |
+| `RefinementSession` | Chat-based refinement conversation. Stores message history (user + assistant). Supports generic FK (`content_type` + `object_id`) for any model, plus backward-compatible `page` FK. |
+| `AICallLog` | Audit log for every LLM API call. Tracks action, model, provider, tokens, duration, prompts, response, success/error, and optional `assistant_session` FK linking to the site assistant session that triggered it. Created via `log_ai_call()` helper. Browseable at `/backoffice/ai/logs/`. |
+
+### Site Assistant Models (site_assistant app)
+
+| Model | Purpose |
+|-------|---------|
+| `AssistantSession` | Chat session for the site assistant. Stores `messages` (JSON list), `active_page` FK, `model_used`, `title` (auto-generated from first message). Sessions are displayed with `#ID` for easy tracking. |
 
 ## How Pages Work
 
@@ -247,6 +257,39 @@ The `editor_v2` app powers the `?edit=v2` (or `?edit=true`) mode for staff users
 - `GET /editor-v2/api/session/<page_id>/` — load chat session history (superuser)
 - `GET /editor-v2/api/versions/<page_id>/` — list page versions (superuser)
 - `GET /editor-v2/api/versions/<page_id>/<version>/` — get specific version (superuser)
+
+## Site Assistant
+
+The `site_assistant` app provides a chat-based interface at `/site-assistant/` (superuser only) for managing the entire site via natural language.
+
+### Architecture
+
+Two-phase executor with native Gemini function calling:
+- **Phase 1 (Router):** `gemini-lite` classifies user intents and determines which tool categories are needed, or returns a direct response for simple questions.
+- **Phase 2 (Executor):** `gemini-flash` runs a native function-calling loop — calls tools, gets results, calls more tools or returns a final text response. Max 8 iterations.
+
+### Key Components
+
+- `site_assistant/models.py` — `AssistantSession` (chat history, active page tracking)
+- `site_assistant/services.py` — `AssistantService` (two-phase router → executor flow)
+- `site_assistant/router.py` — Intent classification via LLM
+- `site_assistant/prompts.py` — System prompts for router and executor
+- `site_assistant/tool_declarations.py` — Gemini function declarations per intent category
+- `site_assistant/tools/` — Tool implementations:
+  - `site_tools.py` — list/create/update/delete pages, menu items, settings, header/footer refinement
+  - `page_tools.py` — element styles, attributes, section operations, AI refinement (delegates to `ContentGenerationService`)
+  - `news_tools.py` — news post CRUD (if news app is installed)
+
+### API Endpoints
+
+- `GET /site-assistant/` — Chat UI
+- `POST /site-assistant/api/chat/` — Send message (supports multipart with reference images)
+- `GET /site-assistant/api/sessions/` — List user's recent sessions
+- `GET /site-assistant/api/sessions/<id>/` — Load full session with messages
+
+### AI Call Tracking
+
+When the site assistant triggers AI operations (e.g., `refine_section`, `refine_page`), the `AssistantSession` is linked to the resulting `AICallLog` entries via `assistant_session` FK. This allows filtering AI logs by session in `/backoffice/ai/logs/`.
 
 ## Design System
 
@@ -321,12 +364,30 @@ No `{{ trans.xxx }}` variables — text is embedded directly in each language's 
 - `/backoffice/forms/<id>/submissions/` → view form submissions
 - `/ai/api/*` → AI API endpoints
 - `/editor-v2/api/*` → inline editor API (staff only)
+- `/site-assistant/` → AI chat assistant (superuser only)
+- `/site-assistant/api/*` → assistant API endpoints
+- `/backoffice/ai/logs/` → AI call logs (browseable, filterable by action/model/session)
 
 ## AI System
 
 ### Available LLM Models
 
-Configured in `ai/utils/llm_config.py`. Supports OpenAI, Anthropic, and Google (Gemini) providers. Default: `gemini-pro`. Models are selected per-request from the backoffice UI.
+Configured in `ai/utils/llm_config.py`. Supports OpenAI, Anthropic, and Google (Gemini) providers. Models are selected per-task with defaults that can be overridden per-site via `SiteSettings.ai_model_config` (JSON field).
+
+**Per-task defaults:**
+| Task | Default Model | Purpose |
+|------|---------------|---------|
+| `generation` | `gemini-pro` | Page HTML generation |
+| `refinement_page` | `gemini-pro` | Full page AI refinement |
+| `refinement_section` | `gemini-flash` | Section/element refinement |
+| `header_footer` | `gemini-flash` | Header/footer refinement |
+| `translation` | `gemini-lite` | HTML translation between languages |
+| `metadata` | `gemini-lite` | Title/slug suggestion |
+| `image_analysis` | `gemini-flash` | Image prompt analysis |
+| `assistant_router` | `gemini-lite` | Site assistant intent classification |
+| `assistant_executor` | `gemini-flash` | Site assistant tool execution |
+
+**Available model keys:** `gpt-5`, `gpt-5-mini`, `claude`, `gemini-pro`, `gemini-flash`, `gemini-lite`
 
 ### AI API Endpoints
 
@@ -412,12 +473,13 @@ Use `/add-app appname` to scaffold automatically, or follow the reference manual
 - `.env` — secrets (never committed)
 
 ### Core CMS
-- `core/models.py` — Page, SiteSettings, GlobalSection, SiteImage, PageVersion, DynamicForm, FormSubmission
+- `core/models.py` — Page, SiteSettings, GlobalSection, SiteImage, ContentVersion, MenuItem, DynamicForm, FormSubmission
 - `core/mixins.py` — `I18nModelMixin`: shared mixin for language-aware field resolution (used by all decoupled apps)
+- `core/services/global_sections.py` — `GlobalSectionService`: get, list, update, AI-refine GlobalSections
 - `core/views.py` — PageView (catches all page URLs), set_language, form_submit
 - `core/email.py` — form notification + confirmation email helpers
-- `core/context_processors.py` — injects THEME, SITE_NAME, LOGO, etc. into all templates
-- `core/templatetags/section_tags.py` — `load_global_section`, `get_translation` filters
+- `core/context_processors.py` — injects THEME, SITE_NAME, LOGO, MENU_ITEMS, etc. into all templates
+- `core/templatetags/section_tags.py` — `load_global_section`, `get_menu_label`, `get_menu_url` filters
 - `templates/base.html` — master layout, loads header/footer GlobalSections
 
 ### News (Reference App for Decoupled Apps)
@@ -437,10 +499,18 @@ Use `/add-app appname` to scaffold automatically, or follow the reference manual
 - `ai/utils/llm_config.py` — `LLMBase`: unified LLM client (OpenAI, Anthropic, Google), image generation, `optimize_generated_image()`
 - `ai/utils/unsplash.py` — Unsplash API client: `search_photos()`, `download_photo()`, `is_configured()`
 - `ai/views.py` — all AI API endpoints
-- `ai/models.py` — `RefinementSession`
+- `ai/models.py` — `RefinementSession`, `AICallLog`, `log_ai_call()`
+
+### Site Assistant
+- `site_assistant/models.py` — `AssistantSession`
+- `site_assistant/services.py` — `AssistantService` (two-phase router → executor)
+- `site_assistant/router.py` — Intent classification
+- `site_assistant/prompts.py` — System prompts for router and executor
+- `site_assistant/tools/site_tools.py` — Page/menu/settings/header/footer tools
+- `site_assistant/tools/page_tools.py` — Element editing, AI refinement tools
 
 ### Backoffice
-- `backoffice/views.py` — dashboard, page editor, process images, settings, AI tools views
+- `backoffice/views.py` — dashboard, page editor, process images, settings, AI tools, AI call logs views
 - `backoffice/api_views.py` — settings API, media library API, page content API
 - `backoffice/templates/backoffice/` — all admin templates
 
@@ -520,7 +590,7 @@ python manage.py push_data https://my-site.railway.app             # Push local 
 python manage.py push_data https://my-site.railway.app --dry-run   # Preview without sending
 python manage.py pull_data https://my-site.railway.app             # Pull remote DB to local
 python manage.py pull_data https://my-site.railway.app --dry-run   # Preview without loading
-python manage.py bump_version                              # Show current version
+python manage.py bump_version                              # Show current version (from src/djangopress/VERSION)
 python manage.py bump_version patch                        # 1.0.0 → 1.0.1 (bug fix)
 python manage.py bump_version minor                        # 1.0.1 → 1.1.0 (new feature)
 python manage.py bump_version major                        # 1.1.0 → 2.0.0 (breaking change)
