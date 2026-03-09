@@ -114,11 +114,10 @@ Skills are symlinked from the djangopress package to `.claude/skills/` in each c
 
 | Skill | Usage | What It Does |
 |-------|-------|-------------|
-| `/new-site` | `/new-site my-project` | Interactive setup wizard. Walks through `.env`, dependencies, migrations, SiteSettings. |
-| `/create-briefing` | `/create-briefing O Moinho` | Researches client online, writes a briefing markdown file for `/generate-site`. |
-| `/generate-site` | `/generate-site briefings/my-site.md` | Full site generation from briefing — pages, header/footer, menu, images. |
+| `/create-briefing` | `/create-briefing O Moinho` | Researches client online, writes a briefing markdown file. |
+| `/generate-site` | `/generate-site briefings/my-site.md` | Full setup + generation — env, settings, pages, header/footer, menu, images. Handles fresh and existing projects. |
 | `/add-app` | `/add-app properties` | Scaffolds a decoupled feature app (models, views, templates, URLs). |
-| `/deploy-site` | `/deploy-site my-project` | Deploy to Railway with Postgres, env vars, data migration. |
+| `/deploy-site-railway` | `/deploy-site-railway my-project` | Deploy to Railway with Postgres, env vars, data migration. |
 | `/sync-data` | `/sync-data push` | Push/pull DB content between local and Railway. |
 | `/migrate-sites` | `/migrate-sites` | Batch migration tracker for existing client sites. |
 
@@ -127,12 +126,11 @@ The `djangopress-architecture` skill is auto-loaded when Claude needs deep archi
 ### Typical New Site Flow
 
 ```
-# Option A: Full interactive flow
+# Full flow
 1. /create-briefing My Client     ← researches client, writes briefing
-2. /new-site my-project           ← configures env, deps, SiteSettings
-3. /generate-site briefings/my-client.md  ← generates everything
-4. /add-app blog                  ← if extra features needed
-5. /deploy-site my-client         ← deploy to Railway
+2. /generate-site briefings/my-client.md  ← sets up project + generates everything
+3. /add-app blog                  ← if extra features needed
+4. /deploy-site-railway my-client ← deploy to Railway
 
 # After making local changes to a deployed site:
 /sync-data push                   ← push local DB to Railway

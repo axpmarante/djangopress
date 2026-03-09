@@ -1,5 +1,5 @@
 ---
-name: deploy-site
+name: deploy-site-railway
 description: Deploy a DjangoPress site to Railway with Postgres, data migration, and environment setup.
 argument-hint: [project-name]
 allowed-tools: Bash, Read, Write, Edit, Grep, Glob, AskUserQuestion

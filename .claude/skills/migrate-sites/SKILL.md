@@ -231,7 +231,7 @@ Ask the user what app type is needed for each before scaffolding it.
 
 1. **Navigate to the project** and use the deploy skill:
 ```
-/deploy-site <project-name>
+/deploy-site-railway <project-name>
 ```
 
 2. **After deployment**, verify:

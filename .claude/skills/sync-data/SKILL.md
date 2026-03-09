@@ -31,7 +31,7 @@ pwd
 railway status
 ```
 
-- Must be linked to a Railway project. If not, tell the user to run `/deploy-site` first.
+- Must be linked to a Railway project. If not, tell the user to run `/deploy-site-railway` first.
 - If `railway` command fails, tell user to install: `npm install -g @railway/cli && railway login`
 
 ### Determine target URL

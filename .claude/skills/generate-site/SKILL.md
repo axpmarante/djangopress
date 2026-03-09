@@ -1,49 +1,47 @@
 ---
 name: generate-site
-description: Generate a full DjangoPress site from a markdown briefing — pages, header, footer, images, menu items.
+description: Set up a new DjangoPress site and/or generate a full site from a markdown briefing — environment, settings, pages, header, footer, images, menu items. Handles fresh projects and existing ones.
 argument-hint: [briefing-file.md]
 allowed-tools: Bash, Read, Write, Edit, Grep, Glob, AskUserQuestion
 ---
 
-# Full Site Generation from Briefing
+# DjangoPress Site Setup & Generation
 
-You are generating a complete DjangoPress site from a markdown briefing document. The briefing file path is: `$ARGUMENTS`
+You are setting up and/or generating a complete DjangoPress site. The briefing file path (if provided) is: `$ARGUMENTS`
 
-If no argument was provided, ask the user for the path to their briefing file. If no briefing file exists yet, offer to create one from the template at `briefings/TEMPLATE.md`.
+If no argument was provided, check if the project already has content. If it's a fresh project, ask the user for the path to their briefing file or offer to create one from the template at `briefings/TEMPLATE.md`.
 
 ## Overview
 
-You will orchestrate the full pipeline:
-1. Parse the briefing to understand the business and requirements
-2. Check if the project needs setup (fresh clone vs existing)
-3. Configure SiteSettings with all business details + design system
-4. Generate pages one by one, reviewing quality after each
-5. Create menu items linking to all pages
-6. Generate header and footer
-7. Process images on all pages
-8. Final review and summary
+You will orchestrate the full pipeline, skipping steps that are already done:
+1. **Setup** — verify project structure, .env, dependencies, Claude Code integration
+2. **Briefing** — parse the briefing to understand the business
+3. **Settings** — configure SiteSettings with business details + design system
+4. **Pages** — generate pages one by one, reviewing quality after each
+5. **Menu** — create menu items linking to all pages
+6. **Header & Footer** — generate with AI
+7. **Images** — process image placeholders on all pages
+8. **Review** — final verification and summary
 
 **Your advantage as Claude Code:** You can read the briefing, understand the business context, choose appropriate design values, review generated HTML for quality, and fix issues — things a non-interactive script cannot do.
 
-## Phase 1: Read and Understand the Briefing
+---
 
-Read the briefing file and extract:
-- Business name, description, tone
-- Languages (default + additional)
-- Contact info and social media
-- Pages to generate (with descriptions)
-- Header/footer instructions
-- Design preferences
-- Image strategy
-- Domain identifier
+## Phase 1: Project Setup
 
-Summarize what you understood and confirm with the user before proceeding.
-
-## Phase 2: Project Setup Check
-
-Check if the project is ready:
+### 1a. Check project status
 
 ```bash
+# Check for .env
+test -f .env && echo "ENV: EXISTS" || echo "ENV: MISSING"
+
+# Check if djangopress is installed
+pip show djangopress 2>/dev/null | head -3 || echo "NOT INSTALLED"
+
+# Check if migrations have been run
+test -f db.sqlite3 && echo "DB: EXISTS" || echo "DB: NO DB"
+
+# Check existing content
 python manage.py shell -c "
 from core.models import SiteSettings, Page
 s = SiteSettings.objects.first()
@@ -55,16 +53,60 @@ if s:
     print(f'Briefing: {\"SET\" if s.project_briefing else \"EMPTY\"}')
 else:
     print('NO_SETTINGS')
-"
+" 2>/dev/null || echo "DJANGO NOT READY"
 ```
 
-- If `NO_SETTINGS`: this is a fresh project. Proceed to configure everything.
-- If settings exist with pages: **warn the user** that existing content may conflict. Ask if they want to continue (will add new pages alongside existing ones).
+- If djangopress is not installed → tell user to run `pip install -r requirements.txt`
+- If settings exist with pages → **warn the user** that existing content may conflict. Ask if they want to continue.
+- If everything is set up with content → skip to whichever phase is needed.
 
-### Check GCS Storage
+### 1b. Set up Claude Code integration
 
-**IMPORTANT:** Verify that Google Cloud Storage is configured so images are stored in GCS from the start. This prevents deployment issues (Railway's filesystem is ephemeral — local media files won't survive).
+If `.claude/skills` doesn't exist or isn't a symlink:
 
+```bash
+# Find the djangopress package location
+DJANGOPRESS_PATH=$(python -c "import djangopress; import os; print(os.path.dirname(os.path.dirname(djangopress.__path__[0])))")
+
+# Symlink .claude/skills to the package's skills
+mkdir -p .claude
+ln -sfn "$DJANGOPRESS_PATH/.claude/skills" .claude/skills
+
+# Generate CLAUDE.md from the child project template if it doesn't exist
+if [ ! -f CLAUDE.md ]; then
+    PROJECT_NAME=$(basename $(pwd))
+    sed "s/{{PROJECT_NAME}}/$PROJECT_NAME/g" "$DJANGOPRESS_PATH/.claude/child-claude-md-template.md" > CLAUDE.md
+    echo "Generated CLAUDE.md for $PROJECT_NAME"
+fi
+```
+
+### 1c. Environment configuration
+
+If `.env` doesn't exist:
+
+1. Copy the example: `cp .env.example .env`
+2. Generate a unique SECRET_KEY:
+   ```bash
+   python -c "from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())"
+   ```
+3. Ask the user which AI providers they have keys for (Gemini, OpenAI, Anthropic)
+4. Ask if they have an existing DjangoPress project to copy keys from
+5. Write the `.env` file with the provided values
+
+### 1d. GCS Storage Setup (Recommended)
+
+**IMPORTANT:** Configure Google Cloud Storage now so that images generated during content creation are stored in GCS from the start. This avoids needing to manually upload local media files when deploying to Railway (where the filesystem is ephemeral).
+
+If the user has an existing DjangoPress project with GCS configured:
+
+```bash
+# Copy GCS config from existing project
+grep "^GS_BUCKET_NAME=" ../djangopress/.env >> .env
+grep "^GS_PROJECT_ID=" ../djangopress/.env >> .env
+grep "^GCS_CREDENTIALS_JSON=" ../djangopress/.env >> .env
+```
+
+Verify GCS is working:
 ```python
 python manage.py shell -c "
 from django.core.files.storage import default_storage
@@ -88,8 +130,50 @@ else:
 ```
 
 If GCS is not configured, use `AskUserQuestion` to ask the user:
-- **"Set up GCS now"** — ask for credentials or copy from an existing project (e.g. `grep "^GS_" ../djangopress/.env >> .env && grep "^GCS_" ../djangopress/.env >> .env`), then restart the Django process
+- **"Set up GCS now"** — ask for credentials or copy from an existing project
 - **"Continue without GCS"** — images will be stored locally; the deploy skill will handle uploading them later
+
+### 1e. Install dependencies & migrate
+
+If not already done:
+
+```bash
+python -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt    # requirements.txt points to djangopress package
+python manage.py migrate
+```
+
+Ask if they want to create a superuser now: `python manage.py createsuperuser`
+
+**IMPORTANT:** Never commit `.env` to git. It's already in `.gitignore`.
+
+---
+
+## Phase 2: Read and Understand the Briefing
+
+Read the briefing file and extract:
+- Business name, description, tone
+- Languages (default + additional)
+- Contact info and social media
+- Pages to generate (with descriptions)
+- Header/footer instructions
+- Design preferences
+- Image strategy
+- Domain identifier
+
+Summarize what you understood and confirm with the user before proceeding.
+
+If no briefing file exists, gather project details interactively:
+1. **Project/Business name** — e.g. "Prestige Real Estate Algarve"
+2. **Languages needed** — e.g. Portuguese + English (ask for default language)
+3. **Domain identifier** — e.g. `prestige-realestate-pt` (used as GCS folder name)
+4. **Business description** — 2-3 sentences about what the business does, target audience, tone
+5. **Contact info** — email, phone, address
+6. **Social media URLs** — any of: Facebook, Instagram, LinkedIn, Twitter/X, YouTube, TikTok, Pinterest, WhatsApp
+7. **Pages to generate** — list of pages with descriptions
+
+---
 
 ## Phase 3: Configure SiteSettings
 
@@ -107,9 +191,64 @@ print('Settings configured!')
 
 This sets domain, languages, site name, description, project briefing, contact info, social media, AND the full design system (colors, fonts, heading sizes, layout, buttons) — all from the briefing.
 
+If no briefing file exists (interactive mode), configure via Django shell directly:
+
+```python
+python manage.py shell -c "
+from core.models import SiteSettings
+settings, _ = SiteSettings.objects.get_or_create(pk=1)
+
+# Domain — SET THIS FIRST before any media uploads
+settings.domain = '<domain-identifier>'
+
+# Languages
+settings.enabled_languages = [
+    {'code': '<default>', 'name': '<Default Language>'},
+    {'code': '<other>', 'name': '<Other Language>'},
+]
+settings.default_language = '<default>'
+
+# Site name (same in all languages — it's a brand name)
+settings.site_name_i18n = {'<lang1>': '<Site Name>', '<lang2>': '<Site Name>'}
+
+# Site description (translated)
+settings.site_description_i18n = {
+    '<lang1>': '<Description in lang1>',
+    '<lang2>': '<Description in lang2>',
+}
+
+# Project briefing (critical for AI generation)
+settings.project_briefing = '''<business description>'''
+
+# Contact info
+settings.contact_email = '<email>'
+settings.contact_phone = '<phone>'
+settings.contact_address_i18n = {
+    '<lang1>': '<address>',
+    '<lang2>': '<address>',
+}
+
+# Social media (set whichever apply)
+settings.facebook_url = '<url>'
+settings.instagram_url = '<url>'
+settings.linkedin_url = '<url>'
+settings.youtube_url = '<url>'
+settings.twitter_url = '<url>'
+settings.whatsapp_number = '<+351...>'
+settings.tiktok_url = '<url>'
+settings.pinterest_url = '<url>'
+
+settings.save()
+print('SiteSettings configured successfully!')
+print(f'Domain: {settings.domain}')
+print(f'Languages: {settings.get_language_codes()}')
+print(f'Default: {settings.get_default_language()}')
+"
+```
+
 ### Verify domain is set (critical for GCS)
 
-After configuring settings, verify the domain was set correctly. The `DomainBasedStorage` backend uses `SiteSettings.domain` as the GCS folder name — if it's empty, files go to `default/` and will be lost or misplaced.
+After configuring settings, verify the domain was set correctly:
 
 ```python
 python manage.py shell -c "
@@ -117,18 +256,6 @@ from core.models import SiteSettings
 s = SiteSettings.objects.first()
 print(f'Domain: {s.domain}')
 assert s.domain, 'ERROR: domain is not set! Set it before generating any images.'
-"
-```
-
-If the domain is not set, set it manually before proceeding to page generation:
-
-```python
-python manage.py shell -c "
-from core.models import SiteSettings
-s = SiteSettings.objects.first()
-s.domain = '<project-name>'
-s.save()
-print(f'Domain set to: {s.domain}')
 "
 ```
 
@@ -144,6 +271,8 @@ s.save()
 print('Updated')
 "
 ```
+
+---
 
 ## Phase 4: Generate Pages
 
@@ -202,7 +331,7 @@ print(f'Languages: {list(result.get(\"html_content_i18n\", {}).keys())}')
 
 After each page, read its HTML and check:
 1. All `<section>` tags have `data-section="name"` and `id="name"` attributes
-2. All text is real text embedded directly in the HTML (no {{ trans.xxx }} variables)
+2. All text is real text embedded directly in the HTML
 3. The section structure matches what was requested
 4. No empty sections or broken HTML
 5. Image placeholders use `data-image-prompt` and `data-image-name`
@@ -268,6 +397,8 @@ print(f'Design guide saved ({len(guide)} chars)')
 "
 ```
 
+---
+
 ## Phase 5: Create Menu Items
 
 After all pages are generated:
@@ -293,6 +424,8 @@ for i, page in enumerate(pages):
 print(f'Created {pages.count()} menu items')
 "
 ```
+
+---
 
 ## Phase 6: Generate Header
 
@@ -326,6 +459,8 @@ print(f'Header generated ({sum(len(v) for v in section.html_template_i18n.values
 "
 ```
 
+---
+
 ## Phase 7: Generate Footer
 
 Same pattern as header:
@@ -356,6 +491,8 @@ section.save()
 print(f'Footer generated ({sum(len(v) for v in section.html_template_i18n.values())} chars)')
 "
 ```
+
+---
 
 ## Phase 8: Process Images
 
@@ -413,6 +550,8 @@ Repeat for each page. Adjust `action` based on the briefing's image strategy pre
 
 **Note:** Image processing is the slowest step (AI generation takes ~30s per image). If the site has many images, consider using `--skip-images` in the management command and processing images later via the backoffice UI, which gives more control.
 
+---
+
 ## Phase 9: Final Review
 
 Verify the contact form exists:
@@ -435,7 +574,14 @@ Report to the user:
 - Header and footer status
 - Number of images processed
 - Any errors that occurred
-- Suggest next steps (upload logos, refine pages via chat, process remaining images)
+- Suggest next steps:
+  1. Visit `/backoffice/settings/` to upload logos and configure the design system
+  2. **Upload logos AFTER the domain is set** (already set from Phase 3)
+  3. Configure SEO & Code settings at `/backoffice/settings/seo/`
+  4. Refine pages via the inline editor (`?edit=v2`) or chat refinement
+  5. The project briefing is the most important field for AI quality
+
+---
 
 ## Error Handling
 
@@ -461,3 +607,10 @@ python manage.py generate_site briefings/my-site.md --skip-images
 # With Unsplash photos
 python manage.py generate_site briefings/my-site.md --image-strategy unsplash_preferred
 ```
+
+## Important Reminders
+
+- **The CMS engine lives in the `djangopress` pip package** — no engine files in the project directory
+- **Domain must be set before uploading media** when using GCS
+- **Home page slug must be `home` in ALL languages**
+- To update DjangoPress: `pip install --upgrade djangopress && python manage.py migrate`
