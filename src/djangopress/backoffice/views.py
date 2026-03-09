@@ -1289,11 +1289,15 @@ class ConsistencyReportDetailView(SuperuserRequiredMixin, TemplateView):
     template_name = 'backoffice/consistency_report_detail.html'
 
     def get_context_data(self, **kwargs):
+        import json
         from djangopress.ai.models import DesignConsistencyReport
         from django.shortcuts import get_object_or_404
         context = super().get_context_data(**kwargs)
         report = get_object_or_404(DesignConsistencyReport, pk=kwargs['pk'])
         context['report'] = report
+        context['report_data_json'] = json.dumps(report.report_data)
+        context['summary_json'] = json.dumps(report.summary)
+        context['issue_statuses_json'] = json.dumps(report.issue_statuses)
         return context
 
 

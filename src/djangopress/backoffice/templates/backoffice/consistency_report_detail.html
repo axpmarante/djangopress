@@ -135,9 +135,9 @@
 
 <script src="{% static 'backoffice/js/sse-client.js' %}"></script>
 <script>
-const reportData = {{ report.report_data|safe }};
-const reportSummary = {{ report.summary|safe }};
-const issueStatuses = {{ report.issue_statuses|safe }};
+const reportData = {{ report_data_json|safe }};
+const reportSummary = {{ summary_json|safe }};
+const issueStatuses = {{ issue_statuses_json|safe }};
 const reportPk = {{ report.pk }};
 
 const SEVERITY_COLORS = {
