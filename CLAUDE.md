@@ -117,6 +117,7 @@ Skills are symlinked from the djangopress package to `.claude/skills/` in each c
 | `/create-briefing` | `/create-briefing O Moinho` | Researches client online, writes a briefing markdown file. |
 | `/generate-site` | `/generate-site briefings/my-site.md` | Full setup + generation — env, settings, pages, header/footer, menu, images. Handles fresh and existing projects. |
 | `/add-app` | `/add-app properties` | Scaffolds a decoupled feature app (models, views, templates, URLs). |
+| `/update-site` | `/update-site` | Update site content — pages, sections, elements, images, settings, header/footer, menu, forms. Auto-loaded for content changes. |
 | `/update-djangopress` | `/update-djangopress` | Update to latest djangopress version — pip upgrade, migrations, skill refresh, optional Railway redeploy. |
 | `/deploy-site-railway` | `/deploy-site-railway my-project` | Deploy to Railway with Postgres, env vars, data migration. |
 | `/sync-data` | `/sync-data push` | Push/pull DB content between local and Railway. |
