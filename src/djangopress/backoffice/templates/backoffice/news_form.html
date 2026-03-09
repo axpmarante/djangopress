@@ -1,4 +1,5 @@
 {% extends 'backoffice/base.html' %}
+{% load static %}
 
 {% block title %}{{ form_title }}{% endblock %}
 
@@ -16,7 +17,7 @@
     </div>
 
     <div class="bg-white rounded-lg shadow p-6">
-        <form method="post" enctype="multipart/form-data" class="space-y-6">
+        <form id="news-form" method="post" enctype="multipart/form-data" class="space-y-6">
             {% csrf_token %}
 
             {% if form.non_field_errors %}
@@ -25,40 +26,93 @@
             </div>
             {% endif %}
 
-            <!-- Title (i18n) -->
-            <div>
-                <label for="{{ form.title_i18n.id_for_label }}" class="block text-sm font-medium text-gray-700 mb-2">
-                    Title (All Languages) *
-                </label>
-                <textarea name="title_i18n" id="{{ form.title_i18n.id_for_label }}"
-                          rows="2"
-                          class="w-full px-4 py-3 border border-gray-300 rounded-md font-mono text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                          placeholder='{"pt": "Titulo", "en": "Title"}'>{{ form.title_i18n.value|default_if_none:"" }}</textarea>
-                {% if form.title_i18n.errors %}
-                    <p class="mt-1 text-sm text-red-600">{{ form.title_i18n.errors.0 }}</p>
-                {% endif %}
+            <!-- Language Tabs -->
+            <div class="border-b border-gray-200">
+                <nav class="flex space-x-4" id="lang-tabs">
+                    {% for code, name in languages %}
+                    <button type="button"
+                            class="lang-tab px-4 py-2 text-sm font-medium transition-colors {% if code == default_language %}border-b-2 border-blue-500 text-blue-600{% else %}text-gray-500 hover:text-gray-700{% endif %}"
+                            data-lang="{{ code }}"
+                            onclick="switchLanguageTab('{{ code }}')">
+                        {{ name }}
+                    </button>
+                    {% endfor %}
+                </nav>
             </div>
 
-            <!-- Slug (i18n) -->
-            <div>
-                <label for="{{ form.slug_i18n.id_for_label }}" class="block text-sm font-medium text-gray-700 mb-2">
-                    Slug (All Languages)
-                </label>
-                <textarea name="slug_i18n" id="{{ form.slug_i18n.id_for_label }}"
-                          rows="2"
-                          class="w-full px-4 py-3 border border-gray-300 rounded-md font-mono text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                          placeholder='{"pt": "meu-artigo", "en": "my-article"}'>{{ form.slug_i18n.value|default_if_none:"" }}</textarea>
-                <p class="mt-1 text-xs text-gray-500">{{ form.slug_i18n.help_text }}</p>
-                {% if form.slug_i18n.errors %}
-                    <p class="mt-1 text-sm text-red-600">{{ form.slug_i18n.errors.0 }}</p>
-                {% endif %}
-            </div>
+            <!-- Hidden JSON fields (populated on submit by JS) -->
+            <input type="hidden" name="title_i18n" id="title_i18n_json">
+            <input type="hidden" name="slug_i18n" id="slug_i18n_json">
+            <input type="hidden" name="excerpt_i18n" id="excerpt_i18n_json">
+            <input type="hidden" name="html_content_i18n" id="html_content_i18n_json">
+            <input type="hidden" name="meta_description_i18n" id="meta_description_i18n_json">
 
-            <!-- Category -->
+            <!-- Initial values for JS to parse (safe JSON encoding) -->
+            {{ form.title_i18n.value|default_if_none:"{}"|json_script:"title_i18n_initial" }}
+            {{ form.slug_i18n.value|default_if_none:"{}"|json_script:"slug_i18n_initial" }}
+            {{ form.excerpt_i18n.value|default_if_none:"{}"|json_script:"excerpt_i18n_initial" }}
+            {{ form.html_content_i18n.value|default_if_none:"{}"|json_script:"html_content_i18n_initial" }}
+            {{ form.meta_description_i18n.value|default_if_none:"{}"|json_script:"meta_description_i18n_initial" }}
+
+            <!-- Per-language panels -->
+            {% for code, name in languages %}
+            <div class="lang-panel space-y-6 {% if code != default_language %}hidden{% endif %}" data-lang="{{ code }}">
+                <!-- Title -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Title ({{ name }}) *</label>
+                    <input type="text" class="i18n-field w-full px-4 py-3 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                           data-field="title_i18n" data-lang="{{ code }}" placeholder="Title in {{ name }}">
+                    {% if code == default_language and form.title_i18n.errors %}
+                        <p class="mt-1 text-sm text-red-600">{{ form.title_i18n.errors.0 }}</p>
+                    {% endif %}
+                </div>
+
+                <!-- Slug -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Slug ({{ name }})</label>
+                    <input type="text" class="i18n-field w-full px-4 py-3 border border-gray-300 rounded-md font-mono text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                           data-field="slug_i18n" data-lang="{{ code }}" placeholder="url-slug-in-{{ code }}">
+                    <p class="mt-1 text-xs text-gray-500">Leave empty to auto-generate from title</p>
+                    {% if code == default_language and form.slug_i18n.errors %}
+                        <p class="mt-1 text-sm text-red-600">{{ form.slug_i18n.errors.0 }}</p>
+                    {% endif %}
+                </div>
+
+                <!-- Excerpt -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Excerpt ({{ name }})</label>
+                    <textarea class="i18n-field w-full px-4 py-3 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                              data-field="excerpt_i18n" data-lang="{{ code }}" rows="3" placeholder="Short summary in {{ name }}"></textarea>
+                    {% if code == default_language and form.excerpt_i18n.errors %}
+                        <p class="mt-1 text-sm text-red-600">{{ form.excerpt_i18n.errors.0 }}</p>
+                    {% endif %}
+                </div>
+
+                <!-- HTML Content -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">HTML Content ({{ name }})</label>
+                    <textarea class="i18n-field w-full px-4 py-3 border border-gray-300 rounded-md font-mono text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                              data-field="html_content_i18n" data-lang="{{ code }}" rows="15" placeholder="<p>Content in {{ name }}...</p>"></textarea>
+                    {% if code == default_language and form.html_content_i18n.errors %}
+                        <p class="mt-1 text-sm text-red-600">{{ form.html_content_i18n.errors.0 }}</p>
+                    {% endif %}
+                </div>
+
+                <!-- Meta Description -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Meta Description ({{ name }})</label>
+                    <textarea class="i18n-field w-full px-4 py-3 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                              data-field="meta_description_i18n" data-lang="{{ code }}" rows="2" placeholder="SEO description in {{ name }}"></textarea>
+                    {% if code == default_language and form.meta_description_i18n.errors %}
+                        <p class="mt-1 text-sm text-red-600">{{ form.meta_description_i18n.errors.0 }}</p>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+
+            <!-- Category (always visible) -->
             <div>
-                <label for="{{ form.category.id_for_label }}" class="block text-sm font-medium text-gray-700 mb-2">
-                    Category
-                </label>
+                <label for="{{ form.category.id_for_label }}" class="block text-sm font-medium text-gray-700 mb-2">Category</label>
                 <select name="category" id="{{ form.category.id_for_label }}"
                         class="w-full px-4 py-3 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent">
                     <option value="">---------</option>
@@ -71,73 +125,45 @@
                 {% endif %}
             </div>
 
-            <!-- Featured Image -->
+            <!-- Featured Image (modal-based) -->
             <div>
-                <label for="{{ form.featured_image.id_for_label }}" class="block text-sm font-medium text-gray-700 mb-2">
-                    Featured Image
-                </label>
-
-                {% if object and object.featured_image %}
-                <div class="mb-4">
-                    <p class="text-sm text-gray-600 mb-2">Current image:</p>
-                    <img src="{{ object.featured_image.url }}" alt="{{ object }}" class="w-64 h-40 object-cover rounded-lg shadow-md">
+                <label class="block text-sm font-medium text-gray-700 mb-2">Featured Image</label>
+                <!-- Hidden select for form submission -->
+                <select name="featured_image" class="hidden" id="id_featured_image">
+                    <option value="">---------</option>
+                    {% for image in form.featured_image.field.queryset %}
+                    <option value="{{ image.pk }}" {% if form.featured_image.value|stringformat:"s" == image.pk|stringformat:"s" %}selected{% endif %}>{{ image }}</option>
+                    {% endfor %}
+                </select>
+                <!-- Visual display -->
+                <div id="featured-image-display">
+                    <!-- JS populates on load -->
                 </div>
-                {% endif %}
-
-                {{ form.featured_image }}
-                <p class="mt-1 text-xs text-gray-500">Select an image from the media library</p>
+                <div class="mt-3 flex space-x-3">
+                    <button type="button" onclick="openFeaturedImageModal()" class="px-4 py-2 text-sm font-medium text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors">
+                        Select from Library
+                    </button>
+                    <button type="button" onclick="openFeaturedUploadModal()" class="px-4 py-2 text-sm font-medium text-gray-600 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                        Upload New
+                    </button>
+                </div>
                 {% if form.featured_image.errors %}
                     <p class="mt-1 text-sm text-red-600">{{ form.featured_image.errors.0 }}</p>
-                {% endif %}
-            </div>
-
-            <!-- Excerpt (i18n) -->
-            <div>
-                <label for="{{ form.excerpt_i18n.id_for_label }}" class="block text-sm font-medium text-gray-700 mb-2">
-                    Excerpt (All Languages)
-                </label>
-                <textarea name="excerpt_i18n" id="{{ form.excerpt_i18n.id_for_label }}"
-                          rows="3"
-                          class="w-full px-4 py-3 border border-gray-300 rounded-md font-mono text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                          placeholder='{"pt": "Resumo...", "en": "Summary..."}'>{{ form.excerpt_i18n.value|default_if_none:"" }}</textarea>
-                <p class="mt-1 text-xs text-gray-500">{{ form.excerpt_i18n.help_text }}</p>
-                {% if form.excerpt_i18n.errors %}
-                    <p class="mt-1 text-sm text-red-600">{{ form.excerpt_i18n.errors.0 }}</p>
-                {% endif %}
-            </div>
-
-            <!-- HTML Content (i18n) -->
-            <div>
-                <label for="{{ form.html_content_i18n.id_for_label }}" class="block text-sm font-medium text-gray-700 mb-2">
-                    HTML Content (All Languages)
-                </label>
-                <textarea name="html_content_i18n" id="{{ form.html_content_i18n.id_for_label }}"
-                          rows="15"
-                          class="w-full px-4 py-3 border border-gray-300 rounded-md font-mono text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                          placeholder='{"pt": "<p>Conteudo...</p>", "en": "<p>Content...</p>"}'>{{ form.html_content_i18n.value|default_if_none:"" }}</textarea>
-                {% if form.html_content_i18n.errors %}
-                    <p class="mt-1 text-sm text-red-600">{{ form.html_content_i18n.errors.0 }}</p>
                 {% endif %}
             </div>
 
             <!-- Publication Settings -->
             <div class="border-t pt-6">
                 <h3 class="text-lg font-semibold text-gray-900 mb-4">Publication Settings</h3>
-
                 <div class="space-y-4">
-                    <!-- Is Published -->
                     <div class="flex items-center">
                         {{ form.is_published }}
                         <label for="{{ form.is_published.id_for_label }}" class="ml-2 block text-sm text-gray-700">
                             {{ form.is_published.help_text }}
                         </label>
                     </div>
-
-                    <!-- Published Date -->
                     <div>
-                        <label for="{{ form.published_date.id_for_label }}" class="block text-sm font-medium text-gray-700 mb-2">
-                            Published Date
-                        </label>
+                        <label for="{{ form.published_date.id_for_label }}" class="block text-sm font-medium text-gray-700 mb-2">Published Date</label>
                         {{ form.published_date }}
                         <p class="mt-1 text-xs text-gray-500">{{ form.published_date.help_text }}</p>
                         {% if form.published_date.errors %}
@@ -147,120 +173,132 @@
                 </div>
             </div>
 
-            <!-- Gallery Images -->
+            <!-- Gallery Images (modal-based) -->
             <div class="border-t pt-6">
                 <h3 class="text-lg font-semibold text-gray-900 mb-4">Gallery Images</h3>
-                <p class="text-sm text-gray-600 mb-4">Select images from your media library to include in this post's gallery</p>
+                <p class="text-sm text-gray-600 mb-4">Select images from your media library</p>
 
-                <!-- Hidden checkbox inputs -->
-                <div class="hidden">
-                    {{ form.gallery_images }}
-                </div>
-
-                <!-- Visual Image Grid -->
-                <div id="gallery-selector" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                <!-- Hidden checkboxes -->
+                <div id="gallery-checkboxes-container" class="hidden">
                     {% for image in form.gallery_images.field.queryset %}
-                    <div class="gallery-item relative cursor-pointer group" data-image-id="{{ image.id }}">
-                        <input type="checkbox"
-                               name="gallery_images"
-                               value="{{ image.id }}"
-                               id="gallery_{{ image.id }}"
-                               class="hidden gallery-checkbox"
-                               {% if image in form.gallery_images.initial %}checked{% endif %}>
-                        <label for="gallery_{{ image.id }}" class="block cursor-pointer">
-                            <div class="aspect-square relative rounded-lg overflow-hidden border-2 transition-all gallery-border">
-                                <img src="{{ image.image.url }}"
-                                     alt="{{ image.alt_text }}"
-                                     class="w-full h-full object-cover">
-                                <!-- Overlay -->
-                                <div class="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-40 transition-opacity flex items-center justify-center">
-                                    <!-- Checkmark icon -->
-                                    <div class="gallery-checkmark hidden">
-                                        <svg class="w-12 h-12 text-white" fill="currentColor" viewBox="0 0 20 20">
-                                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
-                                        </svg>
-                                    </div>
-                                </div>
-                            </div>
-                            <p class="text-xs text-gray-600 mt-1 truncate text-center" title="{{ image.title }}">{{ image.title }}</p>
-                        </label>
-                    </div>
-                    {% empty %}
-                    <div class="col-span-full text-center py-8 text-gray-500">
-                        <p>No images available. Please upload images to your media library first.</p>
-                    </div>
+                    <input type="checkbox" name="gallery_images" value="{{ image.id }}"
+                           {% if image in form.gallery_images.initial %}checked{% endif %}>
                     {% endfor %}
                 </div>
 
-                <p class="mt-4 text-xs text-gray-500">
-                    <strong>Tip:</strong> You can also manage the gallery after saving by clicking the "Gallery" link from the news list.
-                </p>
-            </div>
+                <!-- Visual display -->
+                <div id="selected-gallery-display">
+                    <!-- JS populates on load -->
+                </div>
 
-            <!-- SEO Settings -->
-            <div class="border-t pt-6">
-                <h3 class="text-lg font-semibold text-gray-900 mb-4">SEO Settings</h3>
-
-                <div>
-                    <label for="{{ form.meta_description_i18n.id_for_label }}" class="block text-sm font-medium text-gray-700 mb-2">
-                        Meta Description (All Languages)
-                    </label>
-                    <textarea name="meta_description_i18n" id="{{ form.meta_description_i18n.id_for_label }}"
-                              rows="3"
-                              class="w-full px-4 py-3 border border-gray-300 rounded-md font-mono text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                              placeholder='{"pt": "Descricao...", "en": "Description..."}'>{{ form.meta_description_i18n.value|default_if_none:"" }}</textarea>
-                    <p class="mt-1 text-xs text-gray-500">{{ form.meta_description_i18n.help_text }}</p>
-                    {% if form.meta_description_i18n.errors %}
-                        <p class="mt-1 text-sm text-red-600">{{ form.meta_description_i18n.errors.0 }}</p>
-                    {% endif %}
+                <div class="mt-3 flex space-x-3">
+                    <button type="button" onclick="openGalleryModal()" class="px-4 py-2 text-sm font-medium text-green-600 bg-green-50 rounded-lg hover:bg-green-100 transition-colors">
+                        Select from Library
+                    </button>
+                    <button type="button" onclick="openUploadModal()" class="px-4 py-2 text-sm font-medium text-gray-600 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                        Upload New
+                    </button>
                 </div>
             </div>
 
             <!-- Form Actions -->
             <div class="flex items-center justify-between pt-6 border-t border-gray-200">
-                <a href="{% url 'backoffice:news_list' %}"
-                   class="px-4 py-2 text-sm font-medium text-gray-700 hover:text-gray-900">
-                    Cancel
-                </a>
-                <button type="submit"
-                        class="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
-                    {{ submit_text }}
-                </button>
+                <a href="{% url 'backoffice:news_list' %}" class="px-4 py-2 text-sm font-medium text-gray-700 hover:text-gray-900">Cancel</a>
+                <button type="submit" class="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">{{ submit_text }}</button>
             </div>
         </form>
     </div>
 </div>
 
-<script>
-// Gallery image selection visual feedback
-document.addEventListener('DOMContentLoaded', function() {
-    // Initialize checked state on page load
-    document.querySelectorAll('.gallery-checkbox').forEach(checkbox => {
-        updateGalleryItemVisual(checkbox);
-    });
+<!-- Image Selection Modals -->
+{% include 'backoffice/partials/image_selection_modals.html' with form=form %}
 
-    // Add change listeners
-    document.querySelectorAll('.gallery-checkbox').forEach(checkbox => {
-        checkbox.addEventListener('change', function() {
-            updateGalleryItemVisual(this);
+<script src="{% static 'backoffice/js/image_selection.js' %}"></script>
+
+<script>
+// === Language Tab Management ===
+const I18N_FIELDS = ['title_i18n', 'slug_i18n', 'excerpt_i18n', 'html_content_i18n', 'meta_description_i18n'];
+
+function initI18nFields() {
+    I18N_FIELDS.forEach(fieldName => {
+        let data = {};
+        try {
+            const el = document.getElementById(fieldName + '_initial');
+            if (el) {
+                const raw = el.textContent;
+                if (raw) {
+                    const parsed = JSON.parse(raw);
+                    // json_script double-encodes: the script tag contains a JSON string,
+                    // which itself is the JSON dict. Parse again if we got a string.
+                    if (typeof parsed === 'string') {
+                        data = JSON.parse(parsed);
+                    } else {
+                        data = parsed;
+                    }
+                }
+            }
+        } catch (e) {
+            console.warn('Failed to parse i18n initial data for', fieldName, e);
+        }
+
+        document.querySelectorAll(`.i18n-field[data-field="${fieldName}"]`).forEach(input => {
+            const lang = input.dataset.lang;
+            if (data[lang] !== undefined) {
+                input.value = data[lang];
+            }
         });
     });
+}
 
-    function updateGalleryItemVisual(checkbox) {
-        const item = checkbox.closest('.gallery-item');
-        const border = item.querySelector('.gallery-border');
-        const checkmark = item.querySelector('.gallery-checkmark');
+function assembleI18nJson() {
+    I18N_FIELDS.forEach(fieldName => {
+        const data = {};
+        document.querySelectorAll(`.i18n-field[data-field="${fieldName}"]`).forEach(input => {
+            const val = input.value;
+            if (val) data[input.dataset.lang] = val;
+        });
+        document.getElementById(fieldName + '_json').value = JSON.stringify(data);
+    });
+}
 
-        if (checkbox.checked) {
-            border.classList.add('border-blue-500', 'shadow-lg');
-            border.classList.remove('border-gray-300');
-            checkmark.classList.remove('hidden');
+function switchLanguageTab(lang) {
+    document.querySelectorAll('.lang-tab').forEach(tab => {
+        if (tab.dataset.lang === lang) {
+            tab.classList.add('border-b-2', 'border-blue-500', 'text-blue-600');
+            tab.classList.remove('text-gray-500');
         } else {
-            border.classList.remove('border-blue-500', 'shadow-lg');
-            border.classList.add('border-gray-300');
-            checkmark.classList.add('hidden');
+            tab.classList.remove('border-b-2', 'border-blue-500', 'text-blue-600');
+            tab.classList.add('text-gray-500');
         }
+    });
+
+    document.querySelectorAll('.lang-panel').forEach(panel => {
+        panel.classList.toggle('hidden', panel.dataset.lang !== lang);
+    });
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    // Initialize i18n fields from JSON
+    initI18nFields();
+
+    // Initialize featured image display
+    const select = document.querySelector('select[name="featured_image"]');
+    if (select && select.value) {
+        const modalItem = document.querySelector(`.modal-image-item[data-image-id="${select.value}"]`);
+        if (modalItem) {
+            selectFeaturedImage(parseInt(select.value), modalItem.dataset.imageUrl, modalItem.dataset.imageTitle);
+        }
+    } else {
+        clearFeaturedImage();
     }
+
+    // Initialize gallery display
+    updateGalleryDisplay();
+
+    // Intercept form submit to assemble JSON
+    document.getElementById('news-form').addEventListener('submit', function(e) {
+        assembleI18nJson();
+    });
 });
 </script>
 {% endblock %}
