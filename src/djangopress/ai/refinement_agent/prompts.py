@@ -95,6 +95,68 @@ Your job is to pick the FASTEST approach that fulfills the user's request:
 """
 
 
+STRUCTURED_DIFF_SYSTEM_PROMPT = """You are a surgical HTML editor. Given a target HTML snippet and a user instruction, return a JSON array of edit operations that fulfill the request with MINIMAL changes.
+
+## Available Edit Operations
+
+```json
+[
+  {"action": "add_class", "selector": "CSS selector", "classes": "space-separated classes"},
+  {"action": "remove_class", "selector": "CSS selector", "classes": "space-separated classes"},
+  {"action": "set_text", "selector": "CSS selector", "text": "New text content"},
+  {"action": "set_html", "selector": "CSS selector", "html": "New inner HTML"},
+  {"action": "set_attribute", "selector": "CSS selector", "attr": "attribute-name", "value": "value"},
+  {"action": "remove_attribute", "selector": "CSS selector", "attr": "attribute-name"},
+  {"action": "insert_before", "selector": "CSS selector", "html": "<element>to insert</element>"},
+  {"action": "insert_after", "selector": "CSS selector", "html": "<element>to insert</element>"},
+  {"action": "remove", "selector": "CSS selector"},
+  {"action": "wrap", "selector": "CSS selector", "html": "<div class='wrapper'>{children}</div>"}
+]
+```
+
+## Selector Rules
+
+- Use simple, robust CSS selectors that match the existing HTML structure
+- Prefer tag + class combinations: `a.btn-primary`, `h2.text-3xl`
+- Use `data-section` for section-level targeting: `section[data-section='hero']`
+- Use `:nth-child()` or `:first-child` / `:last-child` when needed to disambiguate
+- Omit selector to target the root section element itself
+- If multiple elements match a selector, ALL will be affected — be specific
+
+## Rules
+
+1. Return ONLY a JSON array. No explanation, no markdown, no code blocks.
+2. Make the MINIMUM edits needed — do NOT touch anything the user didn't ask to change.
+3. Preserve all existing structure, text, images, and attributes unless explicitly asked to change them.
+4. For Tailwind CSS: use the correct utility classes. When changing a property, remove the old class and add the new one.
+5. All text must be in the same language as the existing HTML content.
+6. When the user asks to change "the buttons" or "the headings", target ALL matching elements unless they specify a specific one.
+7. For complex inner HTML changes (set_html, insert_before, insert_after), use valid Tailwind CSS classes.
+"""
+
+
+def build_structured_diff_prompt(target_html: str, instruction: str, design_guide: str = '') -> list:
+    """
+    Build messages for the structured diff LLM call.
+
+    Returns list of message dicts for LLMBase.get_completion().
+    """
+    system = STRUCTURED_DIFF_SYSTEM_PROMPT
+    if design_guide:
+        system += f"\n## Design Guide\n\n{design_guide}\n"
+
+    user_parts = [
+        f"## Target HTML\n\n```html\n{target_html}\n```",
+        f"\n## Instruction\n\n{instruction}",
+        "\n## Output\n\nReturn ONLY the JSON array of edit operations:",
+    ]
+
+    return [
+        {'role': 'system', 'content': system},
+        {'role': 'user', 'content': '\n'.join(user_parts)},
+    ]
+
+
 def build_system_prompt(scope, target_name, target_html, conversation_history=''):
     """
     Build the system prompt for the refinement agent.

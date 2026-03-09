@@ -140,6 +140,63 @@ def update_text(params, context):
     }
 
 
+# ── Structured diff tool (LLM generates edits, BeautifulSoup applies) ────────
+
+def apply_edits(params, context):
+    """Use a focused LLM call to generate surgical edit operations, then apply them."""
+    import json as json_mod
+    from djangopress.ai.utils.llm_config import LLMBase
+    from .edit_operations import apply_edits as execute_edits
+    from .prompts import build_structured_diff_prompt
+
+    target_html = context['target_html']
+    instructions = params.get('instructions', context.get('instructions', ''))
+    include_design_guide = params.get('include_design_guide', True)
+
+    # Optionally fetch design guide
+    design_guide = ''
+    if include_design_guide:
+        site_settings = context.get('site_settings')
+        if site_settings:
+            design_guide = site_settings.design_guide or ''
+
+    messages = build_structured_diff_prompt(target_html, instructions, design_guide)
+
+    llm = LLMBase()
+    try:
+        response = llm.get_completion(messages, tool_name='gemini-flash')
+        raw = response.choices[0].message.content.strip()
+    except Exception as e:
+        return {'success': False, 'message': f'LLM call failed: {e}'}
+
+    # Parse JSON from response — strip markdown code fences if present
+    clean = raw
+    if clean.startswith('```'):
+        clean = re.sub(r'^```(?:json)?\s*', '', clean)
+        clean = re.sub(r'\s*```$', '', clean)
+
+    try:
+        edits = json_mod.loads(clean)
+    except json_mod.JSONDecodeError:
+        return {'success': False, 'message': f'Failed to parse edits JSON: {raw[:300]}'}
+
+    if not isinstance(edits, list):
+        return {'success': False, 'message': f'Expected JSON array, got: {type(edits).__name__}'}
+
+    # Apply the edits
+    result = execute_edits(target_html, edits)
+
+    if result['success']:
+        context['target_html'] = result['html']
+
+    return {
+        'success': result['success'],
+        'message': f"Applied {result['applied']} edit(s). Errors: {len(result['errors'])}."
+                   + (f" Details: {'; '.join(result['errors'])}" if result['errors'] else ''),
+        'html': result['html'],
+    }
+
+
 # ── AI delegation tools ──────────────────────────────────────────────────────
 
 def refine_with_ai(params, context):
@@ -198,7 +255,7 @@ def refine_with_ai(params, context):
 # ── Tool registry ────────────────────────────────────────────────────────────
 
 READ_TOOLS = {'inspect_html', 'get_design_guide', 'get_briefing', 'get_pages_list'}
-DIRECT_EDIT_TOOLS = {'update_styles', 'update_text'}
+DIRECT_EDIT_TOOLS = {'update_styles', 'update_text', 'apply_edits'}
 DELEGATION_TOOLS = {'refine_with_ai'}
 
 ALL_TOOLS = {
@@ -208,6 +265,7 @@ ALL_TOOLS = {
     'get_pages_list': get_pages_list,
     'update_styles': update_styles,
     'update_text': update_text,
+    'apply_edits': apply_edits,
     'refine_with_ai': refine_with_ai,
 }
 
