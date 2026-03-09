@@ -11,9 +11,9 @@ You are setting up a **new website** from the DjangoPress template. This is a ch
 
 Walk the user through each step interactively. Check what's already done and skip completed steps. Ask questions to gather project details.
 
-## Step 1: Verify Repository Structure
+## Step 1: Verify Project Structure & Link Skills
 
-Check if this looks like a freshly cloned DjangoPress template:
+Check project status:
 
 ```bash
 # Check for .env (not .env.example)
@@ -24,6 +24,22 @@ pip show djangopress 2>/dev/null | head -3 || echo "NOT INSTALLED"
 
 # Check if migrations have been run
 test -f db.sqlite3 && echo "DB EXISTS" || echo "NO DB"
+```
+
+### Symlink Claude Code skills from the djangopress package
+
+This ensures child projects always have the latest skills without manual updates:
+
+```bash
+# Find the djangopress package location
+DJANGOPRESS_PATH=$(python -c "import djangopress; import os; print(os.path.dirname(os.path.dirname(djangopress.__path__[0])))")
+
+# Symlink .claude/skills to the package's skills
+mkdir -p .claude
+ln -sfn "$DJANGOPRESS_PATH/.claude/skills" .claude/skills
+
+# Verify
+ls -la .claude/skills/
 ```
 
 If `.env` is missing, proceed to Step 2. If djangopress is not installed, proceed to Step 3.
@@ -159,7 +175,7 @@ Tell the user:
 1. Visit `http://localhost:8000/backoffice/settings/` to upload logos and configure the design system (colors, fonts)
 2. **Upload logos AFTER the domain is set** (it's already set from Step 5)
 3. Configure **SEO & Code** settings (OG image for social sharing, custom tracking scripts) at `/backoffice/settings/seo/`
-4. Use `/generate-content` skill (or go to `/backoffice/ai/`) to start generating pages
+4. Use `/generate-site` skill (or go to `/backoffice/ai/`) to start generating pages
 5. The project briefing is the most important field for AI quality — encourage them to make it detailed
 
 ## Important Reminders
