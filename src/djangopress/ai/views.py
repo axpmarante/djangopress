@@ -2726,6 +2726,7 @@ def analyze_consistency_stream(request):
         custom_rules = data.get('custom_rules', '')
         model = data.get('model') or get_ai_model('consistency')
 
+        current_user = request.user
         q = queue.Queue()
         sentinel = object()
 
@@ -2758,16 +2759,29 @@ def analyze_consistency_stream(request):
                             cat = issue.get('category', 'other')
                             categories[cat] = categories.get(cat, 0) + 1
 
+                summary_data = {
+                    'total_issues': total_issues,
+                    'severity': severity_counts,
+                    'categories': categories,
+                    'affected_pages': affected_pages,
+                    'total_pages': len(report),
+                }
+
+                # Save report to DB
+                from djangopress.ai.models import DesignConsistencyReport
+                db_report = DesignConsistencyReport.objects.create(
+                    created_by=current_user if current_user.is_authenticated else None,
+                    custom_rules=custom_rules,
+                    model_used=model,
+                    report_data=report,
+                    summary=summary_data,
+                )
+
                 q.put(('complete', {
                     'success': True,
                     'report': report,
-                    'summary': {
-                        'total_issues': total_issues,
-                        'severity': severity_counts,
-                        'categories': categories,
-                        'affected_pages': affected_pages,
-                        'total_pages': len(report),
-                    },
+                    'summary': summary_data,
+                    'report_id': db_report.pk,
                 }))
             except Exception as e:
                 q.put(('error', str(e)))
