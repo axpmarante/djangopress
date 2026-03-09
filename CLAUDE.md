@@ -19,26 +19,67 @@ DjangoPress is a **reusable CMS blueprint** — the Django equivalent of WordPre
 
 ## New Project Setup
 
-When starting a new site from this template:
+When starting a new site:
 
-### 1. Create the repo and clone
-
-Using the GitHub CLI (recommended):
+### 1. Create the project directory
 
 ```bash
 cd /path/to/DjangoSites
-gh repo create my-project-name --template axpmarante/djangopress --private --clone --description "Project description"
+mkdir my-project-name && cd my-project-name
+git init
 ```
 
-Or via GitHub web: go to `github.com/axpmarante/djangopress` → **"Use this template"** → create repo → clone it manually.
-
-### 2. Set up upstream remote
-
-This allows the child project to pull future djangopress engine updates:
+### 2. Install djangopress
 
 ```bash
-cd my-project-name
-git remote add upstream https://github.com/axpmarante/djangopress.git
+python -m venv venv
+source venv/bin/activate
+
+# For local development (editable install from local repo):
+echo 'djangopress @ file:///path/to/djangopress' > requirements.txt
+pip install -r requirements.txt
+
+# Create thin config files
+mkdir config && touch config/__init__.py
+```
+
+Create `config/settings.py`:
+```python
+from djangopress.settings import *  # noqa: F401,F403
+import environ
+from pathlib import Path
+
+BASE_DIR = Path(__file__).resolve().parent.parent
+env = environ.Env()
+env.read_env(BASE_DIR / '.env')
+
+SECRET_KEY = env('SECRET_KEY', default='django-insecure-change-me')
+ENVIRONMENT = env('ENVIRONMENT', default='development')
+DEBUG_MODE = env('DEBUG_MODE', default='False') == 'True'
+DEBUG = ENVIRONMENT == 'development' or DEBUG_MODE
+ROOT_URLCONF = 'config.urls'
+WSGI_APPLICATION = 'config.wsgi.application'
+DATABASES = {'default': env.db('DATABASE_URL', default=f'sqlite:///{BASE_DIR / "db.sqlite3"}')}
+TEMPLATES[0]['DIRS'] = ([BASE_DIR / 'templates'] if (BASE_DIR / 'templates').exists() else []) + TEMPLATES[0]['DIRS']
+STATICFILES_DIRS = ([BASE_DIR / 'static'] if (BASE_DIR / 'static').exists() else []) + STATICFILES_DIRS
+STATIC_ROOT = BASE_DIR / 'staticfiles'
+MEDIA_ROOT = BASE_DIR / 'media'
+LOCALE_PATHS = [BASE_DIR / 'locale']
+ALLOWED_HOSTS += ['.railway.app']
+CSRF_TRUSTED_ORIGINS += ['https://*.railway.app']
+```
+
+Create `config/urls.py`:
+```python
+from djangopress.urls import urlpatterns  # noqa: F401
+```
+
+Create `config/wsgi.py`:
+```python
+import os
+from django.core.wsgi import get_wsgi_application
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
+application = get_wsgi_application()
 ```
 
 ### 3. Environment
@@ -103,29 +144,30 @@ Go to `/backoffice/settings/header/` and `/backoffice/settings/footer/` → use 
 
 After generating pages with image placeholders, go to `/backoffice/page/<id>/images/` (or click "Process Images" from the page edit view). Use "AI Suggest Prompts" to auto-fill generation prompts and find matching library images, then "Process Selected" to replace placeholders with real images. Three sources available: AI-generated, media library, and Unsplash stock photos (if `UNSPLASH_ACCESS_KEY` is set in `.env`).
 
-### 9. What NOT to modify for a standard site
+### 9. Project structure
 
-These files rarely need changes for a new site — everything is DB-driven:
+The CMS engine lives in the `djangopress` pip package. A child project directory contains only:
 
-- `core/` — the CMS engine (models, views, templatetags) — shared across all sites
-- `editor_v2/` — inline editing system — shared
-- `ai/` — AI generation/refinement — shared
-- `site_assistant/` — AI chat assistant — shared
-- `templates/base.html` — master layout — shared
-- `config/urls.py` — URL routing — shared
+- `config/` — thin settings, urls, wsgi (imports from djangopress)
+- `.env` — secrets and API keys
+- `requirements.txt` — points to djangopress package
+- `manage.py` — Django entry point
+- `db.sqlite3` — local database
+- Custom decoupled apps (if needed) — e.g. `properties/`, `blog/`
 
 ### 10. What you WILL customize
 
 - `.env` — secrets and API keys
 - `SiteSettings` in the database — all branding, design, content
+- `config/settings.py` — add `INSTALLED_APPS += ['my_app']` for custom apps
+- `config/urls.py` — override to register custom app URLs before core catch-all
 - Add new **decoupled apps** if the site needs features beyond pages (blog, shop, booking, etc.)
-- `static/` — custom CSS/JS if needed (rare — Tailwind covers most cases)
 
 ---
 
 ## Claude Code Skills
 
-DjangoPress ships with Claude Code skills (`.claude/skills/`) that automate common workflows. These are inherited by every child project cloned from the template.
+DjangoPress ships with Claude Code skills (`.claude/skills/`) that automate common workflows.
 
 ### User-Invocable Skills
 
@@ -149,7 +191,7 @@ DjangoPress ships with Claude Code skills (`.claude/skills/`) that automate comm
 
 ```
 # Option A: Interactive setup + interactive generation (highest quality)
-1. Clone template → cd into project
+1. Create project dir, install djangopress pip package
 2. /new-site my-project          ← configures everything interactively
 3. /generate-content             ← generates pages, header, footer, images
 4. /add-app blog                 ← if the site needs extra features
@@ -158,12 +200,6 @@ DjangoPress ships with Claude Code skills (`.claude/skills/`) that automate comm
 1. /create-briefing My Client     ← researches client, writes briefing interactively
 2. /generate-site briefings/my-client.md  ← everything in one go
 3. /deploy-site my-client         ← deploy to Railway
-
-# Option C: New project from scratch
-1. ./scripts/new_site.sh my-project briefings/my-site.md
-2. cd ../my-project && source venv/bin/activate
-3. /generate-site briefings/my-site.md
-4. /deploy-site my-project        ← deploy to Railway
 
 # After making local changes to a deployed site:
 /sync-data                        ← push local DB content to Railway
@@ -531,41 +567,31 @@ Use `/add-app appname` to scaffold automatically, or follow the reference manual
 - **GCS storage:** When `GS_BUCKET_NAME` is set in `.env`, media files are stored in Google Cloud Storage under a domain-based folder (from `SiteSettings.domain`).
 - **Server log:** When the dev server is started by DjangoPress Manager, its stdout/stderr is written to `.server.log` in the project root. Read this file to see Django startup output, HTTP request logs, errors, and print statements. Previous sessions are kept as `.server.log.1` and `.server.log.2` (3 sessions total).
 
-## Syncing Template Updates to Child Projects
+## Updating Child Projects
 
-The upstream remote should already be configured (see New Project Setup step 2). To pull updates:
-
-```bash
-git fetch upstream
-git merge upstream/main
-```
-
-The first merge requires `--allow-unrelated-histories` since GitHub template repos don't share git history. Resolve conflicts by taking the upstream version for core engine files (`core/`, `ai/`, `backoffice/`, `editor_v2/`, `config/`, `templates/`). Site-specific content lives in the database and `.env`, so it won't conflict.
-
-### Upgrading to v1.0.0 (Per-Language HTML)
-
-v1.0.0 replaces the `{{ trans.xxx }}` template variable system with per-language HTML. The migration is automatic:
+Child projects install `djangopress` as a pip package. To pull updates:
 
 ```bash
-git fetch upstream
-git merge upstream/main
-pip install -r requirements.txt
-python manage.py migrate                    # Adds i18n fields + auto-populates from old data
-python manage.py fix_i18n_html --dry-run    # Preview: check for leftover {{ trans.xxx }}
-python manage.py fix_i18n_html              # Fix any remaining template vars
+pip install --upgrade djangopress
+# Or if using local editable install, just pull the latest djangopress repo
+python manage.py migrate
 ```
 
-**What happens automatically:**
-- Migration 0037 adds `html_content_i18n` / `html_template_i18n` JSON fields
-- Migration 0038 populates them by replacing `{{ trans.xxx }}` with real text from `content['translations']`
-- Old fields (`html_content`, `content`, `html_template`) are preserved but no longer read by the code
+### Migrating from Template Clone to Pip Package
 
-**After migrating, verify:**
-1. Check each page renders correctly in all languages
-2. Check header/footer render correctly
-3. Use the editor to make a small change and confirm auto-translation works
+Older child projects were cloned from the template repo and contained the full engine source. To convert:
 
-**Old fields are NOT deleted** — they remain in the DB as a safety net. If something goes wrong, the data is still there for manual recovery.
+1. Back up the database: `cp db.sqlite3 db.sqlite3.backup`
+2. Remove embedded engine dirs: `rm -rf ai/ backoffice/ core/ editor_v2/ news/ site_assistant/ templates/ static/ scripts/ docs/`
+3. Remove standalone engine files: `rm -f Procfile gunicorn.conf.py CLAUDE.md VERSION config/storage_backends.py config/asgi.py`
+4. Create thin `config/settings.py` (imports from `djangopress.settings`) and `config/urls.py` (imports from `djangopress.urls`)
+5. Update `requirements.txt` to point to djangopress package
+6. `pip install -r requirements.txt && python manage.py migrate`
+7. Run `python manage.py fix_i18n_html --dry-run` to verify no legacy `{{ trans.xxx }}` vars remain
+
+### Legacy `{{ trans.xxx }}` Architecture (removed in v2.2.0)
+
+The old system stored a single HTML template with `{{ trans.xxx }}` variables + a translations JSON dict. v2.2.0 completed the removal of all traces. Migration 0038 auto-populates `*_i18n` fields from old data. If any site still has `{{ trans.xxx }}` in content, run `python manage.py fix_i18n_html`.
 
 ## Git Conventions
 
@@ -584,8 +610,7 @@ python manage.py migrate_storage_folder --dry-run      # Preview without copying
 python manage.py generate_site briefings/my-site.md    # Generate full site from briefing
 python manage.py generate_site briefings/my-site.md --dry-run      # Preview plan
 python manage.py generate_site briefings/my-site.md --skip-images  # Skip image processing
-./scripts/new_site.sh my-project                       # Create new project from template
-./scripts/new_site.sh my-project briefings/my-site.md  # Create + copy briefing
+# New projects: create dir, pip install djangopress, create thin config files (see New Project Setup above)
 python manage.py push_data https://my-site.railway.app             # Push local DB to production
 python manage.py push_data https://my-site.railway.app --dry-run   # Preview without sending
 python manage.py pull_data https://my-site.railway.app             # Pull remote DB to local

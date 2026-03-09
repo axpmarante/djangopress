@@ -67,7 +67,7 @@ Every LLM call is logged to `AICallLog` with action, model, tokens, duration, pr
 
 ### GlobalSection Refinement
 
-`refine_global_section()` in `ai/services.py` handles header/footer AI refinement. **Note:** The prompt still uses `{{ trans.xxx }}` format for footer text. Includes truncation validation — rejects refined output if <40% of original length to prevent saving corrupted HTML.
+`refine_global_section()` in `ai/services.py` handles header/footer AI refinement. The prompt asks for `html_template_i18n` — per-language HTML with real text (same architecture as pages). Includes truncation validation — rejects refined output if <40% of original length to prevent saving corrupted HTML. Has backward-compat fallback: if LLM returns legacy `html_template` + `content.translations`, auto-resolves `{{ trans.xxx }}` vars before storage.
 
 ## Site Assistant
 
@@ -103,23 +103,27 @@ The `editor_v2` app powers `?edit=v2` (or `?edit=true`) mode for staff users. ES
 - Default language URLs have no prefix (handled by DynamicLanguageMiddleware)
 - `core.urls` is a **catch-all** — any app with public URLs must be registered BEFORE it in `i18n_patterns`
 
-## What NOT to Modify in Child Projects
+## Child Project Architecture (pip package)
 
-These are the shared CMS engine — modify only in the upstream djangopress repo:
-- `core/` — models, views, templatetags, middleware, context processors
-- `ai/` — LLM integration, generation, refinement, prompts
-- `editor_v2/` — inline editor JS and API
-- `backoffice/` — admin dashboard views and templates
-- `site_assistant/` — AI chat assistant
-- `templates/base.html` — master layout
-- `config/` — settings, urls, storage backends
+Child projects install `djangopress` as a pip package. The project directory contains only:
+- `config/settings.py` — imports from `djangopress.settings`, overrides project-specific values
+- `config/urls.py` — imports from `djangopress.urls` (or custom if app URLs needed)
+- `config/wsgi.py` — standard WSGI config
+- `.env` — secrets, API keys (never committed)
+- `requirements.txt` — points to djangopress package
+- `manage.py` — Django management command entry point
+- `db.sqlite3` — local database
+- Custom decoupled apps — features beyond pages (blog, shop, booking, etc.)
+
+The CMS engine (`core/`, `ai/`, `editor_v2/`, `backoffice/`, `site_assistant/`, `templates/`, `static/`) lives in the djangopress package and should only be modified in the upstream repo.
 
 ## What to Customize Per Site
 
 - `.env` — secrets, API keys (never committed)
 - `SiteSettings` in DB — all branding, design, content via `/backoffice/settings/`
 - New decoupled apps — features beyond pages (blog, shop, booking, etc.)
-- `static/` — custom CSS/JS (rare)
+- `config/settings.py` — add `INSTALLED_APPS += ['my_app']` for custom apps
+- `config/urls.py` — override to register custom app URLs before core catch-all
 
 ## Common Gotchas
 

@@ -55,10 +55,12 @@ python manage.py pull_data --help 2>&1 | head -5
 If the commands don't exist, the project needs the data sync API. Tell the user:
 
 ```
-This project doesn't have the data sync API yet.
-You need to pull the latest changes from the djangopress template:
+This project doesn't have the data sync commands yet.
+Update the djangopress package:
 
-    git fetch upstream && git merge upstream/main
+    pip install --upgrade djangopress
+    # Or if using local editable install:
+    pip install -e /path/to/djangopress
 ```
 
 ---

@@ -189,14 +189,12 @@ slug_i18n = result.get('slug_i18n', {})
 page = Page.objects.create(
     title_i18n=result.get('title_i18n', {}),
     slug_i18n=slug_i18n,
-    html_content=result['html_content'],
-    content=result['content'],
+    html_content_i18n=result.get('html_content_i18n', {}),
     is_active=True,
-    sort_order=0,  # increment for each page: 0, 10, 20...
+    sort_order=0,
 )
 print(f'Created: {page.default_title} (/{page.default_slug}/) ID={page.id}')
-print(f'HTML: {len(result[\"html_content\"])} chars')
-print(f'Translations: {list(result[\"content\"][\"translations\"].keys())}')
+print(f'Languages: {list(result.get(\"html_content_i18n\", {}).keys())}')
 "
 ```
 
@@ -204,7 +202,7 @@ print(f'Translations: {list(result[\"content\"][\"translations\"].keys())}')
 
 After each page, read its HTML and check:
 1. All `<section>` tags have `data-section="name"` and `id="name"` attributes
-2. All text uses `{{ trans.xxx }}` variables (no hardcoded strings)
+2. All text is real text embedded directly in the HTML (no {{ trans.xxx }} variables)
 3. The section structure matches what was requested
 4. No empty sections or broken HTML
 5. Image placeholders use `data-image-prompt` and `data-image-name`
@@ -213,7 +211,8 @@ After each page, read its HTML and check:
 python manage.py shell -c "
 from core.models import Page
 page = Page.objects.get(id=<ID>)
-print(page.html_content[:3000])
+default_lang = list(page.html_content_i18n.keys())[0] if page.html_content_i18n else 'pt'
+print(page.html_content_i18n.get(default_lang, '')[:3000])
 "
 ```
 
@@ -234,8 +233,7 @@ result = service.refine_page_with_html(
 )
 
 page = Page.objects.get(id=<ID>)
-page.html_content = result['html_content']
-page.content = result['content']
+page.html_content_i18n = result.get('html_content_i18n', page.html_content_i18n)
 page.save()
 print('Refined and saved')
 "
@@ -253,10 +251,13 @@ from core.models import SiteSettings, Page
 settings = SiteSettings.objects.first()
 home = Page.objects.filter(is_active=True).order_by('sort_order').first()
 
+default_lang = settings.get_default_language()
+home_html = (home.html_content_i18n or {}).get(default_lang, '')
+
 llm = LLMBase()
 messages = [
     {'role': 'system', 'content': 'You are a senior UI/UX designer. Analyze this page and write a concise design guide in markdown that captures its visual patterns, component styles, and conventions.'},
-    {'role': 'user', 'content': f'Site: {settings.get_site_name()}\nBriefing: {settings.project_briefing}\nPage HTML:\n{home.html_content[:8000]}'},
+    {'role': 'user', 'content': f'Site: {settings.get_site_name()}\nBriefing: {settings.project_briefing}\nPage HTML:\n{home_html[:8000]}'},
 ]
 response = llm.get_completion(messages, tool_name='gemini-pro')
 guide = response.choices[0].message.content
@@ -308,8 +309,7 @@ section, created = GlobalSection.objects.get_or_create(
     defaults={
         'name': 'Main Header',
         'section_type': 'header',
-        'html_template': '',
-        'content': {'translations': {}},
+        'html_template_i18n': {},
         'is_active': True,
     }
 )
@@ -320,10 +320,9 @@ result = service.refine_global_section(
     refinement_instructions='''<header instructions from briefing>''',
 )
 
-section.html_template = result['html_template']
-section.content = result.get('content', {'translations': {}})
+section.html_template_i18n = result.get('html_template_i18n', {})
 section.save()
-print(f'Header generated ({len(section.html_template)} chars)')
+print(f'Header generated ({sum(len(v) for v in section.html_template_i18n.values())} chars)')
 "
 ```
 
@@ -341,8 +340,7 @@ section, created = GlobalSection.objects.get_or_create(
     defaults={
         'name': 'Main Footer',
         'section_type': 'footer',
-        'html_template': '',
-        'content': {'translations': {}},
+        'html_template_i18n': {},
         'is_active': True,
     }
 )
@@ -353,10 +351,9 @@ result = service.refine_global_section(
     refinement_instructions='''<footer instructions from briefing>''',
 )
 
-section.html_template = result['html_template']
-section.content = result.get('content', {'translations': {}})
+section.html_template_i18n = result.get('html_template_i18n', {})
 section.save()
-print(f'Footer generated ({len(section.html_template)} chars)')
+print(f'Footer generated ({sum(len(v) for v in section.html_template_i18n.values())} chars)')
 "
 ```
 
@@ -375,7 +372,9 @@ settings = SiteSettings.objects.first()
 languages = settings.get_language_codes()
 
 page = Page.objects.get(id=<PAGE_ID>)
-soup = BeautifulSoup(page.html_content, 'html.parser')
+default_lang = settings.get_default_language()
+html = (page.html_content_i18n or {}).get(default_lang, '')
+soup = BeautifulSoup(html, 'html.parser')
 
 # Find placeholder images
 images = []

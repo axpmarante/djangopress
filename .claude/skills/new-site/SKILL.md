@@ -1,13 +1,13 @@
 ---
 name: new-site
-description: Interactive setup wizard for a new DjangoPress site cloned from the template. Guides through environment, database, settings, and initial configuration.
+description: Interactive setup wizard for a new DjangoPress site. Guides through environment, database, settings, and initial configuration.
 argument-hint: [project-name]
 allowed-tools: Bash, Read, Write, Edit, Grep, Glob, AskUserQuestion
 ---
 
 # New DjangoPress Site Setup
 
-You are setting up a **new website** from the DjangoPress template. This is a child project — the CMS engine (`core/`, `ai/`, `editor_v2/`, `backoffice/`) is shared and should NOT be modified. All customization happens through the database (SiteSettings) and `.env`.
+You are setting up a **new website** from the DjangoPress template. This is a child project — the CMS engine is installed as the `djangopress` pip package. All customization happens through the database (SiteSettings) and `.env`.
 
 Walk the user through each step interactively. Check what's already done and skip completed steps. Ask questions to gather project details.
 
@@ -19,17 +19,14 @@ Check if this looks like a freshly cloned DjangoPress template:
 # Check for .env (not .env.example)
 test -f .env && echo "EXISTS" || echo "MISSING"
 
-# Check if upstream remote is configured
-git remote -v
+# Check if djangopress is installed
+pip show djangopress 2>/dev/null | head -3 || echo "NOT INSTALLED"
 
 # Check if migrations have been run
 test -f db.sqlite3 && echo "DB EXISTS" || echo "NO DB"
 ```
 
-If `.env` is missing, proceed to Step 2. If upstream remote is missing, set it up:
-```bash
-git remote add upstream https://github.com/axpmarante/djangopress.git
-```
+If `.env` is missing, proceed to Step 2. If djangopress is not installed, proceed to Step 3.
 
 ## Step 2: Environment Configuration
 
@@ -77,7 +74,7 @@ If it prints `DomainBasedStorage` / `Using GCS: True`, all images will go direct
 ```bash
 python -m venv venv
 source venv/bin/activate
-pip install -r requirements.txt
+pip install -r requirements.txt    # requirements.txt points to djangopress package
 python manage.py migrate
 ```
 
@@ -167,7 +164,7 @@ Tell the user:
 
 ## Important Reminders
 
-- **Never modify core engine files** (`core/`, `ai/`, `editor_v2/`, `backoffice/`, `templates/base.html`) for a standard site
+- **The CMS engine lives in the `djangopress` pip package** — no engine files in the project directory. Custom apps go in the project root.
 - **Domain must be set before uploading media** when using GCS
 - **Home page slug must be `home` in ALL languages**
-- To pull future DjangoPress updates: `git fetch upstream && git merge upstream/main`
+- To pull future DjangoPress updates: `pip install --upgrade djangopress` (or update the version in `requirements.txt` and `pip install -r requirements.txt`)

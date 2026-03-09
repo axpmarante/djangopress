@@ -73,18 +73,99 @@ Show a summary of all briefings created in this session. Ask if the user wants t
 
 1. **Derive the project name** from the briefing filename (e.g. `willies-restaurante.md` → `willies-restaurante`).
 
-2. **Run the scaffold script:**
+2. **Create the project directory and set up:**
 ```bash
-cd /Users/antoniomarante/Documents/DjangoSites/djangopress
-./scripts/new_site.sh <project-name> briefings/<slug>.md
+cd /Users/antoniomarante/Documents/DjangoSites
+mkdir <project-name>
+cd <project-name>
+
+# Initialize git
+git init
+
+# Create venv and install djangopress
+python -m venv venv
+source venv/bin/activate
+echo 'djangopress @ file:///Users/antoniomarante/Documents/DjangoSites/djangopress' > requirements.txt
+pip install -r requirements.txt
+
+# Create thin config files
+mkdir config
+touch config/__init__.py
 ```
 
-3. **Verify** the project was created:
-```bash
-ls /Users/antoniomarante/Documents/DjangoSites/<project-name>/manage.py
+3. **Create config/settings.py:**
+```python
+from djangopress.settings import *  # noqa: F401,F403
+import environ
+from pathlib import Path
+
+BASE_DIR = Path(__file__).resolve().parent.parent
+env = environ.Env()
+env.read_env(BASE_DIR / '.env')
+
+SECRET_KEY = env('SECRET_KEY', default='django-insecure-change-me')
+ENVIRONMENT = env('ENVIRONMENT', default='development')
+DEBUG_MODE = env('DEBUG_MODE', default='False') == 'True'
+DEBUG = ENVIRONMENT == 'development' or DEBUG_MODE
+
+ROOT_URLCONF = 'config.urls'
+WSGI_APPLICATION = 'config.wsgi.application'
+
+DATABASES = {
+    'default': env.db('DATABASE_URL', default=f'sqlite:///{BASE_DIR / "db.sqlite3"}')
+}
+
+TEMPLATES[0]['DIRS'] = ([BASE_DIR / 'templates'] if (BASE_DIR / 'templates').exists() else []) + TEMPLATES[0]['DIRS']
+STATICFILES_DIRS = ([BASE_DIR / 'static'] if (BASE_DIR / 'static').exists() else []) + STATICFILES_DIRS
+STATIC_ROOT = BASE_DIR / 'staticfiles'
+MEDIA_ROOT = BASE_DIR / 'media'
+LOCALE_PATHS = [BASE_DIR / 'locale']
+
+ALLOWED_HOSTS += ['.railway.app']
+CSRF_TRUSTED_ORIGINS += ['https://*.railway.app']
 ```
 
-4. **Update status:** Mark site as `scaffold: done`.
+4. **Create config/urls.py:**
+```python
+from djangopress.urls import urlpatterns  # noqa: F401
+```
+
+5. **Create config/wsgi.py:**
+```python
+import os
+from django.core.wsgi import get_wsgi_application
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
+application = get_wsgi_application()
+```
+
+6. **Create manage.py:**
+```python
+#!/usr/bin/env python
+import os, sys
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
+from django.core.management import execute_from_command_line
+execute_from_command_line(sys.argv)
+```
+
+7. **Copy .env from template and fill in keys:**
+```bash
+cp /Users/antoniomarante/Documents/DjangoSites/djangopress/.env.example .env
+# Edit .env with project-specific values
+```
+
+8. **Copy the briefing file:**
+```bash
+mkdir briefings
+cp /Users/antoniomarante/Documents/DjangoSites/djangopress/briefings/<slug>.md briefings/
+```
+
+9. **Run migrations and create superuser:**
+```bash
+python manage.py migrate
+python manage.py createsuperuser
+```
+
+10. **Update status:** Mark site as `scaffold: done`.
 
 ### Skip sites that already have projects:
 Check before scaffolding:

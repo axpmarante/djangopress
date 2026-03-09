@@ -84,7 +84,7 @@ If `NO_SETTINGS` or 0 pages, warn the user that there's no content to deploy and
 
 ## Phase 2: Create Deployment Files (if missing)
 
-Check if `Procfile` and `gunicorn.conf.py` exist. If not, create them:
+Check if `Procfile` and `gunicorn.conf.py` exist. The djangopress package includes these files, but if they're missing (e.g. custom deployment), create them:
 
 **Procfile:**
 ```
@@ -306,6 +306,8 @@ If GCS is NOT configured and there are local media files, warn the user that ima
 ---
 
 ## Phase 8: Migrate Data (SQLite → Postgres)
+
+> **Preferred method:** Use `python manage.py push_data https://<DOMAIN>.railway.app` instead of dumpdata/loaddata. See `/sync-data` skill. The method below is a manual fallback.
 
 ### Get the public DATABASE_URL
 

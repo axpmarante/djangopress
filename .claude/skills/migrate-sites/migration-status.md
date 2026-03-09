@@ -7,7 +7,7 @@ Last updated: 2026-02-12
 - [x] = Done
 - [-] = Skipped
 - **Briefing** = `briefings/<slug>.md` exists and parses
-- **Scaffold** = Child project created with `new_site.sh`
+- **Scaffold** = Child project created with pip djangopress package
 - **Generated** = Site generated with `/generate-site`, reviewed and approved
 - **Deployed** = Live on Railway with data migrated
 

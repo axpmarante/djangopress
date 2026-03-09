@@ -27,7 +27,12 @@ If no app name was provided, ask the user what the app should be called.
 python manage.py startapp <app_name>
 ```
 
-Add `'<app_name>'` to `INSTALLED_APPS` in `config/settings.py`.
+Add the app to `INSTALLED_APPS` in `config/settings.py`. Since the settings import from `djangopress.settings`, append to the existing list:
+
+```python
+# In config/settings.py, after the djangopress import:
+INSTALLED_APPS += ['<app_name>']
+```
 
 ## Step 2: Create Models
 
@@ -204,17 +209,28 @@ urlpatterns = [
 
 ## Step 6: Register URLs in config/urls.py
 
-Read the current `config/urls.py` and add the app inside the existing `i18n_patterns` block, **before** `core.urls`:
+Since `config/urls.py` imports from `djangopress.urls`, you need to replace it with a custom version that includes your app's URLs before the core catch-all:
 
 ```python
+# config/urls.py
+from djangopress.urls import urlpatterns as _base_patterns
+from django.conf.urls.i18n import i18n_patterns
+from django.urls import path, include
+
+# Start with all non-i18n patterns from djangopress
+urlpatterns = [p for p in _base_patterns if not hasattr(p, 'url_patterns') or not any(
+    hasattr(sub, 'app_name') and sub.app_name == 'core' for sub in getattr(p, 'url_patterns', [])
+)]
+
+# Add i18n patterns with your app BEFORE core catch-all
 urlpatterns += i18n_patterns(
-    path('', include('<app_name>.urls')),    # ← BEFORE core
+    path('', include('<app_name>.urls')),    # Your app
     path('', include('core.urls')),          # catch-all last
     prefix_default_language=True,
 )
 ```
 
-Do NOT create a second `i18n_patterns` block.
+Alternatively, copy the full `urlpatterns` from `djangopress/urls.py` and add your app's include before `core.urls`.
 
 ## Step 7: Create Template Tags
 
@@ -225,6 +241,8 @@ Create `<app_name>/templatetags/__init__.py` and `<app_name>/templatetags/<app_n
 - `{% <app>_categories as var %}` — all active categories
 
 Reference: `news/templatetags/news_tags.py`
+
+> **Note:** With the pip package architecture, `backoffice/` files live in the djangopress package. For custom apps, keep backoffice views in your app directory and register the URLs in your custom `config/urls.py`.
 
 ## Step 8: Create Backoffice Views
 

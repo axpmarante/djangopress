@@ -90,8 +90,8 @@ result = service.generate_page(
     model='gemini-pro',
     add_image_placeholders=True,
 )
-print('HTML length:', len(result.get('html', '')))
-print('Translations:', list(result.get('content', {}).get('translations', {}).keys()))
+print('HTML languages:', list(result.get('html_content_i18n', {}).keys()))
+print('Languages:', list(result.get('html_content_i18n', {}).keys()))
 "
 ```
 
