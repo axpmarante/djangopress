@@ -183,3 +183,33 @@ class RefinementSession(models.Model):
             lines.append(f"{idx}. User asked: \"{instruction}\" -> {asst_msg['content']}{section_info}")
 
         return '\n'.join(lines)
+
+
+class DesignConsistencyReport(models.Model):
+    """Persisted design consistency analysis report."""
+    created_at = models.DateTimeField(auto_now_add=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+    )
+    custom_rules = models.TextField(blank=True, default='')
+    model_used = models.CharField(max_length=50, default='')
+    report_data = models.JSONField(default=list)
+    summary = models.JSONField(default=dict)
+    issue_statuses = models.JSONField(default=dict)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        total = self.summary.get('total_issues', 0)
+        return f"Report #{self.pk} — {total} issues ({self.created_at:%Y-%m-%d %H:%M})"
+
+    def get_open_count(self):
+        total = self.summary.get('total_issues', 0)
+        return total - len(self.issue_statuses)
+
+    def get_ignored_count(self):
+        return sum(1 for v in self.issue_statuses.values() if v == 'ignored')
+
+    def get_wont_fix_count(self):
+        return sum(1 for v in self.issue_statuses.values() if v == 'wont_fix')
