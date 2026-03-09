@@ -203,7 +203,7 @@ python manage.py runserver 8000
    - Is the content accurate?
    - Any sections that need refinement?
 
-4. **Refine if needed** — use `/generate-content` or chat refine in the backoffice.
+4. **Refine if needed** — use the inline editor (`?edit=v2`), chat refinement in the backoffice, or `/update-site` for programmatic changes.
 
 5. **Update status:** Mark site as `generated: done`.
 
