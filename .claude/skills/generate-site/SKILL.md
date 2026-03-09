@@ -80,7 +80,35 @@ if [ ! -f CLAUDE.md ]; then
 fi
 ```
 
-### 1c. Environment configuration
+### 1c. Settings load order (critical for GCS)
+
+**The child project's `config/settings.py` MUST load `.env` BEFORE importing djangopress settings.** Otherwise, `GS_BUCKET_NAME` won't be in `os.environ` when djangopress checks it, and the storage backend will silently fall back to local `FileSystemStorage` — images will be saved locally instead of GCS, and image URLs will point to GCS but the files won't exist there.
+
+```python
+# CORRECT — .env loaded first, djangopress sees GS_BUCKET_NAME
+import environ
+from pathlib import Path
+
+BASE_DIR = Path(__file__).resolve().parent.parent
+
+env = environ.Env()
+env.read_env(BASE_DIR / '.env')
+
+from djangopress.settings import *  # noqa: F401,F403
+```
+
+```python
+# WRONG — djangopress imported before .env, GCS config is missed
+from djangopress.settings import *  # noqa: F401,F403
+
+import environ
+env = environ.Env()
+env.read_env(BASE_DIR / '.env')  # Too late! djangopress already chose FileSystemStorage
+```
+
+Verify this is correct in every child project during setup.
+
+### 1d. Environment configuration
 
 If `.env` doesn't exist:
 
@@ -93,7 +121,7 @@ If `.env` doesn't exist:
 4. Ask if they have an existing DjangoPress project to copy keys from
 5. Write the `.env` file with the provided values
 
-### 1d. GCS Storage Setup (Recommended)
+### 1e. GCS Storage Setup (Recommended)
 
 **IMPORTANT:** Configure Google Cloud Storage now so that images generated during content creation are stored in GCS from the start. This avoids needing to manually upload local media files when deploying to Railway (where the filesystem is ephemeral).
 
@@ -133,7 +161,7 @@ If GCS is not configured, use `AskUserQuestion` to ask the user:
 - **"Set up GCS now"** — ask for credentials or copy from an existing project
 - **"Continue without GCS"** — images will be stored locally; the deploy skill will handle uploading them later
 
-### 1e. Install dependencies & migrate
+### 1f. Install dependencies & migrate
 
 If not already done:
 

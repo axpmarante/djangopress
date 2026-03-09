@@ -62,6 +62,22 @@ python manage.py check
 
 Fix any warnings or errors before proceeding.
 
+### Verify settings load order (GCS)
+
+Ensure the child project's `config/settings.py` loads `.env` BEFORE `from djangopress.settings import *`. If the order is wrong, GCS storage won't activate and images will be saved locally instead of Google Cloud Storage. The correct order is:
+
+```python
+env.read_env(BASE_DIR / '.env')           # FIRST: load env vars
+from djangopress.settings import *        # THEN: djangopress sees GS_BUCKET_NAME
+```
+
+Quick check:
+```bash
+python manage.py shell -c "from django.conf import settings; print('Storage:', settings.STORAGES['default']['BACKEND'])"
+```
+
+If it shows `FileSystemStorage` but GCS is configured in `.env`, the load order is wrong.
+
 ## Step 5: Check for Content Fixes
 
 ```bash
