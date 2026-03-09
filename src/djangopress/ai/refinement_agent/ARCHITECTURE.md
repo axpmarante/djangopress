@@ -5,6 +5,7 @@
 The Refinement Agent is a lightweight LLM-powered router that sits between the editor's chat panel and the AI refinement pipeline. It analyzes each user request and picks the fastest execution path:
 
 - **Direct edit** (~200ms) — CSS class swap or text replacement via BeautifulSoup, no AI call
+- **Structured diff** (~1-2s) — LLM generates targeted edit operations (class swaps, text changes, attribute edits), applied deterministically by BeautifulSoup
 - **AI delegation with minimal context** (~3s) — gemini-flash with only the context needed
 - **Full AI pipeline** (~5-8s) — gemini-pro with all context (current behavior, unchanged)
 
@@ -43,14 +44,16 @@ User instruction (from editor chat)
 │   ├─ get_pages_list     │  fetch all page slugs
 │   ├─ update_styles      │  direct CSS class change
 │   ├─ update_text        │  direct text replacement
+│   ├─ apply_edits        │  structured diff via LLM
 │   └─ refine_with_ai     │  delegate to AI pipeline
 └────────┬────────────────┘
          |
          v (one of three paths)
 ┌─────────────────────────┐
 │ A) Direct edit result   │  {options: [{html}], routing_tier: 'direct_edit'}
-│ B) AI delegation result │  {options: [{html}...], routing_tier: 'ai_flash' or 'ai_pro'}
-│ C) Fallback result      │  {options: [{html}...], routing_tier: 'fallback'}
+│ B) Structured diff      │  {options: [{html}], routing_tier: 'structured_diff'}
+│ C) AI delegation result │  {options: [{html}...], routing_tier: 'ai_flash' or 'ai_pro'}
+│ D) Fallback result      │  {options: [{html}...], routing_tier: 'fallback'}
 └─────────────────────────┘
          |
          v
@@ -67,6 +70,7 @@ ai/refinement_agent/
 ├── __init__.py
 ├── ARCHITECTURE.md      ← this file
 ├── agent.py             ← RefinementAgent class with tool-use loop
+├── edit_operations.py   ← Structured edit operation executor (BeautifulSoup-based)
 ├── prompts.py           ← System prompt, tool definitions, decision guidelines
 └── tools.py             ← Tool implementations + registry
 ```
@@ -140,12 +144,70 @@ Let me redesign this section with a testimonial carousel.
 |------|--------|-------------|
 | `update_styles` | `{selector?, add_classes, remove_classes}` | Add/remove Tailwind CSS classes via BeautifulSoup |
 | `update_text` | `{updates: {old_text: new_text}}` | Find and replace text in de-templatized HTML |
+| `apply_edits` | `{instructions, include_design_guide?}` | Focused gemini-flash call generates JSON edit ops, BeautifulSoup applies them |
 
 ### AI Delegation Tools
 
 | Tool | Params | What it does |
 |------|--------|-------------|
 | `refine_with_ai` | `{model, include_components, include_briefing, include_pages, include_design_guide}` | Calls `ContentGenerationService.refine_section_only()` or `refine_element_only()` with agent-chosen model and context flags |
+
+## Structured Diff Tier
+
+The structured diff tier sits between direct edits and AI delegation. It uses a focused LLM call to generate targeted edit operations, which are then applied deterministically by BeautifulSoup.
+
+### How It Works
+
+```
+1. Agent routes request to apply_edits tool
+2. Tool calls gemini-flash with a specialized prompt containing:
+   - The current section HTML
+   - The user's instruction
+   - The list of supported edit operations
+   - (Optional) the site's design guide
+3. LLM returns a JSON array of edit operations
+4. edit_operations.apply_edits() parses and applies each op via BeautifulSoup
+5. Result returned as {options: [{html}], routing_tier: 'structured_diff'}
+```
+
+### Why It Exists
+
+- **No unwanted drift** — direct edits only handle single-class or single-text changes; anything involving multiple elements or AI-generated text previously required full HTML regeneration, which could introduce unintended changes elsewhere in the section
+- **Faster and cheaper** — a focused gemini-flash call generating a small JSON array is ~1-2s vs ~3-8s for full section regeneration
+- **Deterministic application** — BeautifulSoup applies the edit ops exactly as specified, no LLM variance in the HTML output
+
+### Supported Operations (10)
+
+| Action | Params | What it does |
+|--------|--------|-------------|
+| `add_class` | `classes` | Add CSS classes to matched elements |
+| `remove_class` | `classes` | Remove CSS classes (supports prefix patterns like `bg-` to remove all `bg-*`) |
+| `set_text` | `text` | Replace element's text content |
+| `set_html` | `html` | Replace element's inner HTML |
+| `set_attribute` | `attr`, `value` | Set an attribute on matched elements |
+| `remove_attribute` | `attr` | Remove an attribute from matched elements |
+| `insert_before` | `html` | Insert HTML before matched elements |
+| `insert_after` | `html` | Insert HTML after matched elements |
+| `remove` | — | Remove matched elements from the DOM |
+| `wrap` | `html` (with `{children}` placeholder) | Wrap element's children in new HTML structure |
+
+### Example Flow
+
+User says: "change all buttons to green and make the heading text bolder"
+
+Agent calls `apply_edits` with `{instructions: "change all buttons to green and make the heading text bolder"}`.
+
+The LLM generates:
+
+```json
+[
+  {"action": "remove_class", "selector": "a.inline-block, button", "classes": "bg-blue- bg-indigo- bg-red-"},
+  {"action": "add_class", "selector": "a.inline-block, button", "classes": "bg-green-600 hover:bg-green-700"},
+  {"action": "add_class", "selector": "h1, h2", "classes": "font-bold"}
+]
+```
+
+BeautifulSoup applies each operation in order. The rest of the HTML remains untouched.
 
 ## Context Flags
 
@@ -170,6 +232,10 @@ These flags map to `skip_*` parameters on `ContentGenerationService.refine_secti
 | "change heading to Welcome" | Text replacement | `update_text` | ~200ms |
 | "make it 2 columns" | Layout change | `get_design_guide` → `refine_with_ai(gemini-flash)` | ~3s |
 | "rewrite heading shorter" | Content rewrite | `get_briefing` → `refine_with_ai(gemini-flash)` | ~3s |
+| "change all buttons to green" | Multi-element style change | `apply_edits` | ~1-2s |
+| "make CTA text more compelling" | Text change needing AI creativity | `apply_edits` | ~1-2s |
+| "add hover effects to cards" | Multi-element class additions | `apply_edits` | ~1-2s |
+| "add alt text to all images" | Multi-element attribute additions | `apply_edits` | ~1-2s |
 | "add testimonial carousel" | New interactive component | `refine_with_ai(gemini-pro, include_components=true)` | ~5-8s |
 | "redesign this completely" | Creative, needs everything | `refine_with_ai(gemini-pro, include_components=true, include_briefing=true, include_pages=true)` | ~5-8s |
 
