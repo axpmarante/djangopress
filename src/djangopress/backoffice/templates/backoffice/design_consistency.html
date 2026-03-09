@@ -382,7 +382,7 @@ function startAnalysis() {
         }
     });
 
-    sse.send({ custom_rules: customRules });
+    sse.start({ custom_rules: customRules });
 }
 
 /* ── Results Rendering ── */
@@ -638,7 +638,7 @@ function startFix() {
         }
     });
 
-    sse.send({ fixes: fixes, custom_rules: customRules });
+    sse.start({ fixes: fixes, custom_rules: customRules });
 }
 
 function renderFixSummary(results, summary) {
