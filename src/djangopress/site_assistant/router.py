@@ -30,6 +30,7 @@ Categories:
 - forms: Dynamic forms and submissions
 - media: Browse/search image library
 - news: Blog/news posts and categories
+- properties: Rental properties — list, search, update, embed property cards in pages
 - stats: Detailed site statistics
 
 Rules:

@@ -13,6 +13,13 @@ try:
 except ImportError:
     NEWS_TOOLS = {}
 
+# Conditionally import properties tools if the properties app is installed
+try:
+    from .properties_tools import PROPERTIES_TOOLS
+    ALL_TOOLS.update(PROPERTIES_TOOLS)
+except ImportError:
+    PROPERTIES_TOOLS = {}
+
 DESTRUCTIVE_TOOLS = {'delete_page', 'delete_menu_item', 'delete_form'}
 
 # Confirmation words (multi-language) — user must say one of these
@@ -59,10 +66,11 @@ class ToolRegistry:
     SITE_TOOL_NAMES = set(SITE_TOOLS.keys())
     PAGE_TOOL_NAMES = set(PAGE_TOOLS.keys())
     NEWS_TOOL_NAMES = set(NEWS_TOOLS.keys()) if NEWS_TOOLS else set()
+    PROPERTIES_TOOL_NAMES = set(PROPERTIES_TOOLS.keys()) if PROPERTIES_TOOLS else set()
 
     @classmethod
     def get_available_tools(cls, has_active_page):
-        tools = set(cls.SITE_TOOL_NAMES) | cls.NEWS_TOOL_NAMES
+        tools = set(cls.SITE_TOOL_NAMES) | cls.NEWS_TOOL_NAMES | cls.PROPERTIES_TOOL_NAMES
         if has_active_page:
             tools |= cls.PAGE_TOOL_NAMES
         return tools

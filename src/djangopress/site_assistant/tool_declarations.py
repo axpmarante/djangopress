@@ -676,6 +676,77 @@ NEWS_TOOLS = [
 ]
 
 # ---------------------------------------------------------------------------
+# PROPERTIES_TOOLS
+# ---------------------------------------------------------------------------
+
+LIST_PROPERTIES = types.FunctionDeclaration(
+    name='list_properties',
+    description='List rental properties. Optionally filter by active status or property type.',
+    parameters=S(
+        type=T.OBJECT,
+        properties={
+            'limit': S(type=T.INTEGER, description='Maximum number of properties to return. Defaults to 20.'),
+            'active_only': S(type=T.BOOLEAN, description='If true, only return active properties.'),
+            'property_type': S(type=T.STRING, description='Filter by type: apartment, studio, house, villa, penthouse.'),
+        },
+    ),
+)
+
+GET_PROPERTY = types.FunctionDeclaration(
+    name='get_property',
+    description=(
+        'Get detailed property information including images, capacity, and booking URL. '
+        'Provide property_id or name (case-insensitive search across all languages).'
+    ),
+    parameters=S(
+        type=T.OBJECT,
+        properties={
+            'property_id': S(type=T.INTEGER, description='Property ID to look up.'),
+            'name': S(type=T.STRING, description='Case-insensitive name search across all languages.'),
+        },
+    ),
+)
+
+UPDATE_PROPERTY = types.FunctionDeclaration(
+    name='update_property',
+    description='Update an existing property.',
+    parameters=S(
+        type=T.OBJECT,
+        properties={
+            'property_id': S(type=T.INTEGER, description='ID of the property to update.'),
+            'name_i18n': S(type=T.OBJECT, description='New name per language.'),
+            'description_i18n': S(type=T.OBJECT, description='New description per language.'),
+            'property_type': S(type=T.STRING, description='Property type: apartment, studio, house, villa, penthouse.'),
+            'city': S(type=T.STRING, description='City name.'),
+            'max_guests': S(type=T.INTEGER, description='Maximum number of guests.'),
+            'bedrooms': S(type=T.INTEGER, description='Number of bedrooms.'),
+            'beds': S(type=T.INTEGER, description='Number of beds.'),
+            'typology': S(type=T.STRING, description='Typology, e.g. T1, T2, Studio.'),
+            'booking_url': S(type=T.STRING, description='External booking URL.'),
+            'featured_image_id': S(type=T.INTEGER, description='SiteImage ID for the featured image.'),
+            'is_active': S(type=T.BOOLEAN, description='Whether the property is active/visible.'),
+            'sort_order': S(type=T.INTEGER, description='Sort order (lower = first).'),
+        },
+        required=['property_id'],
+    ),
+)
+
+LIST_PROPERTY_TEMPLATE_TAGS = types.FunctionDeclaration(
+    name='list_property_template_tags',
+    description=(
+        'List available Django template tags from the properties app that can be embedded in page HTML. '
+        'Use this to find out how to embed property cards/grids in CMS pages.'
+    ),
+)
+
+PROPERTIES_TOOLS = [
+    LIST_PROPERTIES,
+    GET_PROPERTY,
+    UPDATE_PROPERTY,
+    LIST_PROPERTY_TEMPLATE_TAGS,
+]
+
+# ---------------------------------------------------------------------------
 # STATS_TOOLS
 # ---------------------------------------------------------------------------
 
@@ -697,7 +768,7 @@ REQUEST_TOOLS_DECLARATION = types.FunctionDeclaration(
     description=(
         'Request tools from additional categories. Use this when the user\'s '
         'request requires tools not currently available. Available categories: '
-        'pages, page_edit, navigation, settings, header_footer, forms, media, news, stats.'
+        'pages, page_edit, navigation, settings, header_footer, forms, media, news, properties, stats.'
     ),
     parameters=S(
         type=T.OBJECT,
@@ -707,7 +778,7 @@ REQUEST_TOOLS_DECLARATION = types.FunctionDeclaration(
                 description=(
                     'List of category names to request. Available: '
                     '"pages", "page_edit", "navigation", "settings", '
-                    '"header_footer", "forms", "media", "news", "stats".'
+                    '"header_footer", "forms", "media", "news", "properties", "stats".'
                 ),
                 items=S(type=T.STRING),
             ),
@@ -729,6 +800,7 @@ TOOL_CATEGORIES = {
     'forms': FORMS_TOOLS,
     'media': MEDIA_TOOLS,
     'news': NEWS_TOOLS,
+    'properties': PROPERTIES_TOOLS,
     'stats': STATS_TOOLS,
 }
 

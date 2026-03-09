@@ -244,16 +244,122 @@ Reference: `news/templatetags/news_tags.py`
 
 > **Note:** With the pip package architecture, `backoffice/` files live in the djangopress package. For custom apps, keep backoffice views in your app directory and register the URLs in your custom `config/urls.py`.
 
-## Step 8: Create Backoffice Views
+## Step 8: Create Backoffice Views and Forms
 
-Create views in `<app_name>/views.py` (or add to `backoffice/views.py`):
+### Forms (`<app_name>/forms.py`)
+
+```python
+from django import forms
+from .models import <Item>, <Category>
+from djangopress.core.models import SiteImage
+
+class <Item>Form(forms.ModelForm):
+    """Form for creating and updating items (i18n version)"""
+
+    gallery_images = forms.ModelMultipleChoiceField(
+        queryset=SiteImage.objects.filter(is_active=True).order_by('-id'),
+        required=False,
+        widget=forms.CheckboxSelectMultiple,
+        label='Gallery Images',
+        help_text='Select images to add to the gallery'
+    )
+
+    class Meta:
+        model = <Item>
+        fields = [
+            'title_i18n', 'slug_i18n', 'featured_image', 'excerpt_i18n',
+            'html_content_i18n', 'category', 'is_published', 'published_date',
+            'meta_description_i18n',
+        ]
+        widgets = {
+            'is_published': forms.CheckboxInput(attrs={
+                'class': 'w-5 h-5 text-blue-600 border-gray-300 rounded focus:ring-2 focus:ring-blue-500'
+            }),
+            'published_date': forms.DateTimeInput(attrs={
+                'class': 'w-full px-4 py-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent',
+                'type': 'datetime-local'
+            }),
+            'featured_image': forms.Select(attrs={
+                'class': 'w-full px-4 py-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent',
+            }),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['published_date'].required = False
+        self.fields['featured_image'].queryset = SiteImage.objects.filter(is_active=True).order_by('-id')
+        if self.instance and self.instance.pk:
+            self.fields['gallery_images'].initial = self.instance.gallery_images.all()
+
+
+class <Category>Form(forms.ModelForm):
+    class Meta:
+        model = <Category>
+        fields = ['name_i18n', 'slug_i18n', 'description_i18n', 'order', 'is_active']
+        widgets = {
+            'name_i18n': forms.Textarea(attrs={
+                'rows': 2, 'class': 'w-full px-3 py-2 border border-gray-300 rounded-md text-sm font-mono',
+                'placeholder': '{"pt": "Categoria", "en": "Category"}'
+            }),
+            'slug_i18n': forms.Textarea(attrs={
+                'rows': 2, 'class': 'w-full px-3 py-2 border border-gray-300 rounded-md text-sm font-mono',
+            }),
+            'description_i18n': forms.Textarea(attrs={
+                'rows': 3, 'class': 'w-full px-3 py-2 border border-gray-300 rounded-md text-sm font-mono',
+            }),
+            'order': forms.NumberInput(attrs={
+                'class': 'w-24 px-3 py-2 border border-gray-300 rounded-md text-sm',
+            }),
+        }
+```
+
+### Views (`<app_name>/views.py`)
+
+Create views with these patterns:
 
 - CRUD views for the main model (List, Create, Update, Delete)
 - Category CRUD views
 - Layout list/edit views
 - AI tool views (Generate, Bulk, Refine, Images) — use `SuperuserRequiredMixin`
 
-Create forms in `<app_name>/forms.py` with `ModelForm` for the content model and category.
+**Critical: Create/Update views must pass language context and handle gallery images:**
+
+```python
+from djangopress.core.models import SiteSettings
+
+class <Item>CreateView(LoginRequiredMixin, CreateView):
+    model = <Item>
+    form_class = <Item>Form
+    template_name = 'backoffice/<app>_form.html'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['form_title'] = 'Create New <Item>'
+        context['submit_text'] = 'Create <Item>'
+        # Language context for i18n tabs
+        site_settings = SiteSettings.objects.first()
+        if site_settings:
+            context['languages'] = site_settings.get_enabled_languages()
+            context['default_language'] = site_settings.get_default_language()
+        else:
+            context['languages'] = [('pt', 'Portuguese')]
+            context['default_language'] = 'pt'
+        return context
+
+    def form_valid(self, form):
+        response = super().form_valid(form)
+        # Handle gallery images
+        gallery_images = form.cleaned_data.get('gallery_images')
+        if gallery_images:
+            self.object.gallery_items.all().delete()
+            for idx, site_image in enumerate(gallery_images):
+                <Item>GalleryImage.objects.create(
+                    parent=self.object, site_image=site_image, order=idx + 1
+                )
+        return response
+```
+
+Same pattern for `<Item>UpdateView` — identical `get_context_data` and `form_valid`.
 
 Reference: `news/views.py`, `news/forms.py`
 
@@ -287,7 +393,282 @@ Create templates in `backoffice/templates/backoffice/` following the news patter
 - `<app>_layouts.html`, `<app>_layout_form.html`
 - `ai_generate_<app>.html`, `ai_bulk_<app>.html`, `ai_refine_<app>.html`, `<app>_images.html`
 
-Reference: `backoffice/templates/backoffice/` (files prefixed with `news_` or `ai_*_news`)
+### Form Template Pattern (`<app>_form.html`)
+
+The form template uses **language tabs** for i18n fields and **modal-based image selection**. This is the canonical pattern — copy from `news_form.html`.
+
+**Key architecture:**
+1. **Language tab bar** — switches all i18n fields at once, non-i18n fields always visible
+2. **Hidden JSON fields** — populated on submit by JS (`assembleI18nJson()`)
+3. **`json_script` for initial values** — safe JSON encoding (handles HTML with quotes)
+4. **Image modals** — reuse existing `image_selection_modals.html` partial + `image_selection.js`
+
+```html
+{% extends 'backoffice/base.html' %}
+{% load static %}
+
+{% block title %}{{ form_title }}{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto">
+    <div class="mb-6">
+        <h2 class="text-3xl font-bold text-gray-900">{{ form_title }}</h2>
+    </div>
+
+    <div class="bg-white rounded-lg shadow p-6">
+        <form id="<app>-form" method="post" enctype="multipart/form-data" class="space-y-6">
+            {% csrf_token %}
+
+            {% if form.non_field_errors %}
+            <div class="bg-red-50 border-l-4 border-red-500 p-4">
+                <p class="text-sm text-red-700">{{ form.non_field_errors.0 }}</p>
+            </div>
+            {% endif %}
+
+            <!-- Language Tabs -->
+            <div class="border-b border-gray-200">
+                <nav class="flex space-x-4" id="lang-tabs">
+                    {% for code, name in languages %}
+                    <button type="button"
+                            class="lang-tab px-4 py-2 text-sm font-medium transition-colors {% if code == default_language %}border-b-2 border-blue-500 text-blue-600{% else %}text-gray-500 hover:text-gray-700{% endif %}"
+                            data-lang="{{ code }}"
+                            onclick="switchLanguageTab('{{ code }}')">
+                        {{ name }}
+                    </button>
+                    {% endfor %}
+                </nav>
+            </div>
+
+            <!-- Hidden JSON fields (populated on submit by JS) -->
+            <input type="hidden" name="title_i18n" id="title_i18n_json">
+            <input type="hidden" name="slug_i18n" id="slug_i18n_json">
+            <input type="hidden" name="excerpt_i18n" id="excerpt_i18n_json">
+            <input type="hidden" name="html_content_i18n" id="html_content_i18n_json">
+            <input type="hidden" name="meta_description_i18n" id="meta_description_i18n_json">
+
+            <!-- Initial values for JS to parse (safe JSON encoding via json_script) -->
+            {{ form.title_i18n.value|default_if_none:"{}"|json_script:"title_i18n_initial" }}
+            {{ form.slug_i18n.value|default_if_none:"{}"|json_script:"slug_i18n_initial" }}
+            {{ form.excerpt_i18n.value|default_if_none:"{}"|json_script:"excerpt_i18n_initial" }}
+            {{ form.html_content_i18n.value|default_if_none:"{}"|json_script:"html_content_i18n_initial" }}
+            {{ form.meta_description_i18n.value|default_if_none:"{}"|json_script:"meta_description_i18n_initial" }}
+
+            <!-- Per-language panels (one per language, toggled by JS) -->
+            {% for code, name in languages %}
+            <div class="lang-panel space-y-6 {% if code != default_language %}hidden{% endif %}" data-lang="{{ code }}">
+                <!-- Title -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Title ({{ name }}) *</label>
+                    <input type="text" class="i18n-field w-full px-4 py-3 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                           data-field="title_i18n" data-lang="{{ code }}" placeholder="Title in {{ name }}">
+                </div>
+
+                <!-- Slug -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Slug ({{ name }})</label>
+                    <input type="text" class="i18n-field w-full px-4 py-3 border border-gray-300 rounded-md font-mono text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                           data-field="slug_i18n" data-lang="{{ code }}" placeholder="url-slug-in-{{ code }}">
+                    <p class="mt-1 text-xs text-gray-500">Leave empty to auto-generate from title</p>
+                </div>
+
+                <!-- Excerpt -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Excerpt ({{ name }})</label>
+                    <textarea class="i18n-field w-full px-4 py-3 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                              data-field="excerpt_i18n" data-lang="{{ code }}" rows="3" placeholder="Short summary in {{ name }}"></textarea>
+                </div>
+
+                <!-- HTML Content -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">HTML Content ({{ name }})</label>
+                    <textarea class="i18n-field w-full px-4 py-3 border border-gray-300 rounded-md font-mono text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                              data-field="html_content_i18n" data-lang="{{ code }}" rows="15" placeholder="<p>Content in {{ name }}...</p>"></textarea>
+                </div>
+
+                <!-- Meta Description -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Meta Description ({{ name }})</label>
+                    <textarea class="i18n-field w-full px-4 py-3 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                              data-field="meta_description_i18n" data-lang="{{ code }}" rows="2" placeholder="SEO description in {{ name }}"></textarea>
+                </div>
+            </div>
+            {% endfor %}
+
+            <!-- Category (always visible, outside language panels) -->
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">Category</label>
+                <select name="category" class="w-full px-4 py-3 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                    <option value="">---------</option>
+                    {% for choice in form.category.field.queryset %}
+                    <option value="{{ choice.pk }}" {% if form.category.value|stringformat:"s" == choice.pk|stringformat:"s" %}selected{% endif %}>{{ choice }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <!-- Featured Image (modal-based) -->
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">Featured Image</label>
+                <select name="featured_image" class="hidden" id="id_featured_image">
+                    <option value="">---------</option>
+                    {% for image in form.featured_image.field.queryset %}
+                    <option value="{{ image.pk }}" {% if form.featured_image.value|stringformat:"s" == image.pk|stringformat:"s" %}selected{% endif %}>{{ image }}</option>
+                    {% endfor %}
+                </select>
+                <div id="featured-image-display"></div>
+                <div class="mt-3 flex space-x-3">
+                    <button type="button" onclick="openFeaturedImageModal()" class="px-4 py-2 text-sm font-medium text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors">
+                        Select from Library
+                    </button>
+                    <button type="button" onclick="openFeaturedUploadModal()" class="px-4 py-2 text-sm font-medium text-gray-600 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                        Upload New
+                    </button>
+                </div>
+            </div>
+
+            <!-- Publication Settings -->
+            <div class="border-t pt-6">
+                <h3 class="text-lg font-semibold text-gray-900 mb-4">Publication Settings</h3>
+                <div class="space-y-4">
+                    <div class="flex items-center">
+                        {{ form.is_published }}
+                        <label for="{{ form.is_published.id_for_label }}" class="ml-2 block text-sm text-gray-700">
+                            {{ form.is_published.help_text }}
+                        </label>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Published Date</label>
+                        {{ form.published_date }}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Gallery Images (modal-based) -->
+            <div class="border-t pt-6">
+                <h3 class="text-lg font-semibold text-gray-900 mb-4">Gallery Images</h3>
+                <div id="gallery-checkboxes-container" class="hidden">
+                    {% for image in form.gallery_images.field.queryset %}
+                    <input type="checkbox" name="gallery_images" value="{{ image.id }}"
+                           {% if image in form.gallery_images.initial %}checked{% endif %}>
+                    {% endfor %}
+                </div>
+                <div id="selected-gallery-display"></div>
+                <div class="mt-3 flex space-x-3">
+                    <button type="button" onclick="openGalleryModal()" class="px-4 py-2 text-sm font-medium text-green-600 bg-green-50 rounded-lg hover:bg-green-100 transition-colors">
+                        Select from Library
+                    </button>
+                    <button type="button" onclick="openUploadModal()" class="px-4 py-2 text-sm font-medium text-gray-600 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                        Upload New
+                    </button>
+                </div>
+            </div>
+
+            <!-- Form Actions -->
+            <div class="flex items-center justify-between pt-6 border-t border-gray-200">
+                <a href="{% url 'backoffice:<app>_list' %}" class="px-4 py-2 text-sm font-medium text-gray-700 hover:text-gray-900">Cancel</a>
+                <button type="submit" class="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">{{ submit_text }}</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Image Selection Modals (reusable partial) -->
+{% include 'backoffice/partials/image_selection_modals.html' with form=form %}
+
+<script src="{% static 'backoffice/js/image_selection.js' %}"></script>
+
+<script>
+// === Language Tab Management ===
+const I18N_FIELDS = ['title_i18n', 'slug_i18n', 'excerpt_i18n', 'html_content_i18n', 'meta_description_i18n'];
+
+function initI18nFields() {
+    I18N_FIELDS.forEach(fieldName => {
+        let data = {};
+        try {
+            const el = document.getElementById(fieldName + '_initial');
+            if (el) {
+                const raw = el.textContent;
+                if (raw) {
+                    const parsed = JSON.parse(raw);
+                    // json_script double-encodes: parse again if we got a string
+                    data = (typeof parsed === 'string') ? JSON.parse(parsed) : parsed;
+                }
+            }
+        } catch (e) {
+            console.warn('Failed to parse i18n initial data for', fieldName, e);
+        }
+        document.querySelectorAll(`.i18n-field[data-field="${fieldName}"]`).forEach(input => {
+            const lang = input.dataset.lang;
+            if (data[lang] !== undefined) input.value = data[lang];
+        });
+    });
+}
+
+function assembleI18nJson() {
+    I18N_FIELDS.forEach(fieldName => {
+        const data = {};
+        document.querySelectorAll(`.i18n-field[data-field="${fieldName}"]`).forEach(input => {
+            const val = input.value;
+            if (val) data[input.dataset.lang] = val;
+        });
+        document.getElementById(fieldName + '_json').value = JSON.stringify(data);
+    });
+}
+
+function switchLanguageTab(lang) {
+    document.querySelectorAll('.lang-tab').forEach(tab => {
+        if (tab.dataset.lang === lang) {
+            tab.classList.add('border-b-2', 'border-blue-500', 'text-blue-600');
+            tab.classList.remove('text-gray-500');
+        } else {
+            tab.classList.remove('border-b-2', 'border-blue-500', 'text-blue-600');
+            tab.classList.add('text-gray-500');
+        }
+    });
+    document.querySelectorAll('.lang-panel').forEach(panel => {
+        panel.classList.toggle('hidden', panel.dataset.lang !== lang);
+    });
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    initI18nFields();
+
+    // Initialize featured image display
+    const select = document.querySelector('select[name="featured_image"]');
+    if (select && select.value) {
+        const modalItem = document.querySelector(`.modal-image-item[data-image-id="${select.value}"]`);
+        if (modalItem) {
+            selectFeaturedImage(parseInt(select.value), modalItem.dataset.imageUrl, modalItem.dataset.imageTitle);
+        }
+    } else {
+        clearFeaturedImage();
+    }
+
+    // Initialize gallery display
+    updateGalleryDisplay();
+
+    // Assemble JSON on submit
+    document.getElementById('<app>-form').addEventListener('submit', function(e) {
+        assembleI18nJson();
+    });
+});
+</script>
+{% endblock %}
+```
+
+**Key elements to customize per app:**
+- Form ID (`<app>-form`)
+- Cancel link URL (`backoffice:<app>_list`)
+- Add any app-specific non-i18n fields (price, location, etc.) in the "always visible" section
+- Add/remove i18n fields from `I18N_FIELDS` array as needed
+
+**Image modal requirements:**
+- `select[name="featured_image"]` — hidden select for form submission
+- `#featured-image-display` — JS populates featured image preview
+- `#gallery-checkboxes-container` — hidden checkboxes for gallery selection
+- `#selected-gallery-display` — JS populates gallery preview grid
+- Include `image_selection_modals.html` partial and `image_selection.js`
+
+Reference: `backoffice/templates/backoffice/news_form.html`
 
 ## Step 12: Add AI Endpoints
 
@@ -375,6 +756,7 @@ Test:
 - [ ] `get_absolute_url()` with language fallback
 - [ ] Category model with i18n fields
 - [ ] Layout model (`key` + `html_content_i18n`)
+- [ ] Gallery through model (if needed)
 - [ ] Public views load from Layout with fallback HTML
 - [ ] Detail view supports `?edit=v2` with ContentType injection
 - [ ] Template extends `base.html` and injects editor config
@@ -382,9 +764,82 @@ Test:
 - [ ] Category URL before detail URL
 - [ ] Template tags for "records on page"
 - [ ] Backoffice CRUD views + templates
+- [ ] Form template has language tabs for i18n fields
+- [ ] Form template uses `json_script` for initial values + `assembleI18nJson()` on submit
+- [ ] Form template includes `image_selection_modals.html` partial + `image_selection.js`
+- [ ] Create/Update views pass `languages` and `default_language` context
+- [ ] Create/Update views handle gallery images in `form_valid()`
 - [ ] Sidebar navigation added
 - [ ] AI endpoints with generic FK sessions
 - [ ] Dashboard stats added
 - [ ] Admin registered
 - [ ] Migrations created and applied
 - [ ] `python manage.py check` passes
+
+## Site Assistant Integration (Optional)
+
+To make the app queryable and manageable via the site assistant chat, add tools following the `news_tools` / `properties_tools` pattern. All files are in `djangopress/site_assistant/`.
+
+### 1. Tool Declarations (`tool_declarations.py`)
+
+Add FunctionDeclarations for the app's tools. Typical tools for a content app:
+
+- `list_<app>_items` — list/filter records
+- `get_<app>_item` — get details by ID or name search
+- `update_<app>_item` — update fields
+- `list_<app>_template_tags` — expose available template tags for embedding in CMS pages
+
+Group them in a `<APP>_TOOLS` list and register in `TOOL_CATEGORIES`:
+
+```python
+TOOL_CATEGORIES = {
+    ...
+    '<app>': <APP>_TOOLS,
+}
+```
+
+Add `<app>` to the `REQUEST_TOOLS_DECLARATION` description strings.
+
+### 2. Tool Implementations (`tools/<app>_tools.py`)
+
+Create thin adapter functions with signature `(params, context) -> dict`. Use lazy imports inside each function so the module can be conditionally imported:
+
+```python
+def list_items(params, context):
+    from myapp.models import MyModel
+    # query, filter, serialize
+    return {'success': True, 'items': [...], 'message': '...'}
+
+<APP>_TOOLS = {
+    'list_<app>_items': list_items,
+    ...
+}
+```
+
+See `tools/news_tools.py` and `tools/properties_tools.py` for complete examples.
+
+### 3. Registry (`tools/__init__.py`)
+
+Add a conditional import block:
+
+```python
+try:
+    from .<app>_tools import <APP>_TOOLS
+    ALL_TOOLS.update(<APP>_TOOLS)
+except ImportError:
+    <APP>_TOOLS = {}
+```
+
+Add `<APP>_TOOL_NAMES` to `ToolRegistry` and include in `get_available_tools()`.
+
+### 4. Router (`router.py`)
+
+Add the app as a category in `ROUTER_PROMPT`:
+
+```
+- <app>: <description of what the app manages>
+```
+
+### 5. Template Tags Tool
+
+If the app has template tags for embedding content in CMS pages, expose them via a `list_<app>_template_tags` tool. This returns static metadata (tag name, load statement, usage example, description) so the assistant knows how to inject them using `refine_section`.
