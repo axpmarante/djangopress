@@ -368,6 +368,7 @@ Use `/add-app appname` to scaffold automatically, or follow the reference manual
 
 ## Common Gotchas
 
+- **Child project must load `.env` BEFORE `from djangopress.settings import *`** — djangopress checks `os.environ.get('GS_BUCKET_NAME')` at import time to choose between GCS and local `FileSystemStorage`. If `.env` is loaded after the import, GCS config is silently missed and images are saved locally instead of Google Cloud Storage.
 - **Home page slug must be `home` in ALL languages** — PageView defaults to slug `home` for root URL
 - **Domain must be set BEFORE uploading media** when using GCS — `DomainBasedStorage` uses `SiteSettings.domain` as folder name
 - **Editor v1 removed** — only `editor_v2/` exists. `?edit=true` and `?edit=v2` both load v2.
