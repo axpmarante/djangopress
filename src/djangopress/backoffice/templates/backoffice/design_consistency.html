@@ -138,6 +138,10 @@
                     Analyze All Pages
                 </button>
                 <p class="mt-3 text-xs text-gray-500 text-center">Scans {{ total_scannable }} item(s) against your design system</p>
+                <a href="{% url 'backoffice:consistency_reports' %}"
+                   class="block mt-3 w-full px-4 py-2 text-sm font-medium text-center text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50">
+                    View Past Reports
+                </a>
 
                 <!-- Fix Button (hidden initially) -->
                 <button id="fixBtn" onclick="startFix()"
@@ -362,12 +366,14 @@ function startAnalysis() {
             setLoadingSteps(analysisSteps);
             document.getElementById('progressBar').style.width = '100%';
 
-            // Brief delay so user sees completion
+            // Brief delay so user sees completion, then redirect to saved report
             setTimeout(() => {
                 hideLoading();
                 setButtonLoading(analyzeBtn, false);
 
-                if (data.success) {
+                if (data.success && data.report_id) {
+                    window.location.href = '{% url "backoffice:consistency_reports" %}' + data.report_id + '/';
+                } else if (data.success) {
                     analysisReport = data.report;
                     renderResults(data.report, data.summary);
                 } else {
