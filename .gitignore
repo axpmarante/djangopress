@@ -98,4 +98,5 @@ htmlcov/
 # Claude AI — ignore local settings but track shared skills
 .claude/*
 !.claude/skills/
+!.claude/child-claude-md-template.md
 .claude/settings.local.json

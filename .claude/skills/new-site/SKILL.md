@@ -26,9 +26,9 @@ pip show djangopress 2>/dev/null | head -3 || echo "NOT INSTALLED"
 test -f db.sqlite3 && echo "DB EXISTS" || echo "NO DB"
 ```
 
-### Symlink Claude Code skills from the djangopress package
+### Set up Claude Code integration
 
-This ensures child projects always have the latest skills without manual updates:
+Symlink skills from the djangopress package and generate a project-specific CLAUDE.md:
 
 ```bash
 # Find the djangopress package location
@@ -38,8 +38,13 @@ DJANGOPRESS_PATH=$(python -c "import djangopress; import os; print(os.path.dirna
 mkdir -p .claude
 ln -sfn "$DJANGOPRESS_PATH/.claude/skills" .claude/skills
 
+# Generate CLAUDE.md from the child project template
+# Replace {{PROJECT_NAME}} with the actual project name
+sed "s/{{PROJECT_NAME}}/<project-name>/g" "$DJANGOPRESS_PATH/.claude/child-claude-md-template.md" > CLAUDE.md
+
 # Verify
 ls -la .claude/skills/
+head -1 CLAUDE.md
 ```
 
 If `.env` is missing, proceed to Step 2. If djangopress is not installed, proceed to Step 3.
