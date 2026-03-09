@@ -4,8 +4,8 @@ from django.views.generic import TemplateView, ListView, CreateView
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth import authenticate, login
 from django.contrib.auth.decorators import login_required
-from djangopress.core.decorators import SuperuserRequiredMixin
-from django.http import HttpResponseForbidden
+from djangopress.core.decorators import SuperuserRequiredMixin, superuser_required
+from django.http import HttpResponseForbidden, JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 from django.contrib import messages
@@ -1271,6 +1271,64 @@ class DesignConsistencyView(SuperuserRequiredMixin, TemplateView):
         context['design_guide_preview'] = (site_settings.design_guide or '')[:200] if site_settings else ''
         context['default_language'] = default_lang
         return context
+
+
+class ConsistencyReportsView(SuperuserRequiredMixin, TemplateView):
+    """List of past design consistency analysis reports."""
+    template_name = 'backoffice/consistency_reports.html'
+
+    def get_context_data(self, **kwargs):
+        from djangopress.ai.models import DesignConsistencyReport
+        context = super().get_context_data(**kwargs)
+        context['reports'] = DesignConsistencyReport.objects.all()[:50]
+        return context
+
+
+class ConsistencyReportDetailView(SuperuserRequiredMixin, TemplateView):
+    """Detail view for a saved design consistency report."""
+    template_name = 'backoffice/consistency_report_detail.html'
+
+    def get_context_data(self, **kwargs):
+        from djangopress.ai.models import DesignConsistencyReport
+        from django.shortcuts import get_object_or_404
+        context = super().get_context_data(**kwargs)
+        report = get_object_or_404(DesignConsistencyReport, pk=kwargs['pk'])
+        context['report'] = report
+        return context
+
+
+@superuser_required
+@require_http_methods(["POST"])
+def update_issue_status(request, pk):
+    """Update issue_statuses on a DesignConsistencyReport."""
+    from djangopress.ai.models import DesignConsistencyReport
+    from django.shortcuts import get_object_or_404
+    report = get_object_or_404(DesignConsistencyReport, pk=pk)
+    data = json.loads(request.body)
+    issue_key = data.get('issue_key')
+    status = data.get('status')
+
+    if status:
+        report.issue_statuses[issue_key] = status
+    else:
+        report.issue_statuses.pop(issue_key, None)
+    report.save(update_fields=['issue_statuses'])
+
+    return JsonResponse({
+        'success': True,
+        'open': report.get_open_count(),
+        'ignored': report.get_ignored_count(),
+        'wont_fix': report.get_wont_fix_count(),
+    })
+
+
+@superuser_required
+@require_http_methods(["POST"])
+def delete_consistency_report(request, pk):
+    """Delete a DesignConsistencyReport."""
+    from djangopress.ai.models import DesignConsistencyReport
+    DesignConsistencyReport.objects.filter(pk=pk).delete()
+    return JsonResponse({'success': True})
 
 
 class AIRefinePageView(SuperuserRequiredMixin, TemplateView):
