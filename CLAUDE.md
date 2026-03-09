@@ -175,25 +175,18 @@ DjangoPress ships with Claude Code skills (`.claude/skills/`) that automate comm
 |-------|-------|-------------|
 | `/new-site` | `/new-site my-project` | Interactive setup wizard for a freshly cloned project. Walks through `.env`, dependencies, migrations, SiteSettings configuration, and validates everything is ready for content generation. **Start here for every new site.** |
 | `/add-app` | `/add-app properties` | Scaffolds a full decoupled feature app using the **news app as reference** (`docs/decoupled-app-reference.md`). Creates models (I18nModelMixin, category, layout), public views, template tags, backoffice CRUD, AI endpoints, editor v2 integration, and URL registration. |
-| `/generate-content` | `/generate-content` | Guides through the full content pipeline: pre-flight check, page planning, bulk/individual generation, chat refinement, header/footer, image processing, design system polish. |
 | `/create-briefing` | `/create-briefing O Moinho` | **Interactive briefing generator.** Researches the client online (website, social media, reviews), asks targeted questions to fill gaps, and writes a complete `briefings/<slug>.md` file ready for `/generate-site`. Accepts a client name or URL as argument. |
 | `/generate-site` | `/generate-site briefings/my-site.md` | **Full site generation from a markdown briefing.** Reads the briefing, configures SiteSettings, generates all pages, header/footer, menu items, processes images. Claude Code reviews quality and fixes issues. Also available as `python manage.py generate_site` for batch use. |
 | `/deploy-site` | `/deploy-site my-project` | **Deploy to Railway.** Creates Railway project + Postgres, sets env vars, deploys code, migrates data from local SQLite to remote Postgres, generates domain. Handles redeployments (code, data, or both). |
 | `/sync-data` | `/sync-data` | **Push local DB to production.** Syncs pages, settings, forms, media records, header/footer, and menu items to a deployed Railway site via the `push_data` management command. Handles SYNC_SECRET setup and endpoint verification. |
 
-### Auto-Loaded Skills (Claude uses automatically)
-
-| Skill | Purpose |
-|-------|---------|
-| `djangopress-architecture` | CMS architecture reference — request flow, data model, AI pipeline, URL structure, common gotchas. Loaded automatically when architectural questions arise. |
-
 ### Typical New Site Flow
 
 ```
 # Option A: Interactive setup + interactive generation (highest quality)
-1. Create project dir, install djangopress pip package
-2. /new-site my-project          ← configures everything interactively
-3. /generate-content             ← generates pages, header, footer, images
+1. /create-briefing My Client     ← researches client, writes briefing interactively
+2. /new-site my-project          ← configures env, deps, SiteSettings
+3. /generate-site briefings/my-client.md  ← generates everything from briefing
 4. /add-app blog                 ← if the site needs extra features
 
 # Option B: Briefing-driven (fastest for new sites)
@@ -569,13 +562,25 @@ Use `/add-app appname` to scaffold automatically, or follow the reference manual
 
 ## Updating Child Projects
 
-Child projects install `djangopress` as a pip package. To pull updates:
+Child projects install `djangopress` as a pip package. To update to a newer version:
 
 ```bash
+# If using local editable install (development):
+cd /path/to/djangopress && git pull    # pull latest engine code
+cd /path/to/child-project
+pip install -e /path/to/djangopress    # reinstall to pick up changes
+python manage.py migrate               # apply any new migrations
+
+# If using published package (production):
 pip install --upgrade djangopress
-# Or if using local editable install, just pull the latest djangopress repo
 python manage.py migrate
 ```
+
+**After upgrading, always:**
+1. Run `python manage.py migrate` — new versions may include schema changes
+2. Check `python manage.py check` — validates configuration compatibility
+3. Restart the dev server — pick up new code
+4. If deployed on Railway: `railway up -d` to redeploy with the new version
 
 ### Migrating from Template Clone to Pip Package
 
