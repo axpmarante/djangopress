@@ -1,5 +1,5 @@
 ---
-name: update-site
+name: update-djangopress
 description: Update a DjangoPress child project to the latest engine version. Handles pip upgrade, migrations, skill refresh, and optional Railway redeployment.
 argument-hint:
 allowed-tools: Bash, Read, Edit, Grep, Glob, AskUserQuestion
