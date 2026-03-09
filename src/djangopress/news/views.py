@@ -83,6 +83,13 @@ class NewsCreateView(LoginRequiredMixin, CreateView):
         context = super().get_context_data(**kwargs)
         context['form_title'] = 'Create New News Post'
         context['submit_text'] = 'Create Post'
+        site_settings = SiteSettings.objects.first()
+        if site_settings:
+            context['languages'] = site_settings.get_enabled_languages()
+            context['default_language'] = site_settings.get_default_language()
+        else:
+            context['languages'] = [('pt', 'Portuguese')]
+            context['default_language'] = 'pt'
         return context
 
     def form_valid(self, form):
@@ -122,6 +129,13 @@ class NewsUpdateView(LoginRequiredMixin, UpdateView):
         context = super().get_context_data(**kwargs)
         context['form_title'] = f'Edit News Post: {self.object}'
         context['submit_text'] = 'Update Post'
+        site_settings = SiteSettings.objects.first()
+        if site_settings:
+            context['languages'] = site_settings.get_enabled_languages()
+            context['default_language'] = site_settings.get_default_language()
+        else:
+            context['languages'] = [('pt', 'Portuguese')]
+            context['default_language'] = 'pt'
         return context
 
     def form_valid(self, form):
