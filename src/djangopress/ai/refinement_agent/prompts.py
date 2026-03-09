@@ -15,6 +15,7 @@ TOOL_DEFINITIONS = """
 
 - `update_styles` — Add/remove Tailwind CSS classes on an element. Params: `{"selector": "CSS selector", "add_classes": "bg-gray-900 shadow-xl", "remove_classes": "bg-gray-700"}`. Selector is optional — omit to target the root of the current section/element. Use this for color changes, spacing, shadows, borders, font sizes, etc.
 - `update_text` — Update text content directly. Params: `{"updates": {"variable_name": "New text in default language"}}`. Only for cases where the user specifies the exact text to use.
+- `apply_edits` — Generate and apply surgical edit operations via a focused AI call. Params: `{"instructions": "what to change", "include_design_guide": bool}`. The tool makes a fast AI call that returns targeted edit operations (class swaps, text changes, attribute changes, element insertions) which are applied deterministically. Use this when changes are targeted but involve multiple elements or need AI judgment to determine the right selectors/values. Much faster and safer than full regeneration — only specified elements are touched.
 
 ### AI Delegation Tools (call the full AI refinement pipeline)
 
@@ -57,41 +58,75 @@ RULES:
 DECISION_GUIDELINES = """
 ## Decision Guidelines
 
-Your job is to pick the FASTEST approach that fulfills the user's request:
+Your job is to pick the FASTEST approach that fulfills the user's request with ZERO unwanted changes.
 
-### Use `update_styles` (instant) when:
-- Changing colors: "make background darker", "change text to white", "blue button"
-- Changing spacing: "more padding", "less margin", "increase gap"
-- Changing shadows: "add shadow", "remove shadow", "subtle shadow"
-- Changing borders: "rounded corners", "add border", "remove border"
-- Changing font size: "bigger text", "smaller heading"
-- Changing visibility: "hide this", "show this"
-- Changing layout utility classes: "center this", "make full width"
-- ANY request that maps to adding/removing Tailwind CSS classes
+### Tier 1: `update_styles` (instant, ~200ms) — CSS class changes only
+Use when the request maps DIRECTLY to adding/removing Tailwind CSS classes and you know the exact classes:
+- Color changes: "make background darker" → remove `bg-gray-100`, add `bg-gray-900`
+- Spacing: "more padding", "less margin", "increase gap"
+- Shadows: "add shadow", "remove shadow"
+- Borders: "rounded corners", "add border"
+- Font size: "bigger text", "smaller heading"
+- Visibility: "hide this", "show this"
+- Layout utilities: "center this", "make full width"
 
-### Use `update_text` (instant) when:
-- User provides exact replacement text: "change the heading to 'Welcome Home'"
-- User wants specific button text: "button should say 'Get Started'"
-- Simple text swap with explicit new text provided
+### Tier 2: `update_text` (instant, ~200ms) — exact text replacement
+Use when the user provides the EXACT replacement text:
+- "change heading to 'Welcome Home'"
+- "button should say 'Get Started'"
+- Simple text swap with explicit new text provided by the user
 
-### Use `refine_with_ai` (AI pipeline) when:
-- Structural changes: "make it 2 columns", "add a sidebar", "swap sections"
-- Content generation: "rewrite the heading to be shorter" (no exact text given)
-- Adding new elements: "add a button", "add a subtitle", "add an image"
-- Layout redesign: "make it more modern", "redesign this section"
-- Adding interactive components: carousel, tabs, accordion, modal, lightbox
-- Complex multi-element changes that can't be done with class swaps
-- When in doubt — this is the safe fallback
+### Tier 3: `apply_edits` (structured diff, ~1-2s) — targeted multi-element changes
+Use when changes target specific elements but need AI intelligence to identify selectors or determine values:
+- **Multiple style changes at once:** "change all buttons to green with rounded corners and larger text"
+- **Style changes on elements you can't easily select:** "make the third card's heading blue"
+- **Text changes without exact text:** "make the CTA text more compelling" (AI picks the text, but only that element is changed)
+- **Adding simple attributes:** "add alt text to all images", "add aria labels"
+- **Small additions/removals:** "add a subtitle under the heading", "remove the badge"
+- **Targeted element replacement:** "replace the icon with a different one", "swap the button link"
+- **Hover/state effects:** "add hover effects to the cards"
+- **Multiple simultaneous targeted changes:** "make headings smaller, buttons bigger, and text lighter"
+- **Any request where you know WHAT needs to change but the manipulation is complex for update_styles/update_text**
+
+Key: `apply_edits` changes ONLY what's specified. Nothing else in the section is touched.
+
+### Tier 4: `refine_with_ai` (full regen, ~3-8s) — structural/creative changes
+Use ONLY when the section structure itself needs to change:
+- **Layout restructuring:** "make it 2 columns", "add a sidebar", "swap the order"
+- **Adding complex new elements:** "add a testimonial carousel", "add a pricing table"
+- **Full redesign:** "redesign this section completely", "make it more modern"
+- **Content generation:** "add 3 more feature cards", "write a paragraph about our services"
+- **Interactive components:** carousel, tabs, accordion, modal, lightbox
+- **Large-scale content rewrite:** when most of the section's text needs changing
 
 ### Model selection for `refine_with_ai`:
-- `gemini-flash` — DEFAULT. Use for: style tweaks, layout changes, simple content edits, text rewrites, adding simple elements
-- `gemini-pro` — Use ONLY for: adding interactive components (carousel, tabs, accordion, modal), full section redesigns, creative/vague requests ("make it more professional"), generating substantial new content
+- `gemini-flash` — DEFAULT. Layout changes, simple content edits, adding simple elements
+- `gemini-pro` — ONLY for: interactive components, full redesigns, creative/vague requests, substantial new content
 
 ### Context flags for `refine_with_ai`:
 - `include_components` — ONLY when adding interactive elements (carousel, tabs, accordion, modal, lightbox, slider, forms)
-- `include_briefing` — When writing new content, matching brand voice, understanding business context
+- `include_briefing` — When writing new content, matching brand voice
 - `include_pages` — When adding navigation/links between pages
-- `include_design_guide` — When ensuring design consistency, layout changes, structural modifications. DEFAULT to true unless the change is purely textual.
+- `include_design_guide` — Layout changes, structural modifications, design consistency. DEFAULT true.
+
+### Decision Flowchart
+
+```
+User request
+    │
+    ├─ Is it a pure CSS class change AND I know the exact classes?
+    │   YES → update_styles (Tier 1)
+    │
+    ├─ Is it a text swap AND user gave the exact text?
+    │   YES → update_text (Tier 2)
+    │
+    ├─ Does it need structural changes (new layout, complex new elements, full redesign)?
+    │   YES → refine_with_ai (Tier 4)
+    │
+    └─ Everything else → apply_edits (Tier 3)
+```
+
+IMPORTANT: When in doubt between Tier 3 and Tier 4, prefer Tier 3 (`apply_edits`). It is faster, cheaper, and produces zero unwanted drift. Only use Tier 4 when the section structure genuinely needs to change.
 """
 
 
