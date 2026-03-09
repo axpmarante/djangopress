@@ -56,104 +56,134 @@ class ContentGenerationService:
             'total_tokens': getattr(usage, 'total_tokens', 0) or 0,
         }
 
-    def _extract_json_from_response(self, content: str, retry_count: int = 0, max_retries: int = 2) -> Union[Dict, List]:
+    def _extract_json_from_response(self, content: str, retry_count: int = 0, max_retries: int = 1) -> Union[Dict, List]:
         """
-        Extract and parse JSON from LLM response
-        Handles cases where the LLM includes markdown code blocks or extra text
-        If JSON parsing fails, automatically asks LLM to fix the error
+        Extract and parse JSON from LLM response.
+        Handles markdown code blocks, raw JSON, and broken JSON with unescaped HTML.
 
-        Args:
-            content: Raw response content from LLM
-            retry_count: Current retry attempt (internal use)
-            max_retries: Maximum number of retry attempts
-
-        Returns:
-            Parsed JSON object or array
-
-        Raises:
-            ValueError: If no valid JSON found after all retries
+        Strategy:
+        1. Try standard JSON parsing (fast path)
+        2. Try regex-based HTML extraction for html_template_i18n responses (instant)
+        3. Fall back to LLM repair (slow, last resort)
         """
-        # Try to find JSON in markdown code blocks first
+        # Strip markdown code blocks
         json_match = re.search(r'```(?:json)?\s*(\{.*?\}|\[.*?\])\s*```', content, re.DOTALL)
         if json_match:
             json_str = json_match.group(1)
         else:
-            # Try to find raw JSON (array or object)
             json_match = re.search(r'(\{.*\}|\[.*\])', content, re.DOTALL)
-            if json_match:
-                json_str = json_match.group(1)
-            else:
-                # Last resort: assume entire content is JSON
-                json_str = content
+            json_str = json_match.group(1) if json_match else content
 
+        # Fast path: try standard JSON parse
         try:
             return json.loads(json_str)
         except json.JSONDecodeError as e:
-            error_msg = str(e)
-            print(f"Failed to parse JSON (attempt {retry_count + 1}/{max_retries + 1}): {error_msg}")
-            print(f"Error location: {e.msg} at line {e.lineno}, column {e.colno}")
+            print(f"  JSON parse failed: {e.msg} at line {e.lineno}, col {e.colno}")
 
-            # If we haven't exceeded max retries, ask LLM to fix the error
-            if retry_count < max_retries:
-                print(f"Asking LLM to fix the JSON error...")
-                fixed_content = self._ask_llm_to_fix_json(content, error_msg, e.lineno, e.colno)
-                if fixed_content:
-                    # Recursively try to parse the fixed JSON
-                    return self._extract_json_from_response(fixed_content, retry_count + 1, max_retries)
+        # Fallback: regex-extract html_template_i18n values from broken JSON
+        # This handles the common case where HTML with double quotes breaks JSON escaping
+        extracted = self._extract_html_template_i18n(content)
+        if extracted:
+            print(f"  Recovered html_template_i18n via regex extraction: {list(extracted.keys())}")
+            return {'html_template_i18n': extracted}
 
-            # If all retries failed, raise the error
-            print(f"Raw content: {content[:500]}...")
-            raise ValueError(f"LLM did not return valid JSON after {retry_count + 1} attempts: {e}")
+        # Last resort: ask LLM to fix (1 retry max)
+        if retry_count < max_retries:
+            print(f"  Asking LLM to fix JSON...")
+            fixed = self._ask_llm_to_fix_json(json_str, str(e), e.lineno, e.colno)
+            if fixed:
+                return self._extract_json_from_response(fixed, retry_count + 1, max_retries)
+
+        raise ValueError(f"Could not extract valid JSON after {retry_count + 1} attempts: {e}")
+
+    @staticmethod
+    def _extract_html_template_i18n(content: str) -> Optional[Dict[str, str]]:
+        """
+        Extract per-language HTML from broken JSON by finding language keys and their
+        HTML values using structural markers ({% load, <header, <footer, <nav, <section, <div).
+
+        Works even when the HTML contains unescaped double quotes that break JSON parsing.
+        Returns None if the content doesn't look like an html_template_i18n response.
+        """
+        if 'html_template_i18n' not in content:
+            return None
+
+        # Find all language keys followed by their HTML content
+        # Pattern: "xx": "...HTML..." where xx is a 2-3 char language code
+        # We look for language keys and then grab everything up to the next language key or closing brace
+        result = {}
+
+        # Find language code positions: "pt": ", "en": ", etc.
+        lang_pattern = re.compile(r'"([a-z]{2,3})"\s*:\s*"', re.IGNORECASE)
+        lang_matches = list(lang_pattern.finditer(content))
+
+        if not lang_matches:
+            return None
+
+        for i, match in enumerate(lang_matches):
+            lang_code = match.group(1).lower()
+            html_start = match.end()  # position right after the opening quote
+
+            # Find where this language's HTML ends:
+            # It ends at the next language key pattern or the final closing braces
+            if i + 1 < len(lang_matches):
+                # Look backwards from the next lang key to find the closing quote + comma
+                next_match_start = lang_matches[i + 1].start()
+                # The raw content between html_start and next lang key includes trailing ",\n
+                raw_html = content[html_start:next_match_start]
+                # Strip trailing: "  ,\n    (with possible whitespace)
+                raw_html = re.sub(r'"\s*,?\s*$', '', raw_html, flags=re.DOTALL)
+            else:
+                # Last language — find the end by looking for closing braces
+                remaining = content[html_start:]
+                # Find the last occurrence of the HTML closing tag pattern
+                # then take everything up to the quote after it
+                close_patterns = [r'</footer>', r'</header>', r'</nav>', r'</section>', r'</div>']
+                last_close_pos = -1
+                for cp in close_patterns:
+                    for m in re.finditer(cp, remaining):
+                        last_close_pos = max(last_close_pos, m.end())
+
+                if last_close_pos > 0:
+                    raw_html = remaining[:last_close_pos]
+                else:
+                    # Fallback: take everything up to the final "}
+                    raw_html = re.sub(r'"\s*\}\s*\}\s*$', '', remaining, flags=re.DOTALL)
+
+            # Unescape JSON string escapes that the LLM did correctly
+            html = raw_html.replace('\\n', '\n').replace('\\t', '\t').replace('\\"', '"').replace('\\\\', '\\')
+            html = html.strip()
+
+            if len(html) > 50:  # sanity check — real HTML should be substantial
+                result[lang_code] = html
+
+        return result if result else None
 
     def _ask_llm_to_fix_json(self, broken_json: str, error_msg: str, line_no: int, col_no: int) -> Optional[str]:
-        """
-        Ask the LLM to fix broken JSON
+        """Ask the LLM to fix broken JSON. Uses a truncated excerpt to keep it fast."""
+        # Truncate to keep the repair prompt small and fast
+        excerpt = broken_json[:2000] + ('...' if len(broken_json) > 2000 else '')
 
-        Args:
-            broken_json: The broken JSON string
-            error_msg: The JSON error message
-            line_no: Line number where error occurred
-            col_no: Column number where error occurred
+        fix_prompt = f"""Fix this JSON syntax error:
 
-        Returns:
-            Fixed JSON string, or None if LLM couldn't fix it
-        """
-        fix_prompt = f"""The previous response contained invalid JSON. Please fix the following JSON syntax error:
+Error: {error_msg} at line {line_no}, col {col_no}
 
-**Error**: {error_msg}
-**Location**: Line {line_no}, Column {col_no}
+Broken JSON (excerpt):
+{excerpt}
 
-**Broken JSON**:
-```json
-{broken_json}
-```
-
-Please return ONLY the corrected JSON, with no additional text, explanations, or markdown code blocks.
-Focus on:
-1. Fixing the syntax error at the specified location
-2. Ensuring all quotes are properly escaped
-3. Ensuring all commas are in the right places
-4. Ensuring all brackets and braces are properly closed
-5. Making sure the JSON is valid and parseable
-
-Return the complete, corrected JSON now:"""
+Return ONLY the corrected, complete JSON. No markdown, no explanation."""
 
         try:
-            # Use a fast model for fixing — never the expensive pro model
             messages = [{"role": "user", "content": fix_prompt}]
             response = self.llm.get_completion(
                 messages=messages,
                 tool_name=get_ai_model('refinement_section')
             )
-
             if response and hasattr(response, 'choices') and len(response.choices) > 0:
-                fixed_json = response.choices[0].message.content
-                print(f"LLM attempted to fix the JSON")
-                return fixed_json
-
+                print(f"  LLM returned fix attempt")
+                return response.choices[0].message.content
         except Exception as e:
-            print(f"Error asking LLM to fix JSON: {e}")
-
+            print(f"  LLM fix failed: {e}")
         return None
 
     def _make_stream_callback(self, on_progress, step_name, throttle_chars=500):

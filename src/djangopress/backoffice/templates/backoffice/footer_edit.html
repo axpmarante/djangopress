@@ -139,21 +139,37 @@
 
                     <div class="flex items-center justify-between">
                         <h4 class="text-sm font-semibold text-gray-900">Footer HTML Template</h4>
-                        <button type="button" onclick="copyHTMLToClipboard()"
-                                id="copyHtmlBtn"
-                                class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 flex items-center text-sm">
-                            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/>
-                            </svg>
-                            Copy to Clipboard
-                        </button>
+                        <div class="flex items-center space-x-3">
+                            <!-- Language Tabs -->
+                            <div class="flex rounded-md shadow-sm" role="group">
+                                {% for lang in html_langs %}
+                                <button type="button" onclick="showLangTab('{{ lang.code }}')"
+                                        id="lang-tab-{{ lang.code }}"
+                                        class="lang-tab-btn px-3 py-1.5 text-sm font-medium border {% if forloop.first %}rounded-l-md border-blue-500 bg-blue-50 text-blue-700{% else %}border-gray-300 bg-white text-gray-700 hover:bg-gray-50{% endif %}{% if forloop.last %} rounded-r-md{% endif %}">
+                                    {{ lang.code|upper }}
+                                </button>
+                                {% endfor %}
+                            </div>
+                            <button type="button" onclick="copyHTMLToClipboard()"
+                                    id="copyHtmlBtn"
+                                    class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 flex items-center text-sm">
+                                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+                                </svg>
+                                Copy to Clipboard
+                            </button>
+                        </div>
                     </div>
 
-                    <textarea name="html_template"
-                              id="id_html_template"
-                              rows="25"
-                              class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-mono text-sm"
-                              placeholder="<footer>&#10;    <!-- Your footer HTML here -->&#10;</footer>">{{ footer.html_template }}</textarea>
+                    {% for lang in html_langs %}
+                    <div id="lang-content-{{ lang.code }}" class="lang-content {% if not forloop.first %}hidden{% endif %}">
+                        <textarea name="html_template_i18n_{{ lang.code }}"
+                                  id="id_html_template_{{ lang.code }}"
+                                  rows="25"
+                                  class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-mono text-sm"
+                                  placeholder="<footer>&#10;    <!-- Your {{ lang.code|upper }} footer HTML here -->&#10;</footer>">{{ lang.html }}</textarea>
+                    </div>
+                    {% endfor %}
 
                     <!-- Context Variables Reference -->
                     <div class="bg-gray-50 border border-gray-200 rounded-lg p-4">
@@ -169,7 +185,7 @@
                             <div><code class="bg-gray-100 px-1 rounded">&#123;% url 'core:page' slug='privacy' %&#125;</code> — URL tags</div>
                         </div>
                         <p class="text-xs text-gray-500 mt-2">
-                            If the template field is empty, the system will use the fallback template file.
+                            Each language has its own HTML with text written directly in that language. Django template tags are preserved across all languages.
                         </p>
                     </div>
 
@@ -316,6 +332,23 @@
 
 <script src="{% static 'backoffice/js/sse-client.js' %}"></script>
 <script>
+// Language Tab Management
+let currentLang = '{{ html_langs.0.code }}';
+
+function showLangTab(lang) {
+    currentLang = lang;
+    document.querySelectorAll('.lang-content').forEach(el => el.classList.add('hidden'));
+    document.getElementById('lang-content-' + lang).classList.remove('hidden');
+
+    document.querySelectorAll('.lang-tab-btn').forEach(btn => {
+        btn.classList.remove('border-blue-500', 'bg-blue-50', 'text-blue-700');
+        btn.classList.add('border-gray-300', 'bg-white', 'text-gray-700');
+    });
+    const activeBtn = document.getElementById('lang-tab-' + lang);
+    activeBtn.classList.remove('border-gray-300', 'bg-white', 'text-gray-700');
+    activeBtn.classList.add('border-blue-500', 'bg-blue-50', 'text-blue-700');
+}
+
 // Tab Management
 function showTab(tabName) {
     document.querySelectorAll('.tab-content').forEach(content => {
@@ -489,7 +522,7 @@ function reloadPage() {
 
 // Copy HTML to clipboard
 async function copyHTMLToClipboard() {
-    const textarea = document.getElementById('id_html_template');
+    const textarea = document.getElementById('id_html_template_' + currentLang);
     if (!textarea.value) {
         alert('No HTML template to copy');
         return;

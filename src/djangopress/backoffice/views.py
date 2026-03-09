@@ -1507,6 +1507,15 @@ class HeaderEditView(LoginRequiredMixin, TemplateView):
         context['header'] = header
         context['section'] = header  # For consistency with other templates
 
+        # Build per-language HTML list for template
+        html_i18n = header.html_template_i18n or {}
+        site_settings = SiteSettings.objects.first()
+        lang_codes = site_settings.get_language_codes() if site_settings else ['pt', 'en']
+        context['html_langs'] = [
+            {'code': lang, 'html': html_i18n.get(lang, '')}
+            for lang in lang_codes
+        ]
+
         # Add AI configuration
         try:
             from djangopress.ai.utils.llm_config import LLMConfig
@@ -1531,15 +1540,22 @@ class HeaderEditView(LoginRequiredMixin, TemplateView):
             }
         )
 
-        # Update header HTML template
-        header.html_template = request.POST.get('html_template', '')
+        # Update header settings
         header.name = request.POST.get('name', 'Main Header')
         header.cache_duration = int(request.POST.get('cache_duration', 3600))
         header.is_active = 'is_active' in request.POST
         header.fallback_template = request.POST.get('fallback_template', 'partials/header.html')
-        
-        header.save()  # This will auto-clear cache
-        
+
+        # Save per-language HTML templates
+        html_i18n = dict(header.html_template_i18n or {})
+        for key, value in request.POST.items():
+            if key.startswith('html_template_i18n_'):
+                lang = key.replace('html_template_i18n_', '')
+                html_i18n[lang] = value
+        header.html_template_i18n = html_i18n
+
+        header.save()
+
         messages.success(request, 'Header updated successfully!')
         return redirect('backoffice:header_edit')
 
@@ -1565,6 +1581,15 @@ class FooterEditView(LoginRequiredMixin, TemplateView):
         context['footer'] = footer
         context['section'] = footer  # For consistency with other templates
 
+        # Build per-language HTML list for template
+        html_i18n = footer.html_template_i18n or {}
+        site_settings = SiteSettings.objects.first()
+        lang_codes = site_settings.get_language_codes() if site_settings else ['pt', 'en']
+        context['html_langs'] = [
+            {'code': lang, 'html': html_i18n.get(lang, '')}
+            for lang in lang_codes
+        ]
+
         # Add AI configuration
         try:
             from djangopress.ai.utils.llm_config import LLMConfig
@@ -1589,15 +1614,22 @@ class FooterEditView(LoginRequiredMixin, TemplateView):
             }
         )
 
-        # Update footer HTML template
-        footer.html_template = request.POST.get('html_template', '')
+        # Update footer settings
         footer.name = request.POST.get('name', 'Main Footer')
         footer.cache_duration = int(request.POST.get('cache_duration', 3600))
         footer.is_active = 'is_active' in request.POST
         footer.fallback_template = request.POST.get('fallback_template', 'partials/footer.html')
-        
-        footer.save()  # This will auto-clear cache
-        
+
+        # Save per-language HTML templates
+        html_i18n = dict(footer.html_template_i18n or {})
+        for key, value in request.POST.items():
+            if key.startswith('html_template_i18n_'):
+                lang = key.replace('html_template_i18n_', '')
+                html_i18n[lang] = value
+        footer.html_template_i18n = html_i18n
+
+        footer.save()
+
         messages.success(request, 'Footer updated successfully!')
         return redirect('backoffice:footer_edit')
 
