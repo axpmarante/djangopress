@@ -43,7 +43,7 @@ test -f db.sqlite3 && echo "DB: EXISTS" || echo "DB: NO DB"
 
 # Check existing content
 python manage.py shell -c "
-from core.models import SiteSettings, Page
+from djangopress.core.models import SiteSettings, Page
 s = SiteSettings.objects.first()
 if s:
     print(f'Site: {s.get_site_name()}')
@@ -110,7 +110,7 @@ Verify GCS is working:
 ```python
 python manage.py shell -c "
 from django.core.files.storage import default_storage
-from core.models import SiteSettings
+from djangopress.core.models import SiteSettings
 backend = default_storage.__class__.__name__
 print(f'Storage: {backend}')
 if 'DomainBased' in backend:
@@ -195,7 +195,7 @@ If no briefing file exists (interactive mode), configure via Django shell direct
 
 ```python
 python manage.py shell -c "
-from core.models import SiteSettings
+from djangopress.core.models import SiteSettings
 settings, _ = SiteSettings.objects.get_or_create(pk=1)
 
 # Domain — SET THIS FIRST before any media uploads
@@ -252,7 +252,7 @@ After configuring settings, verify the domain was set correctly:
 
 ```python
 python manage.py shell -c "
-from core.models import SiteSettings
+from djangopress.core.models import SiteSettings
 s = SiteSettings.objects.first()
 print(f'Domain: {s.domain}')
 assert s.domain, 'ERROR: domain is not set! Set it before generating any images.'
@@ -263,7 +263,7 @@ assert s.domain, 'ERROR: domain is not set! Set it before generating any images.
 
 ```python
 python manage.py shell -c "
-from core.models import SiteSettings
+from djangopress.core.models import SiteSettings
 s = SiteSettings.objects.first()
 s.primary_color = '#0d9488'
 s.heading_font = 'Playfair Display'
@@ -301,7 +301,7 @@ Use https://placehold.co/WxH?text=Label as placeholder src.
 ```python
 python manage.py shell -c "
 from ai.services import ContentGenerationService
-from core.models import Page, SiteSettings
+from djangopress.core.models import Page, SiteSettings
 
 service = ContentGenerationService()
 settings = SiteSettings.objects.first()
@@ -338,7 +338,7 @@ After each page, read its HTML and check:
 
 ```python
 python manage.py shell -c "
-from core.models import Page
+from djangopress.core.models import Page
 page = Page.objects.get(id=<ID>)
 default_lang = list(page.html_content_i18n.keys())[0] if page.html_content_i18n else 'pt'
 print(page.html_content_i18n.get(default_lang, '')[:3000])
@@ -352,7 +352,7 @@ If you spot issues, refine the page:
 ```python
 python manage.py shell -c "
 from ai.services import ContentGenerationService
-from core.models import Page
+from djangopress.core.models import Page
 
 service = ContentGenerationService()
 result = service.refine_page_with_html(
@@ -375,7 +375,7 @@ Optionally generate a design guide to improve consistency for subsequent pages:
 ```python
 python manage.py shell -c "
 from ai.utils.llm_config import LLMBase
-from core.models import SiteSettings, Page
+from djangopress.core.models import SiteSettings, Page
 
 settings = SiteSettings.objects.first()
 home = Page.objects.filter(is_active=True).order_by('sort_order').first()
@@ -405,7 +405,7 @@ After all pages are generated:
 
 ```python
 python manage.py shell -c "
-from core.models import Page, MenuItem
+from djangopress.core.models import Page, MenuItem
 
 # Clear existing menu items
 MenuItem.objects.filter(parent__isnull=True).delete()
@@ -434,7 +434,7 @@ The header needs menu items to exist first (they're included in the prompt conte
 ```python
 python manage.py shell -c "
 from ai.services import ContentGenerationService
-from core.models import GlobalSection
+from djangopress.core.models import GlobalSection
 
 # Ensure section exists
 section, created = GlobalSection.objects.get_or_create(
@@ -468,7 +468,7 @@ Same pattern as header:
 ```python
 python manage.py shell -c "
 from ai.services import ContentGenerationService
-from core.models import GlobalSection
+from djangopress.core.models import GlobalSection
 
 section, created = GlobalSection.objects.get_or_create(
     key='main-footer',
@@ -501,7 +501,7 @@ For each page with image placeholders:
 ```python
 python manage.py shell -c "
 from ai.services import ContentGenerationService
-from core.models import Page, SiteSettings
+from djangopress.core.models import Page, SiteSettings
 from bs4 import BeautifulSoup
 
 service = ContentGenerationService()
@@ -558,7 +558,7 @@ Verify the contact form exists:
 
 ```python
 python manage.py shell -c "
-from core.models import DynamicForm
+from djangopress.core.models import DynamicForm
 form = DynamicForm.objects.filter(slug='contact').first()
 print(f'Contact form: {\"EXISTS\" if form else \"MISSING\"}')"
 ```

@@ -57,7 +57,7 @@ Check the project has content worth deploying:
 
 ```python
 python manage.py shell -c "
-from core.models import SiteSettings, Page, GlobalSection
+from djangopress.core.models import SiteSettings, Page, GlobalSection
 s = SiteSettings.objects.first()
 if s:
     print(f'Site: {s.get_site_name()}')
@@ -273,7 +273,7 @@ If GCS is active but images are local (generated before GCS was configured), upl
 
 ```bash
 # Get the domain folder name from SiteSettings
-DOMAIN=$(python manage.py shell -c "from core.models import SiteSettings; s=SiteSettings.objects.first(); print(s.domain if s else 'default')")
+DOMAIN=$(python manage.py shell -c "from djangopress.core.models import SiteSettings; s=SiteSettings.objects.first(); print(s.domain if s else 'default')")
 
 # Upload all local media to GCS
 gsutil -m cp -r media/site_images "gs://<GS_BUCKET_NAME>/${DOMAIN}/"
@@ -360,7 +360,7 @@ rm data_export.json
 
 ```bash
 DATABASE_URL="$REMOTE_DB" ENVIRONMENT=production python manage.py shell -c "
-from core.models import SiteSettings, Page, GlobalSection
+from djangopress.core.models import SiteSettings, Page, GlobalSection
 print(f'Settings: {\"YES\" if SiteSettings.objects.exists() else \"NO\"}')
 print(f'Pages: {Page.objects.filter(is_active=True).count()}')
 print(f'Header: {\"YES\" if GlobalSection.objects.filter(key=\"main-header\").exists() else \"NO\"}')

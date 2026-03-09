@@ -45,10 +45,10 @@ myapp/
 
 ### Base Mixin
 
-All models use `I18nModelMixin` from `core/mixins.py`:
+All models use `I18nModelMixin` from `djangopress.core.mixins`:
 
 ```python
-from core.mixins import I18nModelMixin
+from djangopress.core.mixins import I18nModelMixin
 
 class Property(I18nModelMixin, models.Model):
     ...
@@ -89,7 +89,7 @@ def save(self, *args, **kwargs):
 def get_absolute_url(self, lang=None):
     from django.urls import reverse
     from django.utils.translation import get_language
-    from core.models import SiteSettings
+    from djangopress.core.models import SiteSettings
     lang = lang or get_language()
     slug = (self.slug_i18n or {}).get(lang, '')
     if not slug:
@@ -232,7 +232,7 @@ urlpatterns = [
 ```python
 urlpatterns += i18n_patterns(
     path('', include('myapp.urls')),    # ← BEFORE core.urls
-    path('', include('core.urls')),     # catch-all for CMS pages
+    path('', include('djangopress.core.urls')),     # catch-all for CMS pages
     prefix_default_language=True,
 )
 ```

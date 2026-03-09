@@ -21,7 +21,7 @@ Before making changes, check what exists:
 
 ```python
 python manage.py shell -c "
-from core.models import SiteSettings, Page, GlobalSection, MenuItem
+from djangopress.core.models import SiteSettings, Page, GlobalSection, MenuItem
 s = SiteSettings.objects.first()
 print(f'Site: {s.get_site_name()}')
 print(f'Domain: {s.domain}')
@@ -47,7 +47,7 @@ print(f'Menu items: {MenuItem.objects.filter(is_active=True).count()}')
 ### Read page content
 ```python
 python manage.py shell -c "
-from core.models import Page, SiteSettings
+from djangopress.core.models import Page, SiteSettings
 page = Page.objects.get(id=<ID>)  # or .get(slug_i18n__contains='<slug>')
 lang = SiteSettings.objects.first().get_default_language()
 html = page.html_content_i18n.get(lang, '')
@@ -62,7 +62,7 @@ print(html[:5000])
 ```python
 python manage.py shell -c "
 from ai.services import ContentGenerationService
-from core.models import Page
+from djangopress.core.models import Page
 
 service = ContentGenerationService()
 result = service.refine_page_with_html(
@@ -81,7 +81,7 @@ print('Page refined and saved')
 ### Update page title or slug
 ```python
 python manage.py shell -c "
-from core.models import Page
+from djangopress.core.models import Page
 page = Page.objects.get(id=<ID>)
 page.title_i18n = {'pt': 'Novo Título', 'en': 'New Title'}
 page.slug_i18n = {'pt': 'novo-titulo', 'en': 'new-title'}
@@ -94,7 +94,7 @@ print(f'Updated: {page.title_i18n}')
 ```python
 python manage.py shell -c "
 from ai.services import ContentGenerationService
-from core.models import Page, SiteSettings
+from djangopress.core.models import Page, SiteSettings
 
 service = ContentGenerationService()
 settings = SiteSettings.objects.first()
@@ -118,7 +118,7 @@ print(f'Created: {page.default_title} (/{page.default_slug}/) ID={page.id}')
 ### Delete a page
 ```python
 python manage.py shell -c "
-from core.models import Page, MenuItem
+from djangopress.core.models import Page, MenuItem
 page = Page.objects.get(id=<ID>)
 MenuItem.objects.filter(page=page).delete()
 print(f'Deleting: {page.default_title}')
@@ -130,7 +130,7 @@ print('Deleted')
 ### Reorder pages
 ```python
 python manage.py shell -c "
-from core.models import Page
+from djangopress.core.models import Page
 # Set sort_order for each page
 for order, page_id in enumerate([<id1>, <id2>, <id3>]):
     Page.objects.filter(id=page_id).update(sort_order=order * 10)
@@ -146,7 +146,7 @@ for order, page_id in enumerate([<id1>, <id2>, <id3>]):
 ### Read a specific section
 ```python
 python manage.py shell -c "
-from core.models import Page, SiteSettings
+from djangopress.core.models import Page, SiteSettings
 from bs4 import BeautifulSoup
 
 page = Page.objects.get(id=<ID>)
@@ -172,7 +172,7 @@ Use `refine_page_with_html` with instructions targeting the section:
 ```python
 python manage.py shell -c "
 from ai.services import ContentGenerationService
-from core.models import Page
+from djangopress.core.models import Page
 
 service = ContentGenerationService()
 result = service.refine_page_with_html(
@@ -194,7 +194,7 @@ For direct HTML changes without AI:
 
 ```python
 python manage.py shell -c "
-from core.models import Page, SiteSettings
+from djangopress.core.models import Page, SiteSettings
 from bs4 import BeautifulSoup
 
 page = Page.objects.get(id=<ID>)
@@ -223,7 +223,7 @@ print('Section updated in all languages')
 ### Change text content
 ```python
 python manage.py shell -c "
-from core.models import Page, SiteSettings
+from djangopress.core.models import Page, SiteSettings
 from bs4 import BeautifulSoup
 
 page = Page.objects.get(id=<ID>)
@@ -245,7 +245,7 @@ print('Element text updated')
 ### Change CSS classes
 ```python
 python manage.py shell -c "
-from core.models import Page, SiteSettings
+from djangopress.core.models import Page, SiteSettings
 from bs4 import BeautifulSoup
 
 page = Page.objects.get(id=<ID>)
@@ -266,7 +266,7 @@ print('Classes updated')
 ### Change an attribute (href, src, etc.)
 ```python
 python manage.py shell -c "
-from core.models import Page, SiteSettings
+from djangopress.core.models import Page, SiteSettings
 from bs4 import BeautifulSoup
 
 page = Page.objects.get(id=<ID>)
@@ -292,7 +292,7 @@ print('Attribute updated')
 ```python
 python manage.py shell -c "
 from ai.services import ContentGenerationService
-from core.models import Page, SiteSettings
+from djangopress.core.models import Page, SiteSettings
 from bs4 import BeautifulSoup
 
 service = ContentGenerationService()
@@ -325,7 +325,7 @@ else:
 ### Replace a specific image
 ```python
 python manage.py shell -c "
-from core.models import Page, SiteSettings, SiteImage
+from djangopress.core.models import Page, SiteSettings, SiteImage
 from bs4 import BeautifulSoup
 
 page = Page.objects.get(id=<ID>)
@@ -355,7 +355,7 @@ if image:
 ### Site identity
 ```python
 python manage.py shell -c "
-from core.models import SiteSettings
+from djangopress.core.models import SiteSettings
 s = SiteSettings.objects.first()
 s.site_name_i18n = {'pt': '<nome>', 'en': '<name>'}
 s.site_description_i18n = {'pt': '<descrição>', 'en': '<description>'}
@@ -368,7 +368,7 @@ print('Identity updated')
 ### Contact info
 ```python
 python manage.py shell -c "
-from core.models import SiteSettings
+from djangopress.core.models import SiteSettings
 s = SiteSettings.objects.first()
 s.contact_email = '<email>'
 s.contact_phone = '<phone>'
@@ -381,7 +381,7 @@ print('Contact updated')
 ### Social media
 ```python
 python manage.py shell -c "
-from core.models import SiteSettings
+from djangopress.core.models import SiteSettings
 s = SiteSettings.objects.first()
 s.facebook_url = '<url>'
 s.instagram_url = '<url>'
@@ -399,7 +399,7 @@ print('Social media updated')
 ### Design system
 ```python
 python manage.py shell -c "
-from core.models import SiteSettings
+from djangopress.core.models import SiteSettings
 s = SiteSettings.objects.first()
 s.primary_color = '#<hex>'
 s.secondary_color = '#<hex>'
@@ -416,7 +416,7 @@ print('Design system updated')
 ### Languages
 ```python
 python manage.py shell -c "
-from core.models import SiteSettings
+from djangopress.core.models import SiteSettings
 s = SiteSettings.objects.first()
 s.enabled_languages = [
     {'code': 'pt', 'name': 'Português'},
@@ -435,7 +435,7 @@ print(f'Languages: {s.get_language_codes()}')
 ### Read current header
 ```python
 python manage.py shell -c "
-from core.models import GlobalSection, SiteSettings
+from djangopress.core.models import GlobalSection, SiteSettings
 header = GlobalSection.objects.get(key='main-header')
 lang = SiteSettings.objects.first().get_default_language()
 print(header.html_template_i18n.get(lang, '')[:3000])
@@ -446,7 +446,7 @@ print(header.html_template_i18n.get(lang, '')[:3000])
 ```python
 python manage.py shell -c "
 from ai.services import ContentGenerationService
-from core.models import GlobalSection
+from djangopress.core.models import GlobalSection
 
 service = ContentGenerationService()
 result = service.refine_global_section(
@@ -468,7 +468,7 @@ print(f'Header updated ({sum(len(v) for v in header.html_template_i18n.values())
 ### Read current footer
 ```python
 python manage.py shell -c "
-from core.models import GlobalSection, SiteSettings
+from djangopress.core.models import GlobalSection, SiteSettings
 footer = GlobalSection.objects.get(key='main-footer')
 lang = SiteSettings.objects.first().get_default_language()
 print(footer.html_template_i18n.get(lang, '')[:3000])
@@ -479,7 +479,7 @@ print(footer.html_template_i18n.get(lang, '')[:3000])
 ```python
 python manage.py shell -c "
 from ai.services import ContentGenerationService
-from core.models import GlobalSection
+from djangopress.core.models import GlobalSection
 
 service = ContentGenerationService()
 result = service.refine_global_section(
@@ -501,7 +501,7 @@ print(f'Footer updated ({sum(len(v) for v in footer.html_template_i18n.values())
 ### List menu items
 ```python
 python manage.py shell -c "
-from core.models import MenuItem
+from djangopress.core.models import MenuItem
 for item in MenuItem.objects.filter(is_active=True).order_by('sort_order'):
     parent = f' (under {item.parent.get_label()})' if item.parent else ''
     page_info = f' → /{item.page.default_slug}/' if item.page else f' → {item.url}'
@@ -512,7 +512,7 @@ for item in MenuItem.objects.filter(is_active=True).order_by('sort_order'):
 ### Add a menu item
 ```python
 python manage.py shell -c "
-from core.models import MenuItem, Page
+from djangopress.core.models import MenuItem, Page
 page = Page.objects.get(id=<PAGE_ID>)
 MenuItem.objects.create(
     label_i18n=page.title_i18n,
@@ -527,7 +527,7 @@ print(f'Added: {page.default_title}')
 ### Rebuild menu from pages
 ```python
 python manage.py shell -c "
-from core.models import Page, MenuItem
+from djangopress.core.models import Page, MenuItem
 MenuItem.objects.all().delete()
 pages = Page.objects.filter(is_active=True).order_by('sort_order', 'id')
 for i, page in enumerate(pages):
@@ -549,7 +549,7 @@ print(f'Created {pages.count()} menu items')
 ### List forms
 ```python
 python manage.py shell -c "
-from core.models import DynamicForm
+from djangopress.core.models import DynamicForm
 for form in DynamicForm.objects.all():
     print(f'[{form.id}] {form.name} (slug: {form.slug}, submissions: {form.submissions.count()})')
 "
@@ -558,7 +558,7 @@ for form in DynamicForm.objects.all():
 ### Update form fields
 ```python
 python manage.py shell -c "
-from core.models import DynamicForm
+from djangopress.core.models import DynamicForm
 form = DynamicForm.objects.get(slug='contact')
 print(f'Current fields: {form.fields_schema}')
 # Update fields_schema as needed

@@ -15,7 +15,7 @@ If no app name was provided, ask the user what the app should be called.
 
 ## DjangoPress App Rules
 
-1. **Decoupled** — the app should NOT import from other apps except `core` (for `SiteSettings`, `SiteImage`, `I18nModelMixin`)
+1. **Decoupled** — the app should NOT import from other apps except `djangopress.core` (for `SiteSettings`, `SiteImage`, `I18nModelMixin`)
 2. **Multi-language** — all models use `I18nModelMixin` from `core/mixins.py` with `_i18n` JSON fields
 3. **Per-language HTML** — content models store HTML in `html_content_i18n` (same pattern as `Page.html_content_i18n`)
 4. **Tailwind CSS** — templates extend `base.html`, use Tailwind classes
@@ -41,8 +41,8 @@ Ask the user what fields their main content model needs. Then create models foll
 ### Main Content Model
 
 ```python
-from core.mixins import I18nModelMixin
-from core.models import SiteImage
+from djangopress.core.mixins import I18nModelMixin
+from djangopress.core.models import SiteImage
 
 class <Item>(I18nModelMixin, models.Model):
     # Required i18n fields
@@ -71,7 +71,7 @@ class <Item>(I18nModelMixin, models.Model):
     def get_absolute_url(self, lang=None):
         from django.urls import reverse
         from django.utils.translation import get_language
-        from core.models import SiteSettings
+        from djangopress.core.models import SiteSettings
         lang = lang or get_language()
         slug = (self.slug_i18n or {}).get(lang, '')
         if not slug:
@@ -225,7 +225,7 @@ urlpatterns = [p for p in _base_patterns if not hasattr(p, 'url_patterns') or no
 # Add i18n patterns with your app BEFORE core catch-all
 urlpatterns += i18n_patterns(
     path('', include('<app_name>.urls')),    # Your app
-    path('', include('core.urls')),          # catch-all last
+    path('', include('djangopress.core.urls')),  # catch-all last
     prefix_default_language=True,
 )
 ```
