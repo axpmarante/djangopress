@@ -40,21 +40,21 @@ panel's expected height. Common values: `min-h-[300px]`, `min-h-[400px]`,
 <div x-data="{ tab: 'tab1' }">
   <!-- Tab buttons -->
   <div class="flex border-b">
-    <button @click="tab = 'tab1'" :class="tab === 'tab1' ? 'border-b-2 border-blue-500 text-blue-600' : 'text-gray-500'" class="px-4 py-2 font-medium">{{ trans.tab1_label }}</button>
-    <button @click="tab = 'tab2'" :class="tab === 'tab2' ? 'border-b-2 border-blue-500 text-blue-600' : 'text-gray-500'" class="px-4 py-2 font-medium">{{ trans.tab2_label }}</button>
-    <button @click="tab = 'tab3'" :class="tab === 'tab3' ? 'border-b-2 border-blue-500 text-blue-600' : 'text-gray-500'" class="px-4 py-2 font-medium">{{ trans.tab3_label }}</button>
+    <button @click="tab = 'tab1'" :class="tab === 'tab1' ? 'border-b-2 border-blue-500 text-blue-600' : 'text-gray-500'" class="px-4 py-2 font-medium">Overview</button>
+    <button @click="tab = 'tab2'" :class="tab === 'tab2' ? 'border-b-2 border-blue-500 text-blue-600' : 'text-gray-500'" class="px-4 py-2 font-medium">Features</button>
+    <button @click="tab = 'tab3'" :class="tab === 'tab3' ? 'border-b-2 border-blue-500 text-blue-600' : 'text-gray-500'" class="px-4 py-2 font-medium">Pricing</button>
   </div>
 
   <!-- Tab panels — note: absolute positioning + min-h on container -->
   <div class="relative overflow-hidden min-h-[400px]">
     <div class="absolute inset-0 p-6" x-show="tab === 'tab1'" x-transition:enter="transition ease-out duration-300" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100" x-transition:leave="transition ease-in duration-200" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0">
-      <p>{{ trans.tab1_content }}</p>
+      <p>Welcome to our platform. Here you can find everything you need to get started.</p>
     </div>
     <div class="absolute inset-0 p-6" x-show="tab === 'tab2'" x-cloak x-transition:enter="transition ease-out duration-300" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100" x-transition:leave="transition ease-in duration-200" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0">
-      <p>{{ trans.tab2_content }}</p>
+      <p>Explore our comprehensive set of features designed to help you succeed.</p>
     </div>
     <div class="absolute inset-0 p-6" x-show="tab === 'tab3'" x-cloak x-transition:enter="transition ease-out duration-300" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100" x-transition:leave="transition ease-in duration-200" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0">
-      <p>{{ trans.tab3_content }}</p>
+      <p>Choose the plan that best fits your needs and budget.</p>
     </div>
   </div>
 </div>
@@ -107,8 +107,8 @@ x-transition:leave-end="opacity-0 -translate-y-2"
 ```html
 <div x-data="{ tab: 'tab1' }">
   <div class="flex gap-2 mb-6">
-    <button @click="tab = 'tab1'" :class="tab === 'tab1' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'" class="px-5 py-2 rounded-full font-medium transition">{{ trans.tab1_label }}</button>
-    <button @click="tab = 'tab2'" :class="tab === 'tab2' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'" class="px-5 py-2 rounded-full font-medium transition">{{ trans.tab2_label }}</button>
+    <button @click="tab = 'tab1'" :class="tab === 'tab1' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'" class="px-5 py-2 rounded-full font-medium transition">Overview</button>
+    <button @click="tab = 'tab2'" :class="tab === 'tab2' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'" class="px-5 py-2 rounded-full font-medium transition">Features</button>
   </div>
   <div class="relative overflow-hidden min-h-[300px]">
     <!-- panels with absolute inset-0 as above -->
@@ -121,8 +121,8 @@ x-transition:leave-end="opacity-0 -translate-y-2"
 ```html
 <div x-data="{ tab: 'tab1' }">
   <div class="flex border-b border-gray-200">
-    <button @click="tab = 'tab1'" :class="tab === 'tab1' ? 'bg-white border-t border-l border-r border-gray-200 -mb-px rounded-t-lg text-blue-600' : 'text-gray-500 hover:text-gray-700'" class="px-6 py-3 font-medium">{{ trans.tab1_label }}</button>
-    <button @click="tab = 'tab2'" :class="tab === 'tab2' ? 'bg-white border-t border-l border-r border-gray-200 -mb-px rounded-t-lg text-blue-600' : 'text-gray-500 hover:text-gray-700'" class="px-6 py-3 font-medium">{{ trans.tab2_label }}</button>
+    <button @click="tab = 'tab1'" :class="tab === 'tab1' ? 'bg-white border-t border-l border-r border-gray-200 -mb-px rounded-t-lg text-blue-600' : 'text-gray-500 hover:text-gray-700'" class="px-6 py-3 font-medium">Overview</button>
+    <button @click="tab = 'tab2'" :class="tab === 'tab2' ? 'bg-white border-t border-l border-r border-gray-200 -mb-px rounded-t-lg text-blue-600' : 'text-gray-500 hover:text-gray-700'" class="px-6 py-3 font-medium">Features</button>
   </div>
   <div class="relative overflow-hidden min-h-[400px] border border-t-0 border-gray-200 rounded-b-lg bg-white">
     <!-- panels with absolute inset-0 as above -->
@@ -136,8 +136,8 @@ x-transition:leave-end="opacity-0 -translate-y-2"
 <div x-data="{ tab: 'tab1' }" class="flex gap-6">
   <!-- Vertical tab buttons -->
   <div class="flex flex-col space-y-1 min-w-[200px]">
-    <button @click="tab = 'tab1'" :class="tab === 'tab1' ? 'bg-blue-50 text-blue-700 border-l-2 border-blue-600' : 'text-gray-600 hover:bg-gray-50'" class="text-left px-4 py-3 font-medium rounded-r transition">{{ trans.tab1_label }}</button>
-    <button @click="tab = 'tab2'" :class="tab === 'tab2' ? 'bg-blue-50 text-blue-700 border-l-2 border-blue-600' : 'text-gray-600 hover:bg-gray-50'" class="text-left px-4 py-3 font-medium rounded-r transition">{{ trans.tab2_label }}</button>
+    <button @click="tab = 'tab1'" :class="tab === 'tab1' ? 'bg-blue-50 text-blue-700 border-l-2 border-blue-600' : 'text-gray-600 hover:bg-gray-50'" class="text-left px-4 py-3 font-medium rounded-r transition">Overview</button>
+    <button @click="tab = 'tab2'" :class="tab === 'tab2' ? 'bg-blue-50 text-blue-700 border-l-2 border-blue-600' : 'text-gray-600 hover:bg-gray-50'" class="text-left px-4 py-3 font-medium rounded-r transition">Features</button>
   </div>
   <!-- Panel area -->
   <div class="relative overflow-hidden min-h-[400px] flex-1">
@@ -157,7 +157,7 @@ vertical button column on small screens).
 - Set `min-h-[Xpx]` on the panel container (adjust to content)
 - Add `x-cloak` on all initially-hidden panels
 - Move padding from the container to each panel (`p-6` or `p-8`)
-- Use `{{ trans.xxx }}` for all visible text (labels and content)
+- Write all visible text (labels and content) directly in the target language
 - Match active tab styling to the site's design system colors
 
 **Don't:**

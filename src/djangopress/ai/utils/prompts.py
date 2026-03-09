@@ -63,17 +63,6 @@ class PromptTemplates:
             Tuple of (system_prompt, user_prompt)
         """
         langs_display = ' and '.join([lang.upper() for lang in languages])
-        langs_json = ', '.join([f'"{lang}"' for lang in languages])
-
-        # Build language examples
-        lang_examples = {}
-        for lang in languages:
-            if lang == 'pt':
-                lang_examples[lang] = {"menu_home": "Início", "menu_about": "Sobre"}
-            elif lang == 'en':
-                lang_examples[lang] = {"menu_home": "Home", "menu_about": "About"}
-            else:
-                lang_examples[lang] = {"menu_home": "Home", "menu_about": "About"}
 
         # Build menu items info for the prompt
         menu_info = ""
@@ -164,9 +153,8 @@ Do NOT hardcode page links. Use this loop pattern:
 - `get_menu_label` returns the label in the current language
 - Use `item.children.all` to check for and iterate over sub-items — these are prefetched and ready to use
 - Do NOT use `MENU_ITEMS.last` or any index-based access — the user can reorder items at any time
-- Do NOT use `{{{{ trans.menu_xxx }}}}` for menu labels — the menu items have their own i18n labels
-- For CTA buttons, use `{{{{ trans.cta_text }}}}` for the label and `/forms/contact/submit/` or a `{{{{ trans.xxx }}}}` variable for the URL — keep CTAs separate from the menu loop
-- You can still use `{{{{ trans.xxx }}}}` for other translatable text (taglines, CTAs, etc.)
+- Do NOT hardcode menu labels — the menu items have their own i18n labels via `get_menu_label`
+- For CTA buttons, write the button text directly in the target language — keep CTAs separate from the menu loop
 {menu_info}
 
 **Language Switcher Pattern (REQUIRED):**
@@ -199,7 +187,7 @@ Do NOT hardcode page links. Use this loop pattern:
 - Use `{{% url 'core:page' slug='slug-here' %}}` for page links
 - For home page: `{{% url 'core:home' %}}`
 - For pages with different slugs per language, use: `{{% if LANGUAGE_CODE == 'pt' %}}{{% url 'core:page' slug='pt-slug' %}}{{% else %}}{{% url 'core:page' slug='en-slug' %}}{{% endif %}}`
-- Use `{{{{ trans.xxx }}}}` for all link labels and other translatable text
+- Write all link labels and translatable text directly in the target language
 - Do NOT use MENU_ITEMS — footer links are managed directly in the template
 - Refer to the Available Pages list below for correct slugs in each language
 
@@ -222,16 +210,12 @@ Improve the provided {section_type} by applying the requested changes. Return a 
 ## Technical Requirements
 - Use Tailwind CSS classes inline
 - Make responsive
-- Use `{{{{trans.field}}}}` for translatable text
+- Write all text directly in the target language — do NOT use {{{{ trans.xxx }}}} template variables
 - For home page link: `{{% url 'core:home' %}}`
 {section_context}
-**Content Structure:**
-- Translations in ALL languages: {langs_display}
-- Only translatable text in translations
-
-**Required Fields:**
-- `html_template`: Complete HTML with all Tailwind classes and Django tags
-- `content`: Translations object with text only{design_guidelines}"""
+**Required Output:**
+- `html_template_i18n`: A JSON object with one key per language ({langs_display}), each containing the complete HTML with real text in that language
+- Preserve all Django template tags ({{% url %}}, {{{{ SITE_NAME }}}}, {{{{ CONTACT_EMAIL }}}}, etc.) — only content text changes per language{design_guidelines}"""
 
         # Format existing section
         section_json = json.dumps(existing_section, indent=2, ensure_ascii=False)
@@ -244,7 +228,8 @@ Improve the provided {section_type} by applying the requested changes. Return a 
 - Menu labels come from `MENU_ITEMS` — do NOT add them to translations"""
         else:
             nav_reminder = f"""- Use `{{% url 'core:page' slug='...' %}}` for page links — do NOT use MENU_ITEMS
-- Include `{{% load i18n %}}` at the top of html_template"""
+- Include `{{% load i18n %}}` at the top of the HTML
+- Write all link labels and text directly in the target language"""
 
         user_prompt = f"""# PROJECT CONTEXT
 
@@ -278,11 +263,8 @@ Return a JSON **object** with the refined {section_type}:
 
 ```json
 {{
-  "html_template": "<nav class=\\"bg-white shadow-md\\">...</nav>",
-  "content": {{
-    "translations": {{
-      {json.dumps(lang_examples, indent=6, ensure_ascii=False)[1:-1]}
-    }}
+  "html_template_i18n": {{
+    {', '.join([f'"{lang}": "<nav class=\\"...\\">...text in {lang.upper()}...</nav>"' for lang in languages])}
   }}
 }}
 ```
@@ -290,11 +272,11 @@ Return a JSON **object** with the refined {section_type}:
 **Important:**
 - Return ONLY the JSON object
 - Apply ALL requested changes
-- Update translations in ALL languages: {langs_display}
+- Produce complete HTML for ALL languages: {langs_display}
+- Each language version must have all text written directly in that language
+- Preserve all Django template tags ({{% url %}}, {{{{ SITE_NAME }}}}, {{{{ CONTACT_EMAIL }}}}, etc.) — only content text changes per language
 - For home page: `{{% url 'core:home' %}}`
-{nav_reminder}
-- All classes in html_template, only text in translations
-- Every `{{{{trans.xxx}}}}` in html_template MUST have matching translations in all languages"""
+{nav_reminder}"""
 
         return (system_prompt, user_prompt)
 

@@ -30,33 +30,33 @@ open one.
   <!-- Item 1 -->
   <div class="border rounded-lg overflow-hidden">
     <button @click="open = open === 1 ? null : 1" class="w-full flex justify-between items-center p-4 font-medium text-left hover:bg-gray-50 transition">
-      <span>{{ trans.faq_1_question }}</span>
+      <span>What services do you offer?</span>
       <svg :class="open === 1 && 'rotate-180'" class="w-5 h-5 transition-transform duration-200 flex-shrink-0 ml-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
     </button>
     <div x-show="open === 1" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 -translate-y-2" x-transition:enter-end="opacity-100 translate-y-0" x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100 translate-y-0" x-transition:leave-end="opacity-0 -translate-y-2">
-      <div class="px-4 pb-4 text-gray-600">{{ trans.faq_1_answer }}</div>
+      <div class="px-4 pb-4 text-gray-600">We offer a wide range of professional services tailored to your needs. Contact us to learn more about how we can help.</div>
     </div>
   </div>
 
   <!-- Item 2 -->
   <div class="border rounded-lg overflow-hidden">
     <button @click="open = open === 2 ? null : 2" class="w-full flex justify-between items-center p-4 font-medium text-left hover:bg-gray-50 transition">
-      <span>{{ trans.faq_2_question }}</span>
+      <span>How can I get started?</span>
       <svg :class="open === 2 && 'rotate-180'" class="w-5 h-5 transition-transform duration-200 flex-shrink-0 ml-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
     </button>
     <div x-show="open === 2" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 -translate-y-2" x-transition:enter-end="opacity-100 translate-y-0" x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100 translate-y-0" x-transition:leave-end="opacity-0 -translate-y-2">
-      <div class="px-4 pb-4 text-gray-600">{{ trans.faq_2_answer }}</div>
+      <div class="px-4 pb-4 text-gray-600">Simply reach out through our contact form or give us a call. We'll schedule a consultation to discuss your requirements.</div>
     </div>
   </div>
 
   <!-- Item 3 -->
   <div class="border rounded-lg overflow-hidden">
     <button @click="open = open === 3 ? null : 3" class="w-full flex justify-between items-center p-4 font-medium text-left hover:bg-gray-50 transition">
-      <span>{{ trans.faq_3_question }}</span>
+      <span>What are your pricing options?</span>
       <svg :class="open === 3 && 'rotate-180'" class="w-5 h-5 transition-transform duration-200 flex-shrink-0 ml-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
     </button>
     <div x-show="open === 3" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 -translate-y-2" x-transition:enter-end="opacity-100 translate-y-0" x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100 translate-y-0" x-transition:leave-end="opacity-0 -translate-y-2">
-      <div class="px-4 pb-4 text-gray-600">{{ trans.faq_3_answer }}</div>
+      <div class="px-4 pb-4 text-gray-600">We offer flexible pricing plans to suit different budgets. Request a quote for a detailed breakdown.</div>
     </div>
   </div>
 </div>
@@ -71,22 +71,22 @@ Multiple items can be expanded simultaneously. Each item tracks its own state.
   <!-- Item 1 -->
   <div class="border rounded-lg overflow-hidden">
     <button @click="open[1] = !open[1]" class="w-full flex justify-between items-center p-4 font-medium text-left hover:bg-gray-50 transition">
-      <span>{{ trans.service_1_title }}</span>
+      <span>Web Design</span>
       <svg :class="open[1] && 'rotate-180'" class="w-5 h-5 transition-transform duration-200 flex-shrink-0 ml-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
     </button>
     <div x-show="open[1]" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 -translate-y-2" x-transition:enter-end="opacity-100 translate-y-0" x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100 translate-y-0" x-transition:leave-end="opacity-0 -translate-y-2">
-      <div class="px-4 pb-4 text-gray-600">{{ trans.service_1_description }}</div>
+      <div class="px-4 pb-4 text-gray-600">Custom website design and development using modern technologies and best practices.</div>
     </div>
   </div>
 
   <!-- Item 2 -->
   <div class="border rounded-lg overflow-hidden">
     <button @click="open[2] = !open[2]" class="w-full flex justify-between items-center p-4 font-medium text-left hover:bg-gray-50 transition">
-      <span>{{ trans.service_2_title }}</span>
+      <span>Digital Marketing</span>
       <svg :class="open[2] && 'rotate-180'" class="w-5 h-5 transition-transform duration-200 flex-shrink-0 ml-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
     </button>
     <div x-show="open[2]" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 -translate-y-2" x-transition:enter-end="opacity-100 translate-y-0" x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100 translate-y-0" x-transition:leave-end="opacity-0 -translate-y-2">
-      <div class="px-4 pb-4 text-gray-600">{{ trans.service_2_description }}</div>
+      <div class="px-4 pb-4 text-gray-600">Strategic digital marketing campaigns to grow your online presence and reach your target audience.</div>
     </div>
   </div>
 </div>
@@ -115,11 +115,11 @@ To have an item open by default, set its value in the initial state:
 <div x-data="{ open: null }" class="divide-y">
   <div>
     <button @click="open = open === 1 ? null : 1" class="w-full flex justify-between items-center py-4 font-medium text-left">
-      <span>{{ trans.faq_1_question }}</span>
+      <span>What services do you offer?</span>
       <svg :class="open === 1 && 'rotate-180'" class="w-5 h-5 transition-transform duration-200 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
     </button>
     <div x-show="open === 1" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100" x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0">
-      <div class="pb-4 text-gray-600">{{ trans.faq_1_answer }}</div>
+      <div class="pb-4 text-gray-600">We offer a wide range of professional services tailored to your needs. Contact us to learn more about how we can help.</div>
     </div>
   </div>
 </div>
@@ -130,11 +130,11 @@ To have an item open by default, set its value in the initial state:
 <div x-data="{ open: null }" class="space-y-3">
   <div class="bg-white rounded-xl shadow-sm border overflow-hidden">
     <button @click="open = open === 1 ? null : 1" :class="open === 1 ? 'bg-blue-50' : ''" class="w-full flex justify-between items-center p-5 font-medium text-left transition">
-      <span>{{ trans.faq_1_question }}</span>
+      <span>What services do you offer?</span>
       <svg :class="open === 1 && 'rotate-180'" class="w-5 h-5 transition-transform duration-200 flex-shrink-0 ml-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
     </button>
     <div x-show="open === 1" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 -translate-y-2" x-transition:enter-end="opacity-100 translate-y-0" x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100 translate-y-0" x-transition:leave-end="opacity-0 -translate-y-2">
-      <div class="px-5 pb-5 text-gray-600">{{ trans.faq_1_answer }}</div>
+      <div class="px-5 pb-5 text-gray-600">We offer a wide range of professional services tailored to your needs. Contact us to learn more about how we can help.</div>
     </div>
   </div>
 </div>
@@ -146,7 +146,7 @@ Replace the chevron SVG with a plus/minus indicator:
 
 ```html
 <button @click="open = open === 1 ? null : 1" class="w-full flex justify-between items-center p-4 font-medium text-left">
-  <span>{{ trans.faq_1_question }}</span>
+  <span>What services do you offer?</span>
   <span class="text-2xl font-light flex-shrink-0 ml-4" x-text="open === 1 ? '−' : '+'"></span>
 </button>
 ```
@@ -179,7 +179,7 @@ Then you can use `x-collapse` instead of `x-transition`:
 - Add `flex-shrink-0` to the chevron/icon so it doesn't compress
 - Add `ml-4` spacing between the text and icon
 - Use `overflow-hidden` on each accordion item container
-- Use `{{ trans.xxx }}` for all visible text
+- Write all visible text directly in the target language
 - Add `hover:bg-gray-50 transition` on buttons for interactive feedback
 
 **Don't:**

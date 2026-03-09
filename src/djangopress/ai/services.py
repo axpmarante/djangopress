@@ -497,8 +497,7 @@ Return the complete, corrected JSON now:"""
         existing_data = {
             'key': section.key,
             'section_type': section.section_type,
-            'html_template': current_template,
-            'content': section.content,
+            'html_template_i18n': template_i18n,
             'name': section.name,
         }
         notify("load_section", "done")
@@ -630,53 +629,64 @@ Return the complete, corrected JSON now:"""
                 raise ValueError("LLM returned empty list")
             refined_data = refined_data[0]
 
-        # Validate essential fields for GlobalSection
-        if 'html_template' not in refined_data:
-            raise ValueError("Refined section missing 'html_template' field")
+        # Handle response: new format (html_template_i18n) or legacy (html_template + content)
+        result_template_i18n = dict(section.html_template_i18n or {})
+
+        if 'html_template_i18n' in refined_data:
+            # New format: per-language HTML with real text
+            for lang, html in refined_data['html_template_i18n'].items():
+                if html:
+                    # Strip any accidental {{ trans.xxx }} vars
+                    remaining = re.findall(r'\{\{\s*trans\.(\w+)\s*\}\}', html)
+                    if remaining:
+                        print(f"  ⚠️  {lang.upper()}: stripping {len(remaining)} unexpected trans vars")
+                        html = re.sub(r'\{\{\s*trans\.\w+\s*\}\}', '', html)
+                    result_template_i18n[lang] = html
+                    print(f"  {lang.upper()}: {len(html)} chars")
+
+        elif 'html_template' in refined_data:
+            # Legacy format: single template with {{ trans.xxx }} + content.translations
+            print("  ⚠️  LLM returned legacy format (html_template + content) — resolving trans vars")
+            html_template = refined_data['html_template']
+            translations = refined_data.get('content', {}).get('translations', {})
+
+            if translations:
+                for lang in languages:
+                    lang_trans = translations.get(lang, {})
+                    if lang_trans:
+                        resolved = html_template
+                        for key, value in lang_trans.items():
+                            resolved = re.sub(
+                                r'\{\{\s*trans\.' + re.escape(key) + r'\s*\}\}',
+                                value, resolved
+                            )
+                        remaining = re.findall(r'\{\{\s*trans\.(\w+)\s*\}\}', resolved)
+                        if remaining:
+                            print(f"  ⚠️  {lang.upper()}: stripping {len(remaining)} unresolved trans vars")
+                            resolved = re.sub(r'\{\{\s*trans\.\w+\s*\}\}', '', resolved)
+                        result_template_i18n[lang] = resolved
+                        print(f"  Resolved trans vars for {lang.upper()}: {len(resolved)} chars")
+            else:
+                result_template_i18n[current_lang] = html_template
+        else:
+            raise ValueError("Refined section missing both 'html_template_i18n' and 'html_template' fields")
 
         # Validate that the refined output isn't truncated
-        refined_html = refined_data['html_template']
         original_len = len(current_template)
-        refined_len = len(refined_html)
-        if original_len > 500 and refined_len < original_len * 0.4:
-            raise ValueError(
-                f"Refined {section_key} appears truncated "
-                f"({refined_len} chars vs {original_len} original — "
-                f"{int(refined_len / original_len * 100)}%). "
-                f"The LLM likely hit its output limit. "
-                f"Try a shorter instruction or simplify the template first."
-            )
+        for lang, html in result_template_i18n.items():
+            if lang in (template_i18n or {}):
+                refined_len = len(html)
+                if original_len > 500 and refined_len < original_len * 0.4:
+                    raise ValueError(
+                        f"Refined {section_key} [{lang}] appears truncated "
+                        f"({refined_len} chars vs {original_len} original — "
+                        f"{int(refined_len / original_len * 100)}%). "
+                        f"The LLM likely hit its output limit. "
+                        f"Try a shorter instruction or simplify the template first."
+                    )
 
-        # Ensure content field exists
-        if 'content' not in refined_data:
-            refined_data['content'] = {}
-
-        # Validate that all {{trans.xxx}} variables in html_template have translations
-        html_template = refined_data.get('html_template', '')
-        content = refined_data.get('content', {})
-        translations = content.get('translations', {})
-
-        trans_vars = set(re.findall(r'\{\{\s*trans\.(\w+)\s*\}\}', html_template))
-
-        if trans_vars and translations:
-            missing_vars = {}
-            for lang in languages:
-                lang_trans = translations.get(lang, {})
-                missing_in_lang = trans_vars - set(lang_trans.keys())
-                if missing_in_lang:
-                    missing_vars[lang] = list(missing_in_lang)
-
-            if missing_vars:
-                print(f"⚠️  WARNING: Missing translations detected!")
-                for lang, vars in missing_vars.items():
-                    print(f"  - {lang.upper()}: {', '.join(vars)}")
-                print(f"  The {section.section_type} may render with blank text for these variables.")
-        notify("templatize_translate", "done")
-
-        # Add html_template_i18n to the result for the current language
-        result_template_i18n = dict(section.html_template_i18n or {})
-        result_template_i18n[current_lang] = refined_data.get('html_template', '')
         refined_data['html_template_i18n'] = result_template_i18n
+        notify("templatize_translate", "done")
 
         print(f"Successfully refined global section: {section_key}")
         notify("complete", "done")

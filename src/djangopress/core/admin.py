@@ -434,7 +434,7 @@ class PageAdmin(admin.ModelAdmin):
         }),
         ('HTML Content', {
             'fields': ('html_content', 'content'),
-            'description': 'Full page HTML and translation JSON. Use {{trans.field}} for translatable content.',
+            'description': 'Legacy fields (pre-v1.0). Per-language HTML is now in the I18n Content section above.',
         }),
         ('Metadata', {
             'fields': ('created_at', 'updated_at'),

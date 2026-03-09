@@ -1,6 +1,6 @@
 import { events } from '../lib/events.js';
 import { api } from '../lib/api.js';
-import { $, $$, getCssSelector, isTextElement, getTransVar, getSections, getTagLabel } from '../lib/dom.js';
+import { $, $$, getCssSelector, isTextElement, getSections, getTagLabel } from '../lib/dom.js';
 import { CATEGORIES, HOVER_CATEGORIES, COLOR_FAMILIES, COLOR_SHADES, COLOR_KEYWORDS } from '../lib/tailwind-classes.js';
 import { parseClasses, buildClassString } from '../lib/class-parser.js';
 
@@ -178,9 +178,8 @@ function renderContentTab() {
 }
 
 function renderTextField(container, selector) {
-    const transVar = getTransVar(selectedEl);
-    const fieldKey = transVar || '';
-    const label = transVar ? `trans.${transVar}` : selectedEl.tagName.toLowerCase();
+    const fieldKey = '';
+    const label = selectedEl.tagName.toLowerCase();
     const text = selectedEl.textContent.trim();
     const isLong = text.length > 80;
 
@@ -190,7 +189,6 @@ function renderTextField(container, selector) {
     } else {
         html += `<input class="ev2-input" type="text" data-field-key="${esc(fieldKey)}" data-selector="${esc(selector)}" value="${esc(text)}" />`;
     }
-    if (transVar) html += `<p class="ev2-hint">Variable: {{ trans.${esc(transVar)} }}</p>`;
     html += '</div>';
 
     container.innerHTML = html;
@@ -217,15 +215,14 @@ function renderImageFields(container, selector) {
 }
 
 function renderLinkFields(container, selector) {
-    const transVar = getTransVar(selectedEl);
-    const fieldKey = transVar || '';
-    const label = transVar ? `trans.${transVar}` : selectedEl.tagName.toLowerCase();
+    const fieldKey = '';
+    const label = selectedEl.tagName.toLowerCase();
     const text = selectedEl.textContent.trim();
     const href = selectedEl.getAttribute('href') || '';
     container.innerHTML = `
         <div class="ev2-field"><label class="ev2-label">${esc(label)}</label>
             <input class="ev2-input" type="text" data-field-key="${esc(fieldKey)}" data-selector="${esc(selector)}" value="${esc(text)}" />
-            ${transVar ? `<p class="ev2-hint">Variable: {{ trans.${esc(transVar)} }}</p>` : ''}</div>
+            </div>
         <div class="ev2-field"><label class="ev2-label">Link URL</label>
             <input class="ev2-input" type="text" data-attr="href" data-selector="${esc(selector)}" value="${esc(href)}" /></div>`;
     attachContentListeners(container);

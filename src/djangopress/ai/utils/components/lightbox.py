@@ -41,14 +41,14 @@ all elements with `data-lightbox` attributes on page load.
 
 ```html
 <div class="grid grid-cols-2 md:grid-cols-3 gap-4" data-media-collection="lightbox">
-  <a href="/media/photo-1-full.jpg" data-lightbox="gallery" data-alt="{{ trans.photo_1_caption }}">
-    <img src="/media/photo-1-thumb.jpg" alt="{{ trans.photo_1_caption }}" class="w-full h-48 object-cover rounded-lg hover:opacity-90 transition cursor-pointer">
+  <a href="/media/photo-1-full.jpg" data-lightbox="gallery" data-alt="Sunset over the ocean">
+    <img src="/media/photo-1-thumb.jpg" alt="Sunset over the ocean" class="w-full h-48 object-cover rounded-lg hover:opacity-90 transition cursor-pointer">
   </a>
-  <a href="/media/photo-2-full.jpg" data-lightbox="gallery" data-alt="{{ trans.photo_2_caption }}">
-    <img src="/media/photo-2-thumb.jpg" alt="{{ trans.photo_2_caption }}" class="w-full h-48 object-cover rounded-lg hover:opacity-90 transition cursor-pointer">
+  <a href="/media/photo-2-full.jpg" data-lightbox="gallery" data-alt="Mountain landscape">
+    <img src="/media/photo-2-thumb.jpg" alt="Mountain landscape" class="w-full h-48 object-cover rounded-lg hover:opacity-90 transition cursor-pointer">
   </a>
-  <a href="/media/photo-3-full.jpg" data-lightbox="gallery" data-alt="{{ trans.photo_3_caption }}">
-    <img src="/media/photo-3-thumb.jpg" alt="{{ trans.photo_3_caption }}" class="w-full h-48 object-cover rounded-lg hover:opacity-90 transition cursor-pointer">
+  <a href="/media/photo-3-full.jpg" data-lightbox="gallery" data-alt="City skyline at night">
+    <img src="/media/photo-3-thumb.jpg" alt="City skyline at night" class="w-full h-48 object-cover rounded-lg hover:opacity-90 transition cursor-pointer">
   </a>
 </div>
 ```
@@ -155,7 +155,7 @@ The lightbox also reads `data-src` and `src` as fallbacks for the image URL
 - Use `<a>` tags with `href` pointing to the full-size image
 - Wrap each `<img>` thumbnail inside the `<a>` tag
 - Use the same `data-lightbox` group name for images that should be navigable together
-- Add `data-alt` for captions (use `{{ trans.xxx }}` for translated captions)
+- Add `data-alt` for captions (write caption text directly in the target language)
 - Add `cursor-pointer` class to the `<a>` or `<img>` for visual affordance
 - Use `hover:opacity-90 transition` for hover feedback
 - Add `data-media-collection="lightbox"` on the container wrapping all lightbox links

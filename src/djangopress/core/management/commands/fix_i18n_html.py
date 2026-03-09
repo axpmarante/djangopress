@@ -1,13 +1,26 @@
 """
 Fix html_content_i18n / html_template_i18n fields that still contain
-{{ trans.xxx }} variables from incomplete data migration.
+{{ trans.xxx }} variables from the legacy translation architecture.
 
-Re-applies regex replacement from translations JSON, then strips any
-remaining {{ trans.xxx }} patterns (replacing with empty string).
+DjangoPress v2.1+ uses per-language HTML with real text embedded directly.
+The old architecture used {{ trans.xxx }} template variables resolved at
+render time from a translations JSON dict. This command migrates any
+remaining legacy content to the new format.
+
+Re-applies regex replacement from translations JSON (in the legacy `content`
+field), then strips any remaining {{ trans.xxx }} patterns.
 
 Usage:
     python manage.py fix_i18n_html          # Fix all pages + global sections
     python manage.py fix_i18n_html --dry-run  # Preview changes without saving
+
+Migration guide for sites upgrading from pre-v2.1:
+    1. git fetch upstream && git merge upstream/main
+    2. pip install -r requirements.txt
+    3. python manage.py migrate
+    4. python manage.py fix_i18n_html --dry-run   # Preview
+    5. python manage.py fix_i18n_html              # Apply fixes
+    6. Verify pages and header/footer render correctly
 """
 
 import re

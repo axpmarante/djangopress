@@ -14,7 +14,7 @@ DESCRIPTION = "DynamicForm submission with CSRF, honeypot spam protection, and e
 INDEX_ENTRY = (
     "DynamicForm submission. `action=\"/forms/SLUG/submit/\"` with `{% csrf_token %}`, "
     "hidden honeypot `name=\"website_url\"`, fixed `name` attrs for field keys. "
-    "Use `{{ trans.xxx }}` for labels/placeholders. Common slugs: contact, quote-request, booking."
+    "Write labels/placeholders directly in the target language. Common slugs: contact, quote-request, booking."
 )
 
 FULL_REFERENCE = """\
@@ -45,26 +45,26 @@ a **slug** and a submission endpoint at `/forms/SLUG/submit/`.
   </div>
 
   <div>
-    <label class="block text-sm font-medium text-gray-700 mb-1">{{ trans.form_name_label }}</label>
-    <input type="text" name="name" required placeholder="{{ trans.form_name_placeholder }}" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition">
+    <label class="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
+    <input type="text" name="name" required placeholder="Enter your full name" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition">
   </div>
 
   <div>
-    <label class="block text-sm font-medium text-gray-700 mb-1">{{ trans.form_email_label }}</label>
-    <input type="email" name="email" required placeholder="{{ trans.form_email_placeholder }}" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition">
+    <label class="block text-sm font-medium text-gray-700 mb-1">Email Address</label>
+    <input type="email" name="email" required placeholder="your@email.com" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition">
   </div>
 
   <div>
-    <label class="block text-sm font-medium text-gray-700 mb-1">{{ trans.form_phone_label }}</label>
-    <input type="tel" name="phone" placeholder="{{ trans.form_phone_placeholder }}" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition">
+    <label class="block text-sm font-medium text-gray-700 mb-1">Phone</label>
+    <input type="tel" name="phone" placeholder="+351 912 345 678" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition">
   </div>
 
   <div>
-    <label class="block text-sm font-medium text-gray-700 mb-1">{{ trans.form_message_label }}</label>
-    <textarea name="message" rows="5" required placeholder="{{ trans.form_message_placeholder }}" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"></textarea>
+    <label class="block text-sm font-medium text-gray-700 mb-1">Message</label>
+    <textarea name="message" rows="5" required placeholder="Tell us how we can help..." class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"></textarea>
   </div>
 
-  <button type="submit" class="w-full px-6 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition">{{ trans.form_submit_btn }}</button>
+  <button type="submit" class="w-full px-6 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition">Send Message</button>
 </form>
 ```
 
@@ -113,29 +113,29 @@ Use standard HTML input types. The form system stores all values as JSON.
 
   <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
     <div>
-      <label class="block text-sm font-medium text-gray-700 mb-1">{{ trans.quote_name_label }}</label>
+      <label class="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
       <input type="text" name="name" required class="w-full px-4 py-3 border rounded-lg">
     </div>
     <div>
-      <label class="block text-sm font-medium text-gray-700 mb-1">{{ trans.quote_email_label }}</label>
+      <label class="block text-sm font-medium text-gray-700 mb-1">Email Address</label>
       <input type="email" name="email" required class="w-full px-4 py-3 border rounded-lg">
     </div>
   </div>
 
   <div>
-    <label class="block text-sm font-medium text-gray-700 mb-1">{{ trans.quote_service_label }}</label>
+    <label class="block text-sm font-medium text-gray-700 mb-1">Service</label>
     <select name="service" required class="w-full px-4 py-3 border rounded-lg bg-white">
-      <option value="">{{ trans.quote_service_placeholder }}</option>
-      <option value="web-design">{{ trans.quote_service_web }}</option>
-      <option value="branding">{{ trans.quote_service_branding }}</option>
-      <option value="marketing">{{ trans.quote_service_marketing }}</option>
+      <option value="">Select a service</option>
+      <option value="web-design">Web Design</option>
+      <option value="branding">Branding</option>
+      <option value="marketing">Digital Marketing</option>
     </select>
   </div>
 
   <div>
-    <label class="block text-sm font-medium text-gray-700 mb-1">{{ trans.quote_budget_label }}</label>
+    <label class="block text-sm font-medium text-gray-700 mb-1">Budget Range</label>
     <select name="budget" class="w-full px-4 py-3 border rounded-lg bg-white">
-      <option value="">{{ trans.quote_budget_placeholder }}</option>
+      <option value="">Select your budget</option>
       <option value="under-1000">< 1,000</option>
       <option value="1000-5000">1,000 - 5,000</option>
       <option value="5000-10000">5,000 - 10,000</option>
@@ -144,11 +144,11 @@ Use standard HTML input types. The form system stores all values as JSON.
   </div>
 
   <div>
-    <label class="block text-sm font-medium text-gray-700 mb-1">{{ trans.quote_details_label }}</label>
-    <textarea name="details" rows="4" class="w-full px-4 py-3 border rounded-lg" placeholder="{{ trans.quote_details_placeholder }}"></textarea>
+    <label class="block text-sm font-medium text-gray-700 mb-1">Project Details</label>
+    <textarea name="details" rows="4" class="w-full px-4 py-3 border rounded-lg" placeholder="Tell us about your project..."></textarea>
   </div>
 
-  <button type="submit" class="px-8 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition">{{ trans.quote_submit_btn }}</button>
+  <button type="submit" class="px-8 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition">Request Quote</button>
 </form>
 ```
 
@@ -160,8 +160,8 @@ Use standard HTML input types. The form system stores all values as JSON.
   <div style="position:absolute;left:-9999px;" aria-hidden="true">
     <input type="text" name="website_url" tabindex="-1" autocomplete="off">
   </div>
-  <input type="email" name="email" required placeholder="{{ trans.newsletter_placeholder }}" class="flex-1 px-4 py-3 border rounded-lg">
-  <button type="submit" class="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition whitespace-nowrap">{{ trans.newsletter_btn }}</button>
+  <input type="email" name="email" required placeholder="Enter your email" class="flex-1 px-4 py-3 border rounded-lg">
+  <button type="submit" class="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition whitespace-nowrap">Subscribe</button>
 </form>
 ```
 
@@ -170,7 +170,7 @@ Use standard HTML input types. The form system stores all values as JSON.
 ```html
 <div class="flex items-start gap-2">
   <input type="checkbox" name="privacy_consent" id="privacy_consent" required class="mt-1">
-  <label for="privacy_consent" class="text-sm text-gray-600">{{ trans.form_privacy_consent }}</label>
+  <label for="privacy_consent" class="text-sm text-gray-600">I agree to the privacy policy and terms of service</label>
 </div>
 ```
 
@@ -195,11 +195,11 @@ unchecked and not `required`, the field is simply absent from the data.
 - Input `name` attributes are fixed identifiers — they are NOT translated
 - They become the JSON keys in the `FormSubmission.data` field
 - Use snake_case for consistency: `name`, `email`, `phone`, `message`, `company_name`
-- Use `{{ trans.xxx }}` only for visible text: labels, placeholders, button text, helper text
+- Write all visible text (labels, placeholders, buttons) directly in the target language
 
 **Select/Option Values:**
 - `<option value="...">` values are fixed identifiers (not translated)
-- The visible `<option>` text should use `{{ trans.xxx }}`
+- Write visible option text directly in the target language
 - Exception: numeric or code values (e.g., budget ranges) can be plain text
 
 **Form Action URL:**
@@ -228,13 +228,13 @@ The form endpoint supports AJAX (returns JSON). Add Alpine.js handling:
   <!-- honeypot + fields as above -->
 
   <div x-show="success" class="p-4 bg-green-50 text-green-700 rounded-lg">
-    {{ trans.form_success_message }}
+    Thank you! Your message has been sent successfully.
   </div>
   <div x-show="error" class="p-4 bg-red-50 text-red-700 rounded-lg" x-text="error"></div>
 
   <button type="submit" :disabled="loading" class="px-6 py-3 bg-blue-600 text-white rounded-lg">
-    <span x-show="!loading">{{ trans.form_submit_btn }}</span>
-    <span x-show="loading">{{ trans.form_sending }}</span>
+    <span x-show="!loading">Send Message</span>
+    <span x-show="loading">Sending...</span>
   </button>
 </form>
 ```
@@ -256,7 +256,7 @@ implemented in a decoupled app.
 **Do:**
 - Always include `{{% csrf_token %}}`
 - Always include the honeypot field with `name="website_url"` exactly as shown
-- Use `{{ trans.xxx }}` for all visible text (labels, placeholders, buttons)
+- Write all visible text (labels, placeholders, buttons) directly in the target language
 - Use fixed, untranslated `name` attributes on inputs
 - Use `required` on mandatory fields for client-side validation
 - Add `focus:ring-2 focus:ring-blue-500 focus:border-transparent` for focus styles

@@ -97,8 +97,8 @@ The JSON must be valid (use double quotes for keys and string values).
             <img src="..." alt="..." class="absolute inset-0 w-full h-full object-cover">
             <div class="absolute inset-0 bg-black/40 flex items-center justify-center">
               <div class="text-center text-white px-4">
-                <h2 class="text-4xl md:text-6xl font-bold mb-4">{{ trans.slide_1_title }}</h2>
-                <p class="text-xl md:text-2xl">{{ trans.slide_1_subtitle }}</p>
+                <h2 class="text-4xl md:text-6xl font-bold mb-4">Welcome to Our World</h2>
+                <p class="text-xl md:text-2xl">Discover extraordinary experiences</p>
               </div>
             </div>
           </div>
@@ -108,8 +108,8 @@ The JSON must be valid (use double quotes for keys and string values).
             <img src="..." alt="..." class="absolute inset-0 w-full h-full object-cover">
             <div class="absolute inset-0 bg-black/40 flex items-center justify-center">
               <div class="text-center text-white px-4">
-                <h2 class="text-4xl md:text-6xl font-bold mb-4">{{ trans.slide_2_title }}</h2>
-                <p class="text-xl md:text-2xl">{{ trans.slide_2_subtitle }}</p>
+                <h2 class="text-4xl md:text-6xl font-bold mb-4">Quality & Excellence</h2>
+                <p class="text-xl md:text-2xl">Crafted with passion and dedication</p>
               </div>
             </div>
           </div>
@@ -147,20 +147,20 @@ The JSON must be valid (use double quotes for keys and string values).
 ```html
 <section data-section="testimonials" id="testimonials" class="py-16 bg-gray-50">
   <div class="max-w-4xl mx-auto px-4">
-    <h2 class="text-3xl font-bold text-center mb-10">{{ trans.testimonials_title }}</h2>
+    <h2 class="text-3xl font-bold text-center mb-10">What Our Clients Say</h2>
     <div class="splide" data-media-collection="slider" data-splide='{"type":"loop","perPage":1,"autoplay":true,"interval":6000,"pauseOnHover":true,"arrows":false,"pagination":true}'>
       <div class="splide__track">
         <ul class="splide__list">
           <li class="splide__slide">
             <div class="text-center max-w-2xl mx-auto px-8 py-6">
-              <p class="text-lg italic mb-4">{{ trans.testimonial_1_quote }}</p>
-              <p class="font-semibold">{{ trans.testimonial_1_author }}</p>
+              <p class="text-lg italic mb-4">"An exceptional experience from start to finish. The team exceeded all our expectations."</p>
+              <p class="font-semibold">Maria Santos</p>
             </div>
           </li>
           <li class="splide__slide">
             <div class="text-center max-w-2xl mx-auto px-8 py-6">
-              <p class="text-lg italic mb-4">{{ trans.testimonial_2_quote }}</p>
-              <p class="font-semibold">{{ trans.testimonial_2_author }}</p>
+              <p class="text-lg italic mb-4">"Outstanding quality and attention to detail. Highly recommended!"</p>
+              <p class="font-semibold">João Silva</p>
             </div>
           </li>
         </ul>

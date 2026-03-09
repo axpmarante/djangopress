@@ -734,7 +734,7 @@ class Page(models.Model):
         'HTML Content',
         blank=True,
         default='',
-        help_text='Full page HTML with Tailwind CSS. Use {{trans.field}} for translatable content. Use data-section="name" on <section> tags for LLM reference.'
+        help_text='Legacy field (pre-v1.0). Per-language HTML is now stored in html_content_i18n.'
     )
     html_content_i18n = models.JSONField(
         default=dict, blank=True,
@@ -1060,7 +1060,7 @@ class GlobalSection(models.Model):
 
     html_template = models.TextField(
         'HTML Template',
-        help_text='HTML template with Django template syntax. Use {{trans.field}} for translatable content.'
+        help_text='Legacy field (pre-v1.0). Per-language HTML is now stored in html_template_i18n.'
     )
     html_template_i18n = models.JSONField(
         default=dict, blank=True,

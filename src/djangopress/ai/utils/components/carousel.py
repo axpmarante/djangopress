@@ -107,7 +107,7 @@ Keys are pixel widths (as strings). Values override the parent options below tha
 ```html
 <section data-section="gallery" id="gallery" class="py-16 bg-gray-50">
   <div class="max-w-6xl mx-auto px-4">
-    <h2 class="text-3xl font-bold text-center mb-10">{{ trans.gallery_title }}</h2>
+    <h2 class="text-3xl font-bold text-center mb-10">Our Gallery</h2>
     <div class="splide" data-media-collection="carousel" data-splide='{"type":"loop","perPage":3,"gap":"1.5rem","breakpoints":{"768":{"perPage":1},"1024":{"perPage":2}}}'>
       <div class="splide__track">
         <ul class="splide__list">

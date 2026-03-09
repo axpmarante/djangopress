@@ -1,5 +1,5 @@
 import { events } from '../lib/events.js';
-import { $, getContentWrapper, getCssSelector, isTextElement, getTransVar } from '../lib/dom.js';
+import { $, getContentWrapper, getCssSelector, isTextElement } from '../lib/dom.js';
 
 let handlers = {};
 let toolbar = null;
@@ -43,7 +43,7 @@ function finishEdit(cancel) {
             events.emit('change:content', {
                 type: 'content',
                 selector: getCssSelector(el),
-                fieldKey: getTransVar(el) || '',
+                fieldKey: '',
                 value: newText,
                 oldValue: originalText,
             });

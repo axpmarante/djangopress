@@ -105,11 +105,8 @@ export function isTextElement(el) {
     return TEXT_TAGS.has(el.tagName);
 }
 
-const TRANS_RE = /\{\{\s*trans\.(\w+)\s*\}\}/;
-
 export function getTransVar(el) {
-    const match = el.textContent.match(TRANS_RE);
-    return match ? match[1] : null;
+    return null;
 }
 
 /**

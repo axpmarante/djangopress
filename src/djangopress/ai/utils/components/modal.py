@@ -26,7 +26,7 @@ in `base.html`.
 ```html
 <div x-data="{ open: false }">
   <!-- Trigger button -->
-  <button @click="open = true" class="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition">{{ trans.open_modal_btn }}</button>
+  <button @click="open = true" class="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition">Open Details</button>
 
   <!-- Backdrop overlay -->
   <div x-show="open" x-transition.opacity.duration.300ms class="fixed inset-0 bg-black/50 z-40" @click="open = false"></div>
@@ -36,19 +36,19 @@ in `base.html`.
     <div class="bg-white rounded-xl shadow-2xl max-w-lg w-full p-6">
       <!-- Close button (top-right) -->
       <div class="flex justify-between items-start mb-4">
-        <h3 class="text-xl font-bold">{{ trans.modal_title }}</h3>
+        <h3 class="text-xl font-bold">Details</h3>
         <button @click="open = false" class="text-gray-400 hover:text-gray-600 transition">
           <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
         </button>
       </div>
       <!-- Modal body -->
       <div class="text-gray-600 mb-6">
-        <p>{{ trans.modal_content }}</p>
+        <p>Here you can find more information about our services and how we can help you achieve your goals.</p>
       </div>
       <!-- Modal footer -->
       <div class="flex justify-end gap-3">
-        <button @click="open = false" class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition">{{ trans.modal_cancel }}</button>
-        <button @click="open = false" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition">{{ trans.modal_confirm }}</button>
+        <button @click="open = false" class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition">Cancel</button>
+        <button @click="open = false" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition">Confirm</button>
       </div>
     </div>
   </div>
@@ -105,7 +105,7 @@ For modals with long content, add `max-h` and `overflow-y-auto` to the body area
   <!-- Fixed header -->
   <div class="p-6 border-b flex-shrink-0">
     <div class="flex justify-between items-start">
-      <h3 class="text-xl font-bold">{{ trans.modal_title }}</h3>
+      <h3 class="text-xl font-bold">Details</h3>
       <button @click="open = false" class="text-gray-400 hover:text-gray-600">
         <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
       </button>
@@ -113,11 +113,11 @@ For modals with long content, add `max-h` and `overflow-y-auto` to the body area
   </div>
   <!-- Scrollable body -->
   <div class="p-6 overflow-y-auto">
-    <p>{{ trans.modal_long_content }}</p>
+    <p>This section contains detailed information about our services, policies, and terms. Please read through carefully before proceeding.</p>
   </div>
   <!-- Fixed footer -->
   <div class="p-6 border-t flex-shrink-0 flex justify-end gap-3">
-    <button @click="open = false" class="px-4 py-2 bg-gray-100 rounded-lg">{{ trans.modal_close }}</button>
+    <button @click="open = false" class="px-4 py-2 bg-gray-100 rounded-lg">Close</button>
   </div>
 </div>
 ```
