@@ -16,6 +16,28 @@ from .models import log_ai_call
 logger = logging.getLogger(__name__)
 
 
+def sanitize_html_output(html: str) -> str:
+    """
+    Fix common HTML corruption introduced by BeautifulSoup or HTML processing.
+
+    Repairs:
+    - HTML-entity-escaped JS operators: =&gt; → =>, &lt;= → <=, &amp;&amp; → &&
+    - Entity-escaped template tags inside attributes (rare but possible)
+    """
+    if not html:
+        return html
+
+    # Fix arrow functions: =&gt; → =>
+    html = html.replace('=&gt;', '=>')
+    # Fix comparison operators in JS: &lt;= → <=, &gt;= → >=
+    html = html.replace('&lt;=', '<=')
+    html = html.replace('&gt;=', '>=')
+    # Fix logical operators: &amp;&amp; → &&
+    html = html.replace('&amp;&amp;', '&&')
+
+    return html
+
+
 def validate_html_structure(html: str, original_html: str = None) -> list:
     """
     Validate HTML structural integrity. Returns a list of error strings.
@@ -23,10 +45,10 @@ def validate_html_structure(html: str, original_html: str = None) -> list:
 
     Checks:
     1. Must contain at least one HTML tag
-    2. Critical tags (<header>, <section>, <footer>, <select>, <form>, <div>)
-       must have matching close tags
+    2. Critical tags must have matching close tags
     3. If original_html provided, new HTML must be at least 50% of original length
-       (prevents truncation)
+    4. Form actions must reference valid slugs (if DynamicForm model available)
+    5. JS in inline handlers must not contain HTML-escaped operators
     """
     errors = []
 
@@ -38,7 +60,6 @@ def validate_html_structure(html: str, original_html: str = None) -> list:
     # 2. Check critical tags are balanced
     critical_tags = ['header', 'footer', 'section', 'select', 'form', 'table', 'nav']
     for tag in critical_tags:
-        # Count opening tags (not self-closing)
         open_count = len(re.findall(rf'<{tag}[\s>]', html, re.IGNORECASE))
         close_count = len(re.findall(rf'</{tag}\s*>', html, re.IGNORECASE))
         if open_count > 0 and open_count != close_count:
@@ -55,7 +76,55 @@ def validate_html_structure(html: str, original_html: str = None) -> list:
                 f"({len(html)} vs {len(original_html)} chars) — possible truncation"
             )
 
+    # 4. Check for HTML-escaped JS operators (BS4 corruption)
+    if '=&gt;' in html or '&amp;&amp;' in html:
+        errors.append(
+            "HTML contains escaped JS operators (=&gt; or &amp;&amp;) — "
+            "likely BeautifulSoup corruption, auto-fixable"
+        )
+
+    # 5. Validate form action slugs exist in DB
+    form_slugs = re.findall(r'action="/forms/([^/"]+)/submit/"', html)
+    if form_slugs:
+        try:
+            from djangopress.core.models import DynamicForm
+            existing = set(
+                DynamicForm.objects.filter(
+                    slug__in=form_slugs, is_active=True
+                ).values_list('slug', flat=True)
+            )
+            missing = set(form_slugs) - existing
+            if missing:
+                errors.append(
+                    f"Form action references non-existent DynamicForm slug(s): "
+                    f"{', '.join(sorted(missing))}"
+                )
+        except Exception:
+            pass  # Skip DB check if models not available
+
     return errors
+
+
+def validate_and_fix_html(html: str, original_html: str = None) -> tuple:
+    """
+    Validate HTML and auto-fix what can be fixed.
+
+    Returns:
+        (fixed_html, remaining_errors) — remaining_errors is empty if all issues resolved.
+    """
+    # Auto-fix: sanitize BS4 corruption
+    fixed = sanitize_html_output(html)
+
+    # Validate the fixed version
+    remaining = validate_html_structure(fixed, original_html)
+
+    # Filter out the auto-fixable errors (they've been fixed)
+    remaining = [
+        e for e in remaining
+        if 'auto-fixable' not in e
+    ]
+
+    return fixed, remaining
 
 
 class ContentGenerationService:
@@ -255,17 +324,18 @@ Return ONLY the corrected, complete JSON. No markdown, no explanation."""
     def _extract_html_from_response(self, content: str, original_html: str = None) -> str:
         """
         Extract HTML from LLM response, handling markdown code blocks.
-        Validates structural integrity of the result.
+        Auto-fixes known issues (BS4 escaping), validates structure,
+        and raises on unfixable problems.
 
         Args:
             content: Raw response content from LLM
             original_html: Optional original HTML for length comparison
 
         Returns:
-            Extracted HTML string
+            Cleaned, validated HTML string
 
         Raises:
-            ValueError: If the extracted content fails validation
+            ValueError: If the extracted content has unfixable validation errors
         """
         # Try to find HTML in markdown code blocks first
         html_match = re.search(r'```(?:html)?\s*(.*?)\s*```', content, re.DOTALL)
@@ -274,8 +344,9 @@ Return ONLY the corrected, complete JSON. No markdown, no explanation."""
         else:
             result = content.strip()
 
-        # Structural validation
-        errors = validate_html_structure(result, original_html)
+        # Auto-fix and validate
+        result, errors = validate_and_fix_html(result, original_html)
+
         if errors:
             raise ValueError(
                 "LLM response failed HTML validation:\n- " +
@@ -351,7 +422,7 @@ Return ONLY the corrected, complete JSON. No markdown, no explanation."""
         from bs4 import BeautifulSoup
         soup = BeautifulSoup(full_html, 'html.parser')
         section = soup.find(attrs={'data-section': section_name})
-        return str(section) if section else None
+        return sanitize_html_output(str(section)) if section else None
 
     @staticmethod
     def _splice_section_html(full_html: str, section_name: str, new_section_html: str) -> str:
@@ -362,7 +433,7 @@ Return ONLY the corrected, complete JSON. No markdown, no explanation."""
         if old_section:
             new_section = BeautifulSoup(new_section_html, 'html.parser')
             old_section.replace_with(new_section)
-            return str(soup)
+            return sanitize_html_output(str(soup))
         return full_html
 
     def _generate_page_metadata(self, brief: str, languages: list, model: str) -> Dict:
@@ -2670,6 +2741,66 @@ Keep the translations natural and fluent — these are website UI strings.
         notify("analyzing", "done", total_issues=sum(len(p.get('issues', [])) for p in report))
         return report
 
+    def _fix_with_retry(self, messages, model, on_progress, step_name,
+                        original_html, label='', max_retries=1) -> str:
+        """
+        Call LLM, extract HTML, auto-fix, validate. On unfixable errors,
+        retry by feeding errors back to the LLM.
+
+        Returns:
+            Validated HTML string
+        """
+        actual_model, provider = self._get_model_info(model)
+
+        for attempt in range(1 + max_retries):
+            stream_cb = self._make_stream_callback(on_progress, step_name)
+            t0 = time.time()
+            try:
+                response = self.llm.get_completion(messages, tool_name=model, on_stream=stream_cb)
+                usage = self._extract_usage(response)
+                content = response.choices[0].message.content
+                self._log(
+                    action=f'{step_name}_attempt_{attempt}',
+                    model_name=actual_model, provider=provider,
+                    system_prompt=messages[0]['content'],
+                    user_prompt=messages[-1]['content'],
+                    response_text=content,
+                    duration_ms=int((time.time() - t0) * 1000), **usage,
+                )
+            except Exception as e:
+                self._log(
+                    action=f'{step_name}_attempt_{attempt}',
+                    model_name=actual_model, provider=provider,
+                    system_prompt=messages[0]['content'],
+                    user_prompt=messages[-1]['content'],
+                    duration_ms=int((time.time() - t0) * 1000),
+                    success=False, error_message=str(e),
+                )
+                raise
+
+            try:
+                fixed_html = self._extract_html_from_response(content, original_html=original_html)
+                if not fixed_html or len(fixed_html.strip()) < 50:
+                    raise ValueError("Fix returned empty or too-short HTML")
+                return fixed_html
+            except ValueError as e:
+                if attempt < max_retries:
+                    logger.warning(
+                        "HTML validation failed (attempt %d/%d) for %s: %s — retrying",
+                        attempt + 1, 1 + max_retries, label, e,
+                    )
+                    # Feed errors back to LLM for correction
+                    messages = messages + [
+                        {'role': 'assistant', 'content': content},
+                        {'role': 'user', 'content': (
+                            f"The HTML you returned has validation errors:\n{e}\n\n"
+                            "Please fix these issues and return the complete, corrected HTML. "
+                            "Return ONLY the HTML, no markdown code blocks, no explanations."
+                        )},
+                    ]
+                else:
+                    raise
+
     def _fix_full_html(
         self, html, issues, design_system, design_guide,
         custom_rules, model, label, on_progress,
@@ -2688,32 +2819,12 @@ Keep the translations natural and fluent — these are website UI strings.
             {'role': 'user', 'content': user_prompt},
         ]
 
-        actual_model, provider = self._get_model_info(model)
-        stream_cb = self._make_stream_callback(on_progress, 'fixing')
-        t0 = time.time()
-        try:
-            response = self.llm.get_completion(messages, tool_name=model, on_stream=stream_cb)
-            usage = self._extract_usage(response)
-            content = response.choices[0].message.content
-            self._log(
-                action='consistency_fix', model_name=actual_model, provider=provider,
-                system_prompt=system_prompt, user_prompt=user_prompt,
-                response_text=content,
-                duration_ms=int((time.time() - t0) * 1000), **usage,
-            )
-        except Exception as e:
-            self._log(
-                action='consistency_fix', model_name=actual_model, provider=provider,
-                system_prompt=system_prompt, user_prompt=user_prompt,
-                duration_ms=int((time.time() - t0) * 1000),
-                success=False, error_message=str(e),
-            )
-            raise
-
-        fixed_html = self._extract_html_from_response(content, original_html=html)
-        if not fixed_html or len(fixed_html.strip()) < 50:
-            raise ValueError("Fix returned empty or too-short HTML")
-
+        fixed_html = self._fix_with_retry(
+            messages, model, on_progress,
+            step_name='consistency_fix',
+            original_html=html,
+            label=label,
+        )
         return {'html': fixed_html}
 
     def fix_design_consistency(
@@ -2800,7 +2911,7 @@ Keep the translations natural and fluent — these are website UI strings.
                 current_html = result['html']
                 continue
 
-            # Fix section in isolation
+            # Fix section in isolation (with retry loop)
             system_prompt, user_prompt = PromptTemplates.get_consistency_section_fix_prompt(
                 design_system=design_system,
                 design_guide=design_guide,
@@ -2815,31 +2926,12 @@ Keep the translations natural and fluent — these are website UI strings.
                 {'role': 'user', 'content': user_prompt},
             ]
 
-            actual_model, provider = self._get_model_info(model)
-            stream_cb = self._make_stream_callback(on_progress, 'fixing')
-            t0 = time.time()
-            try:
-                response = self.llm.get_completion(messages, tool_name=model, on_stream=stream_cb)
-                usage = self._extract_usage(response)
-                content = response.choices[0].message.content
-                self._log(
-                    action='consistency_fix_section', model_name=actual_model, provider=provider,
-                    system_prompt=system_prompt, user_prompt=user_prompt,
-                    response_text=content,
-                    duration_ms=int((time.time() - t0) * 1000), **usage,
-                )
-            except Exception as e:
-                self._log(
-                    action='consistency_fix_section', model_name=actual_model, provider=provider,
-                    system_prompt=system_prompt, user_prompt=user_prompt,
-                    duration_ms=int((time.time() - t0) * 1000),
-                    success=False, error_message=str(e),
-                )
-                raise
-
-            fixed_section_html = self._extract_html_from_response(content, original_html=section_html)
-            if not fixed_section_html or len(fixed_section_html.strip()) < 20:
-                raise ValueError(f"Fix returned empty HTML for section '{section_name}'")
+            fixed_section_html = self._fix_with_retry(
+                messages, model, on_progress,
+                step_name='consistency_fix_section',
+                original_html=section_html,
+                label=f"{label}/{section_name}",
+            )
 
             # Splice fixed section back into full page
             current_html = self._splice_section_html(current_html, section_name, fixed_section_html)

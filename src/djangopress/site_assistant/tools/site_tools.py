@@ -239,6 +239,127 @@ def list_form_submissions(params, context):
     )
 
 
+def validate_forms(params, context):
+    """Scan all pages and GlobalSections for form-related issues."""
+    import re
+    from djangopress.core.models import Page, GlobalSection, DynamicForm, SiteSettings
+
+    site_settings = SiteSettings.objects.first()
+    default_lang = site_settings.get_default_language() if site_settings else 'pt'
+
+    # Build registry of existing forms
+    existing_forms = {}
+    for form in DynamicForm.objects.filter(is_active=True):
+        schema_names = {f['name'] for f in (form.fields_schema or []) if 'name' in f}
+        existing_forms[form.slug] = {
+            'name': form.name,
+            'field_names': schema_names,
+        }
+
+    issues = []
+    pages_checked = 0
+
+    # Check pages
+    for page in Page.objects.filter(is_active=True):
+        html = (page.html_content_i18n or {}).get(default_lang, '')
+        if not html:
+            continue
+        pages_checked += 1
+        page_label = page.default_title or f'Page {page.id}'
+        _check_html_for_form_issues(html, page_label, existing_forms, issues)
+
+    # Check GlobalSections
+    for section in GlobalSection.objects.filter(is_active=True):
+        html = (section.html_template_i18n or {}).get(default_lang, '')
+        if not html:
+            continue
+        section_label = f'GlobalSection: {section.name or section.key}'
+        _check_html_for_form_issues(html, section_label, existing_forms, issues)
+
+    if not issues:
+        return {
+            'success': True,
+            'message': f'All forms OK. Checked {pages_checked} pages.',
+            'issues': [],
+        }
+
+    return {
+        'success': True,
+        'message': f'Found {len(issues)} issue(s) across {pages_checked} pages.',
+        'issues': issues,
+    }
+
+
+def _check_html_for_form_issues(html, source_label, existing_forms, issues):
+    """Check a piece of HTML for form-related problems."""
+    import re
+
+    # Find all form actions
+    form_actions = re.findall(
+        r'<form[^>]*action="/forms/([^/"]+)/submit/"[^>]*>(.*?)</form>',
+        html, re.DOTALL | re.IGNORECASE,
+    )
+
+    for slug, form_body in form_actions:
+        # Check slug exists
+        if slug not in existing_forms:
+            issues.append({
+                'source': source_label,
+                'severity': 'high',
+                'issue': f'Form action references non-existent DynamicForm: "{slug}"',
+                'fix': f'Create a DynamicForm with slug="{slug}" or update the form action URL.',
+            })
+            continue
+
+        # Check field name mismatches
+        schema_names = existing_forms[slug]['field_names']
+        html_names = set(re.findall(r'name="([^"]+)"', form_body))
+        # Exclude system fields
+        html_names -= {'csrfmiddlewaretoken', 'website_url', 'next', 'language'}
+
+        missing_in_schema = html_names - schema_names
+        missing_in_html = {n for n in schema_names if n not in html_names}
+
+        if missing_in_schema:
+            issues.append({
+                'source': source_label,
+                'severity': 'medium',
+                'issue': (
+                    f'Form "{slug}": HTML has fields not in schema: '
+                    f'{", ".join(sorted(missing_in_schema))}'
+                ),
+                'fix': 'Add these fields to the DynamicForm fields_schema or remove from HTML.',
+            })
+        if missing_in_html:
+            issues.append({
+                'source': source_label,
+                'severity': 'medium',
+                'issue': (
+                    f'Form "{slug}": schema requires fields missing from HTML: '
+                    f'{", ".join(sorted(missing_in_html))}'
+                ),
+                'fix': 'Add these fields to the HTML form or remove from schema.',
+            })
+
+        # Check honeypot
+        if 'website_url' not in re.findall(r'name="([^"]+)"', form_body):
+            issues.append({
+                'source': source_label,
+                'severity': 'low',
+                'issue': f'Form "{slug}": missing honeypot field (website_url)',
+                'fix': 'Add hidden honeypot field for spam protection.',
+            })
+
+    # Check for escaped JS operators (BS4 corruption)
+    if '=&gt;' in html or '&amp;&amp;' in html:
+        issues.append({
+            'source': source_label,
+            'severity': 'high',
+            'issue': 'HTML contains escaped JS operators (=&gt; or &amp;&amp;) — JavaScript is broken',
+            'fix': 'Run sanitize_html_output() or replace =&gt; with => in the stored HTML.',
+        })
+
+
 def get_stats(params, context):
     result = SettingsService.get_snapshot()
     if not result['success']:
@@ -292,6 +413,7 @@ SITE_TOOLS = {
     'update_form': update_form,
     'delete_form': delete_form,
     'list_form_submissions': list_form_submissions,
+    'validate_forms': validate_forms,
     'get_stats': get_stats,
     'refine_header': refine_header,
     'refine_footer': refine_footer,

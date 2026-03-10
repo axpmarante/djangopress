@@ -548,12 +548,25 @@ LIST_FORM_SUBMISSIONS = types.FunctionDeclaration(
     ),
 )
 
+VALIDATE_FORMS = types.FunctionDeclaration(
+    name='validate_forms',
+    description=(
+        'Scan all pages and GlobalSections for form issues. Checks: '
+        '(1) form action slugs match existing DynamicForm records, '
+        '(2) HTML field names match the form fields_schema, '
+        '(3) JS in form handlers is not corrupted (escaped operators), '
+        '(4) honeypot field is present. '
+        'Returns a diagnostic report with issues and suggested fixes.'
+    ),
+)
+
 FORMS_TOOLS = [
     LIST_FORMS,
     CREATE_FORM,
     UPDATE_FORM,
     DELETE_FORM,
     LIST_FORM_SUBMISSIONS,
+    VALIDATE_FORMS,
 ]
 
 # ---------------------------------------------------------------------------
