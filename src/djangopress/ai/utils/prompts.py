@@ -1662,3 +1662,65 @@ Return ONLY the fixed HTML. No markdown code blocks, no explanations."""
 Fix ONLY the listed issues. Return the complete fixed HTML."""
 
         return (system_prompt, user_prompt)
+
+    @staticmethod
+    def get_consistency_section_fix_prompt(
+        design_system: dict,
+        design_guide: str,
+        section_html: str,
+        section_name: str,
+        issues: list,
+        custom_rules: str = '',
+    ) -> tuple:
+        """
+        Generate prompt for fixing design inconsistencies on a single section.
+        Same as get_consistency_fix_prompt but scoped to one section.
+        """
+        design_json = json.dumps(design_system, indent=2, ensure_ascii=False)
+        issues_json = json.dumps(issues, indent=2, ensure_ascii=False)
+
+        system_prompt = f"""You are a web design consistency fixer. Fix the specific design inconsistencies in the "{section_name}" section.
+
+## Rules
+- ONLY change Tailwind CSS classes and inline styles to fix the listed issues
+- Do NOT change text content, wording, or copy
+- Do NOT change HTML structure (adding/removing elements, reordering)
+- Do NOT change data-section, id, or data-* attributes
+- Do NOT change Alpine.js directives (x-data, x-show, @click, etc.)
+- Do NOT change Django template tags ({{% url %}}, {{% csrf_token %}}, etc.)
+- Do NOT change image src URLs or alt text
+- Do NOT change href URLs
+- Preserve ALL existing functionality
+- Return the complete fixed section HTML (the entire <section> tag)
+
+Return ONLY the fixed section HTML. No markdown code blocks, no explanations."""
+
+        design_guide_block = ""
+        if design_guide:
+            design_guide_block = f"\n## Design Guide\n{design_guide}\n"
+
+        custom_rules_block = ""
+        if custom_rules:
+            custom_rules_block = f"\n## Custom Rules\n{custom_rules}\n"
+
+        user_prompt = f"""## Design System Reference
+
+```json
+{design_json}
+```
+{design_guide_block}{custom_rules_block}
+## Issues to Fix in "{section_name}" Section
+
+```json
+{issues_json}
+```
+
+## Section HTML to Fix
+
+```html
+{section_html}
+```
+
+Fix ONLY the listed issues in this section. Return the complete fixed section HTML."""
+
+        return (system_prompt, user_prompt)
