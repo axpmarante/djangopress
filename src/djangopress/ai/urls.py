@@ -32,6 +32,7 @@ urlpatterns = [
 
     # Design guide generation
     path('api/generate-design-guide/', views.generate_design_guide_ai_api, name='generate_design_guide_ai'),
+    path('api/sync-settings-from-guide/', views.sync_settings_from_guide_api, name='sync_settings_from_guide'),
 
     # Image processing
     path('api/analyze-page-images/', views.analyze_page_images_api, name='analyze_page_images'),

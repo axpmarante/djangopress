@@ -1463,6 +1463,132 @@ The design_guide value must have newlines as \\n within the JSON string."""
 
 @superuser_required
 @require_http_methods(["POST"])
+def sync_settings_from_guide_api(request):
+    """
+    Read the current design guide and extract design system values using AI.
+    Returns only design_updates — does NOT modify the guide itself.
+    """
+    try:
+        from djangopress.core.models import SiteSettings
+        from .utils.llm_config import LLMBase
+
+        site_settings = SiteSettings.objects.first()
+        if not site_settings:
+            return JsonResponse({'success': False, 'error': 'Site settings not found'}, status=400)
+
+        design_guide = (site_settings.design_guide or '').strip()
+        if not design_guide:
+            return JsonResponse({'success': False, 'error': 'Design guide is empty. Generate one first.'}, status=400)
+
+        data = json.loads(request.body) if request.body else {}
+        model = data.get('model') or get_ai_model('generation')
+
+        default_language = site_settings.get_default_language()
+        site_name = site_settings.get_site_name(default_language)
+        project_briefing = site_settings.get_project_briefing()
+
+        system_prompt = """You are a design systems expert. Your job is to read a design guide document and extract concrete design system values from it.
+
+Given a design guide (markdown), extract the design system settings that match the guide's descriptions. Return ONLY a JSON object with the fields that should be set.
+
+Available fields and formats:
+
+**Colors** (hex codes like "#1e3a8a"):
+primary_color, primary_color_hover, secondary_color, accent_color, background_color, text_color, heading_color, primary_button_bg, primary_button_text, primary_button_border, primary_button_hover, secondary_button_bg, secondary_button_text, secondary_button_border, secondary_button_hover
+
+**Fonts** (Google Fonts names like "Inter", "Playfair Display", "Montserrat"):
+heading_font, body_font
+
+**Layout** (preset values):
+container_width: full|xs|sm|md|lg|xl|2xl|3xl|4xl|5xl|6xl|7xl
+border_radius_preset: none|sm|md|lg|xl|2xl|3xl|full
+spacing_scale: tight|normal|relaxed|loose
+shadow_preset: none|sm|md|lg|xl|2xl
+button_style: rounded|square|pill
+button_size: small|medium|large
+button_border_width: 0|1|2|4
+
+Return ONLY a JSON object like: {"primary_color": "#1e3a8a", "heading_font": "Playfair Display", ...}
+Include ALL fields you can determine from the guide. No explanations, no markdown wrapping."""
+
+        user_prompt = f"# Site: {site_name}\n\n"
+        if project_briefing:
+            user_prompt += f"## Project Briefing\n{project_briefing}\n\n"
+        user_prompt += f"## Design Guide\n{design_guide}"
+
+        llm = LLMBase()
+        actual_model, provider = _get_model_info(model)
+        t0 = time.time()
+
+        try:
+            messages = [
+                {'role': 'system', 'content': system_prompt},
+                {'role': 'user', 'content': user_prompt},
+            ]
+            response = llm.get_completion(messages, tool_name=model)
+
+            usage = _extract_usage(response)
+            log_ai_call(
+                action='sync_settings_from_guide', model_name=actual_model, provider=provider,
+                system_prompt=system_prompt, user_prompt=user_prompt,
+                response_text=response.choices[0].message.content,
+                duration_ms=int((time.time() - t0) * 1000),
+                user=request.user, **usage,
+            )
+        except Exception as e:
+            log_ai_call(
+                action='sync_settings_from_guide', model_name=actual_model, provider=provider,
+                system_prompt=system_prompt, user_prompt=user_prompt,
+                duration_ms=int((time.time() - t0) * 1000),
+                success=False, error_message=str(e), user=request.user,
+            )
+            raise
+
+        # Parse response
+        content = response.choices[0].message.content.strip()
+        if content.startswith('```'):
+            lines = content.split('\n')
+            if lines[0].startswith('```'):
+                lines = lines[1:]
+            if lines and lines[-1].strip() == '```':
+                lines = lines[:-1]
+            content = '\n'.join(lines)
+
+        design_updates = json.loads(content)
+
+        # Validate: only allow known fields
+        ALLOWED_UPDATE_FIELDS = {
+            'primary_color', 'primary_color_hover', 'secondary_color', 'accent_color',
+            'background_color', 'text_color', 'heading_color',
+            'heading_font', 'body_font',
+            'container_width', 'border_radius_preset', 'spacing_scale', 'shadow_preset',
+            'button_style', 'button_size',
+            'primary_button_bg', 'primary_button_text', 'primary_button_border', 'primary_button_hover',
+            'secondary_button_bg', 'secondary_button_text', 'secondary_button_border', 'secondary_button_hover',
+            'button_border_width',
+        }
+        design_updates = {k: v for k, v in design_updates.items() if k in ALLOWED_UPDATE_FIELDS}
+
+        # Filter out updates that match current values
+        filtered = {}
+        for field, value in design_updates.items():
+            current = getattr(site_settings, field, None)
+            if current is not None and str(current) != str(value):
+                filtered[field] = value
+
+        return JsonResponse({
+            'success': True,
+            'design_updates': filtered,
+        })
+
+    except json.JSONDecodeError:
+        return JsonResponse({'success': False, 'error': 'AI returned invalid JSON'}, status=500)
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
+@superuser_required
+@require_http_methods(["POST"])
 def analyze_page_images_api(request):
     """
     Analyze page images and suggest generation prompts + library matches.

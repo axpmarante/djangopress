@@ -60,10 +60,14 @@
                     </div>
                     {% endif %}
 
-                    <div class="flex items-center gap-3">
+                    <div class="flex items-center gap-3 flex-wrap">
                         <button type="button" onclick="aiGenerateDesignGuide()" id="btn_ai_generate_guide"
                                 class="px-4 py-2 text-sm bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors font-medium">
                             AI Generate Design Guide
+                        </button>
+                        <button type="button" onclick="syncSettingsFromGuide()" id="btn_sync_from_guide"
+                                class="px-4 py-2 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-medium">
+                            Sync Settings from Guide
                         </button>
                         <button type="button" onclick="generateDesignGuide()" id="btn_generate_guide"
                                 class="px-4 py-2 text-sm bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors border border-gray-300">
@@ -527,6 +531,60 @@ function aiGenerateDesignGuide() {
             // Show design system suggestions if any
             if (data.design_updates && Object.keys(data.design_updates).length > 0) {
                 showDesignSuggestions(data.design_updates);
+            }
+        } else {
+            statusSpan.textContent = 'Error: ' + (data.error || 'Unknown error');
+            statusSpan.className = 'text-xs text-red-600';
+        }
+    })
+    .catch(error => {
+        statusSpan.textContent = 'Error: ' + error.message;
+        statusSpan.className = 'text-xs text-red-600';
+    })
+    .finally(() => {
+        btn.textContent = originalText;
+        btn.disabled = false;
+    });
+}
+
+// ============ Sync Settings from Guide ============
+function syncSettingsFromGuide() {
+    const btn = document.getElementById('btn_sync_from_guide');
+    const statusSpan = document.getElementById('ai-guide-status');
+    const originalText = btn.textContent;
+    const guide = document.getElementById('id_design_guide').value.trim();
+
+    if (!guide) {
+        statusSpan.textContent = 'Design guide is empty. Generate one first.';
+        statusSpan.className = 'text-xs text-red-600';
+        return;
+    }
+
+    btn.textContent = 'Syncing...';
+    btn.disabled = true;
+    statusSpan.textContent = 'Analyzing design guide...';
+    statusSpan.className = 'text-xs text-indigo-600';
+
+    document.getElementById('design-suggestions-panel').classList.add('hidden');
+
+    fetch('/ai/api/sync-settings-from-guide/', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': '{{ csrf_token }}'
+        },
+        body: JSON.stringify({})
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            if (data.design_updates && Object.keys(data.design_updates).length > 0) {
+                showDesignSuggestions(data.design_updates);
+                statusSpan.textContent = `${Object.keys(data.design_updates).length} setting change(s) suggested. Review and apply.`;
+                statusSpan.className = 'text-xs text-green-600';
+            } else {
+                statusSpan.textContent = 'Settings already match the design guide.';
+                statusSpan.className = 'text-xs text-green-600';
             }
         } else {
             statusSpan.textContent = 'Error: ' + (data.error || 'Unknown error');
