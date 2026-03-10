@@ -2610,6 +2610,52 @@ Keep the translations natural and fluent — these are website UI strings.
         notify("analyzing", "done", total_issues=sum(len(p.get('issues', [])) for p in report))
         return report
 
+    def _fix_full_html(
+        self, html, issues, design_system, design_guide,
+        custom_rules, model, label, on_progress,
+    ) -> Dict:
+        """Full-page HTML fix — the original approach, used as fallback."""
+        system_prompt, user_prompt = PromptTemplates.get_consistency_fix_prompt(
+            design_system=design_system,
+            design_guide=design_guide,
+            page_html=html,
+            issues=issues,
+            custom_rules=custom_rules,
+        )
+
+        messages = [
+            {'role': 'system', 'content': system_prompt},
+            {'role': 'user', 'content': user_prompt},
+        ]
+
+        actual_model, provider = self._get_model_info(model)
+        stream_cb = self._make_stream_callback(on_progress, 'fixing')
+        t0 = time.time()
+        try:
+            response = self.llm.get_completion(messages, tool_name=model, on_stream=stream_cb)
+            usage = self._extract_usage(response)
+            content = response.choices[0].message.content
+            self._log(
+                action='consistency_fix', model_name=actual_model, provider=provider,
+                system_prompt=system_prompt, user_prompt=user_prompt,
+                response_text=content,
+                duration_ms=int((time.time() - t0) * 1000), **usage,
+            )
+        except Exception as e:
+            self._log(
+                action='consistency_fix', model_name=actual_model, provider=provider,
+                system_prompt=system_prompt, user_prompt=user_prompt,
+                duration_ms=int((time.time() - t0) * 1000),
+                success=False, error_message=str(e),
+            )
+            raise
+
+        fixed_html = self._extract_html_from_response(content)
+        if not fixed_html or len(fixed_html.strip()) < 50:
+            raise ValueError("Fix returned empty or too-short HTML")
+
+        return {'html': fixed_html}
+
     def fix_design_consistency(
         self,
         page_id: int = None,
@@ -2622,16 +2668,11 @@ Keep the translations natural and fluent — these are website UI strings.
         """
         Fix design inconsistencies on a single page or GlobalSection.
 
-        Args:
-            page_id: Page ID to fix (mutually exclusive with section_key)
-            section_key: GlobalSection key to fix
-            issues: List of issue dicts to fix
-            custom_rules: Optional user-defined rules
-            model_override: Override the default model
-            on_progress: Progress callback
+        For pages: groups issues by data-section, extracts each section,
+        fixes it in isolation, and splices it back. Issues without a clear
+        section fall back to full-page fix.
 
-        Returns:
-            Dict with 'html' containing the fixed HTML
+        For GlobalSections: uses full-HTML fix (no data-section structure).
         """
         def notify(step, status, **extra):
             if on_progress:
@@ -2665,47 +2706,86 @@ Keep the translations natural and fluent — these are website UI strings.
             raise ValueError(f"No HTML found for {label}")
 
         notify("fixing", "running", label=label)
-
-        system_prompt, user_prompt = PromptTemplates.get_consistency_fix_prompt(
-            design_system=design_system,
-            design_guide=design_guide,
-            page_html=html,
-            issues=issues or [],
-            custom_rules=custom_rules,
-        )
-
         model = model_override or get_ai_model('consistency')
-        messages = [
-            {'role': 'system', 'content': system_prompt},
-            {'role': 'user', 'content': user_prompt},
-        ]
 
-        actual_model, provider = self._get_model_info(model)
-        stream_cb = self._make_stream_callback(on_progress, 'fixing')
-        t0 = time.time()
-        try:
-            response = self.llm.get_completion(messages, tool_name=model, on_stream=stream_cb)
-            usage = self._extract_usage(response)
-            content = response.choices[0].message.content
-            self._log(
-                action='consistency_fix', model_name=actual_model, provider=provider,
-                system_prompt=system_prompt, user_prompt=user_prompt,
-                response_text=content,
-                duration_ms=int((time.time() - t0) * 1000), **usage,
+        # GlobalSections: always use full-HTML fix (no data-section structure)
+        if section_key:
+            return self._fix_full_html(
+                html, issues or [], design_system, design_guide,
+                custom_rules, model, label, on_progress,
             )
-        except Exception as e:
-            self._log(
-                action='consistency_fix', model_name=actual_model, provider=provider,
-                system_prompt=system_prompt, user_prompt=user_prompt,
-                duration_ms=int((time.time() - t0) * 1000),
-                success=False, error_message=str(e),
+
+        # Pages: group issues by section, fix each section surgically
+        grouped = self._group_issues_by_section(issues or [])
+        current_html = html
+
+        for section_name, section_issues in grouped.items():
+            if section_name is None:
+                # No clear section — fall back to full-page fix for these issues
+                result = self._fix_full_html(
+                    current_html, section_issues, design_system, design_guide,
+                    custom_rules, model, label, on_progress,
+                )
+                current_html = result['html']
+                continue
+
+            # Extract section
+            section_html = self._extract_section_html(current_html, section_name)
+            if not section_html:
+                # Section not found in HTML — fall back to full-page fix
+                result = self._fix_full_html(
+                    current_html, section_issues, design_system, design_guide,
+                    custom_rules, model, label, on_progress,
+                )
+                current_html = result['html']
+                continue
+
+            # Fix section in isolation
+            system_prompt, user_prompt = PromptTemplates.get_consistency_section_fix_prompt(
+                design_system=design_system,
+                design_guide=design_guide,
+                section_html=section_html,
+                section_name=section_name,
+                issues=section_issues,
+                custom_rules=custom_rules,
             )
-            raise
 
-        fixed_html = self._extract_html_from_response(content)
+            messages = [
+                {'role': 'system', 'content': system_prompt},
+                {'role': 'user', 'content': user_prompt},
+            ]
 
-        if not fixed_html or len(fixed_html.strip()) < 50:
-            raise ValueError("Fix returned empty or too-short HTML")
+            actual_model, provider = self._get_model_info(model)
+            stream_cb = self._make_stream_callback(on_progress, 'fixing')
+            t0 = time.time()
+            try:
+                response = self.llm.get_completion(messages, tool_name=model, on_stream=stream_cb)
+                usage = self._extract_usage(response)
+                content = response.choices[0].message.content
+                self._log(
+                    action='consistency_fix_section', model_name=actual_model, provider=provider,
+                    system_prompt=system_prompt, user_prompt=user_prompt,
+                    response_text=content,
+                    duration_ms=int((time.time() - t0) * 1000), **usage,
+                )
+            except Exception as e:
+                self._log(
+                    action='consistency_fix_section', model_name=actual_model, provider=provider,
+                    system_prompt=system_prompt, user_prompt=user_prompt,
+                    duration_ms=int((time.time() - t0) * 1000),
+                    success=False, error_message=str(e),
+                )
+                raise
+
+            fixed_section_html = self._extract_html_from_response(content)
+            if not fixed_section_html or len(fixed_section_html.strip()) < 20:
+                raise ValueError(f"Fix returned empty HTML for section '{section_name}'")
+
+            # Splice fixed section back into full page
+            current_html = self._splice_section_html(current_html, section_name, fixed_section_html)
+
+        if not current_html or len(current_html.strip()) < 50:
+            raise ValueError("Fix resulted in empty or too-short HTML")
 
         notify("fixing", "done", label=label)
-        return {'html': fixed_html}
+        return {'html': current_html}
