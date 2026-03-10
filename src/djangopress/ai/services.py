@@ -2498,6 +2498,15 @@ Keep the translations natural and fluent — these are website UI strings.
 
         notify("analyzing", "running", pages=len(pages_html), sections=len(sections_html))
 
+        # Build page registry for link validation
+        available_pages = []
+        for page in Page.objects.filter(is_active=True).order_by('sort_order', 'id'):
+            slug_i18n = page.slug_i18n or {}
+            slug = slug_i18n.get(default_lang, '') or page.slug_i18n.get('en', '') if slug_i18n else ''
+            title = page.get_title(default_lang) or page.default_title or f'Page {page.id}'
+            if slug:
+                available_pages.append({'slug': slug, 'title': title})
+
         # Build prompt
         system_prompt, user_prompt = PromptTemplates.get_consistency_analysis_prompt(
             design_system=design_system,
@@ -2505,6 +2514,7 @@ Keep the translations natural and fluent — these are website UI strings.
             pages_html=pages_html,
             sections_html=sections_html,
             custom_rules=custom_rules,
+            available_pages=available_pages,
         )
 
         model = model_override or get_ai_model('consistency')

@@ -1464,6 +1464,7 @@ HTML:
         pages_html: list,
         sections_html: list,
         custom_rules: str = '',
+        available_pages: list = None,
     ) -> tuple:
         """
         Generate prompt for analyzing design consistency across all pages.
@@ -1575,12 +1576,17 @@ Return ONLY the JSON array. No markdown, no explanations."""
         if design_guide:
             design_guide_block = f"\n## Design Guide\n{design_guide}\n"
 
+        pages_registry_block = ""
+        if available_pages:
+            lines = [f"- /{p['slug']} — {p['title']}" for p in available_pages]
+            pages_registry_block = "\n## Available Pages (valid link targets)\n" + "\n".join(lines) + "\n"
+
         user_prompt = f"""## Design System
 
 ```json
 {design_json}
 ```
-{design_guide_block}
+{design_guide_block}{pages_registry_block}
 ## Pages to Analyze
 {pages_block}{sections_block}
 Analyze all pages and sections for {'the rules provided' if custom_rules else 'design inconsistencies against the design system'}. Return the JSON array."""
