@@ -2894,13 +2894,13 @@ def fix_consistency_stream(request):
                             # Create version backup
                             page.create_version(change_summary='Before design consistency fix')
 
-                            # Save fixed HTML
+                            # Save fixed HTML for default language
                             html_i18n = dict(page.html_content_i18n or {})
                             html_i18n[default_lang] = fixed_html
                             page.html_content_i18n = html_i18n
                             page.save(update_fields=['html_content_i18n'])
 
-                            # Auto-translate
+                            # Translate only changed sections
                             if other_languages:
                                 on_progress({
                                     'step': 'translating',
@@ -2909,9 +2909,42 @@ def fix_consistency_stream(request):
                                     'total': total,
                                     'label': label,
                                 })
-                                translated = service.bulk_translate_page(page, other_languages)
-                                html_i18n = dict(page.html_content_i18n or {})
-                                html_i18n.update(translated)
+
+                                # Identify which sections were fixed
+                                changed_sections = set()
+                                for issue in issues:
+                                    section_name = ContentGenerationService._extract_section_name_from_element(
+                                        issue.get('element', '')
+                                    )
+                                    if section_name:
+                                        changed_sections.add(section_name)
+
+                                if changed_sections:
+                                    # Section-level translation
+                                    for lang in other_languages:
+                                        lang_html = html_i18n.get(lang, '')
+                                        if not lang_html:
+                                            # No existing HTML for this language — translate full page
+                                            lang_html = service.translate_html(fixed_html, default_lang, lang)
+                                        else:
+                                            # Translate and splice each changed section
+                                            for sec_name in changed_sections:
+                                                fixed_section = ContentGenerationService._extract_section_html(
+                                                    fixed_html, sec_name
+                                                )
+                                                if fixed_section:
+                                                    translated_section = service.translate_html(
+                                                        fixed_section, default_lang, lang
+                                                    )
+                                                    lang_html = ContentGenerationService._splice_section_html(
+                                                        lang_html, sec_name, translated_section
+                                                    )
+                                        html_i18n[lang] = lang_html
+                                else:
+                                    # No section info — translate full page (fallback)
+                                    translated = service.bulk_translate_page(page, other_languages)
+                                    html_i18n.update(translated)
+
                                 page.html_content_i18n = html_i18n
                                 page.save(update_fields=['html_content_i18n'])
 
