@@ -393,11 +393,8 @@ class SiteGenerator:
             desc_i18n = {plan['default_language']: desc_text}
             settings.site_description_i18n = desc_i18n
 
-        # Project briefing — the full business section + additional notes
-        briefing_parts = [plan['business_description']]
-        if plan['additional_notes']:
-            briefing_parts.append(f"\nAdditional notes:\n{plan['additional_notes']}")
-        settings.project_briefing = '\n'.join(briefing_parts)
+        # Project briefing — store the full briefing file for AI context
+        settings.project_briefing = self.briefing_text
 
         # Contact info
         contact = plan['contact']

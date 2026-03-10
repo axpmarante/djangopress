@@ -136,7 +136,10 @@ echo "--- Step 3: Installing dependencies ---"
 python3 -m venv venv
 source venv/bin/activate
 pip install -q -r requirements.txt
-echo "  Dependencies installed (djangopress pulled from GitHub)"
+# Re-install djangopress from the local source to get the latest version
+# (requirements.txt pins a git tag for Railway deploys, but locally we want current)
+pip install -q "$SOURCE_DIR"
+echo "  Dependencies installed (djangopress from local source: $SOURCE_DIR)"
 
 # --- Step 4: Database ---
 echo ""
@@ -144,6 +147,12 @@ echo "--- Step 4: Running migrations ---"
 
 python manage.py migrate --verbosity 0
 echo "  Database ready"
+
+# --- Step 4b: Sync Claude Code skills ---
+echo ""
+echo "--- Step 4b: Syncing Claude Code skills ---"
+python manage.py sync_skills --clean
+echo "  Skills synced"
 
 # --- Step 5: Copy briefing file ---
 if [ -n "$BRIEFING_FILE" ]; then
