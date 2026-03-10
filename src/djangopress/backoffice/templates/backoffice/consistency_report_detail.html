@@ -4,131 +4,148 @@
 {% block title %}Report #{{ report.pk }} - Design Consistency{% endblock %}
 
 {% block content %}
+<style>
+    .tooltip-container { position: relative; }
+    .tooltip-container .tooltip {
+        visibility: hidden; opacity: 0; position: absolute; z-index: 50;
+        bottom: calc(100% + 6px); left: 50%; transform: translateX(-50%);
+        padding: 8px 12px; border-radius: 6px;
+        background: #1f2937; color: #fff; font-size: 12px; line-height: 1.4;
+        white-space: normal; width: max-content; max-width: 360px;
+        pointer-events: none; transition: opacity 0.15s;
+        box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+    }
+    .tooltip-container .tooltip::after {
+        content: ''; position: absolute; top: 100%; left: 50%; transform: translateX(-50%);
+        border: 5px solid transparent; border-top-color: #1f2937;
+    }
+    .tooltip-container:hover .tooltip { visibility: visible; opacity: 1; }
+    .sort-arrow { opacity: 0.3; }
+    .sort-arrow.active { opacity: 1; }
+    th.sortable { cursor: pointer; user-select: none; }
+    th.sortable:hover { background: #f3f4f6; }
+</style>
+
 <div class="space-y-6">
     <!-- Breadcrumb -->
     <nav class="flex" aria-label="Breadcrumb">
         <ol class="flex items-center space-x-2 text-sm text-gray-500">
-            <li>
-                <a href="{% url 'backoffice:dashboard' %}" class="hover:text-gray-700">Dashboard</a>
-            </li>
-            <li>
-                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                    <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
-                </svg>
-            </li>
-            <li>
-                <a href="{% url 'backoffice:consistency_reports' %}" class="hover:text-gray-700">Consistency Reports</a>
-            </li>
-            <li>
-                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                    <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
-                </svg>
-            </li>
+            <li><a href="{% url 'backoffice:dashboard' %}" class="hover:text-gray-700">Dashboard</a></li>
+            <li><svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/></svg></li>
+            <li><a href="{% url 'backoffice:consistency_reports' %}" class="hover:text-gray-700">Consistency Reports</a></li>
+            <li><svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/></svg></li>
             <li class="text-gray-900 font-medium">Report #{{ report.pk }}</li>
         </ol>
     </nav>
 
     <!-- Header -->
-    <div>
-        <h2 class="text-3xl font-bold text-gray-900 flex items-center">
-            <span class="w-12 h-12 bg-gradient-to-r from-emerald-500 to-teal-500 rounded-lg flex items-center justify-center mr-3">
-                <svg class="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z"/>
+    <div class="flex items-start justify-between">
+        <div>
+            <h2 class="text-3xl font-bold text-gray-900 flex items-center">
+                <span class="w-12 h-12 bg-gradient-to-r from-emerald-500 to-teal-500 rounded-lg flex items-center justify-center mr-3">
+                    <svg class="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z"/>
+                    </svg>
+                </span>
+                Report #{{ report.pk }}
+            </h2>
+            <div class="mt-2 ml-15 text-sm text-gray-600 space-y-1">
+                <p>Created {{ report.created_at|date:"N j, Y H:i" }}{% if report.created_by %} by {{ report.created_by }}{% endif %}</p>
+                {% if report.model_used %}<p>Model: <span class="font-mono text-xs bg-gray-100 px-1.5 py-0.5 rounded">{{ report.model_used }}</span></p>{% endif %}
+                {% if report.custom_rules %}<p>Custom rules: <span class="italic text-gray-500">{{ report.custom_rules|truncatewords:30 }}</span></p>{% endif %}
+            </div>
+        </div>
+        <div class="flex items-center gap-3">
+            <a href="{% url 'backoffice:consistency_reports' %}"
+               class="inline-flex items-center px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50">
+                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
                 </svg>
-            </span>
-            Report #{{ report.pk }}
-        </h2>
-        <div class="mt-2 ml-15 text-sm text-gray-600 space-y-1">
-            <p>Created {{ report.created_at|date:"N j, Y H:i" }}{% if report.created_by %} by {{ report.created_by }}{% endif %}</p>
-            {% if report.model_used %}<p>Model: <span class="font-mono text-xs bg-gray-100 px-1.5 py-0.5 rounded">{{ report.model_used }}</span></p>{% endif %}
-            {% if report.custom_rules %}<p>Custom rules: <span class="italic text-gray-500">{{ report.custom_rules|truncatewords:30 }}</span></p>{% endif %}
+                Back
+            </a>
         </div>
     </div>
 
-    <!-- Main Content -->
-    <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
-        <!-- Main Column -->
-        <div class="lg:col-span-3 space-y-6">
+    <!-- Summary Bar -->
+    <div id="summaryBar" class="bg-white rounded-lg shadow-sm border border-gray-200 px-6 py-4">
+        <!-- Filled by JS -->
+    </div>
 
-            <!-- Summary Card -->
-            <div id="summaryCard" class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                <!-- Filled by JS -->
-            </div>
-
-            <!-- Per-Page/Section Issue Cards -->
-            <div id="issueCards">
-                <!-- Filled by JS -->
-            </div>
-
-            <!-- Fix Progress Panel (hidden initially) -->
-            <div id="fixPanel" class="hidden space-y-6">
-                <div id="fixProgressCard" class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                    <h3 class="text-lg font-semibold text-gray-900 mb-4">Fixing Design Issues</h3>
-                    <div class="mb-4">
-                        <div class="flex items-center justify-between mb-2">
-                            <span id="fixProgressLabel" class="text-sm text-gray-600">Starting...</span>
-                            <span id="fixProgressCount" class="text-sm font-medium text-gray-900">0 / 0</span>
-                        </div>
-                        <div class="w-full bg-gray-200 rounded-full h-2.5">
-                            <div id="fixProgressBar" class="bg-emerald-600 h-2.5 rounded-full transition-all duration-300" style="width: 0%"></div>
-                        </div>
-                    </div>
-                    <div id="fixResults" class="space-y-2">
-                        <!-- Filled by JS -->
-                    </div>
-                </div>
-
-                <!-- Success Summary (hidden until complete) -->
-                <div id="fixSummary" class="hidden">
-                    <!-- Filled by JS -->
-                </div>
-            </div>
-
+    <!-- Toolbar -->
+    <div class="flex items-center justify-between">
+        <div class="flex items-center gap-3">
+            <span id="selectedInfo" class="text-sm text-gray-500">0 selected</span>
+            <button id="fixBtn" onclick="startFix()"
+                    class="inline-flex items-center px-4 py-2 text-sm font-semibold text-white bg-gradient-to-r from-blue-600 to-indigo-600 rounded-lg hover:from-blue-700 hover:to-indigo-700 shadow-sm transition-all opacity-50 cursor-not-allowed" disabled>
+                <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11.42 15.17l-5.97-5.97a4 4 0 010-5.66 4 4 0 015.66 0L12 4.43l.89-.89a4 4 0 015.66 0 4 4 0 010 5.66l-5.97 5.97a.75.75 0 01-1.06 0z"/>
+                </svg>
+                Fix Selected (<span id="fixCount">0</span>)
+            </button>
         </div>
+        <div class="flex items-center gap-4 text-sm">
+            <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-red-500"></span><span id="statusHighCount">0</span> high</span>
+            <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-yellow-500"></span><span id="statusMedCount">0</span> medium</span>
+            <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-blue-500"></span><span id="statusLowCount">0</span> low</span>
+            <span class="text-gray-300">|</span>
+            <span class="text-gray-600"><span id="statusOpenCount" class="font-semibold">0</span> open</span>
+            <span class="text-gray-400"><span id="statusIgnoredCount">0</span> ignored</span>
+            <span class="text-gray-400"><span id="statusWontFixCount">0</span> won't fix</span>
+        </div>
+    </div>
 
-        <!-- Sidebar -->
-        <div class="space-y-6">
-            <!-- Status Counts -->
-            <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-5">
-                <h3 class="text-sm font-semibold text-gray-900 mb-3">Issue Status</h3>
-                <div class="space-y-2">
-                    <div class="flex items-center justify-between">
-                        <span class="text-sm text-gray-600">Open</span>
-                        <span id="statusOpenCount" class="text-sm font-bold text-gray-900">0</span>
-                    </div>
-                    <div class="flex items-center justify-between">
-                        <span class="text-sm text-gray-600">Ignored</span>
-                        <span id="statusIgnoredCount" class="text-sm font-bold text-yellow-600">0</span>
-                    </div>
-                    <div class="flex items-center justify-between">
-                        <span class="text-sm text-gray-600">Won't Fix</span>
-                        <span id="statusWontFixCount" class="text-sm font-bold text-gray-500">0</span>
-                    </div>
+    <!-- Issues Table -->
+    <div id="issueTable" class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+        <table class="min-w-full divide-y divide-gray-200">
+            <thead class="bg-gray-50">
+                <tr>
+                    <th class="w-10 px-3 py-3 text-left">
+                        <input type="checkbox" id="selectAll" onchange="toggleSelectAll(this)"
+                               class="rounded border-gray-300 text-emerald-600 focus:ring-emerald-500">
+                    </th>
+                    <th class="sortable px-3 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider" data-sort="severity" onclick="sortTable('severity')">
+                        Severity <span class="sort-arrow" id="sort-severity">&#x25B2;</span>
+                    </th>
+                    <th class="sortable px-3 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider" data-sort="category" onclick="sortTable('category')">
+                        Category <span class="sort-arrow" id="sort-category">&#x25B2;</span>
+                    </th>
+                    <th class="sortable px-3 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider" data-sort="page" onclick="sortTable('page')">
+                        Page <span class="sort-arrow" id="sort-page">&#x25B2;</span>
+                    </th>
+                    <th class="px-3 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                        Element
+                    </th>
+                    <th class="px-3 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider" style="min-width:280px;">
+                        Description
+                    </th>
+                    <th class="w-28 px-3 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                        Status
+                    </th>
+                </tr>
+            </thead>
+            <tbody id="issueTableBody" class="divide-y divide-gray-100">
+                <!-- Filled by JS -->
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Fix Progress Panel (hidden initially) -->
+    <div id="fixPanel" class="hidden space-y-6">
+        <div id="fixProgressCard" class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+            <h3 class="text-lg font-semibold text-gray-900 mb-4">Fixing Design Issues</h3>
+            <div class="mb-4">
+                <div class="flex items-center justify-between mb-2">
+                    <span id="fixProgressLabel" class="text-sm text-gray-600">Starting...</span>
+                    <span id="fixProgressCount" class="text-sm font-medium text-gray-900">0 / 0</span>
+                </div>
+                <div class="w-full bg-gray-200 rounded-full h-2.5">
+                    <div id="fixProgressBar" class="bg-emerald-600 h-2.5 rounded-full transition-all duration-300" style="width: 0%"></div>
                 </div>
             </div>
-
-            <!-- Fix Button -->
-            <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-5">
-                <button id="fixBtn" onclick="startFix()"
-                        class="w-full px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg hover:from-blue-700 hover:to-indigo-700 flex items-center justify-center shadow-md hover:shadow-lg transition-all opacity-50 cursor-not-allowed" disabled>
-                    <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11.42 15.17l-5.97-5.97a4 4 0 010-5.66 4 4 0 015.66 0L12 4.43l.89-.89a4 4 0 015.66 0 4 4 0 010 5.66l-5.97 5.97a.75.75 0 01-1.06 0z"/>
-                    </svg>
-                    Fix Selected (<span id="fixCount">0</span>)
-                </button>
-                <p class="mt-3 text-xs text-gray-500 text-center">Only open issues will be sent for fixing</p>
+            <div id="fixResults" class="space-y-2">
             </div>
-
-            <!-- Back Link -->
-            <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-5">
-                <a href="{% url 'backoffice:consistency_reports' %}"
-                   class="w-full inline-flex items-center justify-center px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50">
-                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
-                    </svg>
-                    Back to Reports
-                </a>
-            </div>
+        </div>
+        <div id="fixSummary" class="hidden">
         </div>
     </div>
 </div>
@@ -139,6 +156,8 @@ const reportData = {{ report_data_json|safe }};
 const reportSummary = {{ summary_json|safe }};
 const issueStatuses = {{ issue_statuses_json|safe }};
 const reportPk = {{ report.pk }};
+
+const SEVERITY_ORDER = { high: 0, medium: 1, low: 2 };
 
 const SEVERITY_COLORS = {
     high: { bg: 'bg-red-100', text: 'text-red-800', dot: 'bg-red-500' },
@@ -157,6 +176,35 @@ const CATEGORY_COLORS = {
     cta: 'bg-rose-100 text-rose-800',
     custom: 'bg-emerald-100 text-emerald-800',
 };
+
+/* -- Flatten issues into rows -- */
+let flatIssues = [];
+for (const entry of reportData) {
+    const issues = entry.issues || [];
+    for (let i = 0; i < issues.length; i++) {
+        const issue = issues[i];
+        const pageId = entry.page_id;
+        const sectionKey = entry.section_key || null;
+        const isSection = pageId === null || pageId === undefined;
+        const issueKey = isSection ? `section_${sectionKey}_issue_${i}` : `page_${pageId}_issue_${i}`;
+        flatIssues.push({
+            issueKey,
+            pageId,
+            sectionKey,
+            pageTitle: entry.page_title || entry.name || sectionKey || 'Unknown',
+            isSection,
+            issueIndex: i,
+            severity: issue.severity || 'medium',
+            category: issue.category || 'custom',
+            element: issue.element || '',
+            description: issue.description || '',
+            suggestion: issue.suggested_fix || issue.suggestion || '',
+            entry,
+        });
+    }
+}
+
+let currentSort = { field: 'severity', asc: true };
 
 function getCookie(name) {
     let cookieValue = null;
@@ -179,230 +227,194 @@ function escapeHtml(text) {
     return div.innerHTML;
 }
 
-function getIssueKey(entry, issueIndex) {
-    if (entry.page_id !== null && entry.page_id !== undefined) {
-        return `page_${entry.page_id}_issue_${issueIndex}`;
-    }
-    return `section_${entry.section_key}_issue_${issueIndex}`;
-}
-
 function getIssueStatus(key) {
     return issueStatuses[key] || 'open';
 }
 
-function updateStatusCounts() {
-    let open = 0, ignored = 0, wontFix = 0;
-    for (const entry of reportData) {
-        const issues = entry.issues || [];
-        for (let i = 0; i < issues.length; i++) {
-            const key = getIssueKey(entry, i);
-            const status = getIssueStatus(key);
-            if (status === 'ignored') ignored++;
-            else if (status === 'wont_fix') wontFix++;
-            else open++;
-        }
-    }
-    document.getElementById('statusOpenCount').textContent = open;
-    document.getElementById('statusIgnoredCount').textContent = ignored;
-    document.getElementById('statusWontFixCount').textContent = wontFix;
-}
+/* -- Sorting -- */
 
-function updateIssueVisual(key, status) {
-    const row = document.querySelector(`[data-issue-key="${key}"]`);
-    if (!row) return;
-    const desc = row.querySelector('.issue-description');
-    if (status === 'ignored' || status === 'wont_fix') {
-        row.classList.add('opacity-50');
-        if (desc) desc.classList.add('line-through');
+function sortTable(field) {
+    if (currentSort.field === field) {
+        currentSort.asc = !currentSort.asc;
     } else {
-        row.classList.remove('opacity-50');
-        if (desc) desc.classList.remove('line-through');
+        currentSort.field = field;
+        currentSort.asc = true;
     }
+    document.querySelectorAll('.sort-arrow').forEach(el => {
+        el.classList.remove('active');
+        el.innerHTML = '&#x25B2;';
+    });
+    const arrow = document.getElementById(`sort-${field}`);
+    if (arrow) {
+        arrow.classList.add('active');
+        arrow.innerHTML = currentSort.asc ? '&#x25B2;' : '&#x25BC;';
+    }
+    renderTable();
 }
 
-async function changeStatus(issueKey, selectEl) {
-    const status = selectEl.value;
-    issueStatuses[issueKey] = status === 'open' ? undefined : status;
-    if (status === 'open') delete issueStatuses[issueKey];
-
-    updateIssueVisual(issueKey, status);
-    updateStatusCounts();
-    updateFixCount();
-
-    try {
-        const resp = await fetch(`{% url 'backoffice:consistency_update_status' pk=report.pk %}`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': getCookie('csrftoken'),
-            },
-            body: JSON.stringify({ issue_key: issueKey, status: status === 'open' ? '' : status }),
-        });
-        if (!resp.ok) console.error('Failed to update status');
-    } catch (e) {
-        console.error('Error updating status:', e);
-    }
+function getSorted() {
+    const sorted = [...flatIssues];
+    const dir = currentSort.asc ? 1 : -1;
+    sorted.sort((a, b) => {
+        let cmp = 0;
+        switch (currentSort.field) {
+            case 'severity':
+                cmp = (SEVERITY_ORDER[a.severity] || 1) - (SEVERITY_ORDER[b.severity] || 1);
+                break;
+            case 'category':
+                cmp = a.category.localeCompare(b.category);
+                break;
+            case 'page':
+                cmp = a.pageTitle.localeCompare(b.pageTitle);
+                break;
+        }
+        return cmp * dir;
+    });
+    return sorted;
 }
 
 /* -- Rendering -- */
 
 function renderSummary() {
-    const summaryCard = document.getElementById('summaryCard');
-
+    const bar = document.getElementById('summaryBar');
     if (reportSummary.total_issues === 0) {
-        summaryCard.innerHTML = `
+        bar.innerHTML = `
             <div class="flex items-center">
-                <svg class="w-10 h-10 text-emerald-500 mr-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg class="w-8 h-8 text-emerald-500 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
                 </svg>
                 <div>
                     <h3 class="text-lg font-semibold text-emerald-800">All Clear!</h3>
-                    <p class="text-sm text-emerald-600">No design inconsistencies found across your pages.</p>
+                    <p class="text-sm text-emerald-600">No design inconsistencies found.</p>
                 </div>
-            </div>
-        `;
+            </div>`;
         return;
     }
 
     const sevBadges = Object.entries(reportSummary.severity || {})
-        .filter(([_, count]) => count > 0)
+        .filter(([_, c]) => c > 0)
         .map(([sev, count]) => {
             const c = SEVERITY_COLORS[sev] || SEVERITY_COLORS.medium;
             return `<span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${c.bg} ${c.text}">
-                <span class="w-2 h-2 rounded-full ${c.dot} mr-1.5"></span>
-                ${count} ${sev}
+                <span class="w-2 h-2 rounded-full ${c.dot} mr-1.5"></span>${count} ${sev}
             </span>`;
         }).join(' ');
 
     const catBadges = Object.entries(reportSummary.categories || {})
         .sort((a, b) => b[1] - a[1])
-        .slice(0, 6)
         .map(([cat, count]) => {
             const cls = CATEGORY_COLORS[cat] || 'bg-gray-100 text-gray-800';
             return `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${cls}">${cat} (${count})</span>`;
         }).join(' ');
 
-    summaryCard.innerHTML = `
-        <div class="flex items-start justify-between mb-4">
+    bar.innerHTML = `
+        <div class="flex items-center justify-between">
             <div>
-                <h3 class="text-lg font-semibold text-gray-900">${reportSummary.total_issues} Issues Found</h3>
-                <p class="text-sm text-gray-500">${reportSummary.affected_pages} page(s) affected</p>
+                <span class="text-lg font-semibold text-gray-900">${reportSummary.total_issues} issues</span>
+                <span class="text-sm text-gray-500 ml-2">across ${reportSummary.affected_pages} page(s)</span>
             </div>
+            <div class="flex flex-wrap gap-2">${sevBadges}</div>
         </div>
-        <div class="flex flex-wrap gap-2 mb-3">${sevBadges}</div>
-        <div class="flex flex-wrap gap-2">${catBadges}</div>
-    `;
+        <div class="flex flex-wrap gap-1.5 mt-3">${catBadges}</div>`;
 }
 
-function renderIssueCards() {
-    const issueCards = document.getElementById('issueCards');
-    let cardsHtml = '';
+function renderTable() {
+    const tbody = document.getElementById('issueTableBody');
+    const sorted = getSorted();
+    let html = '';
 
-    for (const entry of reportData) {
-        const issues = entry.issues || [];
-        if (issues.length === 0) continue;
+    for (const row of sorted) {
+        const status = getIssueStatus(row.issueKey);
+        const sc = SEVERITY_COLORS[row.severity] || SEVERITY_COLORS.medium;
+        const cc = CATEGORY_COLORS[row.category] || 'bg-gray-100 text-gray-800';
+        const dimmed = (status === 'ignored' || status === 'wont_fix') ? 'opacity-50' : '';
+        const strikethrough = (status === 'ignored' || status === 'wont_fix') ? 'line-through' : '';
+        const checked = document.querySelector(`[data-key="${row.issueKey}"]`)?.checked ? ' checked' : '';
 
-        const pageId = entry.page_id;
-        const sectionKey = entry.section_key || null;
-        const title = entry.page_title || entry.name || sectionKey || 'Unknown';
-        const isSection = pageId === null || pageId === undefined;
-        const entryId = isSection ? `section_${sectionKey}` : `page_${pageId}`;
-        const typeLabel = isSection ? 'Global Section' : 'Page';
+        const descTruncated = row.description.length > 120
+            ? escapeHtml(row.description.substring(0, 120)) + '...'
+            : escapeHtml(row.description);
+        const hasTooltip = row.description.length > 120 || row.suggestion;
+        const tooltipText = escapeHtml(row.description) + (row.suggestion ? `\n\nFix: ${escapeHtml(row.suggestion)}` : '');
 
-        // Count only open issues for severity badges
-        const highCount = issues.filter(i => i.severity === 'high').length;
-        const medCount = issues.filter(i => i.severity === 'medium').length;
-        const lowCount = issues.filter(i => i.severity === 'low').length;
+        const elementTruncated = row.element.length > 30
+            ? escapeHtml(row.element.substring(0, 30)) + '...'
+            : escapeHtml(row.element);
+        const hasElementTooltip = row.element.length > 30;
 
-        cardsHtml += `
-        <div class="bg-white rounded-lg shadow-sm border border-gray-200 mb-4" x-data="{ open: ${highCount > 0 ? 'true' : 'false'} }">
-            <div class="px-6 py-4 flex items-center justify-between cursor-pointer" @click="open = !open">
-                <div class="flex items-center">
-                    <input type="checkbox" data-entry-id="${entryId}" data-page-id="${pageId || ''}" data-section-key="${sectionKey || ''}"
-                           class="fix-checkbox rounded border-gray-300 text-emerald-600 focus:ring-emerald-500 mr-3"
-                           onchange="updateFixCount()" onclick="event.stopPropagation()">
-                    <div>
-                        <span class="text-sm font-semibold text-gray-900">${escapeHtml(title)}</span>
-                        <span class="text-xs text-gray-400 ml-2">${typeLabel}</span>
-                    </div>
+        html += `
+        <tr class="hover:bg-gray-50 ${dimmed}" data-issue-key="${row.issueKey}">
+            <td class="px-3 py-2.5">
+                <input type="checkbox" data-key="${row.issueKey}" data-page-id="${row.pageId || ''}" data-section-key="${row.sectionKey || ''}"
+                       class="issue-checkbox rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
+                       onchange="updateSelection()"${checked}>
+            </td>
+            <td class="px-3 py-2.5">
+                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${sc.bg} ${sc.text}">
+                    <span class="w-1.5 h-1.5 rounded-full ${sc.dot} mr-1"></span>${row.severity}
+                </span>
+            </td>
+            <td class="px-3 py-2.5">
+                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${cc}">${row.category}</span>
+            </td>
+            <td class="px-3 py-2.5 text-sm text-gray-900 max-w-[180px] truncate" title="${escapeHtml(row.pageTitle)}">
+                ${escapeHtml(row.pageTitle)}
+            </td>
+            <td class="px-3 py-2.5 max-w-[160px]">
+                ${row.element ? `<div class="tooltip-container">
+                    <code class="text-xs text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded truncate block max-w-[160px]">${elementTruncated}</code>
+                    ${hasElementTooltip ? `<div class="tooltip"><code>${escapeHtml(row.element)}</code></div>` : ''}
+                </div>` : '<span class="text-gray-300">-</span>'}
+            </td>
+            <td class="px-3 py-2.5 text-sm text-gray-700 issue-description ${strikethrough}">
+                <div class="tooltip-container">
+                    <span>${descTruncated}</span>
+                    ${hasTooltip ? `<div class="tooltip">${tooltipText.replace(/\n/g, '<br>')}</div>` : ''}
                 </div>
-                <div class="flex items-center space-x-2">
-                    ${highCount > 0 ? `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">${highCount} high</span>` : ''}
-                    ${medCount > 0 ? `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">${medCount} med</span>` : ''}
-                    ${lowCount > 0 ? `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">${lowCount} low</span>` : ''}
-                    <svg class="w-5 h-5 text-gray-400 transition-transform" :class="{ 'rotate-180': open }" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
-                    </svg>
-                </div>
-            </div>
-            <div x-show="open" x-cloak class="border-t border-gray-200 px-6 py-4">
-                <div class="space-y-3">`;
-
-        for (let i = 0; i < issues.length; i++) {
-            const issue = issues[i];
-            const issueKey = getIssueKey(entry, i);
-            const status = getIssueStatus(issueKey);
-            const sc = SEVERITY_COLORS[issue.severity] || SEVERITY_COLORS.medium;
-            const cc = CATEGORY_COLORS[issue.category] || 'bg-gray-100 text-gray-800';
-            const dimmed = (status === 'ignored' || status === 'wont_fix') ? 'opacity-50' : '';
-            const strikethrough = (status === 'ignored' || status === 'wont_fix') ? 'line-through' : '';
-
-            cardsHtml += `
-                    <div class="flex items-start space-x-3 p-3 bg-gray-50 rounded-lg ${dimmed}" data-issue-key="${issueKey}">
-                        <span class="w-2 h-2 rounded-full ${sc.dot} mt-1.5 flex-shrink-0"></span>
-                        <div class="flex-1 min-w-0">
-                            <div class="flex items-center justify-between mb-1">
-                                <div class="flex items-center space-x-2">
-                                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${sc.bg} ${sc.text}">${issue.severity}</span>
-                                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${cc}">${issue.category}</span>
-                                    ${issue.element ? `<code class="text-xs text-gray-500 bg-gray-200 px-1 rounded truncate max-w-[200px]">${escapeHtml(issue.element)}</code>` : ''}
-                                </div>
-                                <select onchange="changeStatus('${issueKey}', this)"
-                                        class="text-xs border-gray-300 rounded-md py-0.5 px-1.5 focus:ring-emerald-500 focus:border-emerald-500"
-                                        onclick="event.stopPropagation()">
-                                    <option value="open"${status === 'open' ? ' selected' : ''}>Open</option>
-                                    <option value="ignored"${status === 'ignored' ? ' selected' : ''}>Ignored</option>
-                                    <option value="wont_fix"${status === 'wont_fix' ? ' selected' : ''}>Won't Fix</option>
-                                </select>
-                            </div>
-                            <p class="text-sm text-gray-700 issue-description ${strikethrough}">${escapeHtml(issue.description)}</p>
-                            ${issue.suggested_fix ? `<p class="text-xs text-gray-500 mt-1"><strong>Fix:</strong> ${escapeHtml(issue.suggested_fix)}</p>` : ''}
-                            ${issue.suggestion ? `<p class="text-xs text-gray-500 mt-1"><strong>Fix:</strong> ${escapeHtml(issue.suggestion)}</p>` : ''}
-                        </div>
-                    </div>`;
-        }
-
-        cardsHtml += `
-                </div>
-            </div>
-        </div>`;
+            </td>
+            <td class="px-3 py-2.5">
+                <select onchange="changeStatus('${row.issueKey}', this)"
+                        class="text-xs border-gray-300 rounded-md py-1 px-1.5 focus:ring-emerald-500 focus:border-emerald-500 w-full">
+                    <option value="open"${status === 'open' ? ' selected' : ''}>Open</option>
+                    <option value="ignored"${status === 'ignored' ? ' selected' : ''}>Ignored</option>
+                    <option value="wont_fix"${status === 'wont_fix' ? ' selected' : ''}>Won't Fix</option>
+                </select>
+            </td>
+        </tr>`;
     }
 
-    issueCards.innerHTML = cardsHtml;
+    tbody.innerHTML = html;
 }
 
-function updateFixCount() {
-    const checkboxes = document.querySelectorAll('.fix-checkbox:checked');
-    let openIssueCount = 0;
+/* -- Selection & Status -- */
 
-    checkboxes.forEach(cb => {
-        const entryId = cb.dataset.entryId;
-        const entry = reportData.find(e => {
-            const isSection = e.page_id === null || e.page_id === undefined;
-            const eid = isSection ? `section_${e.section_key}` : `page_${e.page_id}`;
-            return eid === entryId;
-        });
-        if (entry) {
-            (entry.issues || []).forEach((_, idx) => {
-                const key = getIssueKey(entry, idx);
-                if (getIssueStatus(key) === 'open') openIssueCount++;
-            });
-        }
+function toggleSelectAll(el) {
+    const checkboxes = document.querySelectorAll('.issue-checkbox');
+    checkboxes.forEach(cb => { cb.checked = el.checked; });
+    updateSelection();
+}
+
+function updateSelection() {
+    const all = document.querySelectorAll('.issue-checkbox');
+    const checked = document.querySelectorAll('.issue-checkbox:checked');
+
+    // Update select-all state
+    const selectAll = document.getElementById('selectAll');
+    selectAll.checked = checked.length === all.length && all.length > 0;
+    selectAll.indeterminate = checked.length > 0 && checked.length < all.length;
+
+    // Count only open selected issues
+    let openCount = 0;
+    checked.forEach(cb => {
+        const status = getIssueStatus(cb.dataset.key);
+        if (status === 'open') openCount++;
     });
 
-    document.getElementById('fixCount').textContent = openIssueCount;
+    document.getElementById('selectedInfo').textContent = `${checked.length} selected`;
+    document.getElementById('fixCount').textContent = openCount;
+
     const fixBtn = document.getElementById('fixBtn');
-    if (openIssueCount > 0) {
+    if (openCount > 0) {
         fixBtn.disabled = false;
         fixBtn.classList.remove('opacity-50', 'cursor-not-allowed');
     } else {
@@ -411,61 +423,95 @@ function updateFixCount() {
     }
 }
 
+function updateStatusCounts() {
+    let open = 0, ignored = 0, wontFix = 0, high = 0, med = 0, low = 0;
+    for (const row of flatIssues) {
+        const status = getIssueStatus(row.issueKey);
+        if (status === 'ignored') ignored++;
+        else if (status === 'wont_fix') wontFix++;
+        else {
+            open++;
+            if (row.severity === 'high') high++;
+            else if (row.severity === 'medium') med++;
+            else low++;
+        }
+    }
+    document.getElementById('statusOpenCount').textContent = open;
+    document.getElementById('statusIgnoredCount').textContent = ignored;
+    document.getElementById('statusWontFixCount').textContent = wontFix;
+    document.getElementById('statusHighCount').textContent = high;
+    document.getElementById('statusMedCount').textContent = med;
+    document.getElementById('statusLowCount').textContent = low;
+}
+
+async function changeStatus(issueKey, selectEl) {
+    const status = selectEl.value;
+    if (status === 'open') delete issueStatuses[issueKey];
+    else issueStatuses[issueKey] = status;
+
+    // Update row visual
+    const tr = document.querySelector(`tr[data-issue-key="${issueKey}"]`);
+    if (tr) {
+        const desc = tr.querySelector('.issue-description');
+        if (status === 'ignored' || status === 'wont_fix') {
+            tr.classList.add('opacity-50');
+            if (desc) desc.classList.add('line-through');
+        } else {
+            tr.classList.remove('opacity-50');
+            if (desc) desc.classList.remove('line-through');
+        }
+    }
+
+    updateStatusCounts();
+    updateSelection();
+
+    try {
+        await fetch(`{% url 'backoffice:consistency_update_status' pk=report.pk %}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
+            body: JSON.stringify({ issue_key: issueKey, status: status === 'open' ? '' : status }),
+        });
+    } catch (e) {
+        console.error('Error updating status:', e);
+    }
+}
+
 /* -- Fix Flow -- */
 
 function setButtonLoading(btn, loading) {
     btn.disabled = loading;
-    if (loading) {
-        btn.classList.add('opacity-50', 'cursor-not-allowed');
-    } else {
-        btn.classList.remove('opacity-50', 'cursor-not-allowed');
-    }
+    btn.classList.toggle('opacity-50', loading);
+    btn.classList.toggle('cursor-not-allowed', loading);
 }
 
 function startFix() {
-    const checkboxes = document.querySelectorAll('.fix-checkbox:checked');
-    if (checkboxes.length === 0) {
-        alert('Please select at least one page or section to fix.');
-        return;
-    }
+    const checked = document.querySelectorAll('.issue-checkbox:checked');
+    if (checked.length === 0) { alert('Select issues to fix.'); return; }
 
-    const fixes = [];
-
-    checkboxes.forEach(cb => {
-        const pageId = cb.dataset.pageId ? parseInt(cb.dataset.pageId) : null;
-        const sectionKey = cb.dataset.sectionKey || null;
-
-        const entry = reportData.find(e => {
-            if (pageId) return e.page_id === pageId;
-            if (sectionKey) return e.section_key === sectionKey;
-            return false;
-        });
-
-        if (entry && entry.issues && entry.issues.length > 0) {
-            // Only include open issues
-            const openIssues = entry.issues.filter((_, idx) => {
-                const key = getIssueKey(entry, idx);
-                return getIssueStatus(key) === 'open';
-            });
-
-            if (openIssues.length > 0) {
-                fixes.push({
-                    page_id: pageId || undefined,
-                    section_key: sectionKey || undefined,
-                    label: entry.page_title || entry.name || sectionKey || 'Unknown',
-                    issues: openIssues,
-                });
-            }
+    // Group selected open issues by page/section
+    const groups = {};
+    checked.forEach(cb => {
+        const key = cb.dataset.key;
+        if (getIssueStatus(key) !== 'open') return;
+        const row = flatIssues.find(r => r.issueKey === key);
+        if (!row) return;
+        const groupKey = row.isSection ? `section_${row.sectionKey}` : `page_${row.pageId}`;
+        if (!groups[groupKey]) {
+            groups[groupKey] = {
+                page_id: row.pageId || undefined,
+                section_key: row.sectionKey || undefined,
+                label: row.pageTitle,
+                issues: [],
+            };
         }
+        groups[groupKey].issues.push(row.entry.issues[row.issueIndex]);
     });
 
-    if (fixes.length === 0) {
-        alert('No open issues found for selected items.');
-        return;
-    }
+    const fixes = Object.values(groups).filter(g => g.issues.length > 0);
+    if (fixes.length === 0) { alert('No open issues selected.'); return; }
 
-    // Switch to fix panel
-    document.getElementById('issueCards').classList.add('hidden');
+    // Switch UI
+    document.getElementById('issueTable').classList.add('hidden');
     document.getElementById('fixPanel').classList.remove('hidden');
     document.getElementById('fixSummary').classList.add('hidden');
 
@@ -493,7 +539,6 @@ function startFix() {
                 const pct = Math.round(data.current / data.total * 100);
                 document.getElementById('fixProgressBar').style.width = `${pct}%`;
                 document.getElementById('fixProgressCount').textContent = `${data.current} / ${data.total}`;
-
                 const isError = data.status === 'error';
                 fixResults.innerHTML += `
                     <div class="flex items-center justify-between px-4 py-2.5 ${isError ? 'bg-red-50' : 'bg-emerald-50'} rounded-lg">
@@ -507,18 +552,14 @@ function startFix() {
                         <span class="text-xs ${isError ? 'text-red-600' : 'text-emerald-600'}">
                             ${isError ? escapeHtml(data.error || 'Failed') : 'Fixed + Translated'}
                         </span>
-                    </div>
-                `;
+                    </div>`;
             }
         },
         onComplete: function(data) {
             setButtonLoading(fixBtn, false);
             document.getElementById('fixProgressBar').style.width = '100%';
             document.getElementById('fixProgressLabel').textContent = 'Complete!';
-
-            if (data.success) {
-                renderFixSummary(data.results, data.summary);
-            }
+            if (data.success) renderFixSummary(data.results, data.summary);
         },
         onError: function(data) {
             setButtonLoading(fixBtn, false);
@@ -552,7 +593,6 @@ function renderFixSummary(results, summary) {
                 </div>
             </div>
         </div>
-
         <div class="grid grid-cols-3 divide-x divide-gray-200 bg-gray-50">
             <div class="px-4 py-3 text-center">
                 <p class="text-2xl font-bold text-emerald-600">${summary.fixed}</p>
@@ -567,17 +607,12 @@ function renderFixSummary(results, summary) {
                 <p class="text-xs text-gray-500">Errors</p>
             </div>
         </div>
-
         <div class="px-6 py-4">
             <h4 class="text-sm font-semibold text-gray-700 mb-3">What was changed</h4>
             <div class="space-y-2">`;
 
     for (const r of fixedResults) {
-        const issueCount = r.issues_fixed || 0;
-        const translated = r.translated || 0;
         const editUrl = r.page_id ? `/backoffice/page/${r.page_id}/edit/` : null;
-        const pageSlug = r.page_slug || '';
-
         html += `
                 <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                     <div class="flex items-center min-w-0">
@@ -586,20 +621,10 @@ function renderFixSummary(results, summary) {
                         </svg>
                         <div class="min-w-0">
                             <p class="text-sm font-medium text-gray-900 truncate">${escapeHtml(r.label)}</p>
-                            <p class="text-xs text-gray-500">${issueCount} issue(s) fixed${translated > 0 ? `, translated to ${translated} language(s)` : ''}</p>
+                            <p class="text-xs text-gray-500">${r.issues_fixed || 0} issue(s) fixed${r.translated > 0 ? `, translated to ${r.translated} language(s)` : ''}</p>
                         </div>
                     </div>
-                    <div class="flex items-center space-x-2 ml-3 flex-shrink-0">`;
-
-        if (editUrl) {
-            html += `<a href="${editUrl}" class="inline-flex items-center px-2.5 py-1 text-xs font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-md hover:bg-emerald-100">
-                    <svg class="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
-                    Edit
-                </a>`;
-        }
-
-        html += `
-                    </div>
+                    ${editUrl ? `<a href="${editUrl}" class="inline-flex items-center px-2.5 py-1 text-xs font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-md hover:bg-emerald-100 ml-3 flex-shrink-0">Edit</a>` : ''}
                 </div>`;
     }
 
@@ -619,12 +644,9 @@ function renderFixSummary(results, summary) {
     html += `
             </div>
         </div>
-
         <div class="px-6 py-4 bg-gray-50 border-t border-gray-200 flex items-center justify-between">
             <p class="text-xs text-gray-500">PageVersion backups created for all fixed pages</p>
-            <a href="{% url 'backoffice:consistency_reports' %}" class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50">
-                Back to Reports
-            </a>
+            <a href="{% url 'backoffice:consistency_reports' %}" class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50">Back to Reports</a>
         </div>
     </div>`;
 
@@ -634,9 +656,9 @@ function renderFixSummary(results, summary) {
 /* -- Init -- */
 document.addEventListener('DOMContentLoaded', function() {
     renderSummary();
-    renderIssueCards();
+    sortTable('severity');
     updateStatusCounts();
-    updateFixCount();
+    updateSelection();
 });
 </script>
 
