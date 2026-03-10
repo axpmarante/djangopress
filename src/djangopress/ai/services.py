@@ -209,21 +209,33 @@ Return ONLY the corrected, complete JSON. No markdown, no explanation."""
 
     def _extract_html_from_response(self, content: str) -> str:
         """
-        Extract HTML from LLM response, handling markdown code blocks
+        Extract HTML from LLM response, handling markdown code blocks.
+        Validates the result contains actual HTML tags.
 
         Args:
             content: Raw response content from LLM
 
         Returns:
             Extracted HTML string
+
+        Raises:
+            ValueError: If the extracted content doesn't contain HTML tags
         """
         # Try to find HTML in markdown code blocks first
         html_match = re.search(r'```(?:html)?\s*(.*?)\s*```', content, re.DOTALL)
         if html_match:
-            return html_match.group(1).strip()
+            result = html_match.group(1).strip()
+        else:
+            result = content.strip()
 
-        # Otherwise return content stripped of leading/trailing whitespace
-        return content.strip()
+        # Validate: must contain at least one HTML tag
+        if not re.search(r'<[a-zA-Z][^>]*>', result):
+            raise ValueError(
+                "LLM response does not contain valid HTML. "
+                f"First 200 chars: {result[:200]}"
+            )
+
+        return result
 
     def _split_multi_options(self, html: str) -> list:
         """

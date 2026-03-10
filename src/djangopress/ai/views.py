@@ -2964,6 +2964,9 @@ def fix_consistency_stream(request):
                         elif section_key:
                             section = GlobalSection.objects.get(key=section_key)
 
+                            # Create version backup
+                            section.create_version(change_summary='Before design consistency fix')
+
                             # Save fixed HTML
                             html_i18n = dict(section.html_template_i18n or {})
                             html_i18n[default_lang] = fixed_html

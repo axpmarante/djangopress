@@ -1104,6 +1104,61 @@ class GlobalSection(models.Model):
     def __str__(self):
         return f"{self.name} ({self.key})"
 
+    def create_version(self, change_summary='', max_versions=10):
+        """Create a version snapshot of current GlobalSection state."""
+        version_number = (
+            GlobalSectionVersion.objects.filter(section=self)
+            .aggregate(models.Max('version_number'))['version_number__max'] or 0
+        ) + 1
+
+        version = GlobalSectionVersion.objects.create(
+            section=self,
+            version_number=version_number,
+            html_template_i18n=self.html_template_i18n or {},
+            content=self.content or {},
+            change_summary=change_summary,
+        )
+
+        # Keep only the most recent versions
+        old_versions = (
+            GlobalSectionVersion.objects.filter(section=self)
+            .order_by('-version_number')[max_versions:]
+        )
+        if old_versions.exists():
+            GlobalSectionVersion.objects.filter(
+                pk__in=old_versions.values_list('pk', flat=True)
+            ).delete()
+
+        return version
+
+
+class GlobalSectionVersion(models.Model):
+    """Immutable snapshot of a GlobalSection at a point in time."""
+    section = models.ForeignKey(
+        GlobalSection, on_delete=models.CASCADE, related_name='versions'
+    )
+    version_number = models.IntegerField()
+    html_template_i18n = models.JSONField(default=dict, blank=True)
+    content = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    change_summary = models.CharField(max_length=255, blank=True, default='')
+
+    class Meta:
+        verbose_name = 'Global Section Version'
+        verbose_name_plural = 'Global Section Versions'
+        ordering = ['-created_at']
+        unique_together = ('section', 'version_number')
+
+    def __str__(self):
+        return f"{self.section.key} v{self.version_number} @ {self.created_at:%Y-%m-%d %H:%M}"
+
+    def restore(self):
+        """Restore the associated GlobalSection to this version's data."""
+        s = self.section
+        s.html_template_i18n = self.html_template_i18n or {}
+        s.content = self.content or {}
+        s.save(update_fields=['html_template_i18n', 'content'])
+        return s
 
 
 class PageVersion(models.Model):
