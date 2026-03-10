@@ -636,6 +636,9 @@ class SettingsGeneralView(LoginRequiredMixin, TemplateView):
         context = super().get_context_data(**kwargs)
         site_settings, _ = SiteSettings.objects.get_or_create(pk=1)
         context['settings'] = site_settings
+        # Use get_enabled_languages() which falls back to Django LANGUAGES when empty
+        enabled = site_settings.get_enabled_languages()
+        context['languages'] = [{'code': code, 'name': name} for code, name in enabled]
         context['site_name_i18n_json'] = json.dumps(site_settings.site_name_i18n or {})
         context['site_description_i18n_json'] = json.dumps(site_settings.site_description_i18n or {})
         context['pages'] = Page.objects.filter(is_active=True).order_by('sort_order', 'pk')
