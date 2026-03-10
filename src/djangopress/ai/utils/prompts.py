@@ -1480,7 +1480,48 @@ HTML:
         """
         design_json = json.dumps(design_system, indent=2, ensure_ascii=False)
 
-        system_prompt = """You are a web design QA auditor. Analyze pages for design inconsistencies against the design system.
+        if custom_rules:
+            system_prompt = f"""You are a web design QA auditor. The user has provided specific rules to check. \
+Focus your analysis on these rules — only report issues that match them.
+
+## Rules to Check
+{custom_rules}
+
+Use the "custom" category for issues that match user rules, or a standard category \
+(colors, typography, buttons, spacing, shadows, borders, layout, cta) if appropriate.
+
+## Severity Levels
+- **high** — Clearly violates a rule the user specified; visitors would notice
+- **medium** — Partially violates a rule; reduces polish
+- **low** — Minor deviation from the rules; cosmetic only
+
+## Output Format
+Return a JSON array. Each entry represents one page or section with its issues.
+If a page has no issues, omit it from the array.
+
+```json
+[
+  {{
+    "page_id": 1,
+    "page_title": "Home",
+    "issues": [
+      {{
+        "severity": "high",
+        "category": "buttons",
+        "element": "section[data-section='hero'] .btn",
+        "description": "Uses bg-blue-500 instead of the primary color bg-emerald-600",
+        "suggestion": "Replace bg-blue-500 hover:bg-blue-600 with bg-emerald-600 hover:bg-emerald-700"
+      }}
+    ]
+  }}
+]
+```
+
+For GlobalSections (header/footer), use `"page_id": null` and add `"section_key": "main-header"`.
+
+Return ONLY the JSON array. No markdown, no explanations."""
+        else:
+            system_prompt = """You are a web design QA auditor. Analyze pages for design inconsistencies against the design system.
 
 ## What to Check
 1. **Colors** — hardcoded hex/rgb values instead of design system colors, inconsistent color usage across pages
@@ -1490,7 +1531,6 @@ HTML:
 5. **Shadows & Borders** — mismatched shadow or border-radius values across cards, sections
 6. **Layout** — inconsistent container widths, grid patterns, or section structures
 7. **CTAs** — different call-to-action patterns, inconsistent link styling
-8. **Custom Rules** — any additional rules provided by the user
 
 ## Severity Levels
 - **high** — Visually jarring inconsistency that visitors would notice (e.g. completely different button styles on adjacent pages)
@@ -1531,10 +1571,6 @@ Return ONLY the JSON array. No markdown, no explanations."""
         for s in sections_html:
             sections_block += f"\n### GlobalSection: {s['name']} (key: {s['key']})\n```html\n{s['html']}\n```\n"
 
-        custom_rules_block = ""
-        if custom_rules:
-            custom_rules_block = f"\n## Custom Rules\nApply these additional rules:\n{custom_rules}\n"
-
         design_guide_block = ""
         if design_guide:
             design_guide_block = f"\n## Design Guide\n{design_guide}\n"
@@ -1544,10 +1580,10 @@ Return ONLY the JSON array. No markdown, no explanations."""
 ```json
 {design_json}
 ```
-{design_guide_block}{custom_rules_block}
+{design_guide_block}
 ## Pages to Analyze
 {pages_block}{sections_block}
-Analyze all pages and sections for design inconsistencies against the design system. Return the JSON array."""
+Analyze all pages and sections for {'the rules provided' if custom_rules else 'design inconsistencies against the design system'}. Return the JSON array."""
 
         return (system_prompt, user_prompt)
 
