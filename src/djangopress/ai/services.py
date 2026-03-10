@@ -253,6 +253,57 @@ Return ONLY the corrected, complete JSON. No markdown, no explanation."""
         """Strip legacy data-element-id attributes from HTML to save tokens."""
         return re.sub(r'\s+data-element-id="[^"]*"', '', html)
 
+    @staticmethod
+    def _extract_section_name_from_element(element: str) -> str | None:
+        """
+        Extract data-section value from an issue's element selector.
+
+        Examples:
+            "section[data-section='hero'] .btn" -> "hero"
+            "section[data-section=\"features\"] h2" -> "features"
+            ".some-class" -> None
+        """
+        import re
+        match = re.search(r"""data-section=['"]([^'"]+)['"]""", element or '')
+        return match.group(1) if match else None
+
+    @staticmethod
+    def _group_issues_by_section(issues: list) -> dict:
+        """
+        Group issues by their data-section. Returns dict:
+        {
+            'hero': [issue1, issue2],
+            'features': [issue3],
+            None: [issue4],  # issues without a clear section
+        }
+        """
+        groups = {}
+        for issue in issues:
+            section_name = ContentGenerationService._extract_section_name_from_element(
+                issue.get('element', '')
+            )
+            groups.setdefault(section_name, []).append(issue)
+        return groups
+
+    @staticmethod
+    def _extract_section_html(full_html: str, section_name: str) -> str | None:
+        """Extract a section's outer HTML from the full page HTML."""
+        from bs4 import BeautifulSoup
+        soup = BeautifulSoup(full_html, 'html.parser')
+        section = soup.find(attrs={'data-section': section_name})
+        return str(section) if section else None
+
+    @staticmethod
+    def _splice_section_html(full_html: str, section_name: str, new_section_html: str) -> str:
+        """Replace a section in the full page HTML with new HTML."""
+        from bs4 import BeautifulSoup
+        soup = BeautifulSoup(full_html, 'html.parser')
+        old_section = soup.find(attrs={'data-section': section_name})
+        if old_section:
+            new_section = BeautifulSoup(new_section_html, 'html.parser')
+            old_section.replace_with(new_section)
+            return str(soup)
+        return full_html
 
     def _generate_page_metadata(self, brief: str, languages: list, model: str) -> Dict:
         """
