@@ -121,7 +121,15 @@ class GlobalSectionService:
 
         result = GlobalSectionService.get(key)
         if not result['success']:
-            return result
+            # Auto-create the section if it doesn't exist
+            section_type = 'header' if 'header' in key else 'footer'
+            name = 'Main Header' if section_type == 'header' else 'Main Footer'
+            GlobalSection.objects.create(
+                key=key,
+                name=name,
+                section_type=section_type,
+                is_active=True,
+            )
 
         from djangopress.ai.services import ContentGenerationService
         service = ContentGenerationService(model_name=model)
