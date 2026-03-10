@@ -937,6 +937,7 @@ class SettingsAIModelsView(LoginRequiredMixin, SuperuserRequiredMixin, TemplateV
                     {'key': 'metadata', 'label': 'Metadata', 'description': 'Page titles, slugs, and metadata generation'},
                     {'key': 'image_analysis', 'label': 'Image Analysis', 'description': 'Image prompt suggestions, descriptions, and vision analysis'},
                     {'key': 'consistency', 'label': 'Design Consistency', 'description': 'Analyze and fix design inconsistencies across pages'},
+                    {'key': 'design_guide', 'label': 'Design Guide', 'description': 'Generate design guide and sync settings from guide'},
                 ],
             },
             {

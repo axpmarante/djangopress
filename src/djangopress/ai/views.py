@@ -1195,7 +1195,7 @@ def generate_design_guide_ai_api(request):
         if request.content_type and 'multipart' in request.content_type:
             page_ids_raw = request.POST.getlist('page_ids')
             page_ids = [int(pid) for pid in page_ids_raw if pid]
-            model = request.POST.get('model') or get_ai_model('generation')
+            model = request.POST.get('model') or get_ai_model('design_guide')
             existing_guide = request.POST.get('existing_guide', '')
             style_instructions = request.POST.get('style_instructions', '')
             reference_images = []
@@ -1204,7 +1204,7 @@ def generate_design_guide_ai_api(request):
         else:
             data = json.loads(request.body)
             page_ids = data.get('page_ids', [])
-            model = data.get('model') or get_ai_model('generation')
+            model = data.get('model') or get_ai_model('design_guide')
             existing_guide = data.get('existing_guide', '')
             style_instructions = data.get('style_instructions', '')
             reference_images = []
@@ -1481,7 +1481,7 @@ def sync_settings_from_guide_api(request):
             return JsonResponse({'success': False, 'error': 'Design guide is empty. Generate one first.'}, status=400)
 
         data = json.loads(request.body) if request.body else {}
-        model = data.get('model') or get_ai_model('generation')
+        model = data.get('model') or get_ai_model('design_guide')
 
         default_language = site_settings.get_default_language()
         site_name = site_settings.get_site_name(default_language)
@@ -2324,6 +2324,7 @@ def propagate_translation_api(request):
                 if scope == 'section' and section_id:
                     # Replace just the matching section in the target language's HTML
                     from bs4 import BeautifulSoup
+                    from djangopress.ai.services import sanitize_html_output
                     target_page_html = html_i18n.get(target_lang, '')
                     if target_page_html:
                         soup = BeautifulSoup(target_page_html, 'html.parser')
@@ -2331,7 +2332,7 @@ def propagate_translation_api(request):
                         if old_section:
                             new_section = BeautifulSoup(translated_html, 'html.parser')
                             old_section.replace_with(new_section)
-                            html_i18n[target_lang] = str(soup)
+                            html_i18n[target_lang] = sanitize_html_output(str(soup))
                         else:
                             html_i18n[target_lang] = translated_html
                     else:

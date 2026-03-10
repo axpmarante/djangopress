@@ -162,6 +162,7 @@ AI_MODEL_DEFAULTS = {
     'assistant_router': 'gemini-lite',
     'assistant_executor': 'gemini-flash',
     'consistency': 'gemini-flash',
+    'design_guide': 'gemini-flash',
 }
 
 
