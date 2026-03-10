@@ -3,6 +3,7 @@ AI Content Generation Services
 Main service layer for generating and refining pages and global sections (header/footer)
 """
 import json
+import logging
 import re
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -11,6 +12,50 @@ from .utils.llm_config import LLMBase, MODEL_CONFIG, get_ai_model
 from .utils.prompts import PromptTemplates
 from .utils.components import ComponentRegistry
 from .models import log_ai_call
+
+logger = logging.getLogger(__name__)
+
+
+def validate_html_structure(html: str, original_html: str = None) -> list:
+    """
+    Validate HTML structural integrity. Returns a list of error strings.
+    Empty list = valid.
+
+    Checks:
+    1. Must contain at least one HTML tag
+    2. Critical tags (<header>, <section>, <footer>, <select>, <form>, <div>)
+       must have matching close tags
+    3. If original_html provided, new HTML must be at least 50% of original length
+       (prevents truncation)
+    """
+    errors = []
+
+    # 1. Must contain HTML tags
+    if not re.search(r'<[a-zA-Z][^>]*>', html):
+        errors.append("No HTML tags found in content")
+        return errors
+
+    # 2. Check critical tags are balanced
+    critical_tags = ['header', 'footer', 'section', 'select', 'form', 'table', 'nav']
+    for tag in critical_tags:
+        # Count opening tags (not self-closing)
+        open_count = len(re.findall(rf'<{tag}[\s>]', html, re.IGNORECASE))
+        close_count = len(re.findall(rf'</{tag}\s*>', html, re.IGNORECASE))
+        if open_count > 0 and open_count != close_count:
+            errors.append(
+                f"Unclosed <{tag}> tag: {open_count} opened, {close_count} closed"
+            )
+
+    # 3. Length check vs original (catch truncation)
+    if original_html and len(original_html) > 100:
+        ratio = len(html) / len(original_html)
+        if ratio < 0.5:
+            errors.append(
+                f"New HTML is only {ratio:.0%} the size of original "
+                f"({len(html)} vs {len(original_html)} chars) — possible truncation"
+            )
+
+    return errors
 
 
 class ContentGenerationService:
@@ -207,19 +252,20 @@ Return ONLY the corrected, complete JSON. No markdown, no explanation."""
                         pass
         return on_stream
 
-    def _extract_html_from_response(self, content: str) -> str:
+    def _extract_html_from_response(self, content: str, original_html: str = None) -> str:
         """
         Extract HTML from LLM response, handling markdown code blocks.
-        Validates the result contains actual HTML tags.
+        Validates structural integrity of the result.
 
         Args:
             content: Raw response content from LLM
+            original_html: Optional original HTML for length comparison
 
         Returns:
             Extracted HTML string
 
         Raises:
-            ValueError: If the extracted content doesn't contain HTML tags
+            ValueError: If the extracted content fails validation
         """
         # Try to find HTML in markdown code blocks first
         html_match = re.search(r'```(?:html)?\s*(.*?)\s*```', content, re.DOTALL)
@@ -228,11 +274,13 @@ Return ONLY the corrected, complete JSON. No markdown, no explanation."""
         else:
             result = content.strip()
 
-        # Validate: must contain at least one HTML tag
-        if not re.search(r'<[a-zA-Z][^>]*>', result):
+        # Structural validation
+        errors = validate_html_structure(result, original_html)
+        if errors:
             raise ValueError(
-                "LLM response does not contain valid HTML. "
-                f"First 200 chars: {result[:200]}"
+                "LLM response failed HTML validation:\n- " +
+                "\n- ".join(errors) +
+                f"\nFirst 200 chars: {result[:200]}"
             )
 
         return result
@@ -981,7 +1029,7 @@ Return ONLY the corrected, complete JSON. No markdown, no explanation."""
             )
             raise
 
-        refined_html = self._extract_html_from_response(response.choices[0].message.content)
+        refined_html = self._extract_html_from_response(response.choices[0].message.content, original_html=clean_html)
 
         if not refined_html or len(refined_html.strip()) < 50:
             raise ValueError("Step 1 returned empty or too-short HTML")
@@ -1162,7 +1210,7 @@ Return ONLY the corrected, complete JSON. No markdown, no explanation."""
             )
             raise
 
-        refined_html = self._extract_html_from_response(response.choices[0].message.content)
+        refined_html = self._extract_html_from_response(response.choices[0].message.content, original_html=clean_html)
 
         if not refined_html or len(refined_html.strip()) < 50:
             raise ValueError("Step 1 returned empty or too-short HTML")
@@ -1518,7 +1566,7 @@ Return ONLY the corrected, complete JSON. No markdown, no explanation."""
             )
             raise
 
-        refined_html = self._extract_html_from_response(response.choices[0].message.content)
+        refined_html = self._extract_html_from_response(response.choices[0].message.content, original_html=section_html)
 
         if not refined_html or len(refined_html.strip()) < 10:
             raise ValueError("Step 1 returned empty or too-short HTML")
@@ -2662,7 +2710,7 @@ Keep the translations natural and fluent — these are website UI strings.
             )
             raise
 
-        fixed_html = self._extract_html_from_response(content)
+        fixed_html = self._extract_html_from_response(content, original_html=html)
         if not fixed_html or len(fixed_html.strip()) < 50:
             raise ValueError("Fix returned empty or too-short HTML")
 
@@ -2789,7 +2837,7 @@ Keep the translations natural and fluent — these are website UI strings.
                 )
                 raise
 
-            fixed_section_html = self._extract_html_from_response(content)
+            fixed_section_html = self._extract_html_from_response(content, original_html=section_html)
             if not fixed_section_html or len(fixed_section_html.strip()) < 20:
                 raise ValueError(f"Fix returned empty HTML for section '{section_name}'")
 

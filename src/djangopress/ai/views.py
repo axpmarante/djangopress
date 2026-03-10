@@ -2891,6 +2891,25 @@ def fix_consistency_stream(request):
 
                         if page_id:
                             page = Page.objects.get(id=page_id)
+
+                            # Validate fixed HTML before saving
+                            from djangopress.ai.services import validate_html_structure
+                            original_page_html = (page.html_content_i18n or {}).get(default_lang, '')
+                            html_errors = validate_html_structure(fixed_html, original_html=original_page_html)
+                            if html_errors:
+                                import logging
+                                logging.getLogger(__name__).warning(
+                                    "Rejecting invalid HTML for Page %s: %s",
+                                    page_id, '; '.join(html_errors),
+                                )
+                                results.append({
+                                    'page_id': page_id,
+                                    'label': label,
+                                    'status': 'error',
+                                    'error': f"HTML validation failed: {'; '.join(html_errors)}",
+                                })
+                                continue
+
                             # Create version backup
                             page.create_version(change_summary='Before design consistency fix')
 
@@ -2963,6 +2982,24 @@ def fix_consistency_stream(request):
 
                         elif section_key:
                             section = GlobalSection.objects.get(key=section_key)
+
+                            # Validate fixed HTML before saving
+                            from djangopress.ai.services import validate_html_structure
+                            original_section_html = (section.html_template_i18n or {}).get(default_lang, '')
+                            html_errors = validate_html_structure(fixed_html, original_html=original_section_html)
+                            if html_errors:
+                                import logging
+                                logging.getLogger(__name__).warning(
+                                    "Rejecting invalid HTML for GlobalSection '%s': %s",
+                                    section_key, '; '.join(html_errors),
+                                )
+                                results.append({
+                                    'section_key': section_key,
+                                    'label': label,
+                                    'status': 'error',
+                                    'error': f"HTML validation failed: {'; '.join(html_errors)}",
+                                })
+                                continue
 
                             # Create version backup
                             section.create_version(change_summary='Before design consistency fix')
