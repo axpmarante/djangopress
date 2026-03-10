@@ -15,7 +15,7 @@
         <p class="text-gray-600 mt-1">Contact information and social media links</p>
     </div>
 
-    <form method="post" enctype="multipart/form-data">
+    <form id="contact-settings-form" method="post" enctype="multipart/form-data">
         {% csrf_token %}
 
         <!-- Contact Information -->
@@ -146,7 +146,7 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 });
 
-document.querySelector('form').addEventListener('submit', function() {
+document.getElementById('contact-settings-form').addEventListener('submit', function() {
     ['contact_address'].forEach(field => {
         const inputs = document.querySelectorAll(`[data-i18n-field="${field}"]`);
         const jsonData = {};

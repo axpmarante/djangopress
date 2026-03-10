@@ -15,7 +15,7 @@
         <p class="text-gray-600 mt-1">Search engine optimization, analytics, code injection, and social sharing defaults</p>
     </div>
 
-    <form method="post" enctype="multipart/form-data">
+    <form id="seo-settings-form" method="post" enctype="multipart/form-data">
         {% csrf_token %}
 
         <!-- SEO & Analytics -->
@@ -129,7 +129,7 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 });
 
-document.querySelector('form').addEventListener('submit', function() {
+document.getElementById('seo-settings-form').addEventListener('submit', function() {
     ['default_og_description'].forEach(field => {
         const inputs = document.querySelectorAll(`[data-i18n-field="${field}"]`);
         const jsonData = {};
