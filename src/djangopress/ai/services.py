@@ -688,14 +688,20 @@ Return ONLY the corrected, complete JSON. No markdown, no explanation."""
         print(f"Section Key: {section_key}")
         print(f"Instructions: {refinement_instructions}")
 
-        # Get existing GlobalSection
+        # Get or create GlobalSection
         notify("load_section", "running")
-        try:
-            from djangopress.core.models import GlobalSection
-            from django.utils.translation import get_language
-            section = GlobalSection.objects.get(key=section_key)
-        except GlobalSection.DoesNotExist:
-            raise ValueError(f"GlobalSection with key '{section_key}' not found")
+        from djangopress.core.models import GlobalSection
+        from django.utils.translation import get_language
+        section, created = GlobalSection.objects.get_or_create(
+            key=section_key,
+            defaults={
+                'name': 'Main Header' if 'header' in section_key else 'Main Footer',
+                'section_type': 'header' if 'header' in section_key else 'footer',
+                'is_active': True,
+            },
+        )
+        if created:
+            print(f"Auto-created GlobalSection '{section_key}'")
 
         # Convert to dict — read from html_template_i18n with fallback
         from djangopress.core.models import SiteSettings, Page
