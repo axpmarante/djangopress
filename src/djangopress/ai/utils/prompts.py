@@ -537,7 +537,8 @@ Generate a complete, professional web page as clean HTML with real text content 
 - Sections with `data-overlay="rgba(r,g,b,a)"` have a semi-transparent overlay applied via `background-image: linear-gradient(rgba, rgba)` in the style attribute. Preserve both the `data-overlay` attribute and the corresponding gradient. To darken: increase the alpha. To remove: delete both `data-overlay` and the gradient from style.
 - Sections may contain `<iframe data-bg-video="youtube">` as a direct child for background video. Preserve these elements exactly — do not remove or modify them unless explicitly asked.
 - Start with a hero section, add content sections, end with a CTA
-- All URLs hardcoded: `href="/about/"`, `src="/media/image.jpg"`
+- All page URLs hardcoded: `href="/about/"`, `href="/contact/"`
+- For images, use `{{ MEDIA_URL }}` prefix: `src="{{ MEDIA_URL }}site_images/photo.jpg"` — this resolves to the correct media path in all environments
 - Generate 4-8 sections for a complete, professional page
 
 ## CRITICAL: Page Content Only

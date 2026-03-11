@@ -140,11 +140,11 @@ This uses Alpine's `$watch` to add/remove `overflow-hidden` on `<body>` whenever
 
 ```html
 <div x-data="{ open: false }">
-  <img @click="open = true" src="/media/thumb.jpg" alt="Preview" class="cursor-pointer rounded-lg hover:opacity-90 transition">
+  <img @click="open = true" src="{{ MEDIA_URL }}site_images/thumb.jpg" alt="Preview" class="cursor-pointer rounded-lg hover:opacity-90 transition">
 
   <div x-show="open" x-transition.opacity class="fixed inset-0 bg-black/80 z-40" @click="open = false"></div>
   <div x-show="open" x-transition class="fixed inset-0 z-50 flex items-center justify-center p-8" @click.self="open = false">
-    <img src="/media/full-size.jpg" alt="Full size" class="max-w-full max-h-[85vh] object-contain rounded-lg shadow-2xl">
+    <img src="{{ MEDIA_URL }}site_images/full-size.jpg" alt="Full size" class="max-w-full max-h-[85vh] object-contain rounded-lg shadow-2xl">
   </div>
 </div>
 ```

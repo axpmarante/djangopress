@@ -387,11 +387,88 @@ The existing `/ai/api/analyze-page-images/` and `/ai/api/process-page-images/` e
 Standard Django CBVs with `LoginRequiredMixin`:
 
 - **ListView** — list all items with pagination
-- **CreateView / UpdateView** — CRUD with `ModelForm`
+- **CreateView / UpdateView** — CRUD with `ModelForm`, must pass language context
 - **DeleteView** — delete confirmation
 - **CategoryListView / CategoryCreateView / CategoryUpdateView / CategoryDeleteView**
 - **LayoutListView / LayoutUpdateView** — edit layout templates
 - **GenerateView / BulkView / RefineView / ImagesView** — AI tool pages (SuperuserRequiredMixin)
+
+**Create/Update views must pass language context for i18n tabs and handle gallery images:**
+
+```python
+from djangopress.core.models import SiteSettings
+
+class PropertyCreateView(LoginRequiredMixin, CreateView):
+    model = Property
+    form_class = PropertyForm
+    template_name = 'backoffice/property_form.html'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['form_title'] = 'Create New Property'
+        context['submit_text'] = 'Create Property'
+        # Language context for i18n tabs
+        site_settings = SiteSettings.objects.first()
+        if site_settings:
+            context['languages'] = site_settings.get_enabled_languages()
+            context['default_language'] = site_settings.get_default_language()
+        else:
+            context['languages'] = [('pt', 'Portuguese')]
+            context['default_language'] = 'pt'
+        return context
+
+    def form_valid(self, form):
+        response = super().form_valid(form)
+        # Handle gallery images
+        gallery_images = form.cleaned_data.get('gallery_images')
+        if gallery_images:
+            self.object.gallery_items.all().delete()
+            for idx, site_image in enumerate(gallery_images):
+                PropertyGalleryImage.objects.create(
+                    parent=self.object, site_image=site_image, order=idx + 1
+                )
+        return response
+```
+
+### Forms (`myapp/forms.py`)
+
+```python
+from django import forms
+from .models import Property, PropertyCategory
+from djangopress.core.models import SiteImage
+
+class PropertyForm(forms.ModelForm):
+    gallery_images = forms.ModelMultipleChoiceField(
+        queryset=SiteImage.objects.filter(is_active=True).order_by('-id'),
+        required=False,
+        widget=forms.CheckboxSelectMultiple,
+    )
+
+    class Meta:
+        model = Property
+        fields = [
+            'title_i18n', 'slug_i18n', 'featured_image', 'excerpt_i18n',
+            'html_content_i18n', 'category', 'is_published', 'published_date',
+            'meta_description_i18n',
+        ]
+        widgets = {
+            'is_published': forms.CheckboxInput(attrs={
+                'class': 'w-5 h-5 text-blue-600 border-gray-300 rounded'
+            }),
+            'published_date': forms.DateTimeInput(attrs={
+                'class': 'w-full px-4 py-3 border border-gray-300 rounded-md',
+                'type': 'datetime-local'
+            }),
+            'featured_image': forms.Select(attrs={'class': 'hidden'}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['published_date'].required = False
+        self.fields['featured_image'].queryset = SiteImage.objects.filter(is_active=True).order_by('-id')
+        if self.instance and self.instance.pk:
+            self.fields['gallery_images'].initial = self.instance.gallery_images.all()
+```
 
 ### Backoffice URLs (`backoffice/urls.py`)
 
@@ -418,6 +495,32 @@ path('properties/ai/bulk/', views.BulkView.as_view(), name='property_ai_bulk'),
 path('properties/ai/chat/refine/<int:pk>/', views.RefineView.as_view(), name='property_ai_refine'),
 path('properties/<int:pk>/images/', views.ImagesView.as_view(), name='property_images'),
 ```
+
+### Backoffice Form Template Pattern
+
+The form template uses **language tabs** for i18n fields and **modal-based image selection**. This is the canonical pattern from `news_form.html`.
+
+**Architecture:**
+1. **Language tab bar** — switches all i18n fields at once, non-i18n fields always visible
+2. **Hidden JSON fields** — `<input type="hidden" name="title_i18n" id="title_i18n_json">` populated on submit
+3. **`json_script` for initial values** — `{{ form.title_i18n.value|default_if_none:"{}"|json_script:"title_i18n_initial" }}` for safe encoding
+4. **Per-language panels** — `<div class="lang-panel" data-lang="{{ code }}">` with `.i18n-field` inputs
+5. **Image modals** — reuse `backoffice/partials/image_selection_modals.html` + `backoffice/js/image_selection.js`
+
+**JS functions (inline in template):**
+- `initI18nFields()` — parses `json_script` elements, populates per-language inputs
+- `assembleI18nJson()` — collects per-language inputs into JSON, sets hidden fields (called on submit)
+- `switchLanguageTab(lang)` — toggles tab styles and panel visibility
+
+**Image modal integration requires:**
+- `select[name="featured_image"]` — hidden select for form value
+- `#featured-image-display` — JS populates preview
+- `#gallery-checkboxes-container` — hidden checkboxes
+- `#selected-gallery-display` — JS populates gallery grid
+- Include partial: `{% include 'backoffice/partials/image_selection_modals.html' with form=form %}`
+- Include JS: `<script src="{% static 'backoffice/js/image_selection.js' %}"></script>`
+
+Reference: `backoffice/templates/backoffice/news_form.html` for the complete template.
 
 ### Sidebar Navigation
 

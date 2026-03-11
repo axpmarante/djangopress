@@ -41,14 +41,14 @@ all elements with `data-lightbox` attributes on page load.
 
 ```html
 <div class="grid grid-cols-2 md:grid-cols-3 gap-4" data-media-collection="lightbox">
-  <a href="/media/photo-1-full.jpg" data-lightbox="gallery" data-alt="Sunset over the ocean">
-    <img src="/media/photo-1-thumb.jpg" alt="Sunset over the ocean" class="w-full h-48 object-cover rounded-lg hover:opacity-90 transition cursor-pointer">
+  <a href="{{ MEDIA_URL }}site_images/photo-1-full.jpg" data-lightbox="gallery" data-alt="Sunset over the ocean">
+    <img src="{{ MEDIA_URL }}site_images/photo-1-thumb.jpg" alt="Sunset over the ocean" class="w-full h-48 object-cover rounded-lg hover:opacity-90 transition cursor-pointer">
   </a>
-  <a href="/media/photo-2-full.jpg" data-lightbox="gallery" data-alt="Mountain landscape">
-    <img src="/media/photo-2-thumb.jpg" alt="Mountain landscape" class="w-full h-48 object-cover rounded-lg hover:opacity-90 transition cursor-pointer">
+  <a href="{{ MEDIA_URL }}site_images/photo-2-full.jpg" data-lightbox="gallery" data-alt="Mountain landscape">
+    <img src="{{ MEDIA_URL }}site_images/photo-2-thumb.jpg" alt="Mountain landscape" class="w-full h-48 object-cover rounded-lg hover:opacity-90 transition cursor-pointer">
   </a>
-  <a href="/media/photo-3-full.jpg" data-lightbox="gallery" data-alt="City skyline at night">
-    <img src="/media/photo-3-thumb.jpg" alt="City skyline at night" class="w-full h-48 object-cover rounded-lg hover:opacity-90 transition cursor-pointer">
+  <a href="{{ MEDIA_URL }}site_images/photo-3-full.jpg" data-lightbox="gallery" data-alt="City skyline at night">
+    <img src="{{ MEDIA_URL }}site_images/photo-3-thumb.jpg" alt="City skyline at night" class="w-full h-48 object-cover rounded-lg hover:opacity-90 transition cursor-pointer">
   </a>
 </div>
 ```
@@ -61,21 +61,21 @@ Navigating within one gallery won't show images from another.
 ```html
 <!-- Team photos gallery -->
 <div class="grid grid-cols-3 gap-4" data-media-collection="lightbox">
-  <a href="/media/team-1.jpg" data-lightbox="team" data-alt="Team Member 1">
-    <img src="/media/team-1-thumb.jpg" alt="Team Member 1" class="w-full h-48 object-cover rounded-lg">
+  <a href="{{ MEDIA_URL }}site_images/team-1.jpg" data-lightbox="team" data-alt="Team Member 1">
+    <img src="{{ MEDIA_URL }}site_images/team-1-thumb.jpg" alt="Team Member 1" class="w-full h-48 object-cover rounded-lg">
   </a>
-  <a href="/media/team-2.jpg" data-lightbox="team" data-alt="Team Member 2">
-    <img src="/media/team-2-thumb.jpg" alt="Team Member 2" class="w-full h-48 object-cover rounded-lg">
+  <a href="{{ MEDIA_URL }}site_images/team-2.jpg" data-lightbox="team" data-alt="Team Member 2">
+    <img src="{{ MEDIA_URL }}site_images/team-2-thumb.jpg" alt="Team Member 2" class="w-full h-48 object-cover rounded-lg">
   </a>
 </div>
 
 <!-- Venue photos gallery (separate) -->
 <div class="grid grid-cols-3 gap-4 mt-8" data-media-collection="lightbox">
-  <a href="/media/venue-1.jpg" data-lightbox="venue" data-alt="Dining Room">
-    <img src="/media/venue-1-thumb.jpg" alt="Dining Room" class="w-full h-48 object-cover rounded-lg">
+  <a href="{{ MEDIA_URL }}site_images/venue-1.jpg" data-lightbox="venue" data-alt="Dining Room">
+    <img src="{{ MEDIA_URL }}site_images/venue-1-thumb.jpg" alt="Dining Room" class="w-full h-48 object-cover rounded-lg">
   </a>
-  <a href="/media/venue-2.jpg" data-lightbox="venue" data-alt="Garden Terrace">
-    <img src="/media/venue-2-thumb.jpg" alt="Garden Terrace" class="w-full h-48 object-cover rounded-lg">
+  <a href="{{ MEDIA_URL }}site_images/venue-2.jpg" data-lightbox="venue" data-alt="Garden Terrace">
+    <img src="{{ MEDIA_URL }}site_images/venue-2-thumb.jpg" alt="Garden Terrace" class="w-full h-48 object-cover rounded-lg">
   </a>
 </div>
 ```
@@ -88,26 +88,26 @@ navigable in the lightbox. This is useful for "show 4, but lightbox has 12":
 ```html
 <div class="grid grid-cols-2 md:grid-cols-4 gap-4" data-media-collection="lightbox">
   <!-- Visible thumbnails -->
-  <a href="/media/img-1.jpg" data-lightbox="portfolio" data-alt="Project 1">
-    <img src="/media/img-1-thumb.jpg" alt="Project 1" class="w-full h-48 object-cover rounded-lg">
+  <a href="{{ MEDIA_URL }}site_images/img-1.jpg" data-lightbox="portfolio" data-alt="Project 1">
+    <img src="{{ MEDIA_URL }}site_images/img-1-thumb.jpg" alt="Project 1" class="w-full h-48 object-cover rounded-lg">
   </a>
-  <a href="/media/img-2.jpg" data-lightbox="portfolio" data-alt="Project 2">
-    <img src="/media/img-2-thumb.jpg" alt="Project 2" class="w-full h-48 object-cover rounded-lg">
+  <a href="{{ MEDIA_URL }}site_images/img-2.jpg" data-lightbox="portfolio" data-alt="Project 2">
+    <img src="{{ MEDIA_URL }}site_images/img-2-thumb.jpg" alt="Project 2" class="w-full h-48 object-cover rounded-lg">
   </a>
-  <a href="/media/img-3.jpg" data-lightbox="portfolio" data-alt="Project 3">
-    <img src="/media/img-3-thumb.jpg" alt="Project 3" class="w-full h-48 object-cover rounded-lg">
+  <a href="{{ MEDIA_URL }}site_images/img-3.jpg" data-lightbox="portfolio" data-alt="Project 3">
+    <img src="{{ MEDIA_URL }}site_images/img-3-thumb.jpg" alt="Project 3" class="w-full h-48 object-cover rounded-lg">
   </a>
-  <a href="/media/img-4.jpg" data-lightbox="portfolio" data-alt="Project 4" class="relative">
-    <img src="/media/img-4-thumb.jpg" alt="Project 4" class="w-full h-48 object-cover rounded-lg">
+  <a href="{{ MEDIA_URL }}site_images/img-4.jpg" data-lightbox="portfolio" data-alt="Project 4" class="relative">
+    <img src="{{ MEDIA_URL }}site_images/img-4-thumb.jpg" alt="Project 4" class="w-full h-48 object-cover rounded-lg">
     <div class="absolute inset-0 bg-black/50 flex items-center justify-center rounded-lg">
       <span class="text-white text-xl font-bold">+8 more</span>
     </div>
   </a>
 </div>
 <!-- Hidden items still navigable in lightbox -->
-<a href="/media/img-5.jpg" data-lightbox="portfolio" data-alt="Project 5" class="hidden"></a>
-<a href="/media/img-6.jpg" data-lightbox="portfolio" data-alt="Project 6" class="hidden"></a>
-<a href="/media/img-7.jpg" data-lightbox="portfolio" data-alt="Project 7" class="hidden"></a>
+<a href="{{ MEDIA_URL }}site_images/img-5.jpg" data-lightbox="portfolio" data-alt="Project 5" class="hidden"></a>
+<a href="{{ MEDIA_URL }}site_images/img-6.jpg" data-lightbox="portfolio" data-alt="Project 6" class="hidden"></a>
+<a href="{{ MEDIA_URL }}site_images/img-7.jpg" data-lightbox="portfolio" data-alt="Project 7" class="hidden"></a>
 <!-- ... more hidden items ... -->
 ```
 
@@ -120,13 +120,13 @@ You can use lightbox links inside Splide slides to get both carousel and lightbo
   <div class="splide__track">
     <ul class="splide__list">
       <li class="splide__slide">
-        <a href="/media/photo-1-full.jpg" data-lightbox="carousel-gallery" data-alt="Photo 1">
-          <img src="/media/photo-1.jpg" alt="Photo 1" class="w-full h-64 object-cover rounded-lg">
+        <a href="{{ MEDIA_URL }}site_images/photo-1-full.jpg" data-lightbox="carousel-gallery" data-alt="Photo 1">
+          <img src="{{ MEDIA_URL }}site_images/photo-1.jpg" alt="Photo 1" class="w-full h-64 object-cover rounded-lg">
         </a>
       </li>
       <li class="splide__slide">
-        <a href="/media/photo-2-full.jpg" data-lightbox="carousel-gallery" data-alt="Photo 2">
-          <img src="/media/photo-2.jpg" alt="Photo 2" class="w-full h-64 object-cover rounded-lg">
+        <a href="{{ MEDIA_URL }}site_images/photo-2-full.jpg" data-lightbox="carousel-gallery" data-alt="Photo 2">
+          <img src="{{ MEDIA_URL }}site_images/photo-2.jpg" alt="Photo 2" class="w-full h-64 object-cover rounded-lg">
         </a>
       </li>
     </ul>
