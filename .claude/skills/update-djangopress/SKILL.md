@@ -78,7 +78,27 @@ python manage.py shell -c "from django.conf import settings; print('Storage:', s
 
 If it shows `FileSystemStorage` but GCS is configured in `.env`, the load order is wrong.
 
-## Step 5: Check for Content Fixes
+## Step 5: Install Optional Dependencies
+
+Check if playwright is installed (used for section screenshot previews in the backoffice page editor and explorer):
+
+```bash
+python -c "from playwright.sync_api import sync_playwright; print('Playwright: OK')" 2>/dev/null || echo "Playwright: NOT INSTALLED"
+```
+
+If not installed, install it:
+
+```bash
+pip install playwright
+playwright install chromium
+```
+
+Verify:
+```bash
+python -c "from playwright.sync_api import sync_playwright; print('Playwright: OK')"
+```
+
+## Step 6: Check for Content Fixes
 
 ```bash
 # Check for any legacy {{ trans.xxx }} template variables that need fixing
@@ -90,7 +110,7 @@ If issues are found, run without `--dry-run` to fix them:
 python manage.py fix_i18n_html
 ```
 
-## Step 6: Refresh Skills Symlink
+## Step 7: Refresh Skills Symlink
 
 Ensure the skills symlink points to the correct location (new skills may have been added):
 
@@ -112,7 +132,7 @@ fi
 ls .claude/skills/
 ```
 
-## Step 7: Restart Dev Server
+## Step 8: Restart Dev Server
 
 If the dev server is running, restart it to pick up the new code:
 
@@ -123,7 +143,7 @@ lsof -i :8000 2>/dev/null | grep LISTEN && echo "Server running on :8000" || ech
 
 Tell the user to restart the dev server if it's running.
 
-## Step 8: Redeploy to Railway (if deployed)
+## Step 9: Redeploy to Railway (if deployed)
 
 Check if this project is deployed:
 
