@@ -35,6 +35,9 @@ def sanitize_html_output(html: str) -> str:
     # Fix logical operators: &amp;&amp; → &&
     html = html.replace('&amp;&amp;', '&&')
 
+    # Fix double-braced Django template tags: {{% csrf_token %}} → {% csrf_token %}
+    html = re.sub(r'\{\{(%\s*\w+.*?%)\}\}', r'{\1}', html)
+
     return html
 
 

@@ -31,7 +31,7 @@ git init
 ### 2. Install djangopress
 
 ```bash
-python -m venv venv && source venv/bin/activate
+python -m venv .venv && source .venv/bin/activate
 
 # For local development (editable install):
 echo 'djangopress @ file:///path/to/djangopress' > requirements.txt
@@ -44,17 +44,12 @@ mkdir config && touch config/__init__.py
 Create `config/settings.py`:
 ```python
 from djangopress.settings import *  # noqa: F401,F403
-import environ
+from djangopress.settings import env
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-env = environ.Env()
-env.read_env(BASE_DIR / '.env')
 
 SECRET_KEY = env('SECRET_KEY', default='django-insecure-change-me')
-ENVIRONMENT = env('ENVIRONMENT', default='development')
-DEBUG_MODE = env('DEBUG_MODE', default='False') == 'True'
-DEBUG = ENVIRONMENT == 'development' or DEBUG_MODE
 ROOT_URLCONF = 'config.urls'
 WSGI_APPLICATION = 'config.wsgi.application'
 DATABASES = {'default': env.db('DATABASE_URL', default=f'sqlite:///{BASE_DIR / "db.sqlite3"}')}
@@ -66,6 +61,8 @@ LOCALE_PATHS = [BASE_DIR / 'locale']
 ALLOWED_HOSTS += ['.railway.app']
 CSRF_TRUSTED_ORIGINS += ['https://*.railway.app']
 ```
+
+> **Note:** djangopress.settings auto-loads `.env` from the working directory. No need to call `env.read_env()` in child settings. The `env` object is imported to use `env()` and `env.db()` for child-specific overrides.
 
 Create `config/urls.py`:
 ```python

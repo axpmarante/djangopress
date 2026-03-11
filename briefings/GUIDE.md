@@ -29,7 +29,7 @@ For production sites that need their own repo.
 
 ```
 1. ./scripts/new_site.sh my-client briefings/my-client.md
-2. cd ../my-client && source venv/bin/activate
+2. cd ../my-client && source .venv/bin/activate
 3. /generate-site briefings/my-client.md
 ```
 

@@ -7,20 +7,30 @@ Child sites import with:
 Then override BASE_DIR, SECRET_KEY, DATABASES, ROOT_URLCONF,
 WSGI_APPLICATION, STATIC_ROOT, MEDIA_ROOT, etc.
 """
-import os
 import warnings
 from pathlib import Path
+
+import environ
+
 from django.utils.translation import gettext_lazy as _
 
 # Package root directory (where this settings.py lives)
 _PACKAGE_DIR = Path(__file__).resolve().parent
 
+# ---------------------------------------------------------------------------
+# Environment — auto-load .env from working directory if present
+# ---------------------------------------------------------------------------
+env = environ.Env()
 
-# ---------------------------------------------------------------------------
-# Environment
-# ---------------------------------------------------------------------------
-ENVIRONMENT = os.environ.get('ENVIRONMENT', 'development')
-DEBUG_MODE = os.environ.get('DEBUG_MODE', 'False') == 'True'
+# Try to load .env from CWD (where manage.py lives) so that all env vars
+# are available before any settings are evaluated. Child sites no longer
+# need to worry about import order.
+_dotenv_path = Path.cwd() / '.env'
+if _dotenv_path.is_file():
+    env.read_env(str(_dotenv_path))
+
+ENVIRONMENT = env('ENVIRONMENT', default='development')
+DEBUG_MODE = env.bool('DEBUG_MODE', default=False)
 
 # Enable DEBUG if in development OR if DEBUG_MODE is explicitly enabled
 DEBUG = ENVIRONMENT == 'development' or DEBUG_MODE
@@ -92,6 +102,7 @@ TEMPLATES = [
             'context_processors': [
                 'django.template.context_processors.debug',
                 'django.template.context_processors.request',
+                'django.template.context_processors.media',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
                 'django.template.context_processors.i18n',
@@ -147,26 +158,27 @@ _staticfiles_backend = (
 # ---------------------------------------------------------------------------
 # Media files — GCS if configured, local filesystem otherwise
 # ---------------------------------------------------------------------------
-if os.environ.get('GS_BUCKET_NAME', ''):
-    from google.oauth2 import service_account
-    import json
+GS_BUCKET_NAME = env('GS_BUCKET_NAME', default='')
 
-    GS_BUCKET_NAME = os.environ['GS_BUCKET_NAME']
-    GS_PROJECT_ID = os.environ.get('GS_PROJECT_ID', '')
+if GS_BUCKET_NAME:
+    import json
+    from google.oauth2 import service_account
+
+    GS_PROJECT_ID = env('GS_PROJECT_ID', default='')
 
     MEDIA_URL = f'https://storage.googleapis.com/{GS_BUCKET_NAME}/'
 
     # Credentials setup — supports both JSON string and file path
-    credentials_json = os.environ.get('GCS_CREDENTIALS_JSON', '')
-    credentials_path = os.environ.get('GS_CREDENTIALS_FILE_PATH', '')
+    _credentials_json = env('GCS_CREDENTIALS_JSON', default='')
+    _credentials_path = env('GS_CREDENTIALS_FILE_PATH', default='')
 
-    if credentials_json:
+    if _credentials_json:
         GS_CREDENTIALS = service_account.Credentials.from_service_account_info(
-            json.loads(credentials_json)
+            json.loads(_credentials_json)
         )
-    elif credentials_path:
+    elif _credentials_path:
         GS_CREDENTIALS = service_account.Credentials.from_service_account_file(
-            credentials_path
+            _credentials_path
         )
     else:
         GS_CREDENTIALS = None
@@ -244,24 +256,24 @@ if ENVIRONMENT == 'development':
 else:
     EMAIL_BACKEND = 'anymail.backends.mailgun.EmailBackend'
     ANYMAIL = {
-        "MAILGUN_API_KEY": os.environ.get('MAILGUN_API_KEY', ''),
-        "MAILGUN_API_URL": os.environ.get('MAILGUN_API_URL', 'https://api.eu.mailgun.net/v3'),
+        "MAILGUN_API_KEY": env('MAILGUN_API_KEY', default=''),
+        "MAILGUN_API_URL": env('MAILGUN_API_URL', default='https://api.eu.mailgun.net/v3'),
     }
 
-DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'noreply@sendermail.io')
+DEFAULT_FROM_EMAIL = env('DEFAULT_FROM_EMAIL', default='noreply@sendermail.io')
 SERVER_EMAIL = DEFAULT_FROM_EMAIL
 
 
 # ---------------------------------------------------------------------------
 # AI provider API keys
 # ---------------------------------------------------------------------------
-GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY', '')
-OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY', '')
-ANTHROPIC_API_KEY = os.environ.get('ANTHROPIC_API_KEY', '')
-UNSPLASH_ACCESS_KEY = os.environ.get('UNSPLASH_ACCESS_KEY', '')
+GEMINI_API_KEY = env('GEMINI_API_KEY', default='')
+OPENAI_API_KEY = env('OPENAI_API_KEY', default='')
+ANTHROPIC_API_KEY = env('ANTHROPIC_API_KEY', default='')
+UNSPLASH_ACCESS_KEY = env('UNSPLASH_ACCESS_KEY', default='')
 
 # Refinement agent: True = use agentic router (gemini-flash picks model/context)
-USE_REFINEMENT_AGENT = os.environ.get('USE_REFINEMENT_AGENT', 'True') == 'True'
+USE_REFINEMENT_AGENT = env.bool('USE_REFINEMENT_AGENT', default=True)
 
 
 # ---------------------------------------------------------------------------
@@ -273,7 +285,7 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 # ---------------------------------------------------------------------------
 # Logging
 # ---------------------------------------------------------------------------
-ENABLE_DEBUG_LOGGING = os.environ.get('ENABLE_DEBUG_LOGGING', 'False') == 'True'
+ENABLE_DEBUG_LOGGING = env.bool('ENABLE_DEBUG_LOGGING', default=False)
 
 if DEBUG_MODE or ENABLE_DEBUG_LOGGING or ENVIRONMENT != 'development':
     LOGGING = {

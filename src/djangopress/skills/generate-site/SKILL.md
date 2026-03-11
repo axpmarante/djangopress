@@ -80,33 +80,31 @@ if [ ! -f CLAUDE.md ]; then
 fi
 ```
 
-### 1c. Settings load order (critical for GCS)
+### 1c. Settings template
 
-**The child project's `config/settings.py` MUST load `.env` BEFORE importing djangopress settings.** Otherwise, `GS_BUCKET_NAME` won't be in `os.environ` when djangopress checks it, and the storage backend will silently fall back to local `FileSystemStorage` — images will be saved locally instead of GCS, and image URLs will point to GCS but the files won't exist there.
+djangopress.settings auto-loads `.env` from the working directory, so child settings are simple:
 
 ```python
-# CORRECT — .env loaded first, djangopress sees GS_BUCKET_NAME
-import environ
+from djangopress.settings import *  # noqa: F401,F403
+from djangopress.settings import env
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-env = environ.Env()
-env.read_env(BASE_DIR / '.env')
-
-from djangopress.settings import *  # noqa: F401,F403
+SECRET_KEY = env('SECRET_KEY', default='django-insecure-change-me')
+ROOT_URLCONF = 'config.urls'
+WSGI_APPLICATION = 'config.wsgi.application'
+DATABASES = {'default': env.db('DATABASE_URL', default=f'sqlite:///{BASE_DIR / "db.sqlite3"}')}
+TEMPLATES[0]['DIRS'] = ([BASE_DIR / 'templates'] if (BASE_DIR / 'templates').exists() else []) + TEMPLATES[0]['DIRS']
+STATICFILES_DIRS = ([BASE_DIR / 'static'] if (BASE_DIR / 'static').exists() else []) + STATICFILES_DIRS
+STATIC_ROOT = BASE_DIR / 'staticfiles'
+MEDIA_ROOT = BASE_DIR / 'media'
+LOCALE_PATHS = [BASE_DIR / 'locale']
+ALLOWED_HOSTS += ['.railway.app']
+CSRF_TRUSTED_ORIGINS += ['https://*.railway.app']
 ```
 
-```python
-# WRONG — djangopress imported before .env, GCS config is missed
-from djangopress.settings import *  # noqa: F401,F403
-
-import environ
-env = environ.Env()
-env.read_env(BASE_DIR / '.env')  # Too late! djangopress already chose FileSystemStorage
-```
-
-Verify this is correct in every child project during setup.
+The `env` object is provided by djangopress — use it for child-specific overrides like `SECRET_KEY` and `DATABASES`.
 
 ### 1d. Environment configuration
 
@@ -166,8 +164,8 @@ If GCS is not configured, use `AskUserQuestion` to ask the user:
 If not already done:
 
 ```bash
-python -m venv venv
-source venv/bin/activate
+python -m venv .venv
+source .venv/bin/activate
 pip install -r requirements.txt    # requirements.txt points to djangopress package
 python manage.py migrate
 ```

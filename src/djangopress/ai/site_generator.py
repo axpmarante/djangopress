@@ -282,10 +282,17 @@ class SiteGenerator:
 
         self.create_menu_items()
 
+        # Translate pages to all enabled languages
+        self.translate_all_content(plan)
+
         if not self.skip_images:
             self.process_all_images()
 
         self.ensure_contact_form()
+
+        # Post-generation validation
+        self.validate_generation()
+
         return self.print_summary()
 
     def plan(self) -> Dict:
@@ -746,6 +753,11 @@ BUTTONS:
         home_page = _generate_single_page(0, pages[0])
         if home_page:
             self.generated_pages.append(home_page)
+            # Set as homepage in SiteSettings
+            if not settings.homepage_id:
+                settings.homepage = home_page
+                settings.save(update_fields=['homepage'])
+                self.log(f"    Set as site homepage")
 
         # Generate remaining pages + header + footer in parallel
         remaining = pages[1:]
@@ -1152,6 +1164,84 @@ for generating pages to ensure visual consistency."""
                 is_active=True,
             )
             self.log("  Contact form created")
+
+    def translate_all_content(self, plan: Dict):
+        """Translate all pages and global sections to enabled languages."""
+        from djangopress.ai.services import ContentGenerationService
+        from djangopress.core.models import SiteSettings
+
+        settings = SiteSettings.objects.first()
+        if not settings:
+            return
+
+        default_lang = settings.get_default_language()
+        language_codes = settings.get_language_codes()
+        additional_langs = [lc for lc in language_codes if lc != default_lang]
+
+        if not additional_langs:
+            self.log("\n--- Translation: single language, skipping ---")
+            return
+
+        self.log(f"\n--- Translating to {', '.join(additional_langs)} --- {self._elapsed()}")
+
+        service = ContentGenerationService(model_name=self.model)
+
+        for target_lang in additional_langs:
+            self.log(f"\n  Translating to '{target_lang}'...")
+            try:
+                result = service.translate_content_to_language(
+                    target_lang=target_lang,
+                    source_lang=default_lang,
+                )
+                pages = result.get('translated_pages', 0)
+                sections = result.get('translated_sections', 0)
+                errors = result.get('errors', [])
+                self.log(f"    {pages} pages, {sections} sections translated")
+                if errors:
+                    for err in errors:
+                        self.log(f"    ERROR: {err}")
+                        self.errors.append({'translation': err})
+            except Exception as e:
+                self.log(f"    Translation to '{target_lang}' failed: {e}")
+                self.errors.append({'translation': f'{target_lang}: {str(e)}'})
+
+    def validate_generation(self):
+        """Post-generation validation — check for common issues."""
+        from djangopress.core.models import Page, GlobalSection, SiteSettings
+
+        settings = SiteSettings.objects.first()
+        if not settings:
+            return
+
+        language_codes = settings.get_language_codes()
+        warnings = []
+
+        self.log(f"\n--- Validation --- {self._elapsed()}")
+
+        # Check all pages have content in all languages
+        for page in Page.objects.filter(is_active=True):
+            html_i18n = page.html_content_i18n or {}
+            for lang in language_codes:
+                if not html_i18n.get(lang):
+                    warnings.append(f'Page "{page.default_title}" missing HTML for language: {lang}')
+
+        # Check global sections have content in all languages
+        for section in GlobalSection.objects.filter(is_active=True):
+            html_i18n = section.html_template_i18n or {}
+            for lang in language_codes:
+                if not html_i18n.get(lang):
+                    warnings.append(f'GlobalSection "{section.key}" missing HTML for language: {lang}')
+
+        # Check homepage is set
+        if not settings.homepage_id:
+            warnings.append('No homepage set in SiteSettings')
+
+        if warnings:
+            self.log(f"  {len(warnings)} warning(s):")
+            for w in warnings:
+                self.log(f"    - {w}")
+        else:
+            self.log("  All checks passed")
 
     def print_summary(self) -> Dict:
         """Print a summary of what was generated."""
