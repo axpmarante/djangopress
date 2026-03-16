@@ -19,8 +19,8 @@ class PageView(TemplateView):
 
     def dispatch(self, request, *args, **kwargs):
         response = super().dispatch(request, *args, **kwargs)
-        if request.user.is_staff:
-            # Staff users get no-store to prevent stale content after edits
+        if request.user.is_authenticated:
+            # Authenticated users get no-store to prevent stale content after edits
             response['Cache-Control'] = 'no-store'
         return response
 
@@ -101,9 +101,9 @@ class PageView(TemplateView):
         else:
             context['page_content'] = ''
 
-        # Enable edit mode for staff users with ?edit=true or ?edit=v2
+        # Enable edit mode for authenticated users with ?edit=true or ?edit=v2
         edit_param = self.request.GET.get('edit')
-        if self.request.user.is_staff and edit_param in ('true', 'v2'):
+        if self.request.user.is_authenticated and edit_param in ('true', 'v2'):
             context['edit_mode'] = 'v2'
         else:
             context['edit_mode'] = False

@@ -1,4 +1,4 @@
-{% if user.is_authenticated and user.is_staff %}
+{% if user.is_authenticated %}
 <!-- Admin Toolbar -->
 <div id="admin-toolbar">
     <div class="admin-toolbar-content">
@@ -22,6 +22,7 @@
                 </svg>
                 Exit Edit
               </a>
+              {% if user.is_staff %}
               <a href="{% url 'backoffice:page_edit' page_obj.id %}" class="toolbar-btn">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
@@ -29,6 +30,7 @@
                 </svg>
                 Page Settings
               </a>
+              {% endif %}
               {% else %}
               <a href="javascript:void(0)" onclick="window.location.href='?edit=v2&_t='+Date.now()" class="toolbar-btn toolbar-btn-edit">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -42,6 +44,7 @@
 
         <!-- Right Side -->
         <div class="toolbar-right">
+            {% if user.is_staff %}
             <!-- Backoffice Link -->
             <a href="/backoffice/" class="toolbar-btn">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -51,6 +54,7 @@
             </a>
 
             <div class="toolbar-divider"></div>
+            {% endif %}
 
             <!-- User Menu -->
             <div class="toolbar-user" x-data="{ open: false }">
@@ -75,6 +79,7 @@
                      x-transition:leave-end="transform opacity-0 translate-y-2"
                      class="toolbar-dropdown"
                      style="display: none;">
+                    {% if user.is_staff %}
                     <a href="/backoffice/settings/" class="dropdown-item">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"/>
@@ -82,6 +87,7 @@
                         Settings
                     </a>
                     <div class="dropdown-divider"></div>
+                    {% endif %}
                     <form method="post" action="/backoffice/logout/" style="margin:0;">
                         {% csrf_token %}
                         <button type="submit" class="dropdown-item" style="width:100%;border:none;background:none;cursor:pointer;font:inherit;">

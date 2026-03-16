@@ -11,6 +11,7 @@ from django.http import JsonResponse
 from django.utils.translation import get_language
 from django.views.decorators.http import require_http_methods
 from django.contrib.admin.views.decorators import staff_member_required
+from django.contrib.auth.decorators import login_required
 from djangopress.core.decorators import superuser_required
 from django.views.decorators.csrf import csrf_exempt
 from djangopress.core.models import Page, PageVersion, SiteImage, SiteSettings
@@ -372,7 +373,7 @@ def _enrich_instructions(instructions, page):
         return instructions
 
 
-@staff_member_required
+@login_required
 @require_http_methods(["POST"])
 def update_page_content(request):
     """
@@ -454,7 +455,7 @@ def update_page_content(request):
         }, status=500)
 
 
-@staff_member_required
+@login_required
 @require_http_methods(["POST"])
 def update_page_element_classes(request):
     """
@@ -549,7 +550,7 @@ def update_page_element_classes(request):
         }, status=500)
 
 
-@staff_member_required
+@login_required
 @require_http_methods(["POST"])
 def update_page_element_attribute(request):
     """
@@ -664,7 +665,7 @@ def update_page_element_attribute(request):
         }, status=500)
 
 
-@staff_member_required
+@login_required
 @require_http_methods(["GET"])
 def get_media_library(request):
     """
@@ -709,7 +710,7 @@ def get_media_library(request):
         }, status=500)
 
 
-@staff_member_required
+@login_required
 @require_http_methods(["GET"])
 def get_images(request):
     """Get all available images for the image modal."""
@@ -1487,7 +1488,7 @@ def apply_option(request):
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
 
 
-@staff_member_required
+@login_required
 @require_http_methods(["POST"])
 def update_section_video(request):
     """
@@ -1622,7 +1623,7 @@ def update_section_video(request):
 
 
 @csrf_exempt
-@staff_member_required
+@login_required
 @require_http_methods(["POST"])
 def upload_image(request):
     """Upload a new image to the media library."""
