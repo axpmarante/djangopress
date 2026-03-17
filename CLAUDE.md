@@ -119,6 +119,7 @@ Skills are symlinked from the djangopress package to `.claude/skills/` in each c
 | `/deploy-site-railway` | `/deploy-site-railway my-project` | Deploy to Railway with Postgres, env vars, data migration. |
 | `/sync-data` | `/sync-data push` | Push/pull DB content between local and Railway. |
 | `/migrate-sites` | `/migrate-sites` | Batch migration tracker for existing client sites. |
+| `/migrate-to-litestream` | `/migrate-to-litestream windmill` | Migrate a deployed site from Postgres to SQLite + Litestream + GCS. |
 
 The `djangopress-architecture` skill is auto-loaded when Claude needs deep architecture reference (models, rendering, AI pipeline, URL patterns, editor internals).
 
