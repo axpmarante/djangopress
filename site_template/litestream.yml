@@ -1,0 +1,9 @@
+# Local development config — points to /dev/ path in GCS.
+# In production, entrypoint.sh generates a separate config with /prod/ path.
+dbs:
+  - path: ./db.sqlite3
+    replicas:
+      - type: gcs
+        bucket: corporate-django-sites-media
+        path: __SITE_SLUG__/db/dev/
+        sync-interval: 1s
