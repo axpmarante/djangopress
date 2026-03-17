@@ -72,6 +72,12 @@ echo "  Template copied"
 
 cd "$TARGET_DIR"
 
+# --- Step 1b: Replace __SITE_SLUG__ placeholders ---
+echo "  Replacing site slug placeholders..."
+sed -i.bak "s|__SITE_SLUG__|$PROJECT_NAME|g" litestream.yml scripts/entrypoint.sh
+rm -f litestream.yml.bak scripts/entrypoint.sh.bak
+echo "  Slug set to: $PROJECT_NAME"
+
 # --- Step 2: Configure .env ---
 echo ""
 echo "--- Step 2: Configuring .env ---"
@@ -203,3 +209,6 @@ echo "  # Or set up manually:"
 echo "  python manage.py createsuperuser"
 echo "  python manage.py runserver 8000"
 echo "  # Visit http://localhost:8000/backoffice/settings/"
+echo ""
+echo "  # Deploy to Railway:"
+echo "  claude /deploy-site-railway $PROJECT_NAME"
