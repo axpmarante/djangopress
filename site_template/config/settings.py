@@ -21,9 +21,17 @@ DEBUG = ENVIRONMENT == 'development' or DEBUG_MODE
 ROOT_URLCONF = 'config.urls'
 WSGI_APPLICATION = 'config.wsgi.application'
 
-# --- Database ---
+# --- Database — SQLite in all environments ---
+# In production, Litestream handles backup/replication to GCS
 DATABASES = {
-    'default': env.db('DATABASE_URL', default=f'sqlite:///{BASE_DIR / "db.sqlite3"}')
+    'default': {
+        'ENGINE': 'django.db.backends.sqlite3',
+        'NAME': BASE_DIR / 'db.sqlite3',
+        'OPTIONS': {
+            'timeout': 20,
+            'transaction_mode': 'IMMEDIATE',
+        },
+    }
 }
 
 # --- Paths ---
