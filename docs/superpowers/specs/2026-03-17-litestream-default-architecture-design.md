@@ -36,7 +36,7 @@ Make SQLite + Litestream + GCS the standard architecture for all new DjangoPress
 Multi-stage build: Alpine stage downloads Litestream v0.3.13, Python 3.13-slim stage installs git + sqlite3, copies Litestream binary, installs pip packages, runs collectstatic with dummy SECRET_KEY, sets entrypoint.
 
 **`.dockerignore`:**
-Excludes venv/, .git/, db.sqlite3, media/, .env, __pycache__/, .claude/, briefings/, *.log.
+Excludes venv/, .git/, db.sqlite3, db.sqlite3-wal, db.sqlite3-shm, media/, .env, __pycache__/, .claude/, briefings/, *.log.
 
 **`litestream.yml`:**
 ```yaml
@@ -215,11 +215,28 @@ Remove "After making local changes" section referencing `/sync-data push` — re
 ```
 
 ### New Project Setup
-Remove DATABASE_URL references from the environment setup section.
+- Remove DATABASE_URL references from the environment setup section
+- Update the example `config/settings.py` code to show the hardcoded SQLite DATABASES block (replace `env.db('DATABASE_URL', ...)`)
+- Add note about Litestream being the default sync mechanism
+
+### Other Skills to Audit
+- `/generate-site` — may reference DATABASE_URL in env setup steps; update if so
+- `/migrate-sites` — may be obsolete now that all sites are migrated; keep for now but mark as potentially removable
 
 ---
 
-## 6. GCS Bucket Convention
+## 6. Prerequisites
+
+The new architecture requires these tools on the developer's machine:
+- **Litestream v0.3.13** — `~/bin/litestream` (installed once, used for local replication)
+- **gcloud CLI** — for `gcloud storage rsync` in sync scripts (already available if GCS media is configured)
+- **sqlite3 CLI** — for PRAGMA commands (comes with macOS)
+
+These should be documented in the CLAUDE.md Commands/Setup section.
+
+---
+
+## 7. GCS Bucket Convention
 
 All sites use the same bucket (`corporate-django-sites-media`) with paths:
 ```
