@@ -40,32 +40,18 @@ def _apply_to_all_langs(page, change_fn):
 def _check_slug_uniqueness(slug_i18n, exclude_page_id=None):
     """Check if any slug in slug_i18n conflicts with existing pages.
 
-    Uses slug_i18n__contains JSON lookup on PostgreSQL, falls back to
-    Python-level iteration on SQLite (which doesn't support __contains).
+    Uses JSON key-path lookups which work on all database backends.
     Returns None if unique, or an error string if duplicate found.
     """
-    from django.db import connection
-    use_json_contains = connection.vendor != 'sqlite'
-
     for lang, slug_val in slug_i18n.items():
         if not slug_val:
             continue
 
-        if use_json_contains:
-            qs = Page.objects.filter(slug_i18n__contains={lang: slug_val})
-            if exclude_page_id:
-                qs = qs.exclude(pk=exclude_page_id)
-            if qs.exists():
-                return f'Slug "{slug_val}" already exists for language "{lang}"'
-        else:
-            # SQLite fallback: iterate pages and check in Python
-            qs = Page.objects.all()
-            if exclude_page_id:
-                qs = qs.exclude(pk=exclude_page_id)
-            for page in qs:
-                if page.slug_i18n and isinstance(page.slug_i18n, dict):
-                    if page.slug_i18n.get(lang) == slug_val:
-                        return f'Slug "{slug_val}" already exists for language "{lang}"'
+        qs = Page.objects.filter(**{f'slug_i18n__{lang}': slug_val})
+        if exclude_page_id:
+            qs = qs.exclude(pk=exclude_page_id)
+        if qs.exists():
+            return f'Slug "{slug_val}" already exists for language "{lang}"'
     return None
 
 

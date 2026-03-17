@@ -665,7 +665,7 @@ def update_page_settings(request, page_id):
             if not slug_val:
                 continue
             conflict = Page.objects.filter(
-                slug_i18n__contains={lang: slug_val}
+                **{f'slug_i18n__{lang}': slug_val}
             ).exclude(id=page_id).first()
             if conflict:
                 return JsonResponse({
