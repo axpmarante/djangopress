@@ -190,8 +190,8 @@ bash scripts/sync-to-prod.sh                                       # Push local 
 bash scripts/pull-from-prod.sh                                     # Pull production DB to local via GCS
 python manage.py migrate_storage_folder                # Copy GCS files from default/ to domain
 python manage.py fix_i18n_html --dry-run               # Check for legacy {{ trans.xxx }} vars
-python manage.py bump_version patch                    # 1.0.0 → 1.0.1
-python manage.py bump_version minor                    # 1.0.1 → 1.1.0
+python manage.py bump_version patch                    # 1.0.0 → 1.0.1 (updates src/djangopress/VERSION)
+python manage.py bump_version minor                    # 1.0.1 → 1.1.0 (pyproject.toml reads from VERSION)
 railway up -d                                          # Redeploy to Railway
 railway logs -f                                        # Stream Railway logs
 ```
