@@ -131,13 +131,22 @@ class SiteSettings(models.Model):
         help_text="Page to use as the site front page. If not set, the first page by sort order is used."
     )
 
-    # Site Domain (used for GCS folder organization)
+    # Site Domain (production URL)
     domain = models.CharField(
         "Site Domain",
         max_length=255,
         blank=True,
         default='',
-        help_text="e.g. get-algarve-com — used as the storage folder name in Google Cloud Storage"
+        help_text="Production domain, e.g. windmillrestaurant.pt"
+    )
+
+    # GCS folder name (set once on site creation, do not change)
+    gcs_folder = models.CharField(
+        "GCS Folder",
+        max_length=255,
+        blank=True,
+        default='',
+        help_text="Folder name in Google Cloud Storage. Set automatically from the project slug. Do not change after media is uploaded."
     )
 
     logo = models.ImageField("Logo (Light Backgrounds)", upload_to='site_images/', blank=True, null=True, help_text="Main logo for light backgrounds")

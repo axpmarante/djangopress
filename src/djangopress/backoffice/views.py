@@ -657,6 +657,11 @@ class SettingsGeneralView(LoginRequiredMixin, TemplateView):
 
         settings.project_briefing = request.POST.get('project_briefing', '')
         settings.domain = request.POST.get('domain', settings.domain)
+        # gcs_folder can only be set once (when empty)
+        if not settings.gcs_folder:
+            gcs_folder = request.POST.get('gcs_folder', '').strip()
+            if gcs_folder:
+                settings.gcs_folder = gcs_folder
         settings.maintenance_mode = 'maintenance_mode' in request.POST
 
         # Homepage

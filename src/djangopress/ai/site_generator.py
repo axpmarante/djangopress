@@ -382,9 +382,14 @@ class SiteGenerator:
 
         settings, _ = SiteSettings.objects.get_or_create(pk=1)
 
-        # Domain (must be set first, before media uploads)
+        # Domain (production URL)
         if plan['domain']:
             settings.domain = plan['domain']
+
+        # GCS folder (set once from project slug, never changed)
+        if not settings.gcs_folder:
+            import os
+            settings.gcs_folder = os.path.basename(os.getcwd())
 
         # Languages
         settings.enabled_languages = plan['enabled_languages']

@@ -1,7 +1,8 @@
 """
-Custom storage backends for Google Cloud Storage with domain-based folder organization.
+Custom storage backends for Google Cloud Storage with folder organization.
 
-Each site/domain gets its own folder in the GCS bucket for isolated storage.
+Each site gets its own folder in the GCS bucket for isolated storage.
+The folder name is determined by SiteSettings.gcs_folder (project slug).
 """
 
 from storages.backends.gcloud import GoogleCloudStorage
@@ -10,32 +11,27 @@ from django.conf import settings
 
 class DomainBasedStorage(GoogleCloudStorage):
     """
-    Storage backend that uses SiteSettings.domain as the folder name.
+    Storage backend that uses SiteSettings.gcs_folder as the folder name.
 
     This allows multiple sites to share a single GCS bucket while keeping
     their files organized in separate folders.
 
-    The folder is always derived from SiteSettings.domain (the configured
-    project identifier), NOT from the request hostname. This ensures files
-    are stored consistently regardless of whether the site is accessed via
-    localhost, a staging domain, or production.
+    The folder is derived from SiteSettings.gcs_folder (the project slug),
+    falling back to SiteSettings.domain for backwards compatibility.
     """
     def __init__(self, *args, **kwargs):
-        # Always use SiteSettings.domain as the canonical folder name
-        domain = 'default'
+        folder_name = 'default'
         try:
             from djangopress.core.models import SiteSettings
             site_settings = SiteSettings.objects.first()
-            if site_settings and site_settings.domain:
-                domain = site_settings.domain
+            if site_settings:
+                if site_settings.gcs_folder:
+                    folder_name = site_settings.gcs_folder
+                elif site_settings.domain:
+                    # Backwards compatibility: use domain if gcs_folder not set
+                    folder_name = site_settings.domain.replace('.', '-').replace(':', '-')
         except Exception:
-            domain = 'default'
+            folder_name = 'default'
 
-        # Clean the domain for use as folder name
-        # Replace dots with dashes and remove port numbers
-        folder_name = domain.replace('.', '-').replace(':', '-')
-
-        # Set the location (folder) in the bucket
         kwargs['location'] = folder_name
-
         super().__init__(*args, **kwargs)
