@@ -52,7 +52,13 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = env('SECRET_KEY', default='django-insecure-change-me')
 ROOT_URLCONF = 'config.urls'
 WSGI_APPLICATION = 'config.wsgi.application'
-DATABASES = {'default': env.db('DATABASE_URL', default=f'sqlite:///{BASE_DIR / "db.sqlite3"}')}
+DATABASES = {
+    'default': {
+        'ENGINE': 'django.db.backends.sqlite3',
+        'NAME': BASE_DIR / 'db.sqlite3',
+        'OPTIONS': {'timeout': 20, 'transaction_mode': 'IMMEDIATE'},
+    }
+}
 TEMPLATES[0]['DIRS'] = ([BASE_DIR / 'templates'] if (BASE_DIR / 'templates').exists() else []) + TEMPLATES[0]['DIRS']
 STATICFILES_DIRS = ([BASE_DIR / 'static'] if (BASE_DIR / 'static').exists() else []) + STATICFILES_DIRS
 STATIC_ROOT = BASE_DIR / 'staticfiles'
@@ -116,8 +122,8 @@ Skills are symlinked from the djangopress package to `.claude/skills/` in each c
 | `/add-app` | `/add-app properties` | Scaffolds a decoupled feature app (models, views, templates, URLs). |
 | `/update-site` | `/update-site` | Update site content — pages, sections, elements, images, settings, header/footer, menu, forms. Auto-loaded for content changes. |
 | `/update-djangopress` | `/update-djangopress` | Update to latest djangopress version — pip upgrade, migrations, skill refresh, optional Railway redeploy. |
-| `/deploy-site-railway` | `/deploy-site-railway my-project` | Deploy to Railway with Postgres, env vars, data migration. |
-| `/sync-data` | `/sync-data push` | Push/pull DB content between local and Railway. |
+| `/deploy-site-railway` | `/deploy-site-railway my-project` | Deploy to Railway with SQLite + Litestream + GCS. |
+| `/sync-data` | `/sync-data push` | Push/pull DB between local and production via Litestream + GCS. |
 | `/migrate-sites` | `/migrate-sites` | Batch migration tracker for existing client sites. |
 | `/migrate-to-litestream` | `/migrate-to-litestream windmill` | Migrate a deployed site from Postgres to SQLite + Litestream + GCS. |
 
@@ -130,10 +136,10 @@ The `djangopress-architecture` skill is auto-loaded when Claude needs deep archi
 1. /create-briefing My Client     ← researches client, writes briefing
 2. /generate-site briefings/my-client.md  ← sets up project + generates everything
 3. /add-app blog                  ← if extra features needed
-4. /deploy-site-railway my-client ← deploy to Railway
+4. /deploy-site-railway my-client ← deploy to Railway (SQLite + Litestream)
 
 # After making local changes to a deployed site:
-/sync-data push                   ← push local DB to Railway
+/sync-data push                   ← replicate local DB to GCS, sync to prod
 ```
 
 ---
@@ -180,8 +186,8 @@ python manage.py shell                                 # Django shell
 python manage.py generate_site briefings/my-site.md    # Generate full site from briefing
 python manage.py generate_site briefings/my-site.md --dry-run      # Preview plan
 python manage.py generate_site briefings/my-site.md --skip-images  # Skip image processing
-python manage.py push_data https://my-site.railway.app             # Push local DB to production
-python manage.py pull_data https://my-site.railway.app             # Pull remote DB to local
+bash scripts/sync-to-prod.sh                                       # Push local DB to production via GCS
+bash scripts/pull-from-prod.sh                                     # Pull production DB to local via GCS
 python manage.py migrate_storage_folder                # Copy GCS files from default/ to domain
 python manage.py fix_i18n_html --dry-run               # Check for legacy {{ trans.xxx }} vars
 python manage.py bump_version patch                    # 1.0.0 → 1.0.1
