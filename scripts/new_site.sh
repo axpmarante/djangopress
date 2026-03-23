@@ -139,12 +139,12 @@ echo "  .env configured"
 echo ""
 echo "--- Step 3: Installing dependencies ---"
 
-python3 -m venv venv
-source venv/bin/activate
+python3 -m venv .venv
+source .venv/bin/activate
 pip install -q -r requirements.txt
-# Re-install djangopress from the local source to get the latest version
+# Re-install djangopress as editable from the local source so skills stay in sync
 # (requirements.txt pins a git tag for Railway deploys, but locally we want current)
-pip install -q "$SOURCE_DIR"
+pip install -q -e "$SOURCE_DIR"
 echo "  Dependencies installed (djangopress from local source: $SOURCE_DIR)"
 
 # --- Step 4: Database ---
@@ -187,7 +187,7 @@ echo ""
 echo "Next steps:"
 echo ""
 echo "  cd $TARGET_DIR"
-echo "  source venv/bin/activate"
+echo "  source .venv/bin/activate"
 echo ""
 
 if [ -n "$BRIEFING_FILE" ]; then

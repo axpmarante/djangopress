@@ -301,6 +301,8 @@ assert s.domain, 'ERROR: domain is not set! Set it before generating any images.
 
 ## Phase 4: Generate Pages
 
+**Note:** New sites already come with a Privacy & Cookies Policy page from the template. You do NOT need to create it — just generate the business-specific pages.
+
 Generate each page by writing the HTML directly. **Home page must be generated FIRST** — it establishes the visual style.
 
 For each page, follow the edit-site temp file pattern:
@@ -384,7 +386,22 @@ print('Refined and saved')
 "
 ```
 
-### 4e. After the home page — write design guide
+### 4e. After the home page — set homepage FK
+
+**Critical:** Set `SiteSettings.homepage` to the home page. Without this, the site root URL shows an empty page.
+
+```python
+python manage.py shell -c "
+from djangopress.core.models import Page, SiteSettings
+home = Page.objects.get(slug_i18n__contains='home')
+s = SiteSettings.load()
+s.homepage = home
+s.save()
+print(f'Homepage set to: {home.default_title} (ID={home.id})')
+"
+```
+
+### 4f. After the home page — write design guide
 
 After generating the home page, write a design guide yourself. You already have full context of the HTML patterns, Tailwind classes, section structures, and component styles you used. Save it to `SiteSettings.design_guide` so subsequent pages maintain consistency.
 
@@ -443,7 +460,9 @@ print(f'Created {pages.count()} menu items')
 
 ---
 
-## Phase 6: Generate Header
+## Phase 6: Refine Header
+
+**New sites already include a default header** (sticky nav, menu items, language switcher, mobile menu). You can skip this phase if the default is acceptable, or refine it to match the site's design.
 
 The header needs menu items to exist first. Write the header HTML template directly using Django template syntax from `djangopress-html-reference`.
 
@@ -486,7 +505,9 @@ rm -f /tmp/dp-header-*.html
 
 ---
 
-## Phase 7: Generate Footer
+## Phase 7: Refine Footer
+
+**New sites already include a default footer** (3-column: brand, contact, links + privacy policy link). You can skip this phase if the default is acceptable, or refine it to match the site's design.
 
 Same pattern as header — write the footer template HTML directly.
 

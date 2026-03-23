@@ -133,7 +133,22 @@ print('MenuItem created')
 "
 ```
 
-### Step 6: Clean up temp files
+### Step 6: Set as homepage (if this is the home page)
+
+```python
+python manage.py shell -c "
+from djangopress.core.models import Page, SiteSettings
+page = Page.objects.get(slug_i18n__contains='home')
+s = SiteSettings.load()
+s.homepage = page
+s.save()
+print(f'Homepage set to: {page.default_title} (ID={page.id})')
+"
+```
+
+**Important:** The `homepage` FK on SiteSettings MUST be set for the home page to render at `/`. Without it, the site shows an empty page.
+
+### Step 7: Clean up temp files
 
 ```bash
 rm /tmp/dp-page-new-*.html

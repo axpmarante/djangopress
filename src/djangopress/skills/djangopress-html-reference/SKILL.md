@@ -67,6 +67,7 @@ order                 → Integer (when multiple sections of same type exist)
 site_name_i18n, site_description_i18n, contact_address_i18n → per-language JSON
 default_language      → "pt"
 enabled_languages     → [{"code": "pt", "name": "Português"}, ...]
+homepage              → FK to Page (front page — MUST be set after creating the home page)
 project_briefing      → Markdown (project description)
 design_guide          → Markdown (UI conventions)
 
@@ -133,6 +134,14 @@ send_confirmation_email → Boolean
 email_subject_i18n → {"pt": "...", "en": "..."}
 is_active      → Boolean
 ```
+
+**New site defaults:** Every new site (created via `new_site.sh`) starts with:
+- Privacy & Cookies Policy page (PT + EN, GDPR-compliant, sort_order=999)
+- Contact form (slug: `contact`)
+- Header GlobalSection (sticky nav, menu, language switcher, mobile menu)
+- Footer GlobalSection (3-column: brand, contact, links + privacy link)
+
+These can be refined via `edit-site` but don't need to be created from scratch.
 
 ## GlobalSections (Header/Footer)
 
