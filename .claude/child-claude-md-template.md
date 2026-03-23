@@ -223,7 +223,7 @@ from django.urls import include
 |-------|-------------|
 | `/generate-site` | Full setup + generation from briefing — env, settings, pages, header/footer, images |
 | `/create-briefing` | Research client online, write briefing interactively |
-| `/update-site` | Update content — pages, sections, elements, images, settings, header/footer, menu |
+| `/edit-site` | Edit site content — pages, sections, elements, images, settings, header/footer, menu |
 | `/update-djangopress` | Update to latest djangopress — pip upgrade, migrations, skill refresh, redeploy |
 | `/add-app` | Scaffold a decoupled feature app |
 | `/deploy-site-railway` | Deploy to Railway with Postgres |
