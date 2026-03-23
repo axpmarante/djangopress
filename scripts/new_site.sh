@@ -164,17 +164,18 @@ s.save()
 echo "  GCS folder set to: $PROJECT_NAME"
 
 # Create default users
+CLIENT_PASS=$(python3 -c "import secrets, string; print(''.join(secrets.choice(string.ascii_letters + string.digits) for _ in range(12)))")
 python manage.py shell -c "
 from django.contrib.auth import get_user_model
 User = get_user_model()
 # Superuser for dev and Claude Code (full access including AI features)
 if not User.objects.filter(username='admin').exists():
     User.objects.create_superuser('admin', 'admin@djangopress.local', 'admin123')
-# Staff user for client (backoffice access, no AI features)
+# Normal user for client delivery (backoffice access, no AI features)
 if not User.objects.filter(username='client').exists():
-    User.objects.create_user('client', 'client@djangopress.local', 'client123')
+    User.objects.create_user('client', 'client@djangopress.local', '$CLIENT_PASS')
 " 2>/dev/null
-echo "  Users created: admin/admin123 (superuser), client/client123 (staff)"
+echo "  Users created: admin/admin123 (superuser), client/$CLIENT_PASS (client)"
 
 # --- Step 4b: Sync Claude Code skills ---
 echo ""
