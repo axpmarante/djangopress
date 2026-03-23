@@ -174,6 +174,9 @@ class SiteSettings(models.Model):
     meta_keywords = models.CharField("Meta Keywords", max_length=255, blank=True)
     google_analytics_id = models.CharField("Google Analytics ID", max_length=50, blank=True)
 
+    # Cookie Consent & Privacy
+    cookie_consent_enabled = models.BooleanField("Cookie Consent Banner", default=True, help_text="Show a GDPR cookie consent banner on all pages")
+
     # Custom Code Injection
     custom_head_code = models.TextField("Custom Head Code", blank=True, default="", help_text="Code injected before </head> (e.g. Facebook Pixel, Hotjar, custom CSS)")
     custom_body_code = models.TextField("Custom Body Code", blank=True, default="", help_text="Code injected before </body> (e.g. chat widgets, cookie consent)")

@@ -289,6 +289,7 @@ class SiteGenerator:
             self.process_all_images()
 
         self.ensure_contact_form()
+        self.ensure_privacy_page()
 
         # Post-generation validation
         self.validate_generation()
@@ -1169,6 +1170,143 @@ for generating pages to ensure visual consistency."""
                 is_active=True,
             )
             self.log("  Contact form created")
+
+    def ensure_privacy_page(self):
+        """Create a Privacy & Cookies Policy page if none exists."""
+        from djangopress.core.models import Page, SiteSettings
+
+        # Check if a privacy page already exists
+        existing = Page.objects.filter(
+            slug_i18n__contains='privacy'
+        ).first() or Page.objects.filter(
+            slug_i18n__contains='politica-de-privacidade'
+        ).first()
+
+        if existing:
+            self.log("\n--- Privacy page: exists ---")
+            return
+
+        self.log("\n--- Privacy page: creating ---")
+
+        settings = SiteSettings.objects.first()
+        if not settings:
+            return
+
+        business_name = settings.site_name_i18n.get('en') or settings.site_name_i18n.get('pt') or 'Our Company'
+        contact_email = settings.contact_email or 'info@example.com'
+        language_codes = settings.get_language_codes()
+        default_lang = settings.get_default_language()
+
+        # Build privacy policy HTML
+        privacy_html = {}
+        privacy_titles = {}
+        privacy_slugs = {}
+
+        for lang in language_codes:
+            if lang == 'pt':
+                privacy_titles[lang] = 'Política de Privacidade e Cookies'
+                privacy_slugs[lang] = 'politica-de-privacidade'
+                privacy_html[lang] = self._privacy_html_pt(business_name, contact_email)
+            else:
+                privacy_titles[lang] = 'Privacy and Cookies Policy'
+                privacy_slugs[lang] = 'privacy-policy'
+                privacy_html[lang] = self._privacy_html_en(business_name, contact_email)
+
+        page = Page.objects.create(
+            title_i18n=privacy_titles,
+            slug_i18n=privacy_slugs,
+            html_content_i18n=privacy_html,
+            is_active=True,
+            show_in_menu=False,
+            sort_order=999,
+        )
+        self.log(f"  Privacy page created: {page.default_title}")
+
+    def _privacy_html_en(self, business_name, contact_email):
+        return f'''<section data-section="privacy-policy" id="privacy-policy" class="py-16 px-4">
+  <div class="max-w-3xl mx-auto prose prose-lg">
+    <h1 class="text-3xl font-bold mb-8">Privacy and Cookies Policy</h1>
+
+    <h2 class="text-xl font-semibold mt-8 mb-4">Who We Are</h2>
+    <p>{business_name} is committed to protecting your privacy in accordance with the General Data Protection Regulation (GDPR). This policy explains how we collect, use, and protect your personal data.</p>
+
+    <h2 class="text-xl font-semibold mt-8 mb-4">Data We Collect</h2>
+    <ul class="list-disc pl-6 space-y-2">
+      <li><strong>Contact information:</strong> Name, email address, and phone number when you submit forms or make enquiries.</li>
+      <li><strong>Browsing data:</strong> IP address, browser type, pages visited, and timestamps — collected automatically.</li>
+      <li><strong>Cookie preferences:</strong> Your consent choices regarding cookies.</li>
+    </ul>
+
+    <h2 class="text-xl font-semibold mt-8 mb-4">Cookies</h2>
+    <p>We use the following types of cookies:</p>
+    <ul class="list-disc pl-6 space-y-2">
+      <li><strong>Essential cookies:</strong> Required for the website to function. These cannot be disabled.</li>
+      <li><strong>Analytics cookies:</strong> Help us understand how visitors use our site (e.g. Google Analytics). These are only activated with your consent.</li>
+    </ul>
+
+    <h2 class="text-xl font-semibold mt-8 mb-4">Your Rights</h2>
+    <p>Under GDPR, you have the right to:</p>
+    <ul class="list-disc pl-6 space-y-2">
+      <li>Access your personal data</li>
+      <li>Rectify inaccurate data</li>
+      <li>Request erasure of your data</li>
+      <li>Restrict or object to processing</li>
+      <li>Data portability</li>
+    </ul>
+
+    <h2 class="text-xl font-semibold mt-8 mb-4">Data Retention</h2>
+    <ul class="list-disc pl-6 space-y-2">
+      <li>Contact form submissions: retained for 12 months.</li>
+      <li>Browsing data: anonymised after 26 months.</li>
+    </ul>
+
+    <h2 class="text-xl font-semibold mt-8 mb-4">Contact Us</h2>
+    <p>For any privacy-related questions, contact us at <a href="mailto:{contact_email}" class="text-blue-600 hover:underline">{contact_email}</a>.</p>
+  </div>
+</section>'''
+
+    def _privacy_html_pt(self, business_name, contact_email):
+        return f'''<section data-section="politica-de-privacidade" id="politica-de-privacidade" class="py-16 px-4">
+  <div class="max-w-3xl mx-auto prose prose-lg">
+    <h1 class="text-3xl font-bold mb-8">Política de Privacidade e Cookies</h1>
+
+    <h2 class="text-xl font-semibold mt-8 mb-4">Quem Somos</h2>
+    <p>{business_name} está comprometido com a proteção da sua privacidade de acordo com o Regulamento Geral de Proteção de Dados (RGPD). Esta política explica como recolhemos, utilizamos e protegemos os seus dados pessoais.</p>
+
+    <h2 class="text-xl font-semibold mt-8 mb-4">Dados que Recolhemos</h2>
+    <ul class="list-disc pl-6 space-y-2">
+      <li><strong>Informações de contacto:</strong> Nome, email e telefone quando submete formulários ou faz consultas.</li>
+      <li><strong>Dados de navegação:</strong> Endereço IP, tipo de browser, páginas visitadas e timestamps — recolhidos automaticamente.</li>
+      <li><strong>Preferências de cookies:</strong> As suas escolhas de consentimento relativas a cookies.</li>
+    </ul>
+
+    <h2 class="text-xl font-semibold mt-8 mb-4">Cookies</h2>
+    <p>Utilizamos os seguintes tipos de cookies:</p>
+    <ul class="list-disc pl-6 space-y-2">
+      <li><strong>Cookies essenciais:</strong> Necessários para o funcionamento do site. Não podem ser desativados.</li>
+      <li><strong>Cookies de análise:</strong> Ajudam-nos a compreender como os visitantes usam o site (ex: Google Analytics). Só são ativados com o seu consentimento.</li>
+    </ul>
+
+    <h2 class="text-xl font-semibold mt-8 mb-4">Os Seus Direitos</h2>
+    <p>Ao abrigo do RGPD, tem direito a:</p>
+    <ul class="list-disc pl-6 space-y-2">
+      <li>Aceder aos seus dados pessoais</li>
+      <li>Retificar dados incorretos</li>
+      <li>Solicitar a eliminação dos seus dados</li>
+      <li>Restringir ou opor-se ao tratamento</li>
+      <li>Portabilidade dos dados</li>
+    </ul>
+
+    <h2 class="text-xl font-semibold mt-8 mb-4">Retenção de Dados</h2>
+    <ul class="list-disc pl-6 space-y-2">
+      <li>Submissões de formulários: retidas por 12 meses.</li>
+      <li>Dados de navegação: anonimizados após 26 meses.</li>
+    </ul>
+
+    <h2 class="text-xl font-semibold mt-8 mb-4">Contacte-nos</h2>
+    <p>Para questões relacionadas com privacidade, contacte-nos em <a href="mailto:{contact_email}" class="text-blue-600 hover:underline">{contact_email}</a>.</p>
+  </div>
+</section>'''
 
     def translate_all_content(self, plan: Dict):
         """Translate all pages and global sections to enabled languages."""

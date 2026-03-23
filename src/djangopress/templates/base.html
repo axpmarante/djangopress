@@ -124,6 +124,7 @@
     <script type="module" src="{% static 'editor_v2/js/editor.js' %}?v=25"></script>
     {% endif %}
     {% block extra_js %}{% endblock %}
+    {% include "partials/cookie_consent.html" %}
     {% if CUSTOM_BODY_CODE %}{{ CUSTOM_BODY_CODE|safe }}{% endif %}
 </body>
 </html>

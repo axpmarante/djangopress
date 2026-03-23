@@ -106,6 +106,9 @@ def site_settings(request):
         'TIKTOK_URL': settings.tiktok_url,
         'PINTEREST_URL': settings.pinterest_url,
 
+        # Cookie Consent
+        'COOKIE_CONSENT_ENABLED': settings.cookie_consent_enabled,
+
         # Custom Code Injection
         'CUSTOM_HEAD_CODE': settings.custom_head_code,
         'CUSTOM_BODY_CODE': settings.custom_body_code,
