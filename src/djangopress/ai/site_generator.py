@@ -1176,11 +1176,12 @@ for generating pages to ensure visual consistency."""
         from djangopress.core.models import Page, SiteSettings
 
         # Check if a privacy page already exists
-        existing = Page.objects.filter(
-            slug_i18n__contains='privacy'
-        ).first() or Page.objects.filter(
-            slug_i18n__contains='politica-de-privacidade'
-        ).first()
+        existing = None
+        for page in Page.objects.all():
+            slugs = page.slug_i18n.values() if isinstance(page.slug_i18n, dict) else []
+            if any('privacy' in s or 'politica' in s for s in slugs):
+                existing = page
+                break
 
         if existing:
             self.log("\n--- Privacy page: exists ---")
@@ -1217,7 +1218,6 @@ for generating pages to ensure visual consistency."""
             slug_i18n=privacy_slugs,
             html_content_i18n=privacy_html,
             is_active=True,
-            show_in_menu=False,
             sort_order=999,
         )
         self.log(f"  Privacy page created: {page.default_title}")
