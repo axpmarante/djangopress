@@ -154,6 +154,15 @@ echo "--- Step 4: Running migrations ---"
 python manage.py migrate --verbosity 0
 echo "  Database ready"
 
+# Set GCS folder to the project slug so images go to the right bucket path from day one
+python manage.py shell -c "
+from djangopress.core.models import SiteSettings
+s, _ = SiteSettings.objects.get_or_create(pk=1)
+s.gcs_folder = '$PROJECT_NAME'
+s.save()
+" 2>/dev/null
+echo "  GCS folder set to: $PROJECT_NAME"
+
 # --- Step 4b: Sync Claude Code skills ---
 echo ""
 echo "--- Step 4b: Syncing Claude Code skills ---"

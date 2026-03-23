@@ -223,7 +223,9 @@ Images are **always stored in Google Cloud Storage**, even in development. This 
 - Folder: `SiteSettings.gcs_folder` (fallback: `SiteSettings.domain`)
 - URL format: `https://storage.googleapis.com/<bucket>/<gcs_folder>/site_images/<filename>`
 - `SiteImage.image.url` returns the full GCS URL
-- Prerequisites: `GS_BUCKET_NAME` and `GCS_CREDENTIALS_JSON` in `.env`, `SiteSettings.gcs_folder` configured
+- Prerequisites: `GS_BUCKET_NAME` and `GCS_CREDENTIALS_JSON` in `.env`
+- `SiteSettings.gcs_folder` is set automatically by `new_site.sh` to the project slug (e.g., `demo-restaurant`). This MUST be set before any image uploads — otherwise images go to a `default/` folder
+- `SiteSettings.domain` is NOT required at creation time — it can be set later when deploying
 
 Placeholder pattern (before image is resolved):
 ```html
