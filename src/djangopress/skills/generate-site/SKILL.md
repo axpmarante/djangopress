@@ -1,9 +1,11 @@
 ---
 name: generate-site
-description: Set up a new DjangoPress site and/or generate a full site from a markdown briefing — environment, settings, pages, header, footer, images, menu items. Handles fresh projects and existing ones.
+description: Set up a new DjangoPress site and generate all content from a markdown briefing. Claude Code writes HTML directly following djangopress-html-reference conventions. Handles environment setup, settings, pages, header, footer, menu items.
 argument-hint: [briefing-file.md]
 allowed-tools: Bash, Read, Write, Edit, Grep, Glob, AskUserQuestion
 ---
+
+This skill references `djangopress-html-reference` for all HTML conventions and `edit-site` for the operational patterns.
 
 # DjangoPress Site Setup & Generation
 
@@ -19,11 +21,11 @@ You will orchestrate the full pipeline, skipping steps that are already done:
 3. **Settings** — configure SiteSettings with business details + design system
 4. **Pages** — generate pages one by one, reviewing quality after each
 5. **Menu** — create menu items linking to all pages
-6. **Header & Footer** — generate with AI
-7. **Images** — process image placeholders on all pages
+6. **Header & Footer** — write HTML templates directly
+7. **Images** — leave placeholders for later processing
 8. **Review** — final verification and summary
 
-**Your advantage as Claude Code:** You can read the briefing, understand the business context, choose appropriate design values, review generated HTML for quality, and fix issues — things a non-interactive script cannot do.
+**Your advantage as Claude Code:** You read the briefing, understand the business context, choose appropriate design values, write HTML directly with full creative control, review quality, and fix issues — no external LLM delegation needed.
 
 ---
 
@@ -203,21 +205,7 @@ If no briefing file exists, gather project details interactively:
 
 ## Phase 3: Configure SiteSettings
 
-Use the `SiteGenerator` to configure all settings from the briefing. The `configure_settings()` method handles identity, contact, social media, **and design system** (colors, fonts, layout, buttons) automatically — it calls an LLM to choose appropriate design values based on the business type and design preferences in the briefing.
-
-```python
-python manage.py shell -c "
-from ai.site_generator import SiteGenerator
-gen = SiteGenerator('<briefing-path>')
-plan = gen.plan()
-gen.configure_settings(plan)
-print('Settings configured!')
-"
-```
-
-This sets domain, languages, site name, description, project briefing, contact info, social media, AND the full design system (colors, fonts, heading sizes, layout, buttons) — all from the briefing.
-
-If no briefing file exists (interactive mode), configure via Django shell directly:
+Read the briefing and choose appropriate design system values yourself based on the business type, industry, and design preferences. Then write all settings via `manage.py shell`.
 
 ```python
 python manage.py shell -c "
@@ -264,6 +252,30 @@ settings.whatsapp_number = '<+351...>'
 settings.tiktok_url = '<url>'
 settings.pinterest_url = '<url>'
 
+# Design system — Claude chooses values based on business type and briefing
+settings.primary_color = '<hex>'       # Main brand color
+settings.secondary_color = '<hex>'     # Supporting color
+settings.accent_color = '<hex>'        # Accent/highlight color
+settings.background_color = '<hex>'    # Page background (usually #ffffff or #f9fafb)
+settings.text_color = '<hex>'          # Body text (usually dark gray)
+settings.heading_color = '<hex>'       # Heading text color
+
+settings.heading_font = '<Google Font>'  # e.g. 'Playfair Display', 'Montserrat'
+settings.body_font = '<Google Font>'     # e.g. 'Inter', 'Open Sans', 'Lato'
+
+settings.button_style = '<style>'        # 'rounded', 'pill', 'square'
+settings.button_radius = '<radius>'      # e.g. '0.375rem', '9999px'
+settings.primary_button_bg = '<hex>'
+settings.primary_button_text = '<hex>'
+settings.primary_button_hover = '<hex>'
+settings.secondary_button_bg = '<hex>'
+settings.secondary_button_text = '<hex>'
+settings.secondary_button_hover = '<hex>'
+
+settings.container_width_class = 'max-w-7xl'   # or 'max-w-6xl', 'max-w-5xl'
+settings.border_radius_class = 'rounded-lg'     # or 'rounded-xl', 'rounded-2xl'
+settings.shadow_class = 'shadow-md'              # or 'shadow-lg', 'shadow-sm'
+
 settings.save()
 print('SiteSettings configured successfully!')
 print(f'Domain: {settings.domain}')
@@ -285,77 +297,65 @@ assert s.domain, 'ERROR: domain is not set! Set it before generating any images.
 "
 ```
 
-**Manual override:** If you need to tweak individual design values after generation:
-
-```python
-python manage.py shell -c "
-from djangopress.core.models import SiteSettings
-s = SiteSettings.objects.first()
-s.primary_color = '#0d9488'
-s.heading_font = 'Playfair Display'
-s.save()
-print('Updated')
-"
-```
-
 ---
 
 ## Phase 4: Generate Pages
 
-Generate each page using the AI service. **Home page must be generated FIRST** — it establishes the visual style.
+Generate each page by writing the HTML directly. **Home page must be generated FIRST** — it establishes the visual style.
 
-For each page:
+For each page, follow the edit-site temp file pattern:
 
-### 4a. Write an enriched brief
+### 4a. Write an enriched brief (internal planning)
 
-You understand the business context, so enrich the briefing's page description:
+Before writing HTML, plan the page:
+- What sections does it need? (hero, features, about, cta, etc.)
+- What content fits this business and page type?
+- What tone and style match the briefing?
+- Each section must have `data-section="name"` and `id="name"` attributes
 
+### 4b. Write HTML to temp file
+
+Write the page HTML for each language to a temp file. Follow `djangopress-html-reference` conventions strictly.
+
+```bash
+# Write HTML for each language using the Write tool
+# File: /tmp/dp-page-new-<lang>.html
 ```
-Create a [Page Name] page for [Business Name].
 
-[Original page description from briefing, expanded with your understanding]
+The HTML must:
+- Use Tailwind CSS classes referencing the design system values from Phase 3
+- Include `data-section="<name>"` and `id="<name>"` on every `<section>` tag
+- Contain real, meaningful content — not lorem ipsum
+- Include image placeholders with `data-image-prompt` and `data-image-name` attributes on `<img>` tags, using `https://placehold.co/WxH?text=Label` as placeholder `src`
+- Be fully translated for each language variant
 
-Design direction: [from design preferences section]
-Additional context: [relevant notes]
-
-Include image placeholders with data-image-prompt and data-image-name attributes on <img> tags.
-Use https://placehold.co/WxH?text=Label as placeholder src.
-```
-
-### 4b. Generate via Django shell
+### 4c. Save via Django shell
 
 ```python
 python manage.py shell -c "
-from ai.services import ContentGenerationService
-from djangopress.core.models import Page, SiteSettings
+from djangopress.core.models import Page
 
-service = ContentGenerationService()
-settings = SiteSettings.objects.first()
-
-result = service.generate_page(
-    brief='''<your enriched brief>''',
-    language=settings.get_default_language(),
-)
+# Read HTML from temp files
+html_content = {}
+for lang in ['<lang1>', '<lang2>']:
+    with open(f'/tmp/dp-page-new-{lang}.html') as f:
+        html_content[lang] = f.read()
 
 # Home page slug must be 'home' in ALL languages
-slug_i18n = result.get('slug_i18n', {})
-# For home page: slug_i18n = {lang: 'home' for lang in settings.get_language_codes()}
-
 page = Page.objects.create(
-    title_i18n=result.get('title_i18n', {}),
-    slug_i18n=slug_i18n,
-    html_content_i18n=result.get('html_content_i18n', {}),
+    title_i18n={'<lang1>': '<Title>', '<lang2>': '<Title>'},
+    slug_i18n={'<lang1>': '<slug>', '<lang2>': '<slug>'},
+    html_content_i18n=html_content,
     is_active=True,
     sort_order=0,
 )
 print(f'Created: {page.default_title} (/{page.default_slug}/) ID={page.id}')
-print(f'Languages: {list(result.get(\"html_content_i18n\", {}).keys())}')
 "
 ```
 
-### 4c. Review the generated HTML
+### 4d. Review and refine
 
-After each page, read its HTML and check:
+After each page, read the saved HTML back and check:
 1. All `<section>` tags have `data-section="name"` and `id="name"` attributes
 2. All text is real text embedded directly in the HTML
 3. The section structure matches what was requested
@@ -371,56 +371,46 @@ print(page.html_content_i18n.get(default_lang, '')[:3000])
 "
 ```
 
-### 4d. Refine if needed
-
-If you spot issues, refine the page:
+If issues are found, write corrected HTML to temp file and re-save:
 
 ```python
 python manage.py shell -c "
-from ai.services import ContentGenerationService
 from djangopress.core.models import Page
-
-service = ContentGenerationService()
-result = service.refine_page_with_html(
-    page_id=<ID>,
-    instructions='Fix: <specific issue>',
-    handle_images=True,
-)
-
 page = Page.objects.get(id=<ID>)
-page.html_content_i18n = result.get('html_content_i18n', page.html_content_i18n)
+with open('/tmp/dp-page-<ID>-<lang>.html') as f:
+    page.html_content_i18n['<lang>'] = f.read()
 page.save()
 print('Refined and saved')
 "
 ```
 
-### 4e. After the home page
+### 4e. After the home page — write design guide
 
-Optionally generate a design guide to improve consistency for subsequent pages:
+After generating the home page, write a design guide yourself. You already have full context of the HTML patterns, Tailwind classes, section structures, and component styles you used. Save it to `SiteSettings.design_guide` so subsequent pages maintain consistency.
 
 ```python
 python manage.py shell -c "
-from ai.utils.llm_config import LLMBase
-from djangopress.core.models import SiteSettings, Page
-
+from djangopress.core.models import SiteSettings
 settings = SiteSettings.objects.first()
-home = Page.objects.filter(is_active=True).order_by('sort_order').first()
 
-default_lang = settings.get_default_language()
-home_html = (home.html_content_i18n or {}).get(default_lang, '')
+settings.design_guide = '''<design guide in markdown>'''
 
-llm = LLMBase()
-messages = [
-    {'role': 'system', 'content': 'You are a senior UI/UX designer. Analyze this page and write a concise design guide in markdown that captures its visual patterns, component styles, and conventions.'},
-    {'role': 'user', 'content': f'Site: {settings.get_site_name()}\nBriefing: {settings.project_briefing}\nPage HTML:\n{home_html[:8000]}'},
-]
-response = llm.get_completion(messages, tool_name='gemini-pro')
-guide = response.choices[0].message.content
-
-settings.design_guide = guide
 settings.save()
-print(f'Design guide saved ({len(guide)} chars)')
+print(f'Design guide saved ({len(settings.design_guide)} chars)')
 "
+```
+
+The design guide should capture:
+- Color usage patterns (which colors for what purpose)
+- Typography patterns (heading levels, font weights)
+- Component styles (cards, buttons, CTAs, section spacing)
+- Section structure conventions (padding, backgrounds, alternating patterns)
+- Image placeholder conventions used
+
+Then clean up temp files:
+
+```bash
+rm -f /tmp/dp-page-*.html
 ```
 
 ---
@@ -455,14 +445,18 @@ print(f'Created {pages.count()} menu items')
 
 ## Phase 6: Generate Header
 
-The header needs menu items to exist first (they're included in the prompt context).
+The header needs menu items to exist first. Write the header HTML template directly using Django template syntax from `djangopress-html-reference`.
+
+### 6a. Write header HTML to temp file
+
+Write header HTML for each language to `/tmp/dp-header-<lang>.html`. The header template uses Django template syntax with variables like `{{ site_name }}`, `{{ menu_items }}`, `{% for item in menu_items %}`, etc. Refer to `djangopress-html-reference` for the exact template variables and conventions.
+
+### 6b. Save via Django shell
 
 ```python
 python manage.py shell -c "
-from ai.services import ContentGenerationService
 from djangopress.core.models import GlobalSection
 
-# Ensure section exists
 section, created = GlobalSection.objects.get_or_create(
     key='main-header',
     defaults={
@@ -473,27 +467,37 @@ section, created = GlobalSection.objects.get_or_create(
     }
 )
 
-service = ContentGenerationService()
-result = service.refine_global_section(
-    section_key='main-header',
-    refinement_instructions='''<header instructions from briefing>''',
-)
+html_template = {}
+for lang in ['<lang1>', '<lang2>']:
+    with open(f'/tmp/dp-header-{lang}.html') as f:
+        html_template[lang] = f.read()
 
-section.html_template_i18n = result.get('html_template_i18n', {})
+section.html_template_i18n = html_template
 section.save()
 print(f'Header generated ({sum(len(v) for v in section.html_template_i18n.values())} chars)')
 "
+```
+
+### 6c. Clean up
+
+```bash
+rm -f /tmp/dp-header-*.html
 ```
 
 ---
 
 ## Phase 7: Generate Footer
 
-Same pattern as header:
+Same pattern as header — write the footer template HTML directly.
+
+### 7a. Write footer HTML to temp file
+
+Write footer HTML for each language to `/tmp/dp-footer-<lang>.html`. Include site name, contact info, social media links, copyright notice, and navigation links using Django template syntax from `djangopress-html-reference`.
+
+### 7b. Save via Django shell
 
 ```python
 python manage.py shell -c "
-from ai.services import ContentGenerationService
 from djangopress.core.models import GlobalSection
 
 section, created = GlobalSection.objects.get_or_create(
@@ -506,75 +510,34 @@ section, created = GlobalSection.objects.get_or_create(
     }
 )
 
-service = ContentGenerationService()
-result = service.refine_global_section(
-    section_key='main-footer',
-    refinement_instructions='''<footer instructions from briefing>''',
-)
+html_template = {}
+for lang in ['<lang1>', '<lang2>']:
+    with open(f'/tmp/dp-footer-{lang}.html') as f:
+        html_template[lang] = f.read()
 
-section.html_template_i18n = result.get('html_template_i18n', {})
+section.html_template_i18n = html_template
 section.save()
 print(f'Footer generated ({sum(len(v) for v in section.html_template_i18n.values())} chars)')
 "
 ```
 
----
+### 7c. Clean up
 
-## Phase 8: Process Images
-
-For each page with image placeholders:
-
-```python
-python manage.py shell -c "
-from ai.services import ContentGenerationService
-from djangopress.core.models import Page, SiteSettings
-from bs4 import BeautifulSoup
-
-service = ContentGenerationService()
-settings = SiteSettings.objects.first()
-languages = settings.get_language_codes()
-
-page = Page.objects.get(id=<PAGE_ID>)
-default_lang = settings.get_default_language()
-html = (page.html_content_i18n or {}).get(default_lang, '')
-soup = BeautifulSoup(html, 'html.parser')
-
-# Find placeholder images
-images = []
-for idx, img in enumerate(soup.find_all('img')):
-    src = img.get('src', '')
-    name = img.get('data-image-name', '')
-    prompt = img.get('data-image-prompt', '')
-    alt = img.get('alt', '')
-    if prompt or name or 'placehold.co' in src:
-        images.append({'index': idx, 'src': src, 'alt': alt, 'name': name, 'prompt': prompt})
-
-if images:
-    # AI suggests prompts
-    suggestions = service.analyze_page_images(page_id=page.id, images=images)
-
-    # Build decisions — use 'generate' for AI images, 'unsplash' for stock photos
-    decisions = []
-    for img_data in images:
-        suggestion = next((s for s in suggestions if s.get('index') == img_data['index']), {})
-        decisions.append({
-            'image_name': img_data.get('name', ''),
-            'image_src': img_data.get('src', ''),
-            'action': 'generate',  # or 'unsplash' or 'library'
-            'prompt': suggestion.get('prompt', img_data.get('prompt', '')),
-            'aspect_ratio': suggestion.get('aspect_ratio', '16:9'),
-        })
-
-    result = service.process_page_images(page_id=page.id, image_decisions=decisions, languages=languages)
-    print(f'Processed: {len(result.get(\"processed\", []))}, Failed: {len(result.get(\"failed\", []))}')
-else:
-    print('No placeholder images found')
-"
+```bash
+rm -f /tmp/dp-footer-*.html
 ```
 
-Repeat for each page. Adjust `action` based on the briefing's image strategy preference.
+---
 
-**Note:** Image processing is the slowest step (AI generation takes ~30s per image). If the site has many images, consider using `--skip-images` in the management command and processing images later via the backoffice UI, which gives more control.
+## Phase 8: Images
+
+Image placeholders are already embedded in the HTML from Phase 4 (using `data-image-prompt`, `data-image-name`, and `placehold.co` src). These placeholders can be resolved later via:
+
+- The backoffice image management UI
+- A dedicated image processing step
+- The `/improve-site` skill
+
+The generate-site skill focuses on content structure — getting all pages, header, footer, and menu items in place with quality HTML. Image generation is a separate concern that can be handled afterwards.
 
 ---
 
@@ -598,27 +561,27 @@ python manage.py runserver 8000
 Report to the user:
 - List all generated pages with their URLs
 - Header and footer status
-- Number of images processed
+- Note that images are placeholders (can be processed later)
 - Any errors that occurred
 - Suggest next steps:
   1. Visit `/backoffice/settings/` to upload logos and configure the design system
   2. **Upload logos AFTER the domain is set** (already set from Phase 3)
   3. Configure SEO & Code settings at `/backoffice/settings/seo/`
   4. Refine pages via the inline editor (`?edit=v2`) or chat refinement
-  5. The project briefing is the most important field for AI quality
+  5. Process image placeholders via backoffice or a dedicated step
+  6. The project briefing is the most important field for AI quality
 
 ---
 
 ## Error Handling
 
-- **Page generation fails:** Log the error, retry once with a simplified brief. If still fails, skip and continue.
+- **Page generation fails:** Review the error, fix the HTML, and retry. If the issue is with the Django shell save, check model constraints.
 - **Header/footer fails:** Retry once. Fallback templates will render if generation fails.
-- **Image processing fails:** Note it in summary, continue. Images can always be processed later via backoffice.
 - **Unexpected errors:** Read the traceback, diagnose the issue, attempt to fix it.
 
 ## Non-Interactive Alternative
 
-For batch generation without Claude Code reviewing each step:
+For batch generation without Claude Code reviewing each step (uses Gemini/GPT pipeline):
 
 ```bash
 # Dry run first — parse briefing, show plan
