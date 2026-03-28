@@ -28,7 +28,7 @@ The site follows the StoryBrand framework: the restaurant owner is the hero stru
 
 ## Pages
 
-- **Home**: StoryBrand funnel homepage. Hero section with headline "Gerir um restaurante não devia ser tão complicado" and two CTAs ("Falar Connosco" + "Experimentar Grátis"). Problem section showing three pain levels: external (5+ disconnected systems), internal (feeling overwhelmed, losing control), philosophical (owners should focus on food and people, not software). Guide section with short founder story (15 years, 2 restaurants, built from lived pain). Plan section with 3-step roadmap (1. Talk to us, 2. We set up your suite, 3. Run your restaurant with clarity). Strong CTA block. Success/stakes section contrasting chaos vs clarity. Product suite grid showing all 10 products grouped by 4 categories (Sala, Cozinha, Equipa, Gestão) with icons and short descriptions linking to individual pages.
+- **Home**: StoryBrand funnel homepage. Hero section with headline "Gerir um restaurante não devia ser tão complicado" and two CTAs ("Falar Connosco" + "Experimentar Grátis"). Problem section showing three pain levels: external (5+ disconnected systems), internal (feeling overwhelmed, losing control), philosophical (owners should focus on food and people, not software). Guide section with short founder story (15 years, 2 restaurants, built from lived pain). Plan section with 3-step roadmap (1. Talk to us, 2. We set up your suite, 3. Run your restaurant with clarity). Strong CTA block. Success/stakes section contrasting chaos vs clarity. Product suite grid showing all 11 products grouped by 5 categories (Sala, Cozinha, Equipa, Gestão, Promoção) with icons and short descriptions linking to individual pages.
 
 - **PicklyMenu**: Product landing page for the Digital Menu System. Pain: outdated paper menus, confused customers, order errors. Solution: interactive digital menus via QR codes and tablets, optional ordering integrated with RestPOS, images and videos for enhanced UX. 3-step plan. Integration callout with RestPOS. CTA: "Experimentar Grátis".
 
@@ -50,12 +50,14 @@ The site follows the StoryBrand framework: the restaurant owner is the hero stru
 
 - **Social Manager**: Product landing page for Social Media & Review Management. Pain: no time for social media, missed reviews damaging reputation, inconsistent online presence. Solution: plan and schedule content, generate engaging posts, publish across platforms, monitor and respond to reviews, manage guest feedback. 3-step plan. CTA: "Experimentar Grátis".
 
+- **RestSite**: Product landing page for Restaurant Website. Pain: no website or outdated one, customers can't find hours/menu/location, losing reservations to competitors, missing local search traffic. Solution: professional restaurant website ready in days, digital menu integrated with PicklyMenu, online reservations with RestBooking, SEO optimized for local search, multi-language, responsive design. 3-step plan. Integration callout with PicklyMenu, RestBooking, Social Manager. CTA: "Experimentar Grátis".
+
 - **Sobre Nós (About)**: The founder's story — 15 years in the restaurant industry, owner of 2 restaurants, built DinnerSoft because he lived the pain every day and saw the same struggles in every restaurant around him. Team section with placeholders. Values: built by restaurateurs for restaurateurs, Portuguese market focus, integrated ecosystem vs patchwork of disconnected tools. Mission: give every restaurant owner the tools to focus on what matters — food and people.
 
 - **Contacto (Contact)**: Contact form with fields: name, email, phone, restaurant name, message, product interest dropdown. Direct contact info (email, phone, address). Social media links. Map placeholder showing Lisbon location.
 
 ## Header
-Clean white header with subtle shadow. DinnerSoft logo on the left. Navigation: Home, Produtos (dropdown with 4 categories: Sala containing PicklyMenu/RestBooking/RestPOS, Cozinha containing Kitchen Manager/Supply Manager/Chefs Recipes, Equipa containing HR Software, Gestão containing Invoice Manager/Manager Station/Social Manager), Sobre Nós, Contacto. "Falar Connosco" CTA button on the right. Language switcher (PT/EN). On mobile: hamburger menu.
+Clean white header with subtle shadow. DinnerSoft logo on the left. Navigation: Home, Produtos (dropdown with 5 categories: Sala containing PicklyMenu/RestBooking/RestPOS, Cozinha containing Kitchen Manager/Supply Manager/Chefs Recipes, Equipa containing HR Software, Gestão containing Invoice Manager/Manager Station, Promoção containing Social Manager/RestSite), Sobre Nós, Contacto. "Falar Connosco" CTA button on the right. Language switcher (PT/EN). On mobile: hamburger menu.
 
 ## Footer
 Three columns: (1) DinnerSoft logo + brief tagline "A plataforma completa para a gestão do seu restaurante" + social media icons, (2) Quick links organized by product category, (3) Contact info + "Falar Connosco" CTA. Below: copyright line. Clean, minimal, dark background (#1A1A2E) with white text and orange accent for links.
@@ -76,4 +78,4 @@ dinnersoft
 - The site follows the StoryBrand framework by Donald Miller. Every page should reinforce the narrative: the restaurant owner is the hero, DinnerSoft is the guide.
 - Two CTAs used contextually: "Falar Connosco" (Talk to Us) for consultative/complex products, "Experimentar Grátis" (Start Free Trial) for self-service products.
 - Product pages should always show how the product connects to the broader DinnerSoft ecosystem.
-- The mega-dropdown menu for Produtos groups products into 4 categories: Sala (Front-of-House), Cozinha (Kitchen), Equipa (Staff), Gestão (Business).
+- The mega-dropdown menu for Produtos groups products into 5 categories: Sala (Front-of-House), Cozinha (Kitchen), Equipa (Staff), Gestão (Business), Promoção (Promotion).
