@@ -2387,3 +2387,109 @@ body.ev2-version-preview .editor-v2-content {
   color: var(--ev2-primary);
   border-color: var(--ev2-primary-alpha);
 }
+
+/* --------------------------------------------------------------------------
+   Images Panel (sidebar tab — Solution A)
+   -------------------------------------------------------------------------- */
+.ev2-images-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.ev2-images-panel-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ev2-images-panel-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--ev2-border);
+}
+
+.ev2-images-panel-section {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ev2-text);
+  font-family: var(--ev2-font-mono);
+}
+
+.ev2-images-panel-count {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  background: var(--ev2-primary-alpha);
+  color: var(--ev2-primary);
+}
+
+.ev2-images-panel-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+
+.ev2-images-panel-thumb {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: var(--ev2-radius);
+  background: transparent;
+  cursor: pointer;
+  overflow: hidden;
+  transition: border-color 0.15s;
+}
+
+.ev2-images-panel-thumb:hover {
+  border-color: var(--ev2-primary);
+}
+
+.ev2-images-panel-thumb img {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  display: block;
+}
+
+.ev2-images-panel-thumb-label {
+  font-size: 10px;
+  font-family: var(--ev2-font-mono);
+  color: var(--ev2-text-faint);
+  padding: 2px 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: left;
+}
+
+.ev2-images-panel-dup {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  font-size: 10px;
+  font-weight: 700;
+  background: rgba(0, 0, 0, 0.7);
+  color: #fff;
+  padding: 1px 5px;
+  border-radius: 9999px;
+  line-height: 1.2;
+}
+
+@keyframes ev2-image-flash {
+  0%   { outline: 3px solid var(--ev2-primary); outline-offset: 4px; }
+  100% { outline: 3px solid transparent;        outline-offset: 4px; }
+}
+
+.ev2-image-flash {
+  animation: ev2-image-flash 1.2s ease-out;
+}
+
+[data-section] img {
+  scroll-margin-top: 5rem;
+}

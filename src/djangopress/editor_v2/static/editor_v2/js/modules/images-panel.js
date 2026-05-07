@@ -83,18 +83,32 @@ function render() {
         return;
     }
 
-    let html = '<pre style="font-family:var(--ev2-font-mono);font-size:11px;white-space:pre-wrap;">';
+    let html = '<div class="ev2-images-panel">';
     for (const group of groups) {
-        html += `\n${esc(group.section)} (${group.entries.length})`;
-        for (const entry of group.entries) {
-            const dup = entry.dupCount > 1 ? ` × ${entry.dupCount}` : '';
-            html += `\n  ${esc(entry.src)}${dup}`;
+        html += `<div class="ev2-images-panel-group">`;
+        html += `<div class="ev2-images-panel-header">`;
+        html += `<span class="ev2-images-panel-section">${esc(group.section)}</span>`;
+        html += `<span class="ev2-images-panel-count">${group.entries.length}</span>`;
+        html += `</div>`;
+        html += `<div class="ev2-images-panel-grid">`;
+        for (let i = 0; i < group.entries.length; i++) {
+            const entry = group.entries[i];
+            const sel = getCssSelector(entry.img) || '';
+            if (!sel) continue;
+            const filename = (entry.src.split('/').pop() || '').split('?')[0];
+            const dup = entry.dupCount > 1 ? `<span class="ev2-images-panel-dup">×${entry.dupCount}</span>` : '';
+            const title = entry.alt || filename || `Image ${i + 1}`;
+            html += `<button type="button" class="ev2-images-panel-thumb" data-img-selector="${esc(sel)}" title="${esc(title)}">`;
+            html += `<img src="${esc(entry.src)}" alt="" loading="lazy" />`;
+            html += dup;
+            html += `<span class="ev2-images-panel-thumb-label">${esc(filename)}</span>`;
+            html += `</button>`;
         }
+        html += `</div></div>`;
     }
-    html += '\n</pre>';
-    container.innerHTML = html;
+    html += '</div>';
 
-    console.log('[images-panel] discovered', { total, groups });
+    container.innerHTML = html;
 }
 
 function onTabChanged(tab) {
