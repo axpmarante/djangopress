@@ -168,6 +168,37 @@ export function getEditableTopLevelDescendants(scope) {
     return items;
 }
 
+/**
+ * Find the visual "card" scope around an element — the closest ancestor
+ * before a list/grid of peer cards. Used by the Content tab to surface
+ * editable elements that are visually part of the same card but live as
+ * siblings under a shared wrapper (image-as-background patterns).
+ *
+ * Algorithm: walk up from `el` until reaching the [data-section] root or
+ * until the parent has at least one *other* child with editable
+ * descendants of its own (= we hit a multi-card list/grid). The last
+ * single-card ancestor is the scope.
+ *
+ * Returns `el` itself if no broader scope is found.
+ */
+export function findCardScope(el) {
+    if (!el) return null;
+    const section = el.closest('[data-section]');
+    if (!section) return null;
+
+    let current = el;
+    while (current.parentElement && current.parentElement !== section) {
+        const parent = current.parentElement;
+        const peerContainers = Array.from(parent.children).filter(c => {
+            if (c === current) return false;
+            return getEditableTopLevelDescendants(c).length > 0;
+        });
+        if (peerContainers.length > 0) return current;
+        current = parent;
+    }
+    return current;
+}
+
 export function getTransVar(el) {
     return null;
 }

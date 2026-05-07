@@ -1,6 +1,6 @@
 import { events } from '../lib/events.js';
 import { api } from '../lib/api.js';
-import { $, $$, getCssSelector, isTextElement, getSections, getTagLabel, getEditableTopLevelDescendants, getAncestors } from '../lib/dom.js';
+import { $, $$, getCssSelector, isTextElement, getSections, getTagLabel, getEditableTopLevelDescendants, getAncestors, findCardScope } from '../lib/dom.js';
 import { CATEGORIES, HOVER_CATEGORIES, COLOR_FAMILIES, COLOR_SHADES, COLOR_KEYWORDS } from '../lib/tailwind-classes.js';
 import { parseClasses, buildClassString } from '../lib/class-parser.js';
 
@@ -241,21 +241,28 @@ function prependContentBreadcrumb(container) {
 }
 
 function appendChildrenPanel(container) {
-    const descendants = getEditableTopLevelDescendants(selectedEl);
-    if (descendants.length === 0) return;
+    // Use the card scope around selectedEl, not just its descendants — that
+    // way image-as-background patterns surface (the <img> sibling of an
+    // overlay div is in the same card, even though it isn't a descendant).
+    const scope = findCardScope(selectedEl) || selectedEl;
+    const items = getEditableTopLevelDescendants(scope).filter(i => i !== selectedEl);
+    if (items.length === 0) return;
 
     const wrap = document.createElement('div');
     wrap.className = 'ev2-children-panel';
 
     const heading = document.createElement('div');
     heading.className = 'ev2-children-heading';
-    heading.textContent = `${descendants.length} ${descendants.length === 1 ? 'element' : 'elements'}`;
+    const scopeLabel = scope === selectedEl
+        ? ''
+        : ` in this ${getTagLabel(scope)}`;
+    heading.textContent = `${items.length} ${items.length === 1 ? 'element' : 'elements'}${scopeLabel}`;
     wrap.appendChild(heading);
 
     const list = document.createElement('div');
     list.className = 'ev2-children-list';
 
-    for (const child of descendants) {
+    for (const child of items) {
         const sel = getCssSelector(child) || '';
         if (!sel) continue;
         const row = document.createElement('button');
