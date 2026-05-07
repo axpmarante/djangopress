@@ -21,7 +21,7 @@
   --ev2-text-secondary: #374151;
   --ev2-text-muted: #64748b;
   --ev2-text-faint: #94a3b8;
-  --ev2-sidebar-width: 380px;
+  --ev2-sidebar-width: 420px;
   --ev2-topbar-height: 44px;
   --ev2-radius: 6px;
   --ev2-radius-lg: 8px;
@@ -2492,4 +2492,80 @@ body.ev2-version-preview .editor-v2-content {
 
 [data-section] img {
   scroll-margin-top: 5rem;
+}
+
+/* --------------------------------------------------------------------------
+   Children panel — flat list of editable descendants in the Content tab,
+   so the user can drill into images/text/links of the clicked container.
+   -------------------------------------------------------------------------- */
+.ev2-children-panel {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--ev2-border);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ev2-children-heading {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ev2-text-faint);
+}
+
+.ev2-children-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ev2-children-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border: 1px solid transparent;
+  border-radius: var(--ev2-radius);
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  font-size: 12px;
+  color: var(--ev2-text);
+  transition: var(--ev2-transition);
+  width: 100%;
+}
+
+.ev2-children-row:hover {
+  background: var(--ev2-bg-subtle);
+  border-color: var(--ev2-border);
+}
+
+.ev2-children-thumb {
+  width: 36px;
+  height: 36px;
+  object-fit: cover;
+  border-radius: var(--ev2-radius);
+  flex-shrink: 0;
+  display: block;
+}
+
+.ev2-children-tag {
+  font-family: var(--ev2-font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 6px;
+  background: var(--ev2-primary-alpha);
+  color: var(--ev2-primary);
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+
+.ev2-children-preview {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--ev2-text-secondary);
 }

@@ -1,6 +1,6 @@
 import { events } from '../lib/events.js';
 import { api } from '../lib/api.js';
-import { $, $$, getCssSelector, isTextElement, getSections, getTagLabel } from '../lib/dom.js';
+import { $, $$, getCssSelector, isTextElement, getSections, getTagLabel, getEditableTopLevelDescendants } from '../lib/dom.js';
 import { CATEGORIES, HOVER_CATEGORIES, COLOR_FAMILIES, COLOR_SHADES, COLOR_KEYWORDS } from '../lib/tailwind-classes.js';
 import { parseClasses, buildClassString } from '../lib/class-parser.js';
 
@@ -167,14 +167,88 @@ function renderContentTab() {
     const tag = selectedEl.tagName;
     const selector = getCssSelector(selectedEl) || '';
 
-    if (tag === 'IMG') renderImageFields(c, selector);
-    else if (tag === 'A') renderLinkFields(c, selector);
-    else if (isTextElement(selectedEl)) renderTextField(c, selector);
-    else {
-        const collectionEl = findMediaCollection(selectedEl);
-        if (collectionEl) renderMediaCollection(c, collectionEl);
-        else c.innerHTML = '<p class="ev2-placeholder ev2-empty-state">Select a text element to edit content</p>';
+    if (tag === 'IMG') {
+        renderImageFields(c, selector);
+        return;
     }
+    if (isTextElement(selectedEl) && tag !== 'A') {
+        renderTextField(c, selector);
+        appendChildrenPanel(c);
+        return;
+    }
+    if (tag === 'A') {
+        renderLinkFields(c, selector);
+        appendChildrenPanel(c);
+        return;
+    }
+    const collectionEl = findMediaCollection(selectedEl);
+    if (collectionEl) {
+        renderMediaCollection(c, collectionEl);
+        return;
+    }
+
+    // Container fallback: list editable descendants so the user can drill in
+    // when the click landed on a wrapper (e.g. a card with absolute-positioned
+    // image hidden under content/overlay layers).
+    const descendants = getEditableTopLevelDescendants(selectedEl);
+    if (descendants.length > 0) {
+        c.innerHTML = '';
+        appendChildrenPanel(c);
+    } else {
+        c.innerHTML = '<p class="ev2-placeholder ev2-empty-state">Select a text element to edit content</p>';
+    }
+}
+
+function appendChildrenPanel(container) {
+    const descendants = getEditableTopLevelDescendants(selectedEl);
+    if (descendants.length === 0) return;
+
+    const wrap = document.createElement('div');
+    wrap.className = 'ev2-children-panel';
+
+    const heading = document.createElement('div');
+    heading.className = 'ev2-children-heading';
+    heading.textContent = `Inside this ${selectedEl.tagName.toLowerCase()} (${descendants.length})`;
+    wrap.appendChild(heading);
+
+    const list = document.createElement('div');
+    list.className = 'ev2-children-list';
+
+    for (const child of descendants) {
+        const sel = getCssSelector(child) || '';
+        if (!sel) continue;
+        const row = document.createElement('button');
+        row.type = 'button';
+        row.className = 'ev2-children-row';
+        row.dataset.childSelector = sel;
+        row.title = `Edit ${child.tagName.toLowerCase()}`;
+
+        if (child.tagName === 'IMG') {
+            const src = child.getAttribute('src') || '';
+            const alt = child.getAttribute('alt') || '';
+            row.innerHTML = `
+                <img class="ev2-children-thumb" src="${esc(src)}" alt="" loading="lazy" />
+                <span class="ev2-children-tag">img</span>
+                <span class="ev2-children-preview">${esc(alt || (src.split('/').pop() || '').split('?')[0])}</span>`;
+        } else {
+            const tag = child.tagName.toLowerCase();
+            const text = (child.textContent || '').trim().slice(0, 80);
+            row.innerHTML = `
+                <span class="ev2-children-tag">${esc(tag)}</span>
+                <span class="ev2-children-preview">${esc(text || '(empty)')}</span>`;
+        }
+
+        row.addEventListener('click', () => {
+            const target = document.querySelector(sel);
+            if (!target) return;
+            events.emit('selection:request', target);
+            target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        });
+        list.appendChild(row);
+    }
+
+    wrap.appendChild(list);
+    container.appendChild(wrap);
 }
 
 function renderTextField(container, selector) {
