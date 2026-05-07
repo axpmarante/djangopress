@@ -105,6 +105,69 @@ export function isTextElement(el) {
     return TEXT_TAGS.has(el.tagName);
 }
 
+/**
+ * True when an <img> should be visible to the editor's discovery features
+ * (Images sidebar tab, contained-images panel). Filters Splide runtime clones,
+ * decorative duplicates marked aria-hidden, and explicit data-editor-skip
+ * opt-outs.
+ *
+ * Note: only checks aria-hidden ON THE IMG itself. Splide adds aria-hidden
+ * to inactive slides at runtime, so checking ancestors would drop legitimate
+ * non-active slides.
+ */
+export function isEditableImage(img) {
+    if (!img || img.tagName !== 'IMG') return false;
+    if (img.getAttribute('aria-hidden') === 'true') return false;
+    if (img.closest('.splide__slide--clone')) return false;
+    if (img.closest('[data-editor-skip="true"]')) return false;
+    return true;
+}
+
+/** All editable images inside `scope` (not recursing into editor-skip subtrees). */
+export function getEditableImages(scope) {
+    if (!scope) return [];
+    return $$('img', scope).filter(isEditableImage);
+}
+
+/**
+ * Top-level editable descendants of `scope` — used to build the
+ * "container view" in the Content tab. Walks the tree but does NOT
+ * recurse into descendants that are themselves editable: clicking the
+ * outer card surfaces both the link wrapper AND the image inside it,
+ * not the spans nested inside the heading.
+ *
+ * Returns elements in DOM order. Excludes `scope` itself.
+ */
+const EDITABLE_DESCENDANT_TAGS = new Set([
+    'IMG', 'A', 'BUTTON',
+    'H1', 'H2', 'H3', 'H4', 'H5', 'H6',
+    'P', 'LI', 'BLOCKQUOTE',
+]);
+
+export function getEditableTopLevelDescendants(scope) {
+    if (!scope) return [];
+    const items = [];
+
+    function walk(el) {
+        for (const child of el.children) {
+            if (child.getAttribute('aria-hidden') === 'true') continue;
+            if (child.closest('.splide__slide--clone')) continue;
+            if (child.closest('[data-editor-skip="true"]')) continue;
+
+            if (EDITABLE_DESCENDANT_TAGS.has(child.tagName)) {
+                if (child.tagName === 'IMG' && !isEditableImage(child)) continue;
+                items.push(child);
+                // Do NOT recurse into already-collected editable elements.
+            } else {
+                walk(child);
+            }
+        }
+    }
+
+    walk(scope);
+    return items;
+}
+
 export function getTransVar(el) {
     return null;
 }

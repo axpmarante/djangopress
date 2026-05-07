@@ -7,7 +7,7 @@
  * tab is active, listens for sidebar:tab-changed.
  */
 import { events } from '../lib/events.js';
-import { $, $$, getContentWrapper, getCssSelector } from '../lib/dom.js';
+import { $, $$, getContentWrapper, getCssSelector, getEditableImages } from '../lib/dom.js';
 
 let activeTab = null;
 let unsubs = [];
@@ -21,11 +21,7 @@ function esc(s) {
  * in DOM order. Within each section, dedup by src URL — first occurrence
  * wins, and the count of duplicates is attached as `dupCount` (>= 1).
  *
- * Filters applied:
- *   1. Only <img> inside [data-section]
- *   2. Drop [aria-hidden="true"] (and any descendant of an aria-hidden ancestor)
- *   3. Drop descendants of .splide__slide--clone (Splide runtime clones)
- *   4. Drop descendants of [data-editor-skip="true"] (explicit opt-out)
+ * Discovery filter is shared via `getEditableImages` in lib/dom.js.
  */
 function discoverImages() {
     const wrapper = getContentWrapper();
@@ -36,13 +32,7 @@ function discoverImages() {
 
     for (const section of sections) {
         const sectionName = section.getAttribute('data-section') || '';
-        const imgs = $$('img', section).filter(img => {
-            if (img.getAttribute('aria-hidden') === 'true') return false;
-            if (img.closest('.splide__slide--clone')) return false;
-            if (img.closest('[data-editor-skip="true"]')) return false;
-            if (img.parentElement && img.parentElement.closest('[aria-hidden="true"]')) return false;
-            return true;
-        });
+        const imgs = getEditableImages(section);
 
         const seen = new Map();
         for (const img of imgs) {
