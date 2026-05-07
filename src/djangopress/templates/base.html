@@ -27,7 +27,7 @@
     <!-- Custom site styles -->
     <link href="{% static 'css/lightbox.css' %}" rel="stylesheet">
     {% if edit_mode == 'v2' %}
-    <link href="{% static 'editor_v2/css/editor.css' %}?v=15" rel="stylesheet">
+    <link href="{% static 'editor_v2/css/editor.css' %}?v=16" rel="stylesheet">
     {% endif %}
     <style>[x-cloak] { display: none !important; }</style>
     <script defer src="https://cdn.jsdelivr.net/npm/@alpinejs/intersect@3.x.x/dist/cdn.min.js"></script>
@@ -121,7 +121,7 @@
         apiBase: '/editor-v2/api',
       };
     </script>
-    <script type="module" src="{% static 'editor_v2/js/editor.js' %}?v=25"></script>
+    <script type="module" src="{% static 'editor_v2/js/editor.js' %}?v=26"></script>
     {% endif %}
     {% block extra_js %}{% endblock %}
     {% include "partials/cookie_consent.html" %}
