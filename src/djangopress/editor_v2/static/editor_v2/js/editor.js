@@ -13,6 +13,7 @@ import * as contextMenu   from './modules/context-menu.js';
 import * as commandPalette from './modules/command-palette.js';
 import * as aiPanel       from './modules/ai-panel.js';
 import * as imagePicker   from './modules/image-picker.js';
+import * as imagesPanel   from './modules/images-panel.js';
 import * as versions         from './modules/versions.js';
 import * as sectionInserter  from './modules/section-inserter.js';
 import * as sectionModal     from './modules/section-modal.js';
@@ -28,6 +29,7 @@ document.addEventListener('DOMContentLoaded', () => {
     commandPalette.init();
     aiPanel.init();
     imagePicker.init();
+    imagesPanel.init();
     versions.init();
     sectionInserter.init();
     sectionModal.init();
