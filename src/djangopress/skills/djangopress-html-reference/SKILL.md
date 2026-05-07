@@ -20,6 +20,48 @@ description: DjangoPress HTML conventions, database structure, editor v2 compati
 **Editor v2 editable tags** (inline text edit via double-click):
 `H1, H2, H3, H4, H5, H6, P, SPAN, A, LI, TD, TH, LABEL, BUTTON, BLOCKQUOTE`
 
+**Image overlay pattern — pointer-events trap:** Any absolutely-positioned element layered on top of an `<img>` will intercept clicks and prevent the editor from selecting the image. This breaks the editor's image-swap flow for the hidden `<img>` underneath. Apply `pointer-events-none` to decorative overlays (gradients, tints, corner accents) so clicks fall through to the image. Keep `pointer-events` enabled on overlays that contain editable children (captions, badges with text):
+
+```html
+<div class="group relative aspect-[3/4] overflow-hidden rounded-lg">
+    <img src="..." alt="..." class="w-full h-full object-cover">
+
+    <!-- Decorative gradient — NOT editable, must not block clicks to <img> -->
+    <div class="absolute inset-0 bg-gradient-to-t from-black to-transparent pointer-events-none"></div>
+
+    <!-- Caption with editable text — KEEP clickable (no pointer-events-none) -->
+    <div class="absolute bottom-6 left-6 right-6">
+        <h3>Title</h3>
+        <p>Caption text</p>
+    </div>
+</div>
+```
+
+Rule of thumb: if an overlay has no editable text/links, add `pointer-events-none`. Otherwise leave it clickable so its children can be reached.
+
+**Decorative & duplicate images — `aria-hidden="true"`:** Mark any `<img>` that is purely decorative or a visual duplicate of another image with `aria-hidden="true"` and an empty `alt=""`. The editor v2's "Images" sidebar tab uses this attribute to filter such images out of the discoverable list, so the user only sees one editable entry per logical image.
+
+The two patterns that require this:
+
+1. **Marquee / scrolling-row duplicates** — when CSS `transform: translateX(-50%)` needs the image set duplicated in the DOM to produce a seamless loop. The duplicate copies are decorative; the originals are the source of truth.
+
+   ```html
+   <div class="marquee-track">
+     <!-- Originals: editable -->
+     <img src="/media/photo-1.jpg" alt="Praia ao pôr do sol" />
+     <img src="/media/photo-2.jpg" alt="Terrace ao entardecer" />
+     <!-- Duplicates: decorative, NOT editable -->
+     <img src="/media/photo-1.jpg" alt="" aria-hidden="true" />
+     <img src="/media/photo-2.jpg" alt="" aria-hidden="true" />
+   </div>
+   ```
+
+2. **Pure decoration** — images used as visual texture (corner accents, ornamental dividers) that have no semantic content the user would want to swap.
+
+Splide-injected clones (`.splide__slide--clone`) are filtered automatically by the editor without needing this attribute.
+
+You can also opt an `<img>` (or any wrapper) out of the editor with `data-editor-skip="true"` if neither `aria-hidden` nor a Splide-clone class fits the situation.
+
 **Splide carousel warning:** The editor v2 filters out Splide-injected elements (cloned slides, arrows, pagination) when computing `nth-child` indices. This means the stored HTML and the live DOM have different `nth-child` counts inside carousels. Structure carousels so that editable text is inside the slide but addressable via its parent `data-section` container — do not rely on `nth-child` addressing within Splide `<li class="splide__slide">` elements.
 
 **Lightbox gallery pattern:** Use `data-lightbox="group-name"` on `<a>` tags wrapping images. All elements sharing the same group name become a navigable gallery:
@@ -28,6 +70,45 @@ description: DjangoPress HTML conventions, database structure, editor v2 compati
     <img src="/media/site_images/photo.jpg" alt="Caption" class="w-full h-full object-cover">
 </a>
 ```
+
+**YouTube video background pattern:** To use a YouTube video as a full-bleed hero background (autoplaying, muted, looping, no controls), embed via `<iframe>` with specific URL params + `allow` attribute + a sizing trick that mimics `object-fit: cover`:
+
+```html
+<section data-section="hero" id="hero" class="relative min-h-screen overflow-hidden">
+    <div class="absolute inset-0 z-0">
+        <iframe
+            src="https://www.youtube.com/embed/VIDEO_ID?autoplay=1&mute=1&loop=1&playlist=VIDEO_ID&controls=0&modestbranding=1&rel=0&playsinline=1&iv_load_policy=3&disablekb=1&fs=0"
+            title="Background video"
+            frameborder="0"
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+            referrerpolicy="strict-origin-when-cross-origin"
+            allowfullscreen
+            style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:100vw;height:56.25vw;min-width:177.77vh;min-height:100vh;pointer-events:none;border:0">
+        </iframe>
+        <div class="absolute inset-0 bg-gradient-to-b from-black/70 via-black/40 to-black"></div>
+    </div>
+    <div class="relative z-10">...hero text...</div>
+</section>
+```
+
+**Required URL params** (all critical):
+- `autoplay=1&mute=1` — autoplay only works when muted (Chrome/Safari policy)
+- `loop=1&playlist=VIDEO_ID` — looping requires `playlist` set to the same video ID (YouTube quirk)
+- `controls=0&modestbranding=1&rel=0&iv_load_policy=3&disablekb=1&fs=0` — hide every chrome element
+- `playsinline=1` — needed for iOS autoplay
+
+**Required iframe attributes:**
+- `allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"` — must include `autoplay` explicitly; modern browsers enforce Permissions-Policy
+- `referrerpolicy="strict-origin-when-cross-origin"` — matches YouTube's recommended referrer
+
+**The `100vw / 56.25vw / 177.77vh / 100vh` sizing trick** mimics `object-fit: cover` for iframes:
+- `width:100vw; height:56.25vw` — at viewport width, iframe stays 16:9 (56.25 = 9/16 × 100)
+- `min-width:177.77vh; min-height:100vh` — at viewport height, iframe stays 16:9 (177.77 = 16/9 × 100)
+- Combined: iframe always fully covers the viewport, cropping whichever axis is shorter
+
+**Overlay:** add a gradient overlay above the iframe for text legibility. `pointer-events:none` on the iframe prevents the user from accidentally clicking YouTube links/controls.
+
+**Troubleshooting autoplay:** if the video shows a play button instead of playing, check (in order): (1) `mute=1` present in URL, (2) `allow` includes `autoplay`, (3) browser ad-blocker not blocking the embed, (4) video owner allows embedding (check via `https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=VIDEO_ID&format=json` — a 401 or restricted response means embedding is disabled).
 
 ## Database Structure
 
@@ -45,11 +126,25 @@ sort_order            → Integer
 
 Note: Legacy fields `html_content` (TextField) and `content` (JSONField) exist but are NOT used. Always use `html_content_i18n` as the canonical field.
 
-**Safety: create a version before destructive edits:**
+**Versioning: snapshot before every content mutation — REQUIRED.**
+
+`Page` has a built-in `create_version(change_summary=...)` method that writes the current `title_i18n`, `slug_i18n`, `html_content_i18n`, and `is_active` into a `PageVersion` row, then auto-prunes to keep only the most recent 20 snapshots. **Always call it before any script that mutates a Page** so the edit can be reverted:
+
 ```python
-from djangopress.core.models import ContentVersion
-ContentVersion.create_for(page, change_summary='Before edit-site update')
+page = Page.objects.get(id=<ID>)
+page.create_version(change_summary='Before: mosaic layout redesign')   # snapshot first
+# ...mutate page.html_content_i18n / title_i18n / etc...
+page.save()
 ```
+
+Related helpers on `Page`:
+- `page.get_latest_version()` — most recent `PageVersion`
+- `page.get_version_count()` — total stored
+- `page.restore_to_version(version_number)` — revert (auto-snapshots current state before restoring)
+
+For `GlobalSection` (header/footer), use `ContentVersion` via the generic content-type relation — see the model definition. For `SiteSettings`, versioning is not built in; snapshot `settings.__dict__` manually if the change is risky.
+
+Skip only for trivial reversible edits that don't touch HTML (e.g., toggling `is_active`).
 
 **GlobalSection:**
 ```
@@ -253,9 +348,9 @@ Standard pattern for writing HTML to the database:
 
 # 2. Load into DB via manage.py shell
 python manage.py shell -c "
-from djangopress.core.models import Page, ContentVersion
+from djangopress.core.models import Page
 page = Page.objects.get(id=<ID>)
-ContentVersion.create_for(page, change_summary='edit-site update')
+page.create_version(change_summary='edit-site update')
 page.html_content_i18n['<lang>'] = open('/tmp/dp-page-<ID>-<lang>.html').read()
 page.save()
 print('Saved')
