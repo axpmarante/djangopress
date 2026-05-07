@@ -71,6 +71,23 @@ function discoverImages() {
     return groups;
 }
 
+function onThumbClick(selector) {
+    if (!selector) return;
+    const img = document.querySelector(selector);
+    if (!img) return;
+
+    events.emit('selection:request', img);
+
+    img.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+    img.classList.remove('ev2-image-flash');
+    void img.offsetWidth;
+    img.classList.add('ev2-image-flash');
+    setTimeout(() => img.classList.remove('ev2-image-flash'), 1300);
+
+    events.emit('image-picker:open');
+}
+
 function render() {
     const container = $('#ev2-tab-content');
     if (!container) return;
@@ -109,6 +126,10 @@ function render() {
     html += '</div>';
 
     container.innerHTML = html;
+
+    container.querySelectorAll('.ev2-images-panel-thumb').forEach(btn => {
+        btn.addEventListener('click', () => onThumbClick(btn.dataset.imgSelector));
+    });
 }
 
 function onTabChanged(tab) {
@@ -118,6 +139,11 @@ function onTabChanged(tab) {
 
 export function init() {
     unsubs.push(events.on('sidebar:tab-changed', onTabChanged));
+    unsubs.push(events.on('change:attribute', (data) => {
+        if (activeTab === 'images' && data && data.attribute === 'src' && data.tagName === 'img') {
+            render();
+        }
+    }));
 }
 
 export function destroy() {
