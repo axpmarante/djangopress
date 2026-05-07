@@ -154,6 +154,16 @@ export function getEditableTopLevelDescendants(scope) {
             if (child.closest('[data-editor-skip="true"]')) continue;
 
             if (EDITABLE_DESCENDANT_TAGS.has(child.tagName)) {
+                // LI and BLOCKQUOTE are structural wrappers when they contain
+                // element children (Splide slides, card-style list items).
+                // Recurse to surface the inner editable elements; only treat
+                // them as leaves when their content is plain text.
+                const isStructural = child.tagName === 'LI' || child.tagName === 'BLOCKQUOTE';
+                if (isStructural && child.children.length > 0) {
+                    walk(child);
+                    continue;
+                }
+
                 // Leaf candidate: filter on aria-hidden directly. (For images,
                 // isEditableImage already checks this and clone/skip ancestors.)
                 if (child.tagName === 'IMG') {
