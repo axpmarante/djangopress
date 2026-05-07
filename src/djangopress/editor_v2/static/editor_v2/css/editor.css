@@ -2495,6 +2495,53 @@ body.ev2-version-preview .editor-v2-content {
 }
 
 /* --------------------------------------------------------------------------
+   Content tab breadcrumb — sticky path at the top so the user can climb
+   back up to a parent container after drilling into a specific child.
+   -------------------------------------------------------------------------- */
+.ev2-content-breadcrumb {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--ev2-bg);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 4px;
+  margin: -8px -4px 12px;
+  border-bottom: 1px solid var(--ev2-border);
+}
+
+.ev2-content-crumb {
+  font-family: var(--ev2-font-mono);
+  font-size: 11px;
+  padding: 2px 6px;
+  border: none;
+  background: transparent;
+  color: var(--ev2-text-secondary);
+  cursor: pointer;
+  border-radius: 4px;
+  transition: var(--ev2-transition);
+}
+
+.ev2-content-crumb:hover:not(.ev2-content-crumb-current) {
+  background: var(--ev2-bg-subtle);
+  color: var(--ev2-primary);
+}
+
+.ev2-content-crumb-current {
+  color: var(--ev2-text);
+  font-weight: 600;
+  cursor: default;
+}
+
+.ev2-content-crumb-sep {
+  color: var(--ev2-text-faint);
+  font-size: 11px;
+  user-select: none;
+}
+
+/* --------------------------------------------------------------------------
    Children panel — flat list of editable descendants in the Content tab,
    so the user can drill into images/text/links of the clicked container.
    -------------------------------------------------------------------------- */

@@ -1,6 +1,6 @@
 import { events } from '../lib/events.js';
 import { api } from '../lib/api.js';
-import { $, $$, getCssSelector, isTextElement, getSections, getTagLabel, getEditableTopLevelDescendants } from '../lib/dom.js';
+import { $, $$, getCssSelector, isTextElement, getSections, getTagLabel, getEditableTopLevelDescendants, getAncestors } from '../lib/dom.js';
 import { CATEGORIES, HOVER_CATEGORIES, COLOR_FAMILIES, COLOR_SHADES, COLOR_KEYWORDS } from '../lib/tailwind-classes.js';
 import { parseClasses, buildClassString } from '../lib/class-parser.js';
 
@@ -169,34 +169,72 @@ function renderContentTab() {
 
     if (tag === 'IMG') {
         renderImageFields(c, selector);
-        return;
-    }
-    if (isTextElement(selectedEl) && tag !== 'A') {
+    } else if (isTextElement(selectedEl) && tag !== 'A') {
         renderTextField(c, selector);
         appendChildrenPanel(c);
-        return;
-    }
-    if (tag === 'A') {
+    } else if (tag === 'A') {
         renderLinkFields(c, selector);
         appendChildrenPanel(c);
-        return;
-    }
-    const collectionEl = findMediaCollection(selectedEl);
-    if (collectionEl) {
-        renderMediaCollection(c, collectionEl);
-        return;
+    } else {
+        const collectionEl = findMediaCollection(selectedEl);
+        if (collectionEl) {
+            renderMediaCollection(c, collectionEl);
+        } else {
+            const descendants = getEditableTopLevelDescendants(selectedEl);
+            if (descendants.length > 0) {
+                c.innerHTML = '';
+                appendChildrenPanel(c);
+            } else {
+                c.innerHTML = '<p class="ev2-placeholder ev2-empty-state">Select a text element to edit content</p>';
+            }
+        }
     }
 
-    // Container fallback: list editable descendants so the user can drill in
-    // when the click landed on a wrapper (e.g. a card with absolute-positioned
-    // image hidden under content/overlay layers).
-    const descendants = getEditableTopLevelDescendants(selectedEl);
-    if (descendants.length > 0) {
-        c.innerHTML = '';
-        appendChildrenPanel(c);
-    } else {
-        c.innerHTML = '<p class="ev2-placeholder ev2-empty-state">Select a text element to edit content</p>';
+    prependContentBreadcrumb(c);
+}
+
+/**
+ * Show a mini-breadcrumb at the top of the Content tab (sticky) so the
+ * user can navigate UP without re-clicking the page. Clicking a crumb
+ * re-selects that ancestor; the Content tab re-renders showing its
+ * children panel, giving back the overview list.
+ */
+function prependContentBreadcrumb(container) {
+    if (!selectedEl) return;
+    const ancestors = getAncestors(selectedEl).reverse(); // outermost first
+    if (ancestors.length === 0) return;
+
+    const wrap = document.createElement('div');
+    wrap.className = 'ev2-content-breadcrumb';
+
+    for (let i = 0; i < ancestors.length; i++) {
+        const a = ancestors[i];
+        const crumb = document.createElement('button');
+        crumb.type = 'button';
+        crumb.className = 'ev2-content-crumb';
+        crumb.textContent = getTagLabel(a);
+        crumb.title = 'Select this parent';
+        crumb.addEventListener('click', () => events.emit('selection:request', a));
+        wrap.appendChild(crumb);
+        if (i < ancestors.length - 1) {
+            const sep = document.createElement('span');
+            sep.className = 'ev2-content-crumb-sep';
+            sep.textContent = '›';
+            wrap.appendChild(sep);
+        }
     }
+
+    // Trailing chevron + current element label (not clickable)
+    const sep = document.createElement('span');
+    sep.className = 'ev2-content-crumb-sep';
+    sep.textContent = '›';
+    wrap.appendChild(sep);
+    const here = document.createElement('span');
+    here.className = 'ev2-content-crumb ev2-content-crumb-current';
+    here.textContent = getTagLabel(selectedEl);
+    wrap.appendChild(here);
+
+    container.insertBefore(wrap, container.firstChild);
 }
 
 function appendChildrenPanel(container) {
