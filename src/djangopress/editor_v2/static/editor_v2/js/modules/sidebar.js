@@ -201,14 +201,23 @@ function renderContentTab() {
  */
 function prependContentBreadcrumb(container) {
     if (!selectedEl) return;
-    const ancestors = getAncestors(selectedEl).reverse(); // outermost first
-    if (ancestors.length === 0) return;
+
+    // Trim ancestors to start at the closest [data-section] (inclusive).
+    // The wrapper / main / outer divs aren't useful navigation targets —
+    // sections are the meaningful editing scope.
+    const ancestors = getAncestors(selectedEl).reverse();
+    const sectionIdx = ancestors.findIndex(a => a.hasAttribute('data-section'));
+    const trimmed = sectionIdx >= 0 ? ancestors.slice(sectionIdx) : [];
+
+    // If selectedEl IS the section, trimmed is empty and we render just the
+    // current crumb. If selectedEl is outside any section, render nothing.
+    if (trimmed.length === 0 && !selectedEl.hasAttribute('data-section')) return;
 
     const wrap = document.createElement('div');
     wrap.className = 'ev2-content-breadcrumb';
 
-    for (let i = 0; i < ancestors.length; i++) {
-        const a = ancestors[i];
+    for (let i = 0; i < trimmed.length; i++) {
+        const a = trimmed[i];
         const crumb = document.createElement('button');
         crumb.type = 'button';
         crumb.className = 'ev2-content-crumb';
@@ -216,19 +225,13 @@ function prependContentBreadcrumb(container) {
         crumb.title = 'Select this parent';
         crumb.addEventListener('click', () => events.emit('selection:request', a));
         wrap.appendChild(crumb);
-        if (i < ancestors.length - 1) {
-            const sep = document.createElement('span');
-            sep.className = 'ev2-content-crumb-sep';
-            sep.textContent = '›';
-            wrap.appendChild(sep);
-        }
+
+        const sep = document.createElement('span');
+        sep.className = 'ev2-content-crumb-sep';
+        sep.textContent = '›';
+        wrap.appendChild(sep);
     }
 
-    // Trailing chevron + current element label (not clickable)
-    const sep = document.createElement('span');
-    sep.className = 'ev2-content-crumb-sep';
-    sep.textContent = '›';
-    wrap.appendChild(sep);
     const here = document.createElement('span');
     here.className = 'ev2-content-crumb ev2-content-crumb-current';
     here.textContent = getTagLabel(selectedEl);
@@ -246,7 +249,7 @@ function appendChildrenPanel(container) {
 
     const heading = document.createElement('div');
     heading.className = 'ev2-children-heading';
-    heading.textContent = `Inside this ${selectedEl.tagName.toLowerCase()} (${descendants.length})`;
+    heading.textContent = `${descendants.length} ${descendants.length === 1 ? 'element' : 'elements'}`;
     wrap.appendChild(heading);
 
     const list = document.createElement('div');
