@@ -150,15 +150,23 @@ export function getEditableTopLevelDescendants(scope) {
 
     function walk(el) {
         for (const child of el.children) {
-            if (child.getAttribute('aria-hidden') === 'true') continue;
             if (child.closest('.splide__slide--clone')) continue;
             if (child.closest('[data-editor-skip="true"]')) continue;
 
             if (EDITABLE_DESCENDANT_TAGS.has(child.tagName)) {
-                if (child.tagName === 'IMG' && !isEditableImage(child)) continue;
+                // Leaf candidate: filter on aria-hidden directly. (For images,
+                // isEditableImage already checks this and clone/skip ancestors.)
+                if (child.tagName === 'IMG') {
+                    if (!isEditableImage(child)) continue;
+                } else if (child.getAttribute('aria-hidden') === 'true') {
+                    continue;
+                }
                 items.push(child);
                 // Do NOT recurse into already-collected editable elements.
             } else {
+                // Container: recurse regardless of aria-hidden. Splide adds
+                // aria-hidden="true" to inactive slides at runtime; we still
+                // want to surface their images so the editor can swap them.
                 walk(child);
             }
         }
@@ -187,10 +195,17 @@ export function findCardScope(el) {
     if (!section) return null;
 
     let current = el;
-    while (current.parentElement && current.parentElement !== section) {
+    while (current && current !== section) {
         const parent = current.parentElement;
+        if (!parent) break;
         const peerContainers = Array.from(parent.children).filter(c => {
             if (c === current) return false;
+            // Layered overlays (absolute/fixed) aren't independent cards —
+            // they're stacked layers of the SAME visual card (image-as-bg
+            // plus gradient plus content overlay). Skip them when deciding
+            // whether to stop walking.
+            const pos = getComputedStyle(c).position;
+            if (pos === 'absolute' || pos === 'fixed') return false;
             return getEditableTopLevelDescendants(c).length > 0;
         });
         if (peerContainers.length > 0) return current;
