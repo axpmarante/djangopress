@@ -323,6 +323,23 @@ function applyImage(url, alt) {
             type: 'attribute', selector: currentSelector,
             attribute: 'alt', value: alt, oldValue: oldAlt, tagName: 'img',
         });
+
+        // Keep <a data-lightbox> href in sync with the wrapped <img src>,
+        // so the lightbox opens the same image the gallery thumbnail shows.
+        const anchor = currentEl.parentElement;
+        if (anchor && anchor.tagName === 'A' && anchor.hasAttribute('data-lightbox')) {
+            const anchorSelector = getCssSelector(anchor);
+            if (anchorSelector) {
+                const oldHref = anchor.getAttribute('href') || '';
+                if (oldHref !== url) {
+                    anchor.setAttribute('href', url);
+                    events.emit('change:attribute', {
+                        type: 'attribute', selector: anchorSelector,
+                        attribute: 'href', value: url, oldValue: oldHref, tagName: 'a',
+                    });
+                }
+            }
+        }
     }
 
     // Refresh sidebar to show new preview

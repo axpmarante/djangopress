@@ -369,6 +369,23 @@ function onContentInput(input) {
             type: 'attribute', selector, attribute: attr,
             value, oldValue, tagName: selectedEl.tagName.toLowerCase(),
         });
+
+        // Keep <a data-lightbox> href in sync when an <img src> is edited
+        // manually, so the lightbox opens the same image as the thumbnail.
+        if (attr === 'src' && selectedEl.tagName === 'IMG') {
+            const anchor = selectedEl.parentElement;
+            if (anchor && anchor.tagName === 'A' && anchor.hasAttribute('data-lightbox')) {
+                const anchorSelector = getCssSelector(anchor);
+                const oldHref = anchor.getAttribute('href') || '';
+                if (anchorSelector && oldHref !== value) {
+                    anchor.setAttribute('href', value);
+                    events.emit('change:attribute', {
+                        type: 'attribute', selector: anchorSelector,
+                        attribute: 'href', value, oldValue: oldHref, tagName: 'a',
+                    });
+                }
+            }
+        }
     } else {
         const oldValue = selectedEl.textContent;
         selectedEl.textContent = value;
