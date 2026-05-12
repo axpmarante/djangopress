@@ -27,9 +27,15 @@ let isPreview = false;
 let originalHtml = null;
 let previewVersion = null;  // the version data currently shown
 
-function detemplatize(html, translations, lang) {
-    const trans = translations?.[lang] || {};
-    return html.replace(/\{\{\s*trans\.(\w+)\s*\}\}/g, (_, key) => trans[key] || key);
+function pickHtmlForLang(htmlI18n, lang) {
+    if (!htmlI18n || typeof htmlI18n !== 'object') return '';
+    if (htmlI18n[lang]) return htmlI18n[lang];
+    const fallbacks = ['pt', 'en'];
+    for (const code of fallbacks) {
+        if (htmlI18n[code]) return htmlI18n[code];
+    }
+    const firstKey = Object.keys(htmlI18n)[0];
+    return firstKey ? (htmlI18n[firstKey] || '') : '';
 }
 
 export function init() {
@@ -127,10 +133,12 @@ async function showVersion() {
         if (!wrapper) return;
         if (!originalHtml) originalHtml = wrapper.innerHTML;
 
-        // De-templatize and show
         const lang = config().language || 'pt';
-        const translations = versionData.content?.translations || {};
-        const html = detemplatize(versionData.html_content, translations, lang);
+        const html = pickHtmlForLang(versionData.html_content_i18n, lang);
+        if (!html) {
+            console.warn('Version has no HTML for any language:', versionData);
+            return;
+        }
         wrapper.innerHTML = html;
 
         isPreview = true;
@@ -158,11 +166,17 @@ function cancel() {
 async function restore() {
     if (!previewVersion) return;
 
+    const lang = config().language || 'pt';
+    const html = pickHtmlForLang(previewVersion.html_content_i18n, lang);
+    if (!html) {
+        alert('This version has no HTML content to restore.');
+        return;
+    }
+
     try {
         await api.post('/save-ai-page/', withEditableId({
             page_id: config().pageId,
-            html_template: previewVersion.html_content,
-            content: previewVersion.content,
+            html_template: html,
         }));
         // Reload to show the restored version as current
         window.location.reload();
