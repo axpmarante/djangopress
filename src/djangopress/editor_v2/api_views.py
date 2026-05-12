@@ -8,6 +8,7 @@ import re
 import queue
 import threading
 from django.http import JsonResponse
+from django.utils.text import slugify
 from django.utils.translation import get_language
 from django.views.decorators.http import require_http_methods
 from django.contrib.admin.views.decorators import staff_member_required
@@ -1640,11 +1641,19 @@ def upload_image(request):
     if image_file.content_type not in allowed_types:
         return JsonResponse({'success': False, 'error': 'Invalid file type. Only JPEG, PNG, GIF, and WebP are allowed'}, status=400)
 
+    base_key = slugify(image_file.name.rsplit('.', 1)[0]) or 'image'
+    key = base_key
+    counter = 1
+    while SiteImage.objects.filter(key=key).exists():
+        key = f"{base_key}-{counter}"
+        counter += 1
+
     try:
         site_image = SiteImage.objects.create(
             image=image_file,
             title_i18n={'pt': title, 'en': title},
             alt_text_i18n={'pt': alt_text, 'en': alt_text},
+            key=key,
             is_active=True
         )
         return JsonResponse({
