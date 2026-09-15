@@ -1,7 +1,7 @@
 ---
 name: mockup-site
-description: Generate the approved-design mockups for a site with gpt-image-2.5 — one master one-page at a time from the final briefing until the operator approves it, then every section in high resolution from that master, one at a time with a check after each. Runs after the briefing is final and before any build; the build refuses to start without an approved master.
-argument-hint: master [note] | approve <n> | section next | section <name> [note] | sections | costs
+description: Generate the approved-design mockups for a site with gpt-image-2.5 — one master one-page at a time from the final briefing until the operator approves it, then every section in high resolution from that master, one at a time with a check after each; for any section, three stacked alternatives in one render and a pick. Runs after the briefing is final and before any build; the build refuses to start without an approved master.
+argument-hint: master [note] | approve <n> | section next | section <name> [note] | section <name> options [note] | section <name> pick <k> [note] | sections | costs
 allowed-tools: Bash, Read, Write, Edit, Grep, Glob
 ---
 
@@ -191,6 +191,68 @@ in the references.
 ```
 
 Print the new path and the cost, then the same two options as `section next`.
+
+---
+
+## `section <name> options [note]`
+
+Three alternative designs of ONE section in a single render, stacked, so the operator chooses before paying for a full-resolution section. Costs the same as one master.
+
+1. `<n>` is the next free number for `docs/mockups/NN-<name>-options-v<n>.png`.
+2. Prompt file `docs/mockups/prompts/NN-<name>-options-v<n>.md`: the master-reference block from `section next`; then, when `NN-<name>.png` exists, "The second reference image is the CURRENT version of this section; each option must be clearly better than it while staying in the same design system." (otherwise the crop is the second reference); then the PROJECT block; then:
+
+```
+TASK: Show THREE ALTERNATIVE DESIGNS of the SAME section "<NAME>", STACKED
+VERTICALLY in one tall image. Each option is a complete DESKTOP section about
+1440px wide (never a mobile layout), separated by a thin cream gap. Put a
+small terracotta tag "OPÇÃO 1", "OPÇÃO 2", "OPÇÃO 3" in the top-left corner
+of each.
+
+Facts allowed (nothing else): <the section's facts from the briefing, listed>.
+
+OPÇÃO 1 — <one-line title>. <composition, photography, elements>
+OPÇÃO 2 — <one-line title>. <composition, photography, elements>
+OPÇÃO 3 — <one-line title>. <composition, photography, elements>
+
+No browser chrome, no annotations other than the three OPÇÃO tags, no device
+frame.
+```
+
+   The three options differ on one axis each unless the operator's note says otherwise: composition (immersive full-bleed / editorial with whitespace / split), photography subject, and content treatment (list / objects / grouped). Every option carries the same facts. If a note was given, it drives all three ("three versions about the wine cellar", "three versions with the terrace").
+3. Render, tall size, both references:
+
+```bash
+.venv/bin/python manage.py generate_mockup --prompt-file docs/mockups/prompts/NN-<name>-options-v<n>.md \
+  --out docs/mockups/NN-<name>-options-v<n>.png --model sunburst --size 1280x3840 --quality high --budget <site budget> \
+  --ref docs/mockups/00-master.png --ref docs/mockups/<NN-<name>.png | crops/NN-<name>-crop.png>
+```
+
+4. Print and stop:
+
+```
+Options for NN-<name>: docs/mockups/NN-<name>-options-v<n>.png   $<cost>   site total $<total>
+Pick one → /mockup-site section <name> pick <k> [what to change in it]
+Another round → /mockup-site section <name> options <note>
+```
+
+---
+
+## `section <name> pick <k> [note]`
+
+Renders the chosen option at full resolution and makes it the section's mockup.
+
+1. Crop option `<k>` (1, 2 or 3) out of the latest `NN-<name>-options-v<n>.png` by thirds — top `(k-1)/3`, bottom `k/3`, widened by 0.02 on each side that is not an image edge — into `docs/mockups/crops/NN-<name>-option<k>-crop.png`. Open the crop with the Read tool and confirm it holds exactly one option; adjust the fractions if the tag of the next option is visible.
+2. If `NN-<name>.png` exists, rename it to `NN-<name>.prev.png`.
+3. Rewrite `docs/mockups/prompts/NN-<name>.md` as in `section next`, with the second-reference sentence replaced by: "The second reference image is the chosen design of this section (labelled OPÇÃO <k>): keep its composition, palette and elements; do not render the OPÇÃO tag." When a note was given, add the `ADJUSTMENT REQUESTED BY THE OPERATOR` block with it.
+4. Render with the section's size from the type table:
+
+```bash
+.venv/bin/python manage.py generate_mockup --prompt-file docs/mockups/prompts/NN-<name>.md \
+  --out docs/mockups/NN-<name>.png --model sunburst --size <size> --quality high --budget <site budget> \
+  --ref docs/mockups/00-master.png --ref docs/mockups/crops/NN-<name>-option<k>-crop.png
+```
+
+5. Print the path and the cost, then the same two options as `section next`. When the section was already built in the site, remind the operator that `docs/design-system.md` (its `### NN-<name>` spec) and the page section must be updated next: `/extract-design` for the spec, then `/edit-site` or `/generate-site … rebuild`.
 
 ---
 

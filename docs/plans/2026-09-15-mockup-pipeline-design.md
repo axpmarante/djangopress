@@ -138,6 +138,8 @@ A `ratio:` line in the section's briefing entry overrides the table.
 
 **`section <name> [note]`** — Regenerates one section, appending the operator's note to the prompt ("less text", "show the terrace", "use the dark treatment"), with the previous render as a third reference. Keeps the previous file as `NN-<name>.prev.png`.
 
+**`section <name> options [note]`** — Three alternative designs of one section stacked in a single `1280x3840` render, each tagged OPÇÃO 1/2/3, differing on one axis each (composition, photography, content treatment) unless the note directs them; same facts in all three; references master + current render. Costs the same as one master. **`section <name> pick <k> [note]`** — crops the chosen third, rotates the current render to `.prev.png`, and renders the section at full resolution from master + that crop, with an optional adjustment note. Added after the first real run, where choosing among three stacked options proved faster than iterating one render at a time.
+
 **`sections`** — Renders every remaining section without stopping, for when the operator is confident in the master. Same prompts and sizes as `section next`.
 
 **`costs`** — Prints the site total and per-image lines from `costs.json`.
