@@ -14,10 +14,18 @@ import random
 import sys
 from pathlib import Path
 
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandError
 from PIL import Image
 
 MAX_SIDE = 160  # downscale so k-means runs on <= ~25k pixels in pure Python
+CHROMATIC_MIN = 12
+CHROMATIC_MAX = 243
+CHROMATIC_FLOOR = 0.15  # below this share of chromatic pixels, fall back to clustering everything
+
+
+def luminance(rgb):
+    r, g, b = rgb
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b
 
 
 def kmeans_palette(pixels, k, iterations=12, seed=7):
@@ -70,6 +78,8 @@ class Command(BaseCommand):
         parser.add_argument('--json', action='store_true')
 
     def handle(self, *args, **options):
+        if options['k'] < 1:
+            raise CommandError('--k must be at least 1')
         src = Path(options['src'])
         if not src.is_file():
             self.stderr.write(self.style.ERROR(f'image not found: {src}'))
@@ -78,9 +88,34 @@ class Command(BaseCommand):
             im = im.convert('RGB')
             im.thumbnail((MAX_SIDE, MAX_SIDE))
             pixels = list(im.getdata())
-        palette = kmeans_palette(pixels, k=options['k'])
-        if options['json']:
-            self.stdout.write(json.dumps([{'hex': to_hex(c), 'share': round(s, 4)} for c, s in palette]))
+
+        total = len(pixels)
+        chromatic, excluded = [], []
+        for p in pixels:
+            (chromatic if CHROMATIC_MIN <= luminance(p) <= CHROMATIC_MAX else excluded).append(p)
+
+        entries = []  # [(rgb, share, hint), ...]
+        if total and len(chromatic) < CHROMATIC_FLOOR * total:
+            # Near-white/near-black dominates the image: fall back to clustering everything.
+            for c, s in kmeans_palette(pixels, k=options['k']):
+                entries.append((c, s, None))
         else:
-            for c, s in palette:
-                self.stdout.write(f'{to_hex(c)}  {s * 100:.1f}%')
+            cluster_source = chromatic
+            for c, s in kmeans_palette(cluster_source, k=options['k']):
+                entries.append((c, s * len(cluster_source) / total, None))
+            light = [p for p in excluded if luminance(p) > CHROMATIC_MAX]
+            dark = [p for p in excluded if luminance(p) < CHROMATIC_MIN]
+            if light:
+                mean = tuple(round(sum(ch) / len(light)) for ch in zip(*light))
+                entries.append((mean, len(light) / total, 'light'))
+            if dark:
+                mean = tuple(round(sum(ch) / len(dark)) for ch in zip(*dark))
+                entries.append((mean, len(dark) / total, 'dark'))
+
+        if options['json']:
+            self.stdout.write(json.dumps([
+                {'hex': to_hex(c), 'share': round(s, 4), 'hint': hint or '-'} for c, s, hint in entries
+            ]))
+        else:
+            for c, s, hint in entries:
+                self.stdout.write(f'{to_hex(c)}  {s * 100:.1f}%  {hint or "-"}')

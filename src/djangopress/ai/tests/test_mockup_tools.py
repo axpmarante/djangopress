@@ -6,6 +6,7 @@ from io import StringIO
 from pathlib import Path
 
 from django.core.management import call_command
+from django.core.management.base import CommandError
 from django.test import SimpleTestCase
 from PIL import Image
 
@@ -77,4 +78,33 @@ class SamplePaletteTest(SimpleTestCase):
         call_command('sample_palette', str(self.src), '--k', '3', stdout=out)
         lines = out.getvalue().strip().splitlines()
         self.assertEqual(len(lines), 3)
-        self.assertRegex(lines[0], r'^#[0-9a-f]{6}\s+\d+\.\d%$')
+        self.assertRegex(lines[0], r'^#[0-9a-f]{6}\s+\d+\.\d%\s+-$')
+
+    def test_near_white_is_reported_separately_not_clustered(self):
+        src = Path(self.tmp.name) / 'near_white.png'
+        im = Image.new('RGB', (100, 20))
+        px = im.load()
+        for x in range(100):
+            for y in range(20):
+                if x < 85:
+                    px[x, y] = (255, 255, 255)
+                elif x < 95:
+                    px[x, y] = (192, 91, 62)
+                else:
+                    px[x, y] = (62, 107, 115)
+        im.save(src)
+        out = StringIO()
+        call_command('sample_palette', str(src), '--k', '2', '--json', stdout=out)
+        data = json.loads(out.getvalue())
+        light_entries = [d for d in data if d['hint'] == 'light']
+        self.assertEqual(len(light_entries), 1)
+        self.assertAlmostEqual(light_entries[0]['share'], 0.85, places=2)
+        clustered = [d for d in data if d['hint'] == '-']
+        self.assertEqual(len(clustered), 2)
+        colors = [tuple(int(d['hex'][i:i + 2], 16) for i in (1, 3, 5)) for d in clustered]
+        for target in ((192, 91, 62), (62, 107, 115)):
+            self.assertTrue(any(all(abs(a - b) <= 2 for a, b in zip(c, target)) for c in colors), target)
+
+    def test_k_below_one_is_an_error(self):
+        with self.assertRaises(CommandError):
+            call_command('sample_palette', str(self.src), '--k', '0')

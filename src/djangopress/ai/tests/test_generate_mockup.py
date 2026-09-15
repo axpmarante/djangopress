@@ -114,6 +114,16 @@ class GenerateMockupTest(SimpleTestCase):
         self.assertEqual(client.images.calls, [])
         self.assertEqual(self.costs.read_text(), '{not json')
 
+    def test_costs_file_with_wrong_shape_is_a_hard_error(self):
+        self.costs.parent.mkdir(parents=True, exist_ok=True)
+        self.costs.write_text('[]')
+        client = FakeClient()
+        with self.assertRaises(SystemExit) as ctx:
+            self._run('--prompt-file', str(self.prompt), '--out', str(self.out), '--size', '1024x1024', client=client)
+        self.assertEqual(ctx.exception.code, 1)
+        self.assertEqual(client.images.calls, [])
+        self.assertEqual(self.costs.read_text(), '[]')
+
     def test_costs_written_atomically_leaves_no_tmp(self):
         self._run('--prompt-file', str(self.prompt), '--out', str(self.out), '--size', '1024x1024')
         self.assertTrue(self.costs.exists())

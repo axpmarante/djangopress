@@ -40,9 +40,12 @@ FALLBACK_ESTIMATE_USD = 0.25  # used for the budget check before any record exis
 def load_costs(path: Path) -> dict:
     if path.exists():
         try:
-            return json.loads(path.read_text())
-        except json.JSONDecodeError as exc:
+            data = json.loads(path.read_text())
+        except json.JSONDecodeError:
             raise ValueError(f'costs file is not valid JSON: {path} — fix or move it before continuing')
+        if not (isinstance(data, dict) and 'total_usd' in data and 'records' in data):
+            raise ValueError(f'costs file is not valid JSON: {path} — fix or move it before continuing')
+        return data
     return {'total_usd': 0.0, 'records': []}
 
 
@@ -140,8 +143,10 @@ class Command(BaseCommand):
             else:
                 result = generate(prompt, size=options['size'], quality=options['quality'],
                                   model=model_id, client=client)
-        except ImageGenerationError as exc:
-            self.fail(f'image generation failed ({"retryable" if exc.retryable else "not retryable"}): {exc}')
+        except (ImageGenerationError, ValueError, FileNotFoundError) as exc:
+            if isinstance(exc, ImageGenerationError):
+                self.fail(f'image generation failed ({"retryable" if exc.retryable else "not retryable"}): {exc}')
+            self.fail(str(exc))
 
         out.parent.mkdir(parents=True, exist_ok=True)
         out.write_bytes(result.png_bytes)

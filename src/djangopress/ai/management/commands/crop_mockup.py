@@ -37,7 +37,9 @@ class Command(BaseCommand):
             self.fail(f'fractions must satisfy 0 <= top < bottom <= 1, got top={top} bottom={bottom}')
         with Image.open(src) as im:
             w, h = im.size
-            box = (0, round(h * top), w, round(h * bottom))
+            top_px = round(h * top)
+            bottom_px = max(top_px + 1, round(h * bottom))
+            box = (0, top_px, w, bottom_px)
             crop = im.crop(box)
             out.parent.mkdir(parents=True, exist_ok=True)
             crop.save(out, format='PNG')

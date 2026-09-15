@@ -1,10 +1,11 @@
 """
 OpenAI image generation for site mockups.
 
-Only two models are used: gpt-image-2.5-flare (fast, for master variants)
-and gpt-image-2.5-sunburst (precise across edits, for the promoted master
-and every section). Masters use the generations endpoint; sections use the
-edits endpoint with the master (and optionally a crop) as reference images.
+Two models are available: gpt-image-2.5-sunburst is used for every master
+and every section, one at a time, and gpt-image-2.5-flare is an explicit
+cheap option an operator can opt into per call. Masters use the generations
+endpoint; sections use the edits endpoint with the master (and optionally a
+crop) as reference images.
 
 Every result carries token usage and the cost computed from OpenAI's
 published per-million-token prices, so skills can log what a site costs.
@@ -117,10 +118,12 @@ def is_retryable(exc: Exception) -> bool:
     exc_str = str(exc).lower()
     if 'insufficient_quota' in exc_str or 'credit_balance_exhausted' in exc_str:
         return False
+    status = getattr(exc, 'status_code', None)
+    if status == 429:
+        return True
     name = exc.__class__.__name__
     if name in ('RateLimitError', 'APIConnectionError', 'APITimeoutError'):
         return True
-    status = getattr(exc, 'status_code', None)
     return isinstance(status, int) and status >= 500
 
 
@@ -191,13 +194,15 @@ def edit(prompt: str, *, references: Sequence[Path], size: str, quality: str = '
             raise FileNotFoundError(str(p))
     model_id = resolve_model(model)
     client = client or get_client()
-    files = [open(p, 'rb') for p in paths]
+    files = []
     started = time.time()
     try:
+        for p in paths:
+            files.append(open(p, 'rb'))
         response = _call_with_retries(
             client.images.edit,
             model=model_id, image=files, prompt=prompt, size=size, quality=quality,
-            input_fidelity=input_fidelity, n=1,
+            input_fidelity=input_fidelity, n=1, output_format='png',
         )
     finally:
         for f in files:

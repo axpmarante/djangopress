@@ -117,6 +117,8 @@ class ModelAndCostTest(SimpleTestCase):
         self.assertTrue(is_retryable(five))
         self.assertFalse(is_retryable(four))
         self.assertFalse(is_retryable(ValueError('x')))
+        too_many = APIStatusError('slow down'); too_many.status_code = 429
+        self.assertTrue(is_retryable(too_many))
 
     def test_quota_exhausted_is_not_retryable(self):
         from djangopress.ai.utils.openai_images import is_retryable
@@ -207,6 +209,7 @@ class EditTest(SimpleTestCase):
         self.assertEqual(kwargs['input_fidelity'], 'high')
         self.assertEqual(kwargs['size'], '1920x1088')
         self.assertEqual(kwargs['quality'], 'high')
+        self.assertEqual(kwargs['output_format'], 'png')
         self.assertEqual(result.usage.image_in, 1200)
         for f in kwargs['image']:
             self.assertTrue(f.closed)
