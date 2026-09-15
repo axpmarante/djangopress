@@ -171,3 +171,21 @@ class PageHtmlCheckTest(TestCase):
             html_content_i18n={'pt': '<nav>bad</nav>'}, is_active=False,
         )
         self.assertNotIn('forbidden-tag', check_names(run_checks()))
+
+
+class SeoShapeCheckTest(TestCase):
+    def setUp(self):
+        self.home = make_valid_site()
+
+    def test_non_object_jsonld_reports_seo_failure(self):
+        s = SiteSettings.load()
+        s.custom_head_code = '<script type="application/ld+json">"hello"</script>'
+        s.save()
+        failures = run_checks(only=['seo'])
+        self.assertTrue(any('expected an object or a list' in f['message'] for f in failures))
+
+    def test_graph_single_object_is_checked(self):
+        s = SiteSettings.load()
+        s.custom_head_code = '<script type="application/ld+json">{"@context": "https://schema.org", "@graph": {"@type": "Restaurant", "name": "X"}}</script>'
+        s.save()
+        self.assertEqual(check_names(run_checks(only=['seo'])), ['seo'])

@@ -37,7 +37,7 @@ TEMPLATE_DEFAULT_COLORS = {
 }
 
 # Internal paths that legitimately have no language prefix.
-UNPREFIXED_ALLOWED = ('/media/', '/static/', '/backoffice/', '/admin/')
+UNPREFIXED_ALLOWED = ('/media/', '/static/', '/backoffice/')
 
 JSONLD_REQUIRED = {
     'Restaurant': (
@@ -289,7 +289,19 @@ class SiteChecker:
                 self.fail('seo', f'JSON-LD does not parse: {exc}')
                 continue
             # A block may hold one object, a list of objects, or an @graph.
-            objects = data if isinstance(data, list) else data.get('@graph', [data])
+            if isinstance(data, list):
+                objects = data
+            elif isinstance(data, dict):
+                graph = data.get('@graph')
+                if graph is None:
+                    objects = [data]
+                elif isinstance(graph, list):
+                    objects = graph
+                else:
+                    objects = [graph]
+            else:
+                self.fail('seo', f'JSON-LD block is {type(data).__name__}, expected an object or a list')
+                continue
             for obj in objects:
                 if not isinstance(obj, dict):
                     continue
