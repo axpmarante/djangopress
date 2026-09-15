@@ -140,6 +140,59 @@ Notes:
 
 **Troubleshooting autoplay:** if the video shows a play button instead of playing, check (in order): (1) `mute=1` present in URL, (2) `allow` includes `autoplay`, (3) browser ad-blocker not blocking the embed, (4) video owner allows embedding (check via `https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=VIDEO_ID&format=json` — a 401 or restricted response means embedding is disabled).
 
+## Rulings Every Site Hits
+
+Verified once, paid for once. Each of these was rediscovered inside a site session before it was written down here. Do not re-derive them.
+
+**1. Internal links carry the language prefix — including the default language.**
+`i18n_patterns` prefixes every language, so `Page.get_absolute_url('pt')` is `/pt/sobre/` and the site root `/` redirects to `/pt/`. Page HTML is raw, with no `{% url %}`, so links are literal:
+
+```html
+<!-- wrong -->            <!-- right -->
+<a href="/reservas/">     <a href="/pt/reservas/">
+<a href="/#menu">         <a href="/pt/#menu">
+```
+
+In the English copy of the page the same link is `/en/reservations/`. Header and footer are Django templates and keep using `{% url 'core:page' slug='...' %}`. `manage.py check_site` reports violations under `[links]`.
+
+**2. Version before you mutate, with the model's own method.**
+`page.create_version(change_summary='...')` and `section.create_version(change_summary='...')` both exist. Never create `ContentVersion` or `PageVersion` rows by hand.
+
+**3. `SiteImage.key` must be ASCII.**
+`django.utils.text.slugify` keeps accented letters, so "Caril de Camarão" becomes `dish-caril-de-camarão` and later lookups by the ASCII form miss. Fold first:
+
+```python
+import unicodedata
+from django.utils.text import slugify
+ascii_name = unicodedata.normalize('NFKD', name).encode('ascii', 'ignore').decode()
+key = f'dish-{slugify(ascii_name)}'
+```
+
+**4. Print HTML to PDF with the bundled Chromium, not `require('playwright')`.**
+`require('playwright')` does not resolve from a temp directory (the npx cache is not on the module path). Use the binary Playwright already installed:
+
+```bash
+CHROME=$(ls -d ~/Library/Caches/ms-playwright/chromium-*/chrome-mac/Chromium.app/Contents/MacOS/Chromium | tail -1)
+"$CHROME" --headless --disable-gpu --no-pdf-header-footer --virtual-time-budget=10000 \
+  --print-to-pdf=/tmp/out.pdf /tmp/in.html
+```
+
+`--virtual-time-budget` lets Google Fonts load before the PDF is written; without it the PDF prints in a fallback font.
+
+**5. Always the site's own venv.**
+`.venv/bin/python manage.py ...`. A script under `scripts/` run directly needs the repo root on `sys.path`, so either run it with `PYTHONPATH=.` or put this at the top:
+
+```python
+import os, sys
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+```
+
+**6. No git worktrees for site work.**
+`.env` and `.venv` are git-ignored, so a fresh worktree cannot run `manage.py`. Work on a branch in the existing checkout.
+
+**7. Verification is `python manage.py check_site`.**
+It encodes every convention on this page as a named check (`sections`, `links`, `images`, `dom-parity`, `home`, `seo`, ...). Run it after every save with `--only <checks relevant to what you changed>` and in full before declaring a site done. Do not write per-site verification scripts.
+
 ## Database Structure
 
 **Page:**
@@ -391,3 +444,11 @@ rm /tmp/dp-page-*.html
 ```
 
 Same pattern for GlobalSections using `GlobalSection.html_template_i18n`.
+
+After every save, verify what you touched:
+
+```bash
+python manage.py check_site --only sections,images,anchors,links,forbidden-tag   # after a page save
+python manage.py check_site --only global-section                                # after a header/footer save
+python manage.py check_site                                                      # before saying a site is done
+```
