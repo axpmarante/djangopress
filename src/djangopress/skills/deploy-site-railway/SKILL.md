@@ -230,6 +230,15 @@ railway domain --service web
 
 Capture the `*.railway.app` URL.
 
+### Custom Domain Setup
+
+If the site has a custom domain (e.g. `example.pt`), remind the user to add **both** the root domain and the `www` subdomain as custom domains in Railway:
+
+1. `example.pt` — the main domain
+2. `www.example.pt` — so visitors using `www.` don't get a 404
+
+Railway allows multiple custom domains per service. Both need corresponding DNS records (CNAME) in the DNS provider (e.g. Cloudflare) pointing to the Railway-provided targets. If using Cloudflare, enable the orange cloud (proxy) on both records.
+
 ---
 
 ## Phase 8: Upload Local Media to GCS (if needed)
@@ -290,7 +299,7 @@ Sync commands:
 Next steps:
   - Visit the live site and verify all pages render correctly
   - Test the contact form
-  - Set up a custom domain in Railway dashboard if needed
+  - Set up a custom domain in Railway dashboard if needed (remember to add BOTH root and www)
   - Monitor logs: railway logs
 ```
 

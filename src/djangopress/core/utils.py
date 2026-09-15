@@ -30,17 +30,32 @@ def resize_and_compress_image(image_field, max_width=1920, quality=80, max_size_
     print(f"Original file size: {original_size / 1024:.2f} KB")
     print(f"Original dimensions: {img.size[0]}x{img.size[1]}px")
 
-    # Convert RGBA to RGB if necessary (for PNG with transparency)
-    print(f"Image mode: {img.mode}")
-    if img.mode in ('RGBA', 'LA', 'P'):
-        print(f"Converting {img.mode} to RGB with white background...")
-        # Create a white background
+    # Determine target format early — needed to decide whether to preserve alpha
+    filename = image_field.name
+    ext = os.path.splitext(filename)[1].lower()
+    if ext == '.png':
+        format_type = 'PNG'
+    elif ext == '.webp':
+        format_type = 'WEBP'
+    elif ext in ['.jpg', '.jpeg']:
+        format_type = 'JPEG'
+    else:
+        format_type = 'JPEG'
+        filename = os.path.splitext(filename)[0] + '.jpg'
+    preserves_alpha = format_type in ('PNG', 'WEBP')
+
+    # Convert based on mode + target format
+    print(f"Image mode: {img.mode} -> target format: {format_type}")
+    if img.mode == 'P':
+        # Palette mode: promote to RGBA to handle transparency correctly
+        img = img.convert('RGBA')
+    if img.mode in ('RGBA', 'LA') and not preserves_alpha:
+        # Flatten onto white background only when output can't carry alpha (JPEG)
+        print(f"Flattening {img.mode} to RGB with white background...")
         background = Image.new('RGB', img.size, (255, 255, 255))
-        if img.mode == 'P':
-            img = img.convert('RGBA')
-        background.paste(img, mask=img.split()[-1] if img.mode == 'RGBA' else None)
+        background.paste(img, mask=img.split()[-1])
         img = background
-    elif img.mode != 'RGB':
+    elif img.mode not in ('RGB', 'RGBA') and img.mode != 'LA':
         print(f"Converting {img.mode} to RGB...")
         img = img.convert('RGB')
 
@@ -60,22 +75,6 @@ def resize_and_compress_image(image_field, max_width=1920, quality=80, max_size_
 
     # Prepare output buffer
     output = BytesIO()
-
-    # Get the file extension
-    filename = image_field.name
-    ext = os.path.splitext(filename)[1].lower()
-
-    # Determine format (default to JPEG for better compression)
-    if ext in ['.jpg', '.jpeg']:
-        format_type = 'JPEG'
-    elif ext == '.png':
-        format_type = 'PNG'
-    elif ext == '.webp':
-        format_type = 'WEBP'
-    else:
-        format_type = 'JPEG'
-        # Change extension to .jpg for other formats
-        filename = os.path.splitext(filename)[0] + '.jpg'
 
     # Save with initial quality
     current_quality = quality

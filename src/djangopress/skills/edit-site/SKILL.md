@@ -176,10 +176,10 @@ for lang, html in page.html_content_i18n.items():
 
 ```bash
 python manage.py shell -c "
-from djangopress.core.models import Page, ContentVersion
+from djangopress.core.models import Page
 
 page = Page.objects.get(id=<PAGE_ID>)
-ContentVersion.create_for(page, change_summary='Before edit-site update')
+page.create_version(change_summary='Before edit-site update')
 print('Version created')
 "
 ```
@@ -249,10 +249,10 @@ for lang, html in page.html_content_i18n.items():
 
 ```bash
 python manage.py shell -c "
-from djangopress.core.models import Page, ContentVersion
+from djangopress.core.models import Page
 
 page = Page.objects.get(id=<PAGE_ID>)
-ContentVersion.create_for(page, change_summary='Before adding new section')
+page.create_version(change_summary='Before adding new section')
 print('Version created')
 "
 ```
@@ -579,10 +579,10 @@ For each non-default language, write a translated version to `/tmp/dp-page-<PAGE
 
 ```bash
 python manage.py shell -c "
-from djangopress.core.models import Page, ContentVersion
+from djangopress.core.models import Page
 
 page = Page.objects.get(id=<PAGE_ID>)
-ContentVersion.create_for(page, change_summary='Adding translations')
+page.create_version(change_summary='Adding translations')
 
 for lang in ['pt', 'en']:
     with open(f'/tmp/dp-page-<PAGE_ID>-{lang}.html', 'r') as f:
@@ -675,10 +675,10 @@ After resolving placeholders, **remove** the `data-image-name` and `data-image-p
 
 ```bash
 python manage.py shell -c "
-from djangopress.core.models import Page, SiteImage, ContentVersion
+from djangopress.core.models import Page, SiteImage
 
 page = Page.objects.get(id=<PAGE_ID>)
-ContentVersion.create_for(page, change_summary='Replacing image placeholders')
+page.create_version(change_summary='Replacing image placeholders')
 
 # Build mapping of placeholder names to real URLs
 images = {img.key: img.image.url for img in SiteImage.objects.filter(is_active=True) if img.key}

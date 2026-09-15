@@ -1,0 +1,76 @@
+/* dp-marquee — auto-scrolling row of items (images, cards, logos).
+ *
+ * HTML:
+ *   <div class="dp-marquee" data-marquee-direction="ltr" data-marquee-speed="60">
+ *     <div class="dp-marquee-track">
+ *       <img src="..." alt="..." />
+ *       ...
+ *     </div>
+ *   </div>
+ *
+ * Wrap multiple marquees in .dp-marquee-group to pause them together on hover.
+ *
+ * Attributes (on .dp-marquee):
+ *   data-marquee-direction  "ltr" (default) | "rtl"
+ *   data-marquee-speed      seconds per cycle (default: 60)
+ *   data-marquee-fade       "false" disables the edge fade mask
+ *   data-marquee-pause      "false" disables pause-on-hover
+ *
+ * marquee.js clones the .dp-marquee-track children once (marking clones with
+ * aria-hidden="true" data-editor-skip="true") so translateX(-50%) loops seamlessly.
+ */
+
+.dp-marquee {
+    overflow: hidden;
+    position: relative;
+}
+
+.dp-marquee:not([data-marquee-fade="false"]) {
+    -webkit-mask-image: linear-gradient(to right, transparent 0%, #000 6%, #000 94%, transparent 100%);
+            mask-image: linear-gradient(to right, transparent 0%, #000 6%, #000 94%, transparent 100%);
+}
+
+.dp-marquee-track {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 1rem;
+    width: max-content;
+    animation: dp-marquee-ltr var(--dp-marquee-duration, 60s) linear infinite;
+}
+
+@media (min-width: 768px) {
+    .dp-marquee-track { gap: 1.5rem; }
+}
+
+.dp-marquee-track > * { flex-shrink: 0; }
+
+.dp-marquee[data-marquee-direction="rtl"] .dp-marquee-track {
+    animation-name: dp-marquee-rtl;
+}
+
+@keyframes dp-marquee-ltr {
+    from { transform: translateX(0); }
+    to   { transform: translateX(-50%); }
+}
+
+@keyframes dp-marquee-rtl {
+    from { transform: translateX(-50%); }
+    to   { transform: translateX(0); }
+}
+
+.dp-marquee:hover .dp-marquee-track,
+.dp-marquee-group:hover .dp-marquee .dp-marquee-track {
+    animation-play-state: paused;
+}
+
+.dp-marquee[data-marquee-pause="false"]:hover .dp-marquee-track,
+.dp-marquee-group[data-marquee-pause="false"]:hover .dp-marquee .dp-marquee-track {
+    animation-play-state: running;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .dp-marquee-track {
+        animation: none;
+        transform: translateX(0);
+    }
+}

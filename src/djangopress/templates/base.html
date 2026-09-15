@@ -26,6 +26,7 @@
 
     <!-- Custom site styles -->
     <link href="{% static 'css/lightbox.css' %}" rel="stylesheet">
+    <link href="{% static 'css/marquee.css' %}" rel="stylesheet">
     {% if edit_mode == 'v2' %}
     <link href="{% static 'editor_v2/css/editor.css' %}?v=20" rel="stylesheet">
     {% endif %}
@@ -108,6 +109,7 @@
     </script>
 
     <script src="{% static 'js/lightbox.js' %}"></script>
+    <script src="{% static 'js/marquee.js' %}"></script>
     {% if edit_mode == 'v2' %}
     <script>
       window.EDITOR_CONFIG = {
@@ -121,7 +123,7 @@
         apiBase: '/editor-v2/api',
       };
     </script>
-    <script type="module" src="{% static 'editor_v2/js/editor.js' %}?v=33"></script>
+    <script type="module" src="{% static 'editor_v2/js/editor.js' %}?v=34"></script>
     {% endif %}
     {% block extra_js %}{% endblock %}
     {% include "partials/cookie_consent.html" %}

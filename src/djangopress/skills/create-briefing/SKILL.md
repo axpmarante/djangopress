@@ -430,12 +430,46 @@ If the user wants changes, edit the file and show it again. Repeat until they're
 
 ## Phase 5: Next Steps
 
-Once the briefing is finalized, tell the user:
+Once the briefing is finalized, confirm to the user that it was saved:
 
 ```
 Briefing saved to `briefings/<slug>.md`
+```
 
-Next steps:
+Then ask whether to proceed straight into site generation. The natural next step after a briefing is generation — don't make the user copy-paste a command if they're ready to go now.
+
+```
+AskUserQuestion:
+Question: "Avançar agora com a geração do site?"
+Options:
+- "Sim — gerar agora" (Recommended) — invokes the generate-site skill with this briefing
+- "Não — só preview (dry-run)" — runs `python manage.py generate_site briefings/<slug>.md --dry-run` so the user can inspect the plan
+- "Não — fico por aqui" — stops; show the commands for later reference
+```
+
+### Branch on the answer
+
+**If "Sim — gerar agora":** Invoke the `generate-site` skill via the Skill tool, passing the briefing path as the argument:
+
+```
+Skill: generate-site
+args: briefings/<slug>.md
+```
+
+The generate-site skill takes over from here and runs the full pipeline (Settings → Pages → Menu → Header → Footer → Translate). Remember the design-first / translate-last rule it enforces: only the default language is generated until the user has signed off on the design.
+
+**If "Não — só preview (dry-run)":** Run the dry-run command and show the output:
+
+```bash
+python manage.py generate_site briefings/<slug>.md --dry-run
+```
+
+After showing the plan, ask again if the user wants to proceed with generation.
+
+**If "Não — fico por aqui":** Show the manual commands so the user can return to this later:
+
+```
+When you're ready to generate, run any of these:
 
   # Preview what will be generated:
   python manage.py generate_site briefings/<slug>.md --dry-run

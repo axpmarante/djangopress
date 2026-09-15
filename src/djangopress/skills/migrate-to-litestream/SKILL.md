@@ -268,14 +268,10 @@ YAML
 echo "[entrypoint] Litestream config written (bucket=$BUCKET path=$REPLICA_PATH)"
 
 echo "[entrypoint] Attempting database restore from GCS..."
-if [ ! -f "$DB_PATH" ]; then
-    if litestream restore -o "$DB_PATH" "gcs://${BUCKET}/${REPLICA_PATH}" 2>/dev/null; then
-        echo "[entrypoint] Database restored from GCS"
-    else
-        echo "[entrypoint] No existing replica found — starting fresh"
-    fi
+if litestream restore -o "$DB_PATH" "gcs://${BUCKET}/${REPLICA_PATH}" 2>/dev/null; then
+    echo "[entrypoint] Database restored from GCS"
 else
-    echo "[entrypoint] Database already exists — skipping restore"
+    echo "[entrypoint] No existing replica found — starting fresh"
 fi
 
 sqlite3 "$DB_PATH" "PRAGMA journal_mode=WAL;" 2>/dev/null || true
@@ -353,11 +349,18 @@ DB_PATH="db.sqlite3"
 BUCKET="gs://<GS_BUCKET_NAME>"
 PROD_PATH="<SITE_SLUG>/db/prod"
 
+LITESTREAM="${LITESTREAM:-$(command -v litestream 2>/dev/null || echo "$HOME/bin/litestream")}"
+
 echo "=== Pull Prod → Dev ==="
 echo ""
 
 if [ -z "$GOOGLE_APPLICATION_CREDENTIALS" ]; then
     echo "ERROR: GOOGLE_APPLICATION_CREDENTIALS not set"
+    exit 1
+fi
+
+if [ ! -x "$LITESTREAM" ]; then
+    echo "ERROR: litestream binary not found (tried PATH and ~/bin/litestream)"
     exit 1
 fi
 
@@ -380,7 +383,7 @@ fi
 rm -f "$DB_PATH" "${DB_PATH}-wal" "${DB_PATH}-shm"
 
 echo "4. Restoring from prod replica..."
-litestream restore -o "$DB_PATH" "gcs://<GS_BUCKET_NAME>/$PROD_PATH"
+"$LITESTREAM" restore -o "$DB_PATH" "gcs://<GS_BUCKET_NAME>/$PROD_PATH"
 
 echo "5. Setting WAL mode..."
 sqlite3 "$DB_PATH" "PRAGMA journal_mode=WAL;"

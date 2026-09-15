@@ -71,6 +71,36 @@ You can also opt an `<img>` (or any wrapper) out of the editor with `data-editor
 </a>
 ```
 
+**Marquee pattern (`dp-marquee`):** Auto-scrolling row of items (images, logos, cards). The user lists originals; `marquee.js` clones the track contents once at runtime — marking clones with `aria-hidden="true"` + `data-editor-skip="true"` — so `translateX(-50%)` loops seamlessly. The editor filters those clones from selectors and the Images sidebar, so only originals appear and `nth-child` paths stay stable.
+
+```html
+<div class="dp-marquee-group space-y-4 md:space-y-6">   <!-- optional wrapper: hovering any row pauses all -->
+    <div class="dp-marquee" data-marquee-direction="ltr" data-marquee-speed="70">
+        <div class="dp-marquee-track">
+            <img src="..." alt="..." class="h-48 md:h-72 w-auto object-cover" />
+            <img src="..." alt="..." class="h-48 md:h-72 w-auto object-cover" />
+            <!-- list as many originals as you want; clones are added by JS -->
+        </div>
+    </div>
+    <div class="dp-marquee" data-marquee-direction="rtl" data-marquee-speed="60">
+        <div class="dp-marquee-track">
+            <img src="..." alt="..." class="h-48 md:h-72 w-auto object-cover" />
+        </div>
+    </div>
+</div>
+```
+
+Attributes on `.dp-marquee`:
+- `data-marquee-direction` — `ltr` (default) or `rtl`
+- `data-marquee-speed` — seconds per cycle (default: `60`; bigger number = slower)
+- `data-marquee-fade` — `false` disables the edge fade mask (default: enabled, fades to transparent)
+- `data-marquee-pause` — `false` disables pause-on-hover (default: pauses)
+
+Notes:
+- The fade is a CSS `mask-image`, so it goes to transparent regardless of background colour — no need for matching gradient overlays.
+- For a seamless loop the originals should ideally be wide enough to fill the viewport on their own; if the strip is too narrow there will be empty space at the edges of the cycle.
+- Sizing the items is up to you (use Tailwind on each `<img>` or child). The track is `display: flex` with a `gap` of 1rem (mobile) / 1.5rem (md+).
+
 **YouTube video background pattern:** To use a YouTube video as a full-bleed hero background (autoplaying, muted, looping, no controls), embed via `<iframe>` with specific URL params + `allow` attribute + a sizing trick that mimics `object-fit: cover`:
 
 ```html

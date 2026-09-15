@@ -27,14 +27,10 @@ YAML
 echo "[entrypoint] Litestream config written (bucket=$BUCKET path=$REPLICA_PATH)"
 
 echo "[entrypoint] Attempting database restore from GCS..."
-if [ ! -f "$DB_PATH" ]; then
-    if litestream restore -o "$DB_PATH" "gcs://${BUCKET}/${REPLICA_PATH}" 2>/dev/null; then
-        echo "[entrypoint] Database restored from GCS"
-    else
-        echo "[entrypoint] No existing replica found — starting fresh"
-    fi
+if litestream restore -o "$DB_PATH" "gcs://${BUCKET}/${REPLICA_PATH}" 2>/dev/null; then
+    echo "[entrypoint] Database restored from GCS"
 else
-    echo "[entrypoint] Database already exists — skipping restore"
+    echo "[entrypoint] No existing replica found — starting fresh"
 fi
 
 sqlite3 "$DB_PATH" "PRAGMA journal_mode=WAL;" 2>/dev/null || true

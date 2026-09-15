@@ -7,16 +7,20 @@ export function $$(selector, context = document) {
 }
 
 /**
- * Check if an element was injected by Splide at runtime and doesn't exist
- * in the stored HTML. Covers: cloned slides, arrow buttons, pagination,
- * and screen-reader-only elements.
+ * Check if an element was injected at runtime and doesn't exist in the
+ * stored HTML. Covers Splide's cloned slides, arrow buttons, pagination,
+ * and screen-reader-only elements; plus any element opted out via
+ * data-editor-skip="true" (used by dp-marquee for its duplicated track
+ * items and available to other runtime-injected components).
  */
-function isSplideInjected(el) {
+function isRuntimeInjected(el) {
     const cls = el.classList;
-    return cls.contains('splide__slide--clone')
+    if (cls.contains('splide__slide--clone')
         || cls.contains('splide__arrows')
         || cls.contains('splide__pagination')
-        || cls.contains('splide__sr');
+        || cls.contains('splide__sr')) return true;
+    if (el.getAttribute && el.getAttribute('data-editor-skip') === 'true') return true;
+    return false;
 }
 
 /**
@@ -35,11 +39,11 @@ export function getCssSelector(el) {
     while (current && current !== section) {
         const parent = current.parentElement;
         if (!parent) break;
-        // Exclude elements injected by Splide at runtime (cloned slides,
-        // arrows, pagination, sr-only) so nth-child indices match the
-        // original HTML stored in the database.
+        // Exclude elements injected at runtime (Splide clones/arrows,
+        // dp-marquee clones, or any [data-editor-skip] opt-out) so
+        // nth-child indices match the original HTML stored in the database.
         const siblings = Array.from(parent.children)
-            .filter(s => !isSplideInjected(s));
+            .filter(s => !isRuntimeInjected(s));
         const index = siblings.indexOf(current) + 1;
         parts.unshift(`${current.tagName.toLowerCase()}:nth-child(${index})`);
         current = parent;
