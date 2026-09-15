@@ -120,7 +120,7 @@ Skills are symlinked from the djangopress package to `.claude/skills/` in each c
 | `/create-briefing` | `/create-briefing https://client.pt docs/brief.pdf` | Intake: researches the client without asking, writes a complete draft briefing plus a short list of questions with defaults, finalizes from the answers. |
 | `/generate-site` | `/generate-site briefings/my-client.md` | Unattended build in the default language: settings, design guide, pages, header, footer, menu, SEO, verified by `check_site` and screenshots. Re-run on a built site for the translation pass. |
 | `/add-app` | `/add-app properties` | Scaffolds a decoupled feature app (models, views, templates, URLs). |
-| `/update-site` | `/update-site` | Update site content — pages, sections, elements, images, settings, header/footer, menu, forms. Auto-loaded for content changes. |
+| `/edit-site` | `/edit-site <what to change>` | Edit site content — pages, sections, header/footer, menu, forms, settings. Claude Code writes the HTML directly. |
 | `/update-djangopress` | `/update-djangopress` | Update to latest djangopress version — pip upgrade, migrations, skill refresh, optional Railway redeploy. |
 | `/deploy-site-railway` | `/deploy-site-railway my-project` | Deploy to Railway with SQLite + Litestream + GCS. |
 | `/sync-data` | `/sync-data push` | Push/pull DB between local and production via Litestream + GCS. |

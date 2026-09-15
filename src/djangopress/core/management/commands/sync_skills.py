@@ -3,10 +3,11 @@ sync_skills management command — sync Claude Code skills from djangopress pack
 
 Creates symlinks in the child project's .claude/skills/ directory pointing to the
 skills in the installed djangopress package. Also generates a CLAUDE.md with
-project-specific instructions.
+project-specific instructions, and copies the packaged briefings/TEMPLATE.md
+into the child project's briefings/ directory (always overwritten).
 
 Usage:
-    python manage.py sync_skills          # sync all skills + CLAUDE.md
+    python manage.py sync_skills          # sync all skills + CLAUDE.md + briefings/TEMPLATE.md
     python manage.py sync_skills --list   # list available skills
     python manage.py sync_skills --clean  # remove stale skills not in package
 """
@@ -155,6 +156,18 @@ class Command(BaseCommand):
                 os.symlink(source, target)
                 created += 1
                 self.stdout.write(f'  Created: {skill_name}')
+
+        # Sync the briefing template (always overwritten — it's a template)
+        package_template = Path(djangopress.__file__).resolve().parent / 'briefings' / 'TEMPLATE.md'
+        if package_template.is_file():
+            project_briefings_dir = project_dir / 'briefings'
+            project_briefings_dir.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(package_template, project_briefings_dir / 'TEMPLATE.md')
+            self.stdout.write('  Synced: briefings/TEMPLATE.md')
+        else:
+            self.stdout.write(self.style.WARNING(
+                f'  Warning: packaged briefings/TEMPLATE.md not found at {package_template}'
+            ))
 
         # Clean stale skills
         removed = 0
