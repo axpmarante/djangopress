@@ -166,13 +166,13 @@ Show a short summary (pages, languages, design direction in one line, integratio
 
 ```
 AskUserQuestion:
-Question: "Briefing finalizado. Avançar com o build?"
+Question: "Briefing finalizado. Gerar o primeiro master one-page?"
 Options:
-- "Sim — /generate-site briefings/<slug>.md" (Recommended)
+- "Sim — /mockup-site master" (Recommended)
 - "Não — fico por aqui"
 ```
 
-If yes, invoke the `generate-site` skill with `briefings/<slug>.md`. Non-interactively, print the command and stop.
+If yes, invoke the `mockup-site` skill with `master`. Non-interactively, print `Next: /mockup-site master` and stop. The build comes only after `/mockup-site approve <n>`, the sections and `/extract-design`, never directly from here.
 
 ---
 

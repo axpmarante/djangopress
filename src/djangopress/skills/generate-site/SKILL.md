@@ -18,7 +18,8 @@ Build and iterate in the default language only. Other languages stay absent from
 ## Two entry points
 
 - **Fresh site** (no pages yet): run Phases 0–8. Stop after Phase 8.
-- **Built site, translation requested** (the operator asked for translation, or ran this skill again on a site that already passes `check_site` in the default language): run Phase 9 only.
+- **Rebuild from mockups** (the site already has pages and `$ARGUMENTS` contains the word `rebuild`): run Phases 0–8, but in Phases 4–6 update the existing page, header and footer rows by slug/key instead of creating new ones. Call `create_version()` before every overwrite. Write only the default-language key and **delete the other language keys** from every `*_i18n` field you rewrite, so stale translations cannot fail `dom-parity`; the report tells the operator to re-run the translation pass.
+- **Built site, translation requested** (pages exist, no `rebuild`, the operator asked for translation or the site passes `check_site` in the default language): run Phase 9 only.
 
 Decide by reading the state in Phase 0.
 
@@ -34,6 +35,24 @@ test -f .env && echo "ENV OK" || echo "ENV MISSING"
 ```
 
 On a fresh site this reports many failures by design; on an existing site it will also list many `[links]` lines because engine-generated content never carried the language prefix. Neither is breakage; both are the to-do list.
+
+### Mandatory mockup gate
+
+```bash
+test -f docs/mockups/00-master.png && echo "MASTER OK" || echo "MASTER MISSING"
+test -f docs/design-system.md && echo "DESIGN SYSTEM OK" || echo "DESIGN SYSTEM MISSING"
+```
+
+If either is missing, stop here and print:
+
+```
+This build needs an approved mockup and an extracted design system.
+  /mockup-site master         → look → approve <n>, or master <note> for another
+  /mockup-site section next   → one section at a time → /extract-design
+Then run /generate-site again.
+```
+
+There is no flag to bypass this gate. When both exist, read `docs/design-system.md` in full and list `docs/mockups/*.png`; you will open each section image while writing its HTML.
 
 Read the briefing, the audit (`briefings/<slug>-audit.md`) if it exists, and the menu JSON if it exists. Then read the current state:
 
@@ -72,18 +91,18 @@ Verify: `.venv/bin/python manage.py check_site --only settings` may still report
 
 ## Phase 2: Design guide
 
-Write `SiteSettings.design_guide` **now, before any page**, from Design Preferences. It is the contract every page follows, including the home page. Markdown, 40–80 lines:
+The design guide is the `## Tokens` part of `docs/design-system.md`, already written to `SiteSettings.design_guide` by `extract-design`. Confirm it is there (`len(s.design_guide) > 0` in the Phase 0 state dump); if it is empty, copy it now:
 
-- Palette with roles and the exact Tailwind arbitrary-value classes you will use (`bg-[#F5F0E8]`, `text-[#2B2520]`, ...).
-- Type: heading font classes, body font, the size scale for h1/h2/h3 at mobile and desktop.
-- Layout signature: the grid pattern and how it collapses on mobile.
-- Section rhythm: vertical padding, alternation of backgrounds, where the dark block sits.
-- Components: button primary/secondary, card, price line, badge, section eyebrow.
-- Motif: how and where the decorative device appears.
-- Image rules from the Images constraints (max render width per group, `srcset`, no full-bleed if the inventory forbids it).
-- Avoid list, copied.
+```bash
+.venv/bin/python manage.py shell -c "
+from djangopress.core.models import SiteSettings
+s = SiteSettings.load()
+s.design_guide = open('docs/design-system.md').read().split('## Sections')[0]
+s.save(); print(len(s.design_guide), 'chars')
+"
+```
 
-Save it with the `edit-site` settings pattern (`s.design_guide = open('/tmp/dp-design-guide.md').read()`).
+Do not derive a design guide from prose when a design system exists.
 
 ---
 
@@ -97,7 +116,11 @@ With `unsplash`, `ai` or `skip`, pages use `https://placehold.co/WxH?text=Label`
 
 ## Phase 4: Home page
 
-Write the home page HTML in the default language to `/tmp/dp-page-new-<lang>.html`, following the design guide and the Pages section of the briefing. Then save it with `edit-site` → *Create Page* (steps 4, 6: create, then set as homepage), including `meta_title_i18n` and `meta_description_i18n`. The `edit-site` recipes loop over every enabled language; in a build write only the default-language key of each `*_i18n` field.
+Write the home page HTML in the default language to `/tmp/dp-page-new-<lang>.html`, following the design guide and the Pages section of the briefing.
+
+Build the page section by section in the order of `## Sections` in `docs/design-system.md`. For each section, open its image `docs/mockups/NN-<name>.png` with the Read tool and its `### NN-<name>` spec, then write that `<section data-section="<name>" id="<name>">` to match the image's layout, palette, type and rhythm — and take every word, number and link from the briefing, never from the image. The section name in the HTML is the `<name>` from the file name.
+
+Then save it with `edit-site` → *Create Page* (steps 4, 6: create, then set as homepage), including `meta_title_i18n` and `meta_description_i18n`. The `edit-site` recipes loop over every enabled language; in a build write only the default-language key of each `*_i18n` field.
 
 Internal links are literal with the language prefix: `/pt/reservas/`, `/pt/#menu` (`Rulings` §1).
 
@@ -113,7 +136,7 @@ Placeholder images are the only acceptable remaining `[images]` lines, and only 
 
 ## Phase 5: Remaining pages
 
-For every other page in the briefing, the same as Phase 4, **without** the homepage step. Pages are independent once the design guide and the home page exist, so you may dispatch them in parallel with the `Agent` tool, one agent per page, each given: the briefing path, the design guide (read it from settings), the home page HTML as the style reference, and the image map. Agents save and report the page id only; they do not run `check_site` (it evaluates the whole site and would chase each other's half-written pages). When all agents have reported, run the Phase 4 `check_site --only` line once yourself and fix what it lists.
+For every other page in the briefing, the same as Phase 4, **without** the homepage step. Pages are independent once the design guide and the home page exist, so you may dispatch them in parallel with the `Agent` tool, one agent per page, each given: the briefing path, the design guide (read it from settings), the home page HTML as the style reference, the image map, and the section images and specs for its page (or, for inner pages without mockups, the home page's images as the style reference). Agents save and report the page id only; they do not run `check_site` (it evaluates the whole site and would chase each other's half-written pages). When all agents have reported, run the Phase 4 `check_site --only` line once yourself and fix what it lists.
 
 Sequential is fine for three pages or fewer.
 
@@ -182,6 +205,7 @@ Read each PNG. Check this list, and only this list, per screenshot:
 5. Primary CTA visible above the fold at 390 and 1440.
 6. Dark or inverted block reads as intentional.
 7. Footer complete and not covered by a fixed element.
+8. Each section reads as the same design as its mockup in docs/mockups/ — same layout, palette, type and rhythm; content differs by design.
 
 Fix what fails (edit the page HTML, save, re-run `check_site --only ...`), re-capture the affected pages, and re-check. At most three rounds. Whatever remains goes to the report as an open item.
 
@@ -195,6 +219,7 @@ Write `docs/build-report.md`:
 ## Result
 check_site: OK | FAIL (<n> remaining, listed below)
 Pages: <n> in <lang>. Header, footer, menu: done. JSON-LD: <type>.
+Mockups used: docs/mockups/00-master.png + <n> section images; design system: docs/design-system.md
 
 ## Pages
 | Page | URL | Sections |
@@ -214,6 +239,7 @@ docs/screenshots/<slug>-<width>.png ...
 - Refine: /edit-site <what to change>
 - When design is signed off: /generate-site briefings/<slug>.md  → runs the translation pass
 - Then: /deploy-site-railway
+- (rebuild only) Translation is stale: run /generate-site briefings/<slug>.md for the translation pass after review.
 ```
 
 ### 8e. Commit
