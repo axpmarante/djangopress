@@ -47,7 +47,8 @@ Record the classification next to the choice so a reviewer can disagree with the
 | surface | #… | (Tailwind arbitrary value in HTML) |
 | text | #… | text_color |
 | headings | #… | heading_color |
-| accent | #… | primary_color, primary_button_bg |
+| accent (CTAs, prices) | #… | primary_color, primary_button_bg |
+| accent (secondary highlight) | #… | accent_color |
 | secondary | #… | secondary_color |
 | dark block | #… | (Tailwind arbitrary value in HTML) |
 
@@ -68,7 +69,8 @@ Record the classification next to the choice so a reviewer can disagree with the
 
 ## Sections
 
-### 01-hero (docs/mockups/01-hero.png)
+### 01-hero
+Image: docs/mockups/01-hero.png
 - Layout: <grid / split / full-bleed>, image ratio <w:h>, image max width <px>
 - Background: <token>
 - Elements in order: <eyebrow, h1, lead, primary CTA, secondary CTA, badge…>
@@ -76,12 +78,13 @@ Record the classification next to the choice so a reviewer can disagree with the
 - Notes: <anything the build must reproduce, e.g. offset, overlay, divider>
 
 ### 02-… (one per rendered section)
+Image: docs/mockups/02-….png
 ```
 
 ## 4. Write back to the briefing
 
 - `## Design Preferences`: replace the bullets with the token values (hex, font names, radius, layout signature, motif), keep the `Avoid` and `References` bullets and the `Reference mockup` line.
-- `## Pages` → Home: rewrite the section list in the master's order; each entry `N. <name> — <purpose> — spec: docs/design-system.md#NN-<name>`. Facts (dish names, prices, hours, contacts) stay exactly as they were.
+- `## Pages` → Home: rewrite the section list in the master's order; each entry `N. <name> — <purpose> — spec: docs/design-system.md → section NN-<name>`. Facts (dish names, prices, hours, contacts) stay exactly as they were.
 
 ## 5. Write SiteSettings
 
@@ -103,7 +106,7 @@ s.save(); print('design system written')
 ## 6. Commit and report
 
 ```bash
-git add docs/design-system.md briefings/ docs/mockups/prompts docs/mockups/costs.json docs/mockups/.gitignore
+git add docs/design-system.md briefings/ docs/mockups/00-master.png docs/mockups/prompts docs/mockups/costs.json docs/mockups/.gitignore
 git commit -m "Design system extracted from approved mockups"
 ```
 

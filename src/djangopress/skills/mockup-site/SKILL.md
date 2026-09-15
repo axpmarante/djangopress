@@ -13,13 +13,13 @@ The argument is: `$ARGUMENTS`. First word is the mode.
 
 **Rhythm.** Each mode renders at most one image and stops so the operator can look. The next call continues. The operator is present during this phase by design.
 
-All commands run through the site venv: `.venv/bin/python manage.py …`. Every prompt is written to `docs/mockups/prompts/` before the call so the operator can read, edit and re-run it. Every render uses `--model sunburst --quality high` unless the operator's argument contains the word `flare`.
+All commands run through the site venv: `.venv/bin/python manage.py …`. Every prompt is written to `docs/mockups/prompts/` before the call so the operator can read, edit and re-run it. Every render uses `--model sunburst --quality high` and `--budget <site budget>`. The site budget defaults to 5 (USD). Two optional trailing tokens on any mode's argument are stripped before anything reaches a prompt: `budget=<n>` raises the site budget for this and later calls (record it in `docs/mockups/budget.txt`, which is read first when present), and `model=flare` renders this call with the cheap model.
 
 ## Setup (every mode)
 
 ```bash
 mkdir -p docs/mockups/prompts docs/mockups/crops
-[ -f docs/mockups/.gitignore ] || printf '*.png\ncrops/\n' > docs/mockups/.gitignore
+[ -f docs/mockups/.gitignore ] || printf '*.png\n!00-master.png\ncrops/\n' > docs/mockups/.gitignore
 ```
 
 Read the briefing (`briefings/<slug>.md`, the only `.md` in `briefings/` besides `TEMPLATE.md` and `*-audit.md`). If it still has an `## Open Questions` section, stop: the briefing is not final; the operator finishes `/create-briefing` first. Read `briefings/<slug>-menu.json` if it exists, and `docs/mockups/costs.json` if it exists.
@@ -72,11 +72,11 @@ and pass the previous master as reference.
 
 ```bash
 .venv/bin/python manage.py generate_mockup --prompt-file docs/mockups/prompts/00-master-v<n>.md \
-  --out docs/mockups/master-v<n>.png --model sunburst --size 1280x3840 --quality high \
+  --out docs/mockups/master-v<n>.png --model sunburst --size 1280x3840 --quality high --budget <site budget> \
   [--ref docs/mockups/master-v<n-1>.png]
 ```
 
-**Long pages.** When the section list has more than 9 entries, render two halves: `--out docs/mockups/master-v<n>-top.png` with sections 1..⌈N/2⌉ and the line `SHOW ONLY THE TOP HALF OF THE PAGE, ending mid-page`, then `master-v<n>-bottom.png` with the remaining sections, `--ref docs/mockups/master-v<n>-top.png`, and the line `CONTINUE THIS EXACT WEBSITE from where the reference ends; the header is NOT repeated; end with the footer`. Both halves keep `1280x3840`.
+**Long pages.** When the numbered SECTIONS list has more than 9 entries (header and footer included), render two halves: `--out docs/mockups/master-v<n>-top.png` with sections 1..⌈N/2⌉ and the line `SHOW ONLY THE TOP HALF OF THE PAGE, ending mid-page`, then `master-v<n>-bottom.png` with the remaining sections, `--ref docs/mockups/master-v<n>-top.png`, and the line `CONTINUE THIS EXACT WEBSITE from where the reference ends; the header is NOT repeated; end with the footer`. Both halves keep `1280x3840`.
 
 Print and stop:
 
@@ -90,7 +90,7 @@ Or ask for another: /mockup-site master <what to change>
 
 ## `approve <n>`
 
-No API call. Copy `master-v<n>.png` to `docs/mockups/00-master.png` (for a two-half master, copy `-top` to `00-master.png` and `-bottom` to `00-master-bottom.png`). In the briefing, under `## Design Preferences`, add or replace the line `- **Reference mockup**: docs/mockups/00-master.png (v<n>)`. Print `Approved master v<n>. Next: /mockup-site section next` and stop.
+No API call. Copy `master-v<n>.png` to `docs/mockups/00-master.png` (for a two-half master, copy `-top` to `00-master.png` and `-bottom` to `00-master-bottom.png`). In the briefing, under `## Design Preferences`, add or replace the line `- **Reference mockup**: docs/mockups/00-master.png (v<n>)`. `00-master.png` is committed by `extract-design`; it is the design record and must survive a fresh clone, unlike the sections, which are regenerable. Print `Approved master v<n>. Next: /mockup-site section next` and stop.
 
 ---
 
@@ -167,7 +167,7 @@ Size by type (a `ratio:` line in the section's briefing entry overrides):
 
 ```bash
 .venv/bin/python manage.py generate_mockup --prompt-file docs/mockups/prompts/NN-<name>.md \
-  --out docs/mockups/NN-<name>.png --model sunburst --size <size> --quality high \
+  --out docs/mockups/NN-<name>.png --model sunburst --size <size> --quality high --budget <site budget> \
   --ref docs/mockups/00-master.png [--ref docs/mockups/crops/NN-<name>.png]
 ```
 
@@ -183,14 +183,14 @@ Change it → /mockup-site section <name> <what to change>
 
 ## `section <name> [note]`
 
-Regenerates `NN-<name>.png`. Keep the previous file as `docs/mockups/NN-<name>.prev.png`. Append to the prompt file:
+Regenerates `NN-<name>.png`. First rename `docs/mockups/NN-<name>.png` to `docs/mockups/NN-<name>.prev.png`. Then run the `section next` render line for this section with one more reference at the end: `--ref docs/mockups/NN-<name>.prev.png` (after the master and, when it exists, the crop). Append to the prompt file:
 
 ```
 ADJUSTMENT REQUESTED BY THE OPERATOR: <note verbatim>. Everything else stays as
 in the references.
 ```
 
-Run the same `generate_mockup` line as in `section next`, with the previous render added as a further `--ref` so the change is incremental. Print the new path and the cost, then the same two options as `section next`.
+Print the new path and the cost, then the same two options as `section next`.
 
 ---
 
@@ -209,6 +209,6 @@ Print `docs/mockups/costs.json` as a table (file, model, size, quality, tokens o
 ## Failure handling
 
 - `OPENAI_API_KEY is not set`: say which `.env` to edit and stop.
-- A `budget` refusal: print the total and stop; the operator raises the budget explicitly.
+- A `budget` refusal: print the total and stop; the operator raises it with `budget=<n>` on the next call.
 - A non-retryable API error: report the error text and the prompt file, and stop; the operator edits the prompt or changes the note.
 - Never delete a rendered PNG except by the `.prev.png` rotation above.
