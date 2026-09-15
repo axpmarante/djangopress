@@ -268,7 +268,14 @@ No browser chrome, no annotations other than the three OPÇÃO tags, no device
 frame.
 ```
 
-   The three options differ on one axis each unless the operator's note says otherwise: composition (immersive full-bleed / editorial with whitespace / split), photography subject, and content treatment (list / objects / grouped). Every option carries the same facts. If a note was given, it drives all three ("three versions about the wine cellar", "three versions with the terrace").
+   When a note was given, insert this block right after the facts line, before `OPÇÃO 1`:
+
+```
+DIRECTION FROM THE OPERATOR: <note verbatim>. All three options follow this
+direction; they differ only in what it leaves open.
+```
+
+   Then write the three `OPÇÃO` lines so that each one satisfies the note, and vary them only on the axes the note leaves open. A note that fixes the subject ("three versions with the terrace") leaves composition and content treatment to vary; a note that fixes the composition ("all three split, text left, photo right") leaves the photography and the content treatment to vary; a note that names three directions ("one dark, one cream, one with a photo background") gives one to each option. Without a note, the three differ on one axis each: composition (immersive full-bleed / editorial with whitespace / split), photography subject, and content treatment (list / objects / grouped). Every option carries the same facts.
 3. Render, tall size, both references:
 
 ```bash
