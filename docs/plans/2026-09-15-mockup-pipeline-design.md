@@ -41,6 +41,8 @@ A real one-page is taller than 1:3, so a master is rendered at the 1:3 limit wit
 
 Text input $5, image input $8, image output $30. OpenAI's per-image estimates exist only for `gpt-image-2` (high quality 1536×1024 ≈ $0.165) and it states 2.5 uses different token counts. The command therefore records `usage` from every response and computes cost from the token rates, so the real number is known after the first site. Conservative budget per site at high quality: 1–2 masters + 14 sections + a handful of regenerations ≈ $3–5.
 
+**Measured on 2026-09-15 (O Marisco, gpt-image-2.5-sunburst, high, 1280×3840):** first master via generations = 1,001 text + 1,328 image-output tokens = **$0.045** in 44 s; second master via edits with the first as reference = 1,106 text + 1,452 image-input + 1,328 image-output tokens = **$0.057** in 43 s. A full site with two masters and fourteen sections should land near **$1**, well under the $5 default budget.
+
 ---
 
 ## Where it sits in the flow
