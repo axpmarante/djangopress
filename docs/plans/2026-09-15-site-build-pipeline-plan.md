@@ -1589,7 +1589,7 @@ git commit -m "Add <lang> translations with DOM parity preserved"
 - [ ] **Step 2: Verify size and structure**
 
 Run: `wc -l src/djangopress/skills/generate-site/SKILL.md && grep -n "^## Phase" src/djangopress/skills/generate-site/SKILL.md && grep -c "AskUserQuestion" src/djangopress/skills/generate-site/SKILL.md`
-Expected: under 400 lines; ten phase headings (0–9); the `AskUserQuestion` count is `2` (the frontmatter no longer lists it; the two mentions are the prohibition sentences).
+Expected: under 400 lines; ten phase headings (0–9); the `AskUserQuestion` count is `1` (the frontmatter no longer lists it; the only mention is the prohibition sentence).
 
 - [ ] **Step 3: Verify every cross-reference resolves**
 
