@@ -116,13 +116,64 @@ With `unsplash`, `ai` or `skip`, pages use `https://placehold.co/WxH?text=Label`
 
 ## Phase 4: Home page
 
-Write the home page HTML in the default language to `/tmp/dp-page-new-<lang>.html`, following the design guide and the Pages section of the briefing.
+The home page is the longest phase of the build and the style reference for every other page. Write the hero first, derive a section contract from it, then write the remaining sections in parallel.
 
-Build the page section by section in the order of `## Sections` in `docs/design-system.md`. For each section, open its image `docs/mockups/NN-<name>.png` with the Read tool and its `### NN-<name>` spec, then write that `<section data-section="<name>" id="<name>">` to match the image's layout, palette, type and rhythm — and take every word, number and link from the briefing, never from the image. The section name in the HTML is the `<name>` from the file name.
+Clear any leftovers from an earlier build first — the assembly in step 4 globs this prefix:
+
+```bash
+rm -f /tmp/dp-section-*.html /tmp/dp-section-contract.md
+```
+
+### 1. Hero first
+
+Write the first section in the `## Sections` order of `docs/design-system.md` yourself, sequentially. Open its image `docs/mockups/01-<name>.png` with the Read tool and its `### 01-<name>` spec, then write that `<section data-section="<name>" id="<name>">` to match the image's layout, palette, type and rhythm — and take every word, number and link from the briefing, never from the image. The section name in the HTML is the `<name>` from the file name. Internal links are literal with the language prefix: `/pt/reservas/`, `/pt/#menu` (`Rulings` §1). Save it to `/tmp/dp-section-01-<name>.html`.
+
+The hero sets the shell every other section inherits. Writing it alone, first, is what makes the parallel sections consistent.
+
+### 2. Section contract
+
+Copy the literal classes out of the hero you just wrote into `/tmp/dp-section-contract.md` — not a description of them, the classes themselves:
+
+```markdown
+# Section contract — every section on this page
+
+Outer:            <section data-section="…" id="…" class="…">
+Container:        <div class="…">
+Vertical padding: <the hero's padding classes, desktop and mobile>
+h2:               class="…"
+Lead / body:      class="…"
+Primary button:   class="…"
+Secondary button: class="…"
+Surface / card:   class="…"
+Dark block:       class="…"
+```
+
+Tokens alone do not pin this down: `container_width: 7xl` and `spacing_scale: relaxed` leave two writers free to pick `py-20` and `py-28`. The literal classes are what prevent that.
+
+### 3. Remaining sections in parallel
+
+Dispatch one `Agent` per remaining section, in `## Sections` order. Sequential is fine for three sections or fewer. Give each agent:
+
+- the briefing path, and its section's facts from the briefing
+- the `## Tokens` block of `docs/design-system.md`
+- `/tmp/dp-section-contract.md`
+- its own `docs/mockups/NN-<name>.png` and its `### NN-<name>` spec
+- `/tmp/dp-images.json` when Phase 3 wrote it; the placeholder rule otherwise
+- the language prefix for internal links (`/pt/reservas/`, `/pt/#menu` — `Rulings` §1)
+
+Each agent writes exactly one `<section data-section="<name>" id="<name>">` block to `/tmp/dp-section-<NN>-<name>.html` and reports only that path. Agents follow the contract verbatim, take every word and number from the briefing and never from the image, do not run `check_site`, and do not touch the database — `check_site` evaluates the whole site and would chase each other's half-written sections, exactly as in Phase 5.
+
+### 4. Assemble and save
+
+Concatenate in `## Sections` order — the `NN-` prefix makes the glob sort correctly:
+
+```bash
+cat /tmp/dp-section-*.html > /tmp/dp-page-new-<lang>.html
+```
 
 Then save it with `edit-site` → *Create Page* (steps 4, 6: create, then set as homepage), including `meta_title_i18n` and `meta_description_i18n`. The `edit-site` recipes loop over every enabled language; in a build write only the default-language key of each `*_i18n` field. In rebuild mode, look the page up by its default-language slug, call `page.create_version(change_summary='Rebuild from mockups')`, then overwrite its fields instead of creating a new page.
 
-Internal links are literal with the language prefix: `/pt/reservas/`, `/pt/#menu` (`Rulings` §1).
+### 5. Verify
 
 Verify and fix until clean:
 
@@ -132,13 +183,15 @@ Verify and fix until clean:
 
 Placeholder images are the only acceptable remaining `[images]` lines, and only under the placeholder strategies.
 
+Then read the assembled page once for the drift `check_site` cannot see — a section that changed container width, vertical rhythm or button treatment. Fix those in place. They are the cost of parallelism; the contract is what keeps them rare.
+
 ---
 
 ## Phase 5: Remaining pages
 
 For every other page in the briefing, the same as Phase 4, **without** the homepage step. Pages are independent once the design guide and the home page exist, so you may dispatch them in parallel with the `Agent` tool, one agent per page, each given: the briefing path, the design guide (read it from settings), the home page HTML as the style reference, the image map, and the section images and specs for its page (or, for inner pages without mockups, the home page's images as the style reference). Agents save and report the page id only; they do not run `check_site` (it evaluates the whole site and would chase each other's half-written pages). When all agents have reported, run the Phase 4 `check_site --only` line once yourself and fix what it lists.
 
-Sequential is fine for three pages or fewer.
+Sequential is fine for three pages or fewer. A page agent writes its own sections sequentially and follows `/tmp/dp-section-contract.md` from Phase 4; it does not dispatch agents of its own.
 
 ---
 
