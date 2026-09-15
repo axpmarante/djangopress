@@ -4,7 +4,7 @@
 **Status:** Draft
 **Repo:** djangopress (engine). No manager changes.
 **Depends on:** Site Build Pipeline (Level A), merged in 3.6.0.
-**Goal:** Put an approved image between the briefing and the build. From the draft briefing, generate master one-page mockups; the operator picks one; every section is then rendered in high resolution from that master; a design system and per-section UI specs are extracted from the images; the build implements them. The mockup is mandatory: `generate-site` refuses to run without an approved master and an extracted design system.
+**Goal:** Put an approved image between the briefing and the build. From the final briefing, generate a master one-page mockup, one at a time until the operator approves it; every section is then rendered in high resolution from that master, one at a time with a check after each; a design system and per-section UI specs are extracted from the images; the build implements them. The mockup is mandatory: `generate-site` refuses to run without an approved master and an extracted design system.
 
 ---
 
@@ -26,8 +26,8 @@ Only two models are used, both from OpenAI, released 2026-09-08:
 
 | Model | Role | Why |
 |---|---|---|
-| `gpt-image-2.5-flare` | Master variants | Same price as Sunburst, about half the latency; variants are for choosing a direction, not for detail. |
-| `gpt-image-2.5-sunburst` | Promoted master, every section, regenerations | Built for precision across chained edits, which is exactly "expand this section without redesigning". |
+| `gpt-image-2.5-sunburst` | Every master, every section, every regeneration | Built for precision across chained edits, which is exactly "another master with this one as reference" and "expand this section without redesigning". A master may be right at the first try, so it is rendered at final quality. |
+| `gpt-image-2.5-flare` | Optional cheap exploration (`--model flare`) | Same price per token, about half the latency; available when the operator wants quick throwaway variants. Not used by default. |
 
 No other image model is called. `LLMBase.generate_image()` (Google) stays untouched for site photography.
 
@@ -39,7 +39,7 @@ A real one-page is taller than 1:3, so a master is rendered at the 1:3 limit wit
 
 ### Pricing (per million tokens, identical for both models)
 
-Text input $5, image input $8, image output $30. OpenAI's per-image estimates exist only for `gpt-image-2` (high quality 1536×1024 ≈ $0.165) and it states 2.5 uses different token counts. The command therefore records `usage` from every response and computes cost from the token rates, so the real number is known after the first site. Conservative budget per site at high quality: 3 masters + 14 sections + 7 regenerations ≈ $4–5.
+Text input $5, image input $8, image output $30. OpenAI's per-image estimates exist only for `gpt-image-2` (high quality 1536×1024 ≈ $0.165) and it states 2.5 uses different token counts. The command therefore records `usage` from every response and computes cost from the token rates, so the real number is known after the first site. Conservative budget per site at high quality: 1–2 masters + 14 sections + a handful of regenerations ≈ $3–5.
 
 ---
 
@@ -47,19 +47,20 @@ Text input $5, image input $8, image output $30. OpenAI's per-image estimates ex
 
 ```
 Novo site (manager)
-  → create-briefing Phase 1–2: research, draft briefing
-  → mockup-site masters: 3 master variants (Flare, medium)          ← new
-  → question block (create-briefing Phase 3) now includes "which master?"
-  → mockup-site promote <n>: chosen variant re-rendered (Sunburst, high) → 00-master.png
-  → mockup-site sections: every section from the master (Sunburst, high)
-  → operator reviews; mockup-site section <name> regenerates one with a note
+  → create-briefing: research, draft briefing, question block, answers → FINAL briefing
+  → mockup-site master: ONE one-page from the final briefing (Sunburst, high)   ← new
+      not right? → mockup-site master <note>: another, with the previous as reference
+      right?     → mockup-site approve <n>: becomes 00-master.png (no API call)
+  → mockup-site section next: the next section from the master (Sunburst, high)
+      operator looks; "ok" → next; note → mockup-site section <name> <note>
+      (mockup-site sections: render all remaining without stopping, when confident)
   → extract-design: design-system.md + per-section UI specs; briefing Pages and
     Design Preferences rewritten from the master; SiteSettings design fields set
   → generate-site (gated on 00-master.png + design-system.md)
   → review / translate / deploy (unchanged)
 ```
 
-The operator touches the flow at three points: choosing a master, reviewing sections, and the build review. Everything else runs unattended. For a single site done by hand each skill is invoked explicitly; for five sites the masters and sections of all five run in parallel and the two choice points are batched.
+The briefing is final before any image exists: the questions were asked and answered on the text. Images then settle the design, one at a time, because the first master or the first render of a section may already be right. The operator is present during the mockup phase by design; for five sites the masters and sections of all five still run in parallel tabs, each stopping at its own check points.
 
 ---
 
@@ -115,13 +116,13 @@ Exit 1 with a one-line reason on any failure. Tests with the fake client: file w
 
 ### Component 5: skill `mockup-site`
 
-`src/djangopress/skills/mockup-site/SKILL.md`. Modes by first argument. All prompts are written to `docs/mockups/prompts/` first, so the operator can read and edit them and re-run.
+`src/djangopress/skills/mockup-site/SKILL.md`. Modes by first argument. All prompts are written to `docs/mockups/prompts/` first, so the operator can read and edit them and re-run. Every render uses `sunburst`, `high` unless the operator passes `flare`.
 
-**`masters`** — Builds `docs/mockups/prompts/00-master.md` from the draft briefing: Business (tone, positioning, audience), the Pages entry for the home page as the section list, Design Preferences (palette roles, type pair, layout signature, motif, avoid list), language, and the rule that the image is a desktop one-page at ~1440px with sections top to bottom and no invented facts beyond placeholder copy. Renders three variants with `flare`, `medium`, `1280x3840` into `master-v1.png` … `master-v3.png`, varying one axis per variant (composition density, photography vs. type-led, warm vs. cool neutral) while keeping the briefing's palette and avoid list. Prints the three paths and stops. When more than ~9 sections are listed, renders each variant as two halves (`-top`, `-bottom`) with the top as reference for the bottom.
+**`master [note]`** — Builds `docs/mockups/prompts/00-master-v<n>.md` from the **final** briefing: Business (tone, positioning, audience), the Pages entry for the home page as the section list, Design Preferences (palette roles, type pair, layout signature, motif, avoid list), language, and the rule that the image is a desktop one-page at ~1440px with sections top to bottom and no invented facts beyond placeholder copy. `<n>` is the next free number. Renders one image, `1280x3840`, into `master-v<n>.png`. When a previous master exists and a note is given, the previous master is passed as reference and the note is appended as "ADJUSTMENT REQUESTED: …; keep everything else". Prints the path and stops: the operator either approves or asks for another with a note. When more than ~9 sections are listed, renders two halves (`-top`, `-bottom`) with the top as reference for the bottom.
 
-**`promote <n>`** — Re-renders `master-v<n>.png` with `sunburst`, `high`, same size, edits endpoint with the variant as the only reference and the master prompt plus "keep this composition exactly; increase fidelity and legibility". Writes `00-master.png`. Records the choice in the briefing under Design Preferences → `Reference mockup: docs/mockups/00-master.png`.
+**`approve <n>`** — Copies `master-v<n>.png` to `00-master.png` (no API call) and records `Reference mockup: docs/mockups/00-master.png (v<n>)` under Design Preferences in the briefing.
 
-**`sections`** — Reads `00-master.png` and identifies the section sequence with approximate y-ranges (top and bottom as fractions). Reconciles it with the briefing's Pages section: sections in the master but not in the briefing are added to the briefing as proposals; sections in the briefing but not in the master are appended to the render list without a crop. For each section writes `prompts/NN-<name>.md` with five blocks: master-reference instruction (the operator's "do not redesign" rule, verbatim), project context, section brief, content, consistency rules. Content is real: dish names and prices from the menu JSON, hours, phone, address from the briefing; navigation labels in the default language. Crops the master with `crop_mockup`, then renders with `sunburst`, `high`, references master + crop, size from the table below. Writes `docs/mockups/NN-<name>.png` and prints a contact sheet listing.
+**`section next`** — Requires `00-master.png`. On the first call, reads the master and writes the section sequence with approximate y-ranges to `docs/mockups/sections.json` (`[{"nn": "01", "name": "hero", "type": "hero", "top": 0.0, "bottom": 0.16}, …]`), reconciled with the briefing's Pages entry: sections in the master but not in the briefing are added to the briefing as proposals; sections in the briefing but not in the master are appended with no crop. Then renders the first section in `sections.json` that has no `NN-<name>.png` yet: writes `prompts/NN-<name>.md` with five blocks (master-reference instruction verbatim, project context, section brief, real content from the briefing and menu JSON, consistency rules), crops the master with `crop_mockup`, renders with references master + crop, size from the table below. Prints the path and stops: the operator says "ok" (next call renders the next one) or gives a note.
 
 | Section type (by name or briefing note) | Size | Ratio |
 |---|---|---|
@@ -133,7 +134,9 @@ Exit 1 with a one-line reason on any failure. Tests with the fake client: file w
 
 A `ratio:` line in the section's briefing entry overrides the table.
 
-**`section <name> [note]`** — Regenerates one section, appending the operator's note to the prompt ("less text", "show the terrace", "use the dark treatment"). Keeps the previous file as `NN-<name>.prev.png`.
+**`section <name> [note]`** — Regenerates one section, appending the operator's note to the prompt ("less text", "show the terrace", "use the dark treatment"), with the previous render as a third reference. Keeps the previous file as `NN-<name>.prev.png`.
+
+**`sections`** — Renders every remaining section without stopping, for when the operator is confident in the master. Same prompts and sizes as `section next`.
 
 **`costs`** — Prints the site total and per-image lines from `costs.json`.
 
@@ -157,8 +160,7 @@ Ends with `check_site --only settings` and a summary. Never invents facts from t
 
 ### Component 8: `create-briefing` changes
 
-- Phase 2 ends by invoking `mockup-site masters` before printing the question block, and the block's first question becomes "Which master, 1, 2 or 3? Or what to change for another round?" with variant 1 as the proposed default.
-- Phase 3 applies the choice with `mockup-site promote <n>` before finalizing the briefing. The hand-off offers `mockup-site sections` as the next step instead of `generate-site`.
+Unchanged up to the final briefing: research, draft, question block, answers. Only the hand-off changes: after finalizing, offer `mockup-site master` as the next step instead of `generate-site`, and say the build comes after `extract-design`.
 
 ### Component 9: Rollout
 
@@ -184,6 +186,8 @@ Ends with `check_site --only settings` and a summary. Never invents facts from t
 - **Mandatory, not optional.** The build gate has no bypass.
 - **Facts from the briefing, form from the image.** Stated in every skill; `extract-design` explicitly ignores text seen in images.
 - **Prompts are files.** Every prompt is written under `docs/mockups/prompts/` before the call, so the operator can edit and re-run a single section.
-- **Flare for variants, Sunburst for everything kept.** Same price; the split trades speed where detail does not matter.
+- **One master at a time, at final quality.** The first may be right; a second is an adjustment of the first, not a new draft. Flare stays available as an explicit cheap option.
 - **Costs are measured, not estimated.** Every call appends to `costs.json`.
 - **1:3 master.** Accept compression; halves only when the section list is long.
+- **Sections one at a time by default.** The operator checks each render before the next; `sections` renders the rest in one go when they are confident.
+- **Briefing final before any image.** Questions are answered on text; images settle design, not facts.

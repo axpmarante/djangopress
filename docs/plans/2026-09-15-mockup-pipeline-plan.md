@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Add an OpenAI image-generation layer (`gpt-image-2.5-flare` / `gpt-image-2.5-sunburst`) with three management commands, two new skills (`mockup-site`, `extract-design`), and the changes to `create-briefing` and `generate-site` that make an approved master mockup and an extracted design system mandatory before any build.
+**Goal:** Add an OpenAI image-generation layer (`gpt-image-2.5-sunburst` by default, `gpt-image-2.5-flare` as an explicit cheap option) with three management commands, two new skills (`mockup-site`, `extract-design`), and the changes to `create-briefing` and `generate-site` that make an approved master mockup and an extracted design system mandatory before any build. The briefing is final before any image; the master and each section are generated one at a time with a check after each.
 
 **Architecture:** A dependency-free helper module wraps the OpenAI Images API (generations for masters, edits with reference images for sections) and reports token usage and cost. Thin management commands expose it to skills one image per call. Skills compose the commands, write every prompt to disk first, and keep the rule "facts from the briefing, form from the image". `generate-site` gains a hard gate on `docs/mockups/00-master.png` and `docs/design-system.md`, plus a rebuild entry point for sites that already have pages.
 
@@ -19,9 +19,9 @@
 - **Quality values:** `low`, `medium`, `high`, `xhigh`, `max`, `auto`.
 - **Prices (USD per million tokens):** text input 5.00, image input 8.00, image output 30.00.
 - **Reference images:** at most 16 per edit call; `input_fidelity` is `high` unless told otherwise.
-- **Master size:** `1280x3840`. Master variants: `flare`, `medium`. Promoted master and sections: `sunburst`, `high`.
+- **Master size:** `1280x3840`. Every render (master, sections, regenerations) uses `sunburst`, `high` unless the operator passes `flare`. One master at a time; the operator approves one (`approve <n>` copies it to `00-master.png`, no API call).
 - **Section size table:** hero/cta/band/inverted → `1920x1088`; editorial split → `1536x1024`; gallery/menu/pricing/grid → `1536x1536`; testimonials/trust bar → `1920x832`; header/footer → `1920x640`. A `ratio:` line in the section's briefing entry overrides.
-- **Files:** prompts under `docs/mockups/prompts/`, crops under `docs/mockups/crops/`, images `docs/mockups/master-v<n>.png`, `docs/mockups/00-master.png`, `docs/mockups/NN-<name>.png`, costs `docs/mockups/costs.json`, design system `docs/design-system.md`. PNGs are git-ignored via `docs/mockups/.gitignore`; prompts, costs and design system are committed.
+- **Files:** prompts under `docs/mockups/prompts/`, crops under `docs/mockups/crops/`, images `docs/mockups/master-v<n>.png`, `docs/mockups/00-master.png`, `docs/mockups/NN-<name>.png`, section list `docs/mockups/sections.json`, costs `docs/mockups/costs.json`, design system `docs/design-system.md`. PNGs are git-ignored via `docs/mockups/.gitignore`; prompts, costs and design system are committed.
 - **Facts from the briefing, form from the image.** Skills never copy text, prices, addresses or names seen in an image.
 - **Skills are live on save** (symlinks into this checkout): write a whole skill file in one `Write`; edit existing skills with precise `Edit` calls.
 - **Commit messages must not contain `Co-Authored-By`.** Commit only the files named in each task. `briefings/lalitana.md` stays untracked.
@@ -1081,8 +1081,8 @@ git commit -m "feat(ai): crop_mockup and sample_palette commands for the mockup 
 - Create: `src/djangopress/skills/mockup-site/SKILL.md`
 
 **Interfaces:**
-- Consumes: `generate_mockup`, `crop_mockup` CLIs (Tasks 2–3); the briefing at `briefings/<slug>.md` with sections Business, Pages, Design Preferences, Integrations, Additional Notes; optional `briefings/<slug>-menu.json`.
-- Produces: `docs/mockups/prompts/00-master.md`, `docs/mockups/master-v{1,2,3}.png`, `docs/mockups/00-master.png`, `docs/mockups/prompts/NN-<name>.md`, `docs/mockups/crops/NN-<name>.png`, `docs/mockups/NN-<name>.png`, `docs/mockups/costs.json`, `docs/mockups/.gitignore`; the briefing line `- **Reference mockup**: docs/mockups/00-master.png` under Design Preferences; the section list convention `NN-<name>` with `NN` two digits from 01 in page order.
+- Consumes: `generate_mockup`, `crop_mockup` CLIs (Tasks 2–3); the final briefing at `briefings/<slug>.md` with sections Business, Pages, Design Preferences, Integrations, Additional Notes; optional `briefings/<slug>-menu.json`.
+- Produces: `docs/mockups/prompts/00-master-v<n>.md`, `docs/mockups/master-v<n>.png`, `docs/mockups/00-master.png`, `docs/mockups/sections.json`, `docs/mockups/prompts/NN-<name>.md`, `docs/mockups/crops/NN-<name>.png`, `docs/mockups/NN-<name>.png`, `docs/mockups/costs.json`, `docs/mockups/.gitignore`; the briefing line `- **Reference mockup**: docs/mockups/00-master.png (v<n>)` under Design Preferences; the section list convention `NN-<name>` with `NN` two digits from 01 in page order.
 
 - [ ] **Step 1: Write the skill**
 
@@ -1091,18 +1091,20 @@ Create `src/djangopress/skills/mockup-site/SKILL.md`:
 ````markdown
 ---
 name: mockup-site
-description: Generate the approved-design mockups for a site with gpt-image-2.5 — three master one-page variants from the briefing, promote the chosen one, render every section in high resolution from the master, regenerate single sections, and report costs. Runs before any build; the build refuses to start without a promoted master.
-argument-hint: masters | promote <n> | sections | section <name> [note] | costs
+description: Generate the approved-design mockups for a site with gpt-image-2.5 — one master one-page at a time from the final briefing until the operator approves it, then every section in high resolution from that master, one at a time with a check after each. Runs after the briefing is final and before any build; the build refuses to start without an approved master.
+argument-hint: master [note] | approve <n> | section next | section <name> [note] | sections | costs
 allowed-tools: Bash, Read, Write, Edit, Grep, Glob
 ---
 
-# Mockups: master one-page → high-resolution sections
+# Mockups: one master → high-resolution sections, one at a time
 
 The argument is: `$ARGUMENTS`. First word is the mode.
 
-**Two rules.** Form comes from the image, facts come from the briefing: nothing seen in an image — a price, an address, a name, a menu item — is ever written into the site. And the master is the approved design: sections are never redesigned, only expanded from it.
+**Two rules.** Form comes from the image, facts come from the briefing: nothing seen in an image — a price, an address, a name, a menu item — is ever written into the site. And the approved master is the design: sections are never redesigned, only expanded from it.
 
-All commands run through the site venv: `.venv/bin/python manage.py …`. Every prompt is written to `docs/mockups/prompts/` before the call so the operator can read, edit and re-run it.
+**Rhythm.** Each mode renders at most one image and stops so the operator can look. The next call continues. The operator is present during this phase by design.
+
+All commands run through the site venv: `.venv/bin/python manage.py …`. Every prompt is written to `docs/mockups/prompts/` before the call so the operator can read, edit and re-run it. Every render uses `--model sunburst --quality high` unless the operator's argument contains the word `flare`.
 
 ## Setup (every mode)
 
@@ -1111,17 +1113,15 @@ mkdir -p docs/mockups/prompts docs/mockups/crops
 [ -f docs/mockups/.gitignore ] || printf '*.png\ncrops/\n' > docs/mockups/.gitignore
 ```
 
-Read the briefing (`briefings/<slug>.md`, the only `.md` in `briefings/` besides `TEMPLATE.md` and `*-audit.md`), and `briefings/<slug>-menu.json` if it exists. Read `docs/mockups/costs.json` if it exists and keep the total in mind.
+Read the briefing (`briefings/<slug>.md`, the only `.md` in `briefings/` besides `TEMPLATE.md` and `*-audit.md`). If it still has an `## Open Questions` section, stop: the briefing is not final; the operator finishes `/create-briefing` first. Read `briefings/<slug>-menu.json` if it exists, and `docs/mockups/costs.json` if it exists.
 
 ---
 
-## `masters`
+## `master [note]`
 
-Builds one prompt and renders three variants with **flare, medium, 1280x3840**.
+Renders **one** master one-page. `<n>` is the next free number (`master-v1.png` if none exists).
 
-### Prompt: `docs/mockups/prompts/00-master.md`
-
-Write it with these blocks, filled from the briefing:
+### Prompt: `docs/mockups/prompts/00-master-v<n>.md`
 
 ```
 DESKTOP WEBSITE ONE-PAGE MOCKUP, full page from header to footer, rendered at
@@ -1149,79 +1149,66 @@ DESIGN DIRECTION (follow exactly):
 AVOID: <the Avoid list verbatim>.
 ```
 
-### Variants
+When a previous master `master-v<n-1>.png` exists and a note was given, append:
 
-Render three times, appending one line to the prompt per variant so they differ on one axis and keep everything else:
+```
+ADJUSTMENT REQUESTED BY THE OPERATOR: <note verbatim>. Keep everything else
+exactly as in the reference image: same sections, order, palette, type and
+composition.
+```
 
-- v1: `VARIANT: dense editorial composition, photography-led hero.`
-- v2: `VARIANT: airy composition with generous whitespace, typography-led hero, photography secondary.`
-- v3: `VARIANT: balanced composition, alternating light and dark bands, one full-width photographic band.`
+and pass the previous master as reference.
 
-Write `docs/mockups/prompts/00-master-v1.md` … `v3.md` (base prompt + variant line) and run, for n in 1 2 3:
+### Render
 
 ```bash
-.venv/bin/python manage.py generate_mockup --prompt-file docs/mockups/prompts/00-master-v$n.md \
-  --out docs/mockups/master-v$n.png --model flare --size 1280x3840 --quality medium
+.venv/bin/python manage.py generate_mockup --prompt-file docs/mockups/prompts/00-master-v<n>.md \
+  --out docs/mockups/master-v<n>.png --model sunburst --size 1280x3840 --quality high \
+  [--ref docs/mockups/master-v<n-1>.png]
 ```
 
-**Long pages.** When the section list has more than 9 entries, render each variant as two halves: `--out docs/mockups/master-v$n-top.png` with sections 1..⌈N/2⌉ and the line `SHOW ONLY THE TOP HALF OF THE PAGE, ending mid-page`, then `master-v$n-bottom.png` with the remaining sections, `--ref docs/mockups/master-v$n-top.png`, and the line `CONTINUE THIS EXACT WEBSITE from where the reference ends; same header style is NOT repeated; end with the footer`. Both halves keep the size `1280x3840`.
+**Long pages.** When the section list has more than 9 entries, render two halves: `--out docs/mockups/master-v<n>-top.png` with sections 1..⌈N/2⌉ and the line `SHOW ONLY THE TOP HALF OF THE PAGE, ending mid-page`, then `master-v<n>-bottom.png` with the remaining sections, `--ref docs/mockups/master-v<n>-top.png`, and the line `CONTINUE THIS EXACT WEBSITE from where the reference ends; the header is NOT repeated; end with the footer`. Both halves keep `1280x3840`.
 
-End by printing the three paths and the running total from the command output, then stop:
+Print and stop:
 
 ```
-Masters ready:
-  1. docs/mockups/master-v1.png — dense, photography-led
-  2. docs/mockups/master-v2.png — airy, typography-led
-  3. docs/mockups/master-v3.png — balanced, alternating bands
-Site total so far: $<total>
-Reply with the number to promote, or what to change for another round.
+Master v<n>: docs/mockups/master-v<n>.png   $<cost>   site total $<total>
+Approve with: /mockup-site approve <n>
+Or ask for another: /mockup-site master <what to change>
 ```
 
 ---
 
-## `promote <n>`
+## `approve <n>`
 
-Re-renders the chosen variant with **sunburst, high**, same size, the variant as the only reference, so the promoted master keeps the composition and gains fidelity. Prompt file `docs/mockups/prompts/00-master.md` = the variant's prompt with the VARIANT line replaced by:
-
-```
-KEEP THIS EXACT COMPOSITION AND SECTION ORDER (reference image). Increase
-fidelity, sharpness and text legibility. Do not add, remove or reorder sections.
-```
-
-```bash
-.venv/bin/python manage.py generate_mockup --prompt-file docs/mockups/prompts/00-master.md \
-  --out docs/mockups/00-master.png --model sunburst --size 1280x3840 --quality high \
-  --ref docs/mockups/master-v<n>.png
-```
-
-For a two-half master, promote both halves the same way into `00-master-top.png` and `00-master-bottom.png`, and also write `00-master.png` as the top half (the gate checks that file).
-
-Then record the choice in the briefing: under `## Design Preferences` add or replace the line `- **Reference mockup**: docs/mockups/00-master.png (variant <n>)`. Print the path and stop.
+No API call. Copy `master-v<n>.png` to `docs/mockups/00-master.png` (for a two-half master, copy `-top` to `00-master.png` and `-bottom` to `00-master-bottom.png`). In the briefing, under `## Design Preferences`, add or replace the line `- **Reference mockup**: docs/mockups/00-master.png (v<n>)`. Print `Approved master v<n>. Next: /mockup-site section next` and stop.
 
 ---
 
-## `sections`
+## `section next`
 
 Requires `docs/mockups/00-master.png`; otherwise say so and stop.
 
-### 1. Read the master and list its sections
+### 1. Section list (first call only)
 
-Open `docs/mockups/00-master.png` with the Read tool. Write the section sequence you see, top to bottom, as a table with the vertical extent of each as fractions of the image height:
+If `docs/mockups/sections.json` does not exist: open `00-master.png` (and `00-master-bottom.png` if present) with the Read tool and write the section sequence you see, top to bottom, with the vertical extent of each as fractions of the image height:
 
+```json
+[
+  {"nn": "01", "name": "hero", "type": "hero", "top": 0.00, "bottom": 0.16},
+  {"nn": "02", "name": "trust-bar", "type": "trust", "top": 0.16, "bottom": 0.19}
+]
 ```
-| NN | name (lowercase, hyphens, English) | type | top | bottom |
-| 01 | hero | hero | 0.00 | 0.16 |
-| 02 | trust-bar | trust | 0.16 | 0.19 |
-...
-```
 
-Types: `hero`, `band` (full-width photographic or colored band, CTA), `inverted` (dark block), `editorial` (text + image split), `grid` (3+ cards or items), `gallery`, `menu`, `pricing`, `testimonials`, `trust`, `header`, `footer`.
+Names: lowercase, hyphens, English. Types: `hero`, `band` (full-width photographic or colored band, CTA), `inverted` (dark block), `editorial` (text + image split), `grid` (3+ cards or items), `gallery`, `menu`, `pricing`, `testimonials`, `trust`, `header`, `footer`. For a bottom-half image, add `"image": "00-master-bottom.png"` to its entries.
 
-### 2. Reconcile with the briefing
+Reconcile with the briefing's `## Pages` → Home: a section in the master but absent from the briefing is appended to the briefing's Home entry as `(proposed from mockup)`; a section in the briefing but absent from the master is appended to `sections.json` with `"top": null, "bottom": null` (no crop). Do not drop anything from the briefing.
 
-Compare with `## Pages` → Home. A section in the master but absent from the briefing is appended to the briefing's Home entry as `(proposed from mockup)`. A section in the briefing but absent from the master is added to the render list with no crop. Do not drop anything from the briefing.
+### 2. Pick the next section
 
-### 3. One prompt per section: `docs/mockups/prompts/NN-<name>.md`
+The first entry in `sections.json` whose `docs/mockups/NN-<name>.png` does not exist. If none is left, print `All sections rendered. Next: /extract-design` and stop.
+
+### 3. Prompt: `docs/mockups/prompts/NN-<name>.md`
 
 Five blocks, in this order:
 
@@ -1253,10 +1240,10 @@ chrome, no annotations, no device frame.
 
 ### 4. Crop and render
 
-For every section with a known extent:
+When `top`/`bottom` are set:
 
 ```bash
-.venv/bin/python manage.py crop_mockup docs/mockups/00-master.png docs/mockups/crops/NN-<name>.png --top <top> --bottom <bottom>
+.venv/bin/python manage.py crop_mockup docs/mockups/<image or 00-master.png> docs/mockups/crops/NN-<name>.png --top <top> --bottom <bottom>
 ```
 
 Size by type (a `ratio:` line in the section's briefing entry overrides):
@@ -1272,34 +1259,35 @@ Size by type (a `ratio:` line in the section's briefing entry overrides):
 ```bash
 .venv/bin/python manage.py generate_mockup --prompt-file docs/mockups/prompts/NN-<name>.md \
   --out docs/mockups/NN-<name>.png --model sunburst --size <size> --quality high \
-  --ref docs/mockups/00-master.png --ref docs/mockups/crops/NN-<name>.png
+  --ref docs/mockups/00-master.png [--ref docs/mockups/crops/NN-<name>.png]
 ```
 
-Without a crop, pass only the master. Render sequentially; stop at the first non-retryable failure and report it.
-
-### 5. Report
-
-Print the list of files with sizes and the site total, and stop:
+### 5. Stop
 
 ```
-Sections rendered (N): docs/mockups/01-hero.png … docs/mockups/14-footer.png
-Site total: $<total>
-Review them; regenerate one with: /mockup-site section <name> <what to change>
-When they are approved: /extract-design
+Section NN-<name>: docs/mockups/NN-<name>.png   $<cost>   site total $<total>   (<k> of <N> done)
+OK? → /mockup-site section next
+Change it → /mockup-site section <name> <what to change>
 ```
 
 ---
 
 ## `section <name> [note]`
 
-Regenerates `NN-<name>.png`. Keep the previous file as `docs/mockups/NN-<name>.prev.png`. Append to the prompt file a last block:
+Regenerates `NN-<name>.png`. Keep the previous file as `docs/mockups/NN-<name>.prev.png`. Append to the prompt file:
 
 ```
 ADJUSTMENT REQUESTED BY THE OPERATOR: <note verbatim>. Everything else stays as
 in the references.
 ```
 
-Run the same `generate_mockup` line as in `sections`, with the previous render added as a third `--ref` so the change is incremental. Print the new path and the cost.
+Run the same `generate_mockup` line as in `section next`, with the previous render added as a further `--ref` so the change is incremental. Print the new path and the cost, then the same two options as `section next`.
+
+---
+
+## `sections`
+
+Renders every remaining section without stopping between them, with the same prompts and sizes as `section next`. For the operator who already trusts the master. Stop at the first non-retryable failure and report it; print the full list and the site total at the end.
 
 ---
 
@@ -1313,20 +1301,20 @@ Print `docs/mockups/costs.json` as a table (file, model, size, quality, tokens o
 
 - `OPENAI_API_KEY is not set`: say which `.env` to edit and stop.
 - A `budget` refusal: print the total and stop; the operator raises the budget explicitly.
-- A non-retryable API error on one section: keep going with the next sections, list the failed ones at the end with the error text.
+- A non-retryable API error: report the error text and the prompt file, and stop; the operator edits the prompt or changes the note.
 - Never delete a rendered PNG except by the `.prev.png` rotation above.
 ````
 
 - [ ] **Step 2: Verify**
 
-Run: `head -6 src/djangopress/skills/mockup-site/SKILL.md && grep -n "^## " src/djangopress/skills/mockup-site/SKILL.md && grep -c '^````' src/djangopress/skills/mockup-site/SKILL.md`
-Expected: frontmatter with `name: mockup-site`; headings for Setup, `masters`, `promote <n>`, `sections`, `section <name> [note]`, `costs`, Failure handling; four-backtick count `0`.
+Run: `head -6 src/djangopress/skills/mockup-site/SKILL.md && grep -n "^## " src/djangopress/skills/mockup-site/SKILL.md && grep -c '^````' src/djangopress/skills/mockup-site/SKILL.md && grep -c "flare" src/djangopress/skills/mockup-site/SKILL.md`
+Expected: frontmatter with `name: mockup-site`; headings for Setup, `master [note]`, `approve <n>`, `section next`, `section <name> [note]`, `sections`, `costs`, Failure handling; four-backtick count `0`; `flare` appears only in the sentence about the operator's explicit option (count `1`).
 
 - [ ] **Step 3: Commit**
 
 ```bash
 git add src/djangopress/skills/mockup-site/SKILL.md
-git commit -m "feat(skills): mockup-site — masters, promote, sections, single-section regeneration, costs"
+git commit -m "feat(skills): mockup-site — one master at a time, approve, sections one at a time, costs"
 ```
 
 ---
@@ -1471,14 +1459,14 @@ git commit -m "feat(skills): extract-design — design system and per-section sp
 
 ---
 
-### Task 6: `generate-site` gate and section-aware build; `create-briefing` masters step
+### Task 6: `generate-site` gate and section-aware build; `create-briefing` hand-off
 
 **Files:**
 - Modify: `src/djangopress/skills/generate-site/SKILL.md` (sections "Two entry points", Phase 0, Phase 2, Phase 4, Phase 5, 8c, 8d)
-- Modify: `src/djangopress/skills/create-briefing/SKILL.md` (Phase 2 end, Phase 3 start and hand-off)
+- Modify: `src/djangopress/skills/create-briefing/SKILL.md` (Phase 3 hand-off only)
 
 **Interfaces:**
-- Consumes: `docs/mockups/00-master.png`, `docs/design-system.md` (Task 5 format), `docs/mockups/NN-<name>.png`, `mockup-site` modes (Task 4).
+- Consumes: `docs/mockups/00-master.png`, `docs/design-system.md` (Task 5 format), `docs/mockups/NN-<name>.png`, `mockup-site` modes `master` / `approve` / `section next` (Task 4).
 - Produces: the argument form `/generate-site briefings/<slug>.md [rebuild]`; the build report field "Mockups used".
 
 Use `grep -n` before each edit to find the current line; the anchors below are the exact current sentences.
@@ -1511,8 +1499,8 @@ If either is missing, stop here and print:
 
 ```
 This build needs an approved mockup and an extracted design system.
-  /mockup-site masters        → choose one → /mockup-site promote <n>
-  /mockup-site sections       → review → /extract-design
+  /mockup-site master         → look → approve <n>, or master <note> for another
+  /mockup-site section next   → one section at a time → /extract-design
 Then run /generate-site again.
 ```
 
@@ -1556,44 +1544,25 @@ In 8d's report template, under `## Result`, add the line `Mockups used: docs/moc
 
 In the `## Next` block of the report template, when the run was a rebuild, add the line `- Translation is stale: run /generate-site briefings/<slug>.md for the translation pass after review.`
 
-- [ ] **Step 6: `create-briefing` — masters before the question block**
+- [ ] **Step 6: `create-briefing` — hand-off to the master, not the build**
 
-In Phase 2, immediately before the sentence `Print the questions in the console, numbered, with the proposed defaults, and end the turn:`, insert:
-
-```markdown
-### Master mockups
-
-Before asking anything, render the three master variants so the operator chooses a direction visually, from the same draft:
-
-```
-Skill: mockup-site
-args: masters
-```
-
-Then make the **first** question of the block: `1. **Master.** Which master, 1, 2 or 3 — or what to change for another round? *Proposed: 1.*`
-```
-
-- [ ] **Step 7: `create-briefing` — apply the choice and change the hand-off**
-
-At the start of Phase 3, before `For each answer, edit the relevant section of the briefing.`, insert:
-
-```markdown
-Apply the master choice first: `Skill: mockup-site` with args `promote <n>` (or `masters` again when the operator asked for another round, then stop and re-ask). The promoted master's section order becomes the proposal for the Home entry in `## Pages`.
-```
-
-Replace the hand-off `AskUserQuestion` block (from `AskUserQuestion:` through `If yes, invoke the \`generate-site\` skill … print the command and stop.`) with:
+Phases 0–2 and the question block are unchanged: the briefing is final before any image exists. In Phase 3, replace the hand-off `AskUserQuestion` block (from `AskUserQuestion:` through `If yes, invoke the \`generate-site\` skill … print the command and stop.`) with:
 
 ```markdown
 ```
 AskUserQuestion:
-Question: "Briefing finalizado. Renderizar as secções a partir do master?"
+Question: "Briefing finalizado. Gerar o primeiro master one-page?"
 Options:
-- "Sim — /mockup-site sections" (Recommended)
+- "Sim — /mockup-site master" (Recommended)
 - "Não — fico por aqui"
 ```
 
-If yes, invoke the `mockup-site` skill with `sections`. Non-interactively, print `Next: /mockup-site sections` and stop. The build comes after `/extract-design`, never directly from here.
+If yes, invoke the `mockup-site` skill with `master`. Non-interactively, print `Next: /mockup-site master` and stop. The build comes only after `/mockup-site approve <n>`, the sections and `/extract-design`, never directly from here.
 ```
+
+- [ ] **Step 7: `create-briefing` — no other change**
+
+Confirm with `grep -n "masters\|promote" src/djangopress/skills/create-briefing/SKILL.md` that the file contains neither word.
 
 - [ ] **Step 8: Verify**
 
@@ -1602,7 +1571,7 @@ Run:
 ```bash
 cd /Users/antoniomarante/Documents/djangopress-sites/djangopress
 grep -n "Mandatory mockup gate\|Rebuild from mockups\|docs/design-system.md\|Mockups used\|reads as the same design" src/djangopress/skills/generate-site/SKILL.md
-grep -n "Master mockups\|promote <n>\|/mockup-site sections\|generate-site" src/djangopress/skills/create-briefing/SKILL.md
+grep -n "/mockup-site master\|approve <n>\|generate-site" src/djangopress/skills/create-briefing/SKILL.md
 grep -c "AskUserQuestion" src/djangopress/skills/generate-site/SKILL.md
 grep -c '^````' src/djangopress/skills/generate-site/SKILL.md src/djangopress/skills/create-briefing/SKILL.md
 wc -l src/djangopress/skills/generate-site/SKILL.md
@@ -1614,7 +1583,7 @@ Expected: every grep hits; `AskUserQuestion` count in generate-site still `1`; f
 
 ```bash
 git add src/djangopress/skills/generate-site/SKILL.md src/djangopress/skills/create-briefing/SKILL.md
-git commit -m "feat(skills): mandatory mockup gate and section-aware build; masters before the question block"
+git commit -m "feat(skills): mandatory mockup gate and section-aware build; briefing hands off to the master"
 ```
 
 ---
@@ -1637,20 +1606,21 @@ In `pyproject.toml` change the dependency line `    "openai",` to `    "openai>=
 Add two rows to the skills table after the `/generate-site` row:
 
 ```markdown
-| `/mockup-site` | `/mockup-site masters` | Master one-page variants (gpt-image-2.5-flare), promote the chosen one (sunburst), render every section in high resolution, regenerate one, report costs. |
+| `/mockup-site` | `/mockup-site master` | One master one-page at a time from the final briefing (gpt-image-2.5-sunburst); approve one; render sections one at a time with a check after each; regenerate one; report costs. |
 | `/extract-design` | `/extract-design` | Sampled palette, font pair, layout tokens and per-section UI specs from the approved mockups → `docs/design-system.md`, briefing, SiteSettings. |
 ```
 
 Replace the "Typical New Site Flow" block with:
 
 ```
-1. /create-briefing <url and/or document>   ← research, three masters, one block of questions, briefing.md
-2. /mockup-site sections                    ← every section from the promoted master; review; regenerate singles
-3. /extract-design                          ← design system + per-section specs
-4. /generate-site briefings/my-client.md    ← unattended build (gated on the master + design system)
-5. /edit-site ...                           ← interactive refinement
-6. /generate-site briefings/my-client.md    ← translation pass, once design is signed off
-7. /deploy-site-railway my-client           ← deploy to Railway (SQLite + Litestream)
+1. /create-briefing <url and/or document>   ← research, one block of questions, FINAL briefing.md
+2. /mockup-site master                      ← one master one-page; approve <n>, or master <note> for another
+3. /mockup-site section next                ← one section at a time from the master; ok → next, or a note
+4. /extract-design                          ← design system + per-section specs
+5. /generate-site briefings/my-client.md    ← unattended build (gated on the master + design system)
+6. /edit-site ...                           ← interactive refinement
+7. /generate-site briefings/my-client.md    ← translation pass, once design is signed off
+8. /deploy-site-railway my-client           ← deploy to Railway (SQLite + Litestream)
 ```
 
 In the `## Commands` code block, after the `check_site` line, add:
@@ -1663,7 +1633,7 @@ python manage.py sample_palette IMG --k 6 --json                         # domin
 
 - [ ] **Step 3: Manager CLAUDE.md (edit only, do not commit)**
 
-In the DjangoPress skills table add rows for `mockup-site` and `extract-design` in the same four-column layout with "How to use from manager" = `` `cd <site.path>` then invoke ``. In "Typical Workflows → New site from scratch", insert after step 1: `2. /mockup-site sections → section mockups from the promoted master` and `3. /extract-design → design system`, renumbering the rest.
+In the DjangoPress skills table add rows for `mockup-site` and `extract-design` in the same four-column layout with "How to use from manager" = `` `cd <site.path>` then invoke ``. In "Typical Workflows → New site from scratch", insert after step 1: `2. /mockup-site master → one master at a time, approve` , `3. /mockup-site section next → sections one at a time` and `4. /extract-design → design system`, renumbering the rest.
 
 - [ ] **Step 4: Bump version**
 
@@ -1685,14 +1655,14 @@ git commit -m "docs: mockup pipeline in CLAUDE.md; openai>=2.36; bump version to
 
 ---
 
-### Task 8: Guided real-API test on O Marisco — masters only
+### Task 8: Guided real-API test on O Marisco — first master only
 
 **Files:**
-- Create (in the site, not the engine): `/Users/antoniomarante/Documents/djangopress-sites/o-marisco/docs/mockups/prompts/00-master*.md`, `…/docs/mockups/master-v{1,2,3}.png`, `…/docs/mockups/costs.json`, `…/docs/mockups/.gitignore`
+- Create (in the site, not the engine): `/Users/antoniomarante/Documents/djangopress-sites/o-marisco/docs/mockups/prompts/00-master-v1.md`, `…/docs/mockups/master-v1.png`, `…/docs/mockups/costs.json`, `…/docs/mockups/.gitignore`
 
 **Interfaces:**
-- Consumes: the `mockup-site` skill via the site's symlink, `OPENAI_API_KEY` in `o-marisco/.env` (verified present), the briefing `briefings/o-marisco.md`.
-- Produces: three master variants and the measured cost, for the operator to choose from. Nothing after `masters` runs in this task — `promote`, `sections`, `extract-design` and the rebuild need the operator's choice and happen interactively afterwards.
+- Consumes: the `mockup-site` skill via the site's symlink, `OPENAI_API_KEY` in `o-marisco/.env` (verified present), the final briefing `briefings/o-marisco.md`.
+- Produces: one master and its measured cost, for the operator to approve or adjust. Nothing after `master` runs in this task — `approve`, `section next`, `extract-design` and the rebuild need the operator and happen interactively afterwards.
 
 - [ ] **Step 1: Sync skills into the site and confirm the key**
 
@@ -1702,42 +1672,43 @@ git branch --show-current            # expected: redesign-2026
 .venv/bin/python manage.py sync_skills | tail -3
 ls .claude/skills | grep -E "mockup-site|extract-design"
 grep -c "^OPENAI_API_KEY=sk" .env    # expected: 1
+grep -c "^## Open Questions" briefings/o-marisco.md   # expected: 0 (the briefing is final)
 ```
 
 - [ ] **Step 2: Dry run**
 
-Write the master prompt as the skill's `masters` mode specifies (read `.claude/skills/mockup-site/SKILL.md`, follow its Setup and the `masters` prompt template using `briefings/o-marisco.md`), then:
+Write the master prompt as the skill's `master` mode specifies (read `.claude/skills/mockup-site/SKILL.md`, follow its Setup and the prompt template using `briefings/o-marisco.md`), then:
 
 ```bash
 .venv/bin/python manage.py generate_mockup --prompt-file docs/mockups/prompts/00-master-v1.md \
-  --out docs/mockups/master-v1.png --model flare --size 1280x3840 --quality medium --dry-run
+  --out docs/mockups/master-v1.png --model sunburst --size 1280x3840 --quality high --dry-run
 ```
 
-Expected: `dry run: generations model=gpt-image-2.5-flare size=1280x3840 quality=medium refs=0 …` and the first 800 characters of the prompt. Read the prompt back: it must contain the briefing's palette hexes, "Bricolage Grotesque", the Avoid list ("azul-marinho náutico", "tipografia script", "fotografia de barcos", "âncora e leme"), and no prices or addresses.
+Expected: `dry run: generations model=gpt-image-2.5-sunburst size=1280x3840 quality=high refs=0 …` and the first 800 characters of the prompt. Read the prompt back: it must contain the briefing's palette hexes, "Bricolage Grotesque", the Avoid list ("azul-marinho náutico", "tipografia script", "fotografia de barcos", "âncora e leme"), and no prices or addresses.
 
-- [ ] **Step 3: Render the three variants (real API, ~$1)**
+- [ ] **Step 3: Render the first master (real API, well under $1)**
 
-Run the three `generate_mockup` calls exactly as the skill's `masters` mode specifies, with `--budget 3`. Expected: three `wrote docs/mockups/master-v<n>.png 1280x3840 $… (…s) site total $…` lines.
+Run the `generate_mockup` call exactly as the skill's `master` mode specifies, with `--budget 2`. Expected: `wrote docs/mockups/master-v1.png 1280x3840 $… (…s) site total $…`.
 
-- [ ] **Step 4: Look at them**
+- [ ] **Step 4: Look at it**
 
-Open each PNG with the Read tool. For each, note in the report: does it follow the section order from the briefing; does it respect the Avoid list; is the palette recognisably cal/terracota/azul-maré; is the text legible enough to judge hierarchy. Do not fix anything; this is evidence for the operator.
+Open the PNG with the Read tool. Note in the report: does it follow the section order from the briefing; does it respect the Avoid list; is the palette recognisably cal/terracota/azul-maré; is the text legible enough to judge hierarchy. Do not fix anything; this is evidence for the operator.
 
-- [ ] **Step 5: Commit prompts and costs in the site (PNGs stay ignored)**
+- [ ] **Step 5: Commit prompt and costs in the site (PNGs stay ignored)**
 
 ```bash
 git add docs/mockups/.gitignore docs/mockups/prompts docs/mockups/costs.json
-git commit -m "Add master mockup prompts and cost log"
+git commit -m "Add first master mockup prompt and cost log"
 ```
 
 - [ ] **Step 6: Report**
 
-Report the three paths, the per-image cost and elapsed time from `costs.json`, the observations from Step 4, and the exact next command for the operator: `/mockup-site promote <n>`.
+Report the path, the cost and elapsed time from `costs.json`, the observations from Step 4, and the two next commands for the operator: `/mockup-site approve 1` or `/mockup-site master <what to change>`.
 
 ---
 
 ## Self-review against the spec
 
-- **Component 1** → Task 1 (module, 19 tests). **Component 2** → Task 2 (command, 8 tests; `--budget`, `--dry-run`, costs file, edits vs generations). **Component 3** → Task 3 `crop_mockup`. **Component 4** → Task 3 `sample_palette` with `kmeans_palette`. **Component 5** → Task 4 (all five modes, size table, long-page halves, prompt files, `.gitignore`). **Component 6** → Task 5. **Component 7** → Task 6 Steps 1–5 (gate with no bypass, design guide from design system, section-by-section build, checklist item, report line) plus the `rebuild` entry point needed for the O Marisco test. **Component 8** → Task 6 Steps 6–7. **Component 9** → Task 7 (pin, env example, CLAUDE.md, version, sync) and Task 8 (first real run, masters only, operator chooses).
+- **Component 1** → Task 1 (module, 19 tests). **Component 2** → Task 2 (command, 8 tests; `--budget`, `--dry-run`, costs file, edits vs generations). **Component 3** → Task 3 `crop_mockup`. **Component 4** → Task 3 `sample_palette` with `kmeans_palette`. **Component 5** → Task 4 (modes `master`, `approve`, `section next`, `section <name>`, `sections`, `costs`; size table; long-page halves; prompt files; `sections.json`; `.gitignore`). **Component 6** → Task 5. **Component 7** → Task 6 Steps 1–5 (gate with no bypass, design guide from design system, section-by-section build, checklist item, report line) plus the `rebuild` entry point needed for the O Marisco test. **Component 8** → Task 6 Steps 6–7 (hand-off only). **Component 9** → Task 7 (pin, env example, CLAUDE.md, version, sync) and Task 8 (first real run, one master, operator approves or adjusts).
 - **Type consistency:** `generate(prompt, *, size, quality, model, client)` / `edit(prompt, *, references, size, quality, model, input_fidelity, client)` are the same in Task 1's module and tests and in Task 2's command; `ImageResult` fields used by the command (`png_bytes`, `usage.text_in/image_in/image_out`, `cost_usd`, `model`, `size`, `quality`, `elapsed_s`) are the ones defined; `get_client` is patched at `djangopress.ai.management.commands.generate_mockup.get_client`, which exists because the command imports it by name; the costs record keys in Task 2 match what the `costs` mode of Task 4 prints; file names `docs/mockups/00-master.png`, `NN-<name>.png`, `docs/design-system.md` and the `### NN-<name>` spec headings are identical across Tasks 4, 5 and 6.
 - **Placeholder scan:** none.
