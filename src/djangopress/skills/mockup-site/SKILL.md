@@ -152,7 +152,7 @@ chrome, no annotations, no device frame.
 When `top`/`bottom` are set:
 
 ```bash
-.venv/bin/python manage.py crop_mockup docs/mockups/<image or 00-master.png> docs/mockups/crops/NN-<name>.png --top <top> --bottom <bottom>
+.venv/bin/python manage.py crop_mockup docs/mockups/<image or 00-master.png> docs/mockups/crops/NN-<name>-crop.png --top <top> --bottom <bottom>
 ```
 
 Size by type (a `ratio:` line in the section's briefing entry overrides):
@@ -168,7 +168,7 @@ Size by type (a `ratio:` line in the section's briefing entry overrides):
 ```bash
 .venv/bin/python manage.py generate_mockup --prompt-file docs/mockups/prompts/NN-<name>.md \
   --out docs/mockups/NN-<name>.png --model sunburst --size <size> --quality high --budget <site budget> \
-  --ref docs/mockups/00-master.png [--ref docs/mockups/crops/NN-<name>.png]
+  --ref docs/mockups/00-master.png [--ref docs/mockups/crops/NN-<name>-crop.png]
 ```
 
 ### 5. Stop
