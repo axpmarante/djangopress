@@ -118,6 +118,12 @@ class ModelAndCostTest(SimpleTestCase):
         self.assertFalse(is_retryable(four))
         self.assertFalse(is_retryable(ValueError('x')))
 
+    def test_quota_exhausted_is_not_retryable(self):
+        from djangopress.ai.utils.openai_images import is_retryable
+        RateLimitError = type('RateLimitError', (Exception,), {})
+        self.assertFalse(is_retryable(RateLimitError("Error code: 429 - {'error': {'code': 'credit_balance_exhausted', 'type': 'insufficient_quota'}}")))
+        self.assertTrue(is_retryable(RateLimitError('Rate limit reached for gpt-image-2.5-sunburst')))
+
 
 class GenerateTest(SimpleTestCase):
     def test_generate_calls_generations_with_expected_args(self):

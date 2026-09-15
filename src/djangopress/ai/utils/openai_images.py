@@ -114,6 +114,9 @@ def cost_usd(usage: Usage) -> float:
 
 
 def is_retryable(exc: Exception) -> bool:
+    exc_str = str(exc).lower()
+    if 'insufficient_quota' in exc_str or 'credit_balance_exhausted' in exc_str:
+        return False
     name = exc.__class__.__name__
     if name in ('RateLimitError', 'APIConnectionError', 'APITimeoutError'):
         return True
