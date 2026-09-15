@@ -3,6 +3,7 @@
 import json
 from io import StringIO
 
+from django.core.cache import cache
 from django.core.management import call_command
 from django.core.management.base import CommandError
 from django.test import TestCase
@@ -78,13 +79,22 @@ def check_names(failures):
     return sorted({f['check'] for f in failures})
 
 
-class ValidSiteTest(TestCase):
+class CheckSiteTestCase(TestCase):
+    """SiteSettings.load() caches across tests; drop it so no stale homepage_id leaks."""
+
+    def tearDown(self):
+        cache.delete('site_settings')
+        cache.delete('default_language_code')
+        super().tearDown()
+
+
+class ValidSiteTest(CheckSiteTestCase):
     def test_valid_site_has_no_failures(self):
         make_valid_site()
         self.assertEqual(run_checks(), [])
 
 
-class SettingsCheckTest(TestCase):
+class SettingsCheckTest(CheckSiteTestCase):
     def setUp(self):
         self.home = make_valid_site()
 
@@ -111,7 +121,7 @@ class SettingsCheckTest(TestCase):
         self.assertIn('settings', check_names(run_checks(only=['settings'])))
 
 
-class PageHtmlCheckTest(TestCase):
+class PageHtmlCheckTest(CheckSiteTestCase):
     def setUp(self):
         self.home = make_valid_site()
 
@@ -176,7 +186,7 @@ class PageHtmlCheckTest(TestCase):
         self.assertNotIn('forbidden-tag', check_names(run_checks()))
 
 
-class SeoShapeCheckTest(TestCase):
+class SeoShapeCheckTest(CheckSiteTestCase):
     def setUp(self):
         self.home = make_valid_site()
 
@@ -194,7 +204,7 @@ class SeoShapeCheckTest(TestCase):
         self.assertEqual(check_names(run_checks(only=['seo'])), ['seo'])
 
 
-class LinksCheckTest(TestCase):
+class LinksCheckTest(CheckSiteTestCase):
     def setUp(self):
         self.home = make_valid_site()
 
@@ -221,7 +231,7 @@ class LinksCheckTest(TestCase):
         self.assertEqual(run_checks(only=['links']), [])
 
 
-class HomeCheckTest(TestCase):
+class HomeCheckTest(CheckSiteTestCase):
     def setUp(self):
         self.home = make_valid_site()
 
@@ -249,7 +259,7 @@ class HomeCheckTest(TestCase):
         self.assertIn('home', check_names(run_checks(only=['home'])))
 
 
-class MetaCheckTest(TestCase):
+class MetaCheckTest(CheckSiteTestCase):
     def test_missing_meta_description(self):
         home = make_valid_site()
         home.meta_description_i18n = {}
@@ -257,7 +267,7 @@ class MetaCheckTest(TestCase):
         self.assertEqual(check_names(run_checks(only=['meta'])), ['meta'])
 
 
-class DomParityCheckTest(TestCase):
+class DomParityCheckTest(CheckSiteTestCase):
     def setUp(self):
         self.home = make_valid_site()
 
@@ -282,7 +292,7 @@ class DomParityCheckTest(TestCase):
         self.assertEqual(check_names(run_checks(only=['dom-parity'])), ['dom-parity'])
 
 
-class GlobalSectionCheckTest(TestCase):
+class GlobalSectionCheckTest(CheckSiteTestCase):
     def test_inactive_footer_fails(self):
         make_valid_site()
         gs = GlobalSection.objects.get(key='main-footer')
@@ -293,7 +303,7 @@ class GlobalSectionCheckTest(TestCase):
         self.assertIn('main-footer', failures[0]['message'])
 
 
-class MenuCheckTest(TestCase):
+class MenuCheckTest(CheckSiteTestCase):
     def test_no_menu_items_fails(self):
         make_valid_site()
         MenuItem.objects.all().delete()
@@ -307,7 +317,7 @@ class MenuCheckTest(TestCase):
         self.assertEqual(check_names(failures), ['menu'])
 
 
-class SeoCheckTest(TestCase):
+class SeoCheckTest(CheckSiteTestCase):
     def setUp(self):
         make_valid_site()
 
@@ -336,7 +346,7 @@ class SeoCheckTest(TestCase):
         self.assertEqual(run_checks(only=['seo']), [])
 
 
-class CommandInterfaceTest(TestCase):
+class CommandInterfaceTest(CheckSiteTestCase):
     def test_json_output_ok(self):
         make_valid_site()
         out = StringIO()
