@@ -145,7 +145,7 @@ Notes:
 Verified once, paid for once. Each of these was rediscovered inside a site session before it was written down here. Do not re-derive them.
 
 **1. Internal links carry the language prefix — including the default language.**
-`i18n_patterns` prefixes every language, so `Page.get_absolute_url('pt')` is `/pt/sobre/` and the site root `/` redirects to `/pt/`. Page HTML is raw, with no `{% url %}`, so links are literal:
+Canonical URLs carry the language prefix for every language. The model's `get_absolute_url()` and the middleware tolerate the unprefixed default-language form, so nothing will error if you omit it — but an unprefixed link inside an `/en/` page silently drops the visitor into the default language. Page HTML is raw, with no `{% url %}`, so write the prefix literally:
 
 ```html
 <!-- wrong -->            <!-- right -->
@@ -156,7 +156,7 @@ Verified once, paid for once. Each of these was rediscovered inside a site sessi
 In the English copy of the page the same link is `/en/reservations/`. Header and footer are Django templates and keep using `{% url 'core:page' slug='...' %}`. `manage.py check_site` reports violations under `[links]`.
 
 **2. Version before you mutate, with the model's own method.**
-`page.create_version(change_summary='...')` and `section.create_version(change_summary='...')` both exist. Never create `ContentVersion` or `PageVersion` rows by hand.
+`page.create_version(change_summary='...')` and `section.create_version(change_summary='...')` both exist. Never create `ContentVersion` or `PageVersion` rows by hand. (`ContentVersion`'s snapshot field is `snapshot`, for the record.)
 
 **3. `SiteImage.key` must be ASCII.**
 `django.utils.text.slugify` keeps accented letters, so "Caril de Camarão" becomes `dish-caril-de-camarão` and later lookups by the ASCII form miss. Fold first:

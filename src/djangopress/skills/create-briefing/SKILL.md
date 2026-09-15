@@ -35,7 +35,7 @@ Compute `<slug>` from the business name: lowercase, ASCII-folded, hyphens (`"O M
 Read the site's current state so the draft does not propose what already exists:
 
 ```bash
-python manage.py shell -c "
+.venv/bin/python manage.py shell -c "
 from djangopress.core.models import SiteSettings, Page, GlobalSection, DynamicForm
 s = SiteSettings.load()
 print('gcs_folder:', s.gcs_folder); print('languages:', s.get_language_codes())
@@ -119,7 +119,7 @@ Write `briefings/<slug>-audit.md`:
 
 ## Phase 2: Draft briefing and the question list
 
-Read `briefings/TEMPLATE.md`. Write `briefings/<slug>.md` following it exactly, **every section filled with a concrete proposal** — no placeholders, no "TBD". The build skill must be able to run from this draft unchanged.
+Read `briefings/TEMPLATE.md` (if the site does not have it, run `.venv/bin/python manage.py sync_skills` once, which copies it from the package). Write `briefings/<slug>.md` following it exactly, **every section filled with a concrete proposal** — no placeholders, no "TBD". The build skill must be able to run from this draft unchanged.
 
 Rules for the draft:
 

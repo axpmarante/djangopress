@@ -30,8 +30,10 @@ Decide by reading the state in Phase 0.
 test -f .env && echo "ENV OK" || echo "ENV MISSING"
 .venv/bin/python -c "import djangopress; print('djangopress', djangopress.__version__ if hasattr(djangopress,'__version__') else 'ok')"
 .venv/bin/python manage.py migrate --check >/dev/null 2>&1 && echo "MIGRATIONS OK" || echo "MIGRATIONS PENDING"
-.venv/bin/python manage.py check_site --json
+.venv/bin/python manage.py check_site --json || true
 ```
+
+On a fresh site this reports many failures by design; on an existing site it will also list many `[links]` lines because engine-generated content never carried the language prefix. Neither is breakage; both are the to-do list.
 
 Read the briefing, the audit (`briefings/<slug>-audit.md`) if it exists, and the menu JSON if it exists. Then read the current state:
 
@@ -47,7 +49,7 @@ print('menu:', MenuItem.objects.count(), '| forms:', list(DynamicForm.objects.va
 "
 ```
 
-Facts to hold: the template already created a privacy page (`sort_order=999`), `main-header` and `main-footer` with a default layout, and a `contact` DynamicForm. Refine them; never recreate them. `gcs_folder` is already the project slug; never change it.
+Facts to hold: a fresh site has migrations applied, `gcs_folder` set to the project slug, and a `contact` DynamicForm. It has no pages and no `main-header`/`main-footer` rows; until those rows exist the site renders from the engine's fallback templates (`partials/header.html`, `partials/footer.html`). Phase 6 creates the rows from those fallbacks when absent. Never change `gcs_folder`.
 
 Create a branch for the build if you are on `main` with a clean tree: `git checkout -b build-$(date +%Y%m%d)`. If the tree is dirty, stay where you are.
 
@@ -61,7 +63,8 @@ Follow `edit-site` → *Settings* → *Update site identity / contact / social /
 - `site_name_i18n` for all languages (brand), `site_description_i18n` default only.
 - `project_briefing` = the Business section verbatim.
 - Contact, social URLs, `whatsapp_number` if any.
-- Colors from Design Preferences: `background_color`, `text_color`, `primary_color` (accent), `secondary_color`, `accent_color`, `heading_color`; `heading_font`, `body_font`; `border_radius_class`, `container_width_class`, `shadow_class`, button colors from the palette.
+- Colors from Design Preferences: `background_color`, `text_color`, `primary_color` (accent), `secondary_color`, `accent_color`, `heading_color`; `heading_font`, `body_font`; `border_radius_preset`, `container_width`, `shadow_preset`, button colors from the palette.
+- Privacy page: create the Privacy & Cookies Policy page now if no page slug contains `privacy` or `politica` — use `edit-site` → *Create Page* with `sort_order=999`, default language only. The footer in Phase 6 links to it.
 
 Verify: `.venv/bin/python manage.py check_site --only settings` may still report `homepage`; everything else under `[settings]` must be gone.
 
@@ -94,7 +97,7 @@ With `unsplash`, `ai` or `skip`, pages use `https://placehold.co/WxH?text=Label`
 
 ## Phase 4: Home page
 
-Write the home page HTML in the default language to `/tmp/dp-page-new-<lang>.html`, following the design guide and the Pages section of the briefing. Then save it with `edit-site` → *Create Page* (steps 4, 6: create, then set as homepage), including `meta_title_i18n` and `meta_description_i18n`.
+Write the home page HTML in the default language to `/tmp/dp-page-new-<lang>.html`, following the design guide and the Pages section of the briefing. Then save it with `edit-site` → *Create Page* (steps 4, 6: create, then set as homepage), including `meta_title_i18n` and `meta_description_i18n`. The `edit-site` recipes loop over every enabled language; in a build write only the default-language key of each `*_i18n` field.
 
 Internal links are literal with the language prefix: `/pt/reservas/`, `/pt/#menu` (`Rulings` §1).
 
@@ -110,7 +113,7 @@ Placeholder images are the only acceptable remaining `[images]` lines, and only 
 
 ## Phase 5: Remaining pages
 
-For every other page in the briefing, the same as Phase 4, **without** the homepage step. Pages are independent once the design guide and the home page exist, so you may dispatch them in parallel with the `Agent` tool, one agent per page, each given: the briefing path, the design guide (read it from settings), the home page HTML as the style reference, the image map, and the exact `check_site --only` line above. Each agent saves its page and reports the page id and its check result. Run the check yourself afterwards; agents' reports are not evidence.
+For every other page in the briefing, the same as Phase 4, **without** the homepage step. Pages are independent once the design guide and the home page exist, so you may dispatch them in parallel with the `Agent` tool, one agent per page, each given: the briefing path, the design guide (read it from settings), the home page HTML as the style reference, and the image map. Agents save and report the page id only; they do not run `check_site` (it evaluates the whole site and would chase each other's half-written pages). When all agents have reported, run the Phase 4 `check_site --only` line once yourself and fix what it lists.
 
 Sequential is fine for three pages or fewer.
 
@@ -119,8 +122,8 @@ Sequential is fine for three pages or fewer.
 ## Phase 6: Header, footer, menu
 
 1. Menu: `edit-site` → *Menu Management* → *Rebuild menu from pages*, then adjust order and add anchor items for a one-pager (`/pt/#menu`) and the reservations CTA as a CTA item.
-2. Header: refine `main-header` per the briefing's Header section with `edit-site` → *Edit Header/Footer*. Keep `{% url %}` tags; keep the language switcher; make the mobile menu work with Alpine.
-3. Footer: same for `main-footer`. Contact, hours, social icons, privacy link, copyright.
+2. Header: create `main-header` from `partials/header.html` if the row is absent, then refine it per the briefing's Header section with `edit-site` → *Edit Header/Footer*. Keep `{% url %}` tags; keep the language switcher; make the mobile menu work with Alpine.
+3. Footer: create `main-footer` from `partials/footer.html` if the row is absent, then refine it. Contact, hours, social icons, privacy link, copyright.
 
 ```bash
 .venv/bin/python manage.py check_site --only global-section,menu
@@ -148,7 +151,7 @@ Sequential is fine for three pages or fewer.
 .venv/bin/python manage.py check_site
 ```
 
-Must print `OK — all checks passed`, except `[images]` placeholder lines under a placeholder strategy. Fix anything else before continuing.
+The gate passes when the command exits 0, or when every remaining line is an `[images]` line reading `unresolved placeholder` or `leftover data-image-* attribute` and the briefing's image strategy is `unsplash`, `ai` or `skip`. Under those strategies both kinds of `[images]` line are expected — do not strip the `data-image-*` attributes to silence them; they are what the later image step consumes. Anything else must be fixed before continuing.
 
 ### 8b. Screenshots
 
