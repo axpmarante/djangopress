@@ -181,7 +181,12 @@ def generate(prompt: str, *, size: str, quality: str = 'high', model: str = 'sun
 
 
 def edit(prompt: str, *, references: Sequence[Path], size: str, quality: str = 'high',
-         model: str = 'sunburst', input_fidelity: str = 'high', client=None) -> ImageResult:
+         model: str = 'sunburst', client=None) -> ImageResult:
+    """Reference-guided render via the edits endpoint.
+
+    gpt-image-2.5 rejects `input_fidelity` (verified against the live API), so it is
+    never sent; the models weigh reference images on their own.
+    """
     validate_size(size)
     validate_quality(quality)
     if not references:
@@ -202,7 +207,7 @@ def edit(prompt: str, *, references: Sequence[Path], size: str, quality: str = '
         response = _call_with_retries(
             client.images.edit,
             model=model_id, image=files, prompt=prompt, size=size, quality=quality,
-            input_fidelity=input_fidelity, n=1, output_format='png',
+            n=1, output_format='png',
         )
     finally:
         for f in files:

@@ -77,10 +77,10 @@ PRICE_PER_M = {'text_in': 5.0, 'image_in': 8.0, 'image_out': 30.0}
 def validate_size(size: str) -> tuple[int, int]      # raises ValueError with the violated rule
 def cost_usd(usage) -> float                          # from usage.input_tokens_details / output_tokens
 def generate(prompt, *, size, quality, model, client=None) -> ImageResult
-def edit(prompt, *, references: list[Path], size, quality, model, input_fidelity='high', client=None) -> ImageResult
+def edit(prompt, *, references: list[Path], size, quality, model, client=None) -> ImageResult   # no input_fidelity: gpt-image-2.5 rejects it
 ```
 
-`ImageResult` carries `png_bytes`, `usage` (input text/image tokens, output tokens), `cost_usd`, `model`, `size`, `quality`, `elapsed_s`. `generate` calls `client.images.generate(model=..., prompt=..., size=..., quality=..., output_format='png', n=1)`; `edit` calls `client.images.edit(model=..., image=[open files...], prompt=..., size=..., quality=..., input_fidelity=...)`. The client comes from `OPENAI_API_KEY` (same env access as `llm_config.py`). Errors from the API surface as `ImageGenerationError(message, retryable: bool)`; rate-limit and 5xx are retried twice with backoff, content-policy and 4xx are not.
+`ImageResult` carries `png_bytes`, `usage` (input text/image tokens, output tokens), `cost_usd`, `model`, `size`, `quality`, `elapsed_s`. `generate` calls `client.images.generate(model=..., prompt=..., size=..., quality=..., output_format='png', n=1)`; `edit` calls `client.images.edit(model=..., image=[open files...], prompt=..., size=..., quality=..., output_format='png', n=1)` — no `input_fidelity`, which gpt-image-2.5 rejects. The client comes from `OPENAI_API_KEY` (same env access as `llm_config.py`). Errors from the API surface as `ImageGenerationError(message, retryable: bool)`; rate-limit and 5xx are retried twice with backoff, content-policy and 4xx are not.
 
 Tests use a fake client object; no network. They cover `validate_size` for every rule, `cost_usd`, the edit call shape (list of files, `input_fidelity`), and the retry classification.
 

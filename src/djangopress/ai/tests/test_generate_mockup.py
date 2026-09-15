@@ -53,7 +53,7 @@ class GenerateMockupTest(SimpleTestCase):
                   '--size', '1920x1088', '--ref', str(ref), client=client)
         kind, kwargs = client.images.calls[0]
         self.assertEqual(kind, 'edit')
-        self.assertEqual(kwargs['input_fidelity'], 'high')
+        self.assertNotIn('input_fidelity', kwargs)
         rec = json.loads(self.costs.read_text())['records'][0]
         self.assertEqual(rec['refs'], [str(ref)])
 

@@ -79,7 +79,6 @@ class Command(BaseCommand):
         parser.add_argument('--size', default='1536x1024', help='WIDTHxHEIGHT (multiples of 16, 1:3..3:1)')
         parser.add_argument('--quality', default='high', help='low|medium|high|xhigh|max|auto')
         parser.add_argument('--ref', action='append', default=[], help='Reference image (repeatable, max 16)')
-        parser.add_argument('--fidelity', default='high', choices=['high', 'low'], help='input_fidelity for edits')
         parser.add_argument('--budget', type=float, default=None, help='Refuse if the site total would exceed this USD amount')
         parser.add_argument('--costs-file', default=DEFAULT_COSTS_FILE)
         parser.add_argument('--dry-run', action='store_true', help='Validate and print the request; no API call')
@@ -118,7 +117,7 @@ class Command(BaseCommand):
         if options['dry_run']:
             self.stdout.write(
                 f"dry run: {endpoint} model={model_id} size={options['size']} quality={options['quality']} "
-                f"refs={len(refs)} fidelity={options['fidelity']} out={out}\n--- prompt ({len(prompt)} chars) ---\n{prompt[:800]}"
+                f"refs={len(refs)} out={out}\n--- prompt ({len(prompt)} chars) ---\n{prompt[:800]}"
             )
             return
 
@@ -139,7 +138,7 @@ class Command(BaseCommand):
             client = get_client()
             if refs:
                 result = edit(prompt, references=refs, size=options['size'], quality=options['quality'],
-                              model=model_id, input_fidelity=options['fidelity'], client=client)
+                              model=model_id, client=client)
             else:
                 result = generate(prompt, size=options['size'], quality=options['quality'],
                                   model=model_id, client=client)

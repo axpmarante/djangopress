@@ -198,7 +198,7 @@ class EditTest(SimpleTestCase):
     def tearDown(self):
         self.tmp.cleanup()
 
-    def test_edit_sends_reference_files_and_fidelity(self):
+    def test_edit_sends_reference_files_without_fidelity(self):
         from djangopress.ai.utils.openai_images import edit
         client = FakeClient(responses=[fake_response(image_in=1200)])
         result = edit('the hero', references=self.refs, size='1920x1088', client=client)
@@ -206,7 +206,7 @@ class EditTest(SimpleTestCase):
         self.assertEqual(kind, 'edit')
         self.assertEqual(kwargs['model'], 'gpt-image-2.5-sunburst')
         self.assertEqual(len(kwargs['image']), 2)
-        self.assertEqual(kwargs['input_fidelity'], 'high')
+        self.assertNotIn('input_fidelity', kwargs)  # gpt-image-2.5 rejects it (live API, 2026-09-15)
         self.assertEqual(kwargs['size'], '1920x1088')
         self.assertEqual(kwargs['quality'], 'high')
         self.assertEqual(kwargs['output_format'], 'png')
