@@ -17,7 +17,7 @@ Build and iterate in the default language only. Other languages stay absent from
 
 ## Two entry points
 
-- **Fresh site** (no page other than the template's privacy page): run Phases 0–8. Stop after Phase 8.
+- **Fresh site** (no pages yet): run Phases 0–8. Stop after Phase 8.
 - **Built site, translation requested** (the operator asked for translation, or ran this skill again on a site that already passes `check_site` in the default language): run Phase 9 only.
 
 Decide by reading the state in Phase 0.

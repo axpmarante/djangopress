@@ -264,10 +264,10 @@ h1_font, h2_font, h3_font, h4_font, h5_font, h6_font → per-heading font overri
 h1_size, h2_size, h3_size, h4_size, h5_size, h6_size → Tailwind size classes
 
 # Design system — layout & components
-container_width_class → e.g. "max-w-7xl"
-border_radius_class   → rounded-none, rounded, rounded-lg, rounded-xl, rounded-2xl, rounded-full
-spacing_class         → spacing scale
-shadow_class          → shadow-none, shadow, shadow-md, shadow-lg, shadow-xl
+container_width       → full, xs, sm, md, lg, xl, 2xl, 3xl, 4xl, 5xl, 6xl, 7xl (rendered as max-w-<value>; "full" → w-full)
+border_radius_preset  → none, sm, md, lg, xl, 2xl, 3xl, full (rendered as rounded-<value>)
+spacing_scale         → tight, normal, relaxed, loose (section padding scale)
+shadow_preset         → none, sm, md, lg, xl, 2xl (rendered as shadow-<value>)
 button_style, button_size, button_radius, button_padding
 primary_button_bg, primary_button_text, primary_button_hover
 secondary_button_bg, secondary_button_text, secondary_button_hover
@@ -275,6 +275,8 @@ secondary_button_bg, secondary_button_text, secondary_button_hover
 # Storage
 gcs_folder            → GCS folder name for media storage
 ```
+
+The `THEME` context processor turns these into `container_width_class`, `border_radius_class`, `spacing_class`, `shadow_class` for templates; those names are not model fields.
 
 **MenuItem:**
 ```
