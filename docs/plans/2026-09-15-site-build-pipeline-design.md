@@ -106,7 +106,7 @@ Anything needing a browser: horizontal scroll, header legibility, rendering. Tha
 New subsection **"Rulings that every site hits"**, placed after "Page HTML Rules". Each ruling is two to four lines with the exact wrong and right form:
 
 1. **Internal links carry the language prefix.** `i18n_patterns` prefixes the default language too, so `reverse('core:home')` is `/pt/`. Page HTML is raw, so links are literal: `/pt/reservas/`, `/en/reservations/`, `/pt/#hero`. Header and footer are Django templates and use `{% url %}`. `check_site` enforces it under `links`.
-2. **Versioning before mutation.** `Page`: `page.create_version(change_summary=...)`. `GlobalSection`: `ContentVersion.objects.create(content_type=..., object_id=..., snapshot={'html_template_i18n': ...}, change_summary=...)`. The field is `snapshot`, not `content_data`.
+2. **Versioning before mutation.** Both models have the method: `page.create_version(change_summary=...)` and `section.create_version(change_summary=...)`. Never write `ContentVersion` rows by hand; its snapshot field is `snapshot`, and hand-written rows are not what the backoffice restore reads.
 3. **`SiteImage.key` is ASCII.** Fold with `unicodedata.normalize('NFKD', v).encode('ascii', 'ignore')` before slugifying. `slugify` alone keeps accents under Python 3's `\w`.
 4. **Printing to PDF.** `require('playwright')` does not resolve from a temp directory. Use the bundled binary at `~/Library/Caches/ms-playwright/chromium-*/chrome-mac/Chromium.app/Contents/MacOS/Chromium` with `--headless --disable-gpu --no-pdf-header-footer --virtual-time-budget=10000 --print-to-pdf=OUT IN`.
 5. **Always the site's venv.** `.venv/bin/python manage.py ...`. Scripts under `scripts/` need `PYTHONPATH=.` or the `sys.path` insert at the top.
