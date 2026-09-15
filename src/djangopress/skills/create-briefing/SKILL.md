@@ -1,494 +1,185 @@
 ---
 name: create-briefing
-description: Interactive wizard to create a site briefing by researching the client online and asking targeted questions.
-argument-hint: [client-name-or-url]
-allowed-tools: Bash, Read, Write, Grep, Glob, AskUserQuestion, WebFetch, WebSearch
+description: Intake for a new site or a redesign. Researches the client (existing site, socials, reviews, integrations, image inventory) without asking anything, writes a complete draft briefing plus a short list of questions only the operator can answer, then finalizes the briefing from the answers. Use when starting any site, with a URL, a client document, or both.
+argument-hint: [url] [path/to/document] — any combination, or nothing
+allowed-tools: Bash, Read, Write, Edit, Grep, Glob, AskUserQuestion, WebFetch, WebSearch
 ---
 
-# Interactive Briefing Generator
+# Site Intake → Briefing
 
-You are creating a DjangoPress site briefing through research and conversation. The goal is to produce a `briefings/<slug>.md` file that follows the exact template format so `BriefingParser` in `ai/site_generator.py` can parse it.
+You produce `briefings/<slug>.md` in the format of `briefings/TEMPLATE.md`, good enough to build from as is, plus `briefings/<slug>-audit.md` with everything you found. The argument is: `$ARGUMENTS`
 
-The argument provided is: `$ARGUMENTS`
-
----
-
-## Phase 1: Starting Point
-
-Determine what the user gave you:
-
-- **If `$ARGUMENTS` looks like a URL** (contains `http`, `www`, or `.com`/`.pt`/etc.) → treat it as the client website. Proceed to Phase 2 with this URL.
-- **If `$ARGUMENTS` is a name** (text without URL patterns) → use it as the business name. Ask the user:
-
-```
-AskUserQuestion: "Do you have a website URL for <name>? (paste it, or skip to answer questions manually)"
-Options: "Skip — no website", "Other" (for URL input)
-```
-
-- **If no argument** → ask:
-
-```
-AskUserQuestion: "What's the client/business name?"
-Options: (free text via "Other")
-```
-
-Then ask for a website URL as above.
-
-Store whatever you have: `business_name` (if known) and `website_url` (if provided).
+**Two rules shape this skill.** Research never asks questions. Questions come once, in a block, at the end, each with a proposed default. This is what lets several intakes run in parallel while the operator is away, and makes a single intake faster too.
 
 ---
 
-## Phase 2: Web Research
+## Phase 0: Detect the mode
 
-**Only run this phase if a URL was provided.** If no URL, skip to Phase 3.
+Parse `$ARGUMENTS`:
 
-Research is the #1 value of this skill — don't ask the user for info that's on their website.
+- A token containing `http`, `www.` or ending in a TLD (`.pt`, `.com`, ...) is the **URL** of the existing site.
+- A token that is an existing file path (`.md`, `.txt`, `.pdf`, `.docx`, `.html`) is the **document** from the client or the operator.
+- Anything else is the business name.
 
-### 2a. Fetch and crawl the client website
+| Inputs | Mode | What the draft proposes | What the questions target |
+|---|---|---|---|
+| URL only | Redesign | Keep the current structure, refresh design | What changes: pages to merge or drop, content to update, design direction |
+| Document only | New site | Structure from the document, filling gaps by industry convention | Gaps in the document, design direction |
+| URL + document | Redesign with brief | Crawl as facts, document as intent | Conflicts between the two |
+| Nothing | Ask once | — | — |
 
-**Step 1: Fetch the homepage.** Use `WebFetch` on the main URL. Extract:
-- Business name and tagline
-- What they do — services, products, specialties
-- Contact info: email, phone, address
-- Social media links (check header, footer, contact page)
-- Visual style observations: colors, mood, typography, imagery style
-- Any awards, certifications, press mentions
-- Opening hours (if applicable)
+With nothing, use one `AskUserQuestion`: "Business name, and a URL or document if there is one?" Then continue in the resulting mode. Running non-interactively (the tool is unavailable), print the same question and stop; the next message will carry the answer.
 
-**Step 2: Extract all internal links.** From the homepage, collect every link from:
-- **Navigation bar** (including dropdown/submenu items)
-- **CTA buttons** and prominent links in the hero/header area
-- **Footer links** (quick links, service pages, legal pages)
+Compute `<slug>` from the business name: lowercase, ASCII-folded, hyphens (`"O Marisco"` → `o-marisco`). If the project directory name already looks like a slug of this business, use the directory name so it matches `SiteSettings.gcs_folder`.
 
-Filter to internal links only (same domain). Deduplicate and ignore anchors (`#`), mailto, tel, and file downloads.
-
-**Step 3: Fetch each page.** Use `WebFetch` on every internal link found. For each page extract:
-- Page title and URL
-- Main content summary (what the page is about, key sections)
-- Specific services, products, or info listed
-- Forms (contact, booking, quote request)
-- Gallery or portfolio items
-- Testimonials or reviews
-- Any data not found on the homepage
-
-Fetch pages in parallel where possible. If a page fails, note it and move on.
-
-**Step 4: Build a complete site map.** Compile all findings into a structured overview of every page and its content. This becomes the foundation for the Pages section in the briefing.
-
-### 2b. Fetch social media profiles
-
-If you found social media links, use `WebFetch` on Instagram and Facebook pages to gather:
-- Bio/description
-- Follower counts
-- Tone of voice and posting style
-- Additional business details not on the website
-
-**Graceful degradation:** If any fetch fails (blocked, timeout, 404), note it and move on. Never let a failed fetch block the process.
-
-### 2c. Web search
-
-Use `WebSearch` for `"<business name>" <city/location>` to find:
-- Google reviews and ratings
-- Awards or press mentions
-- Google Maps listing
-- Additional social profiles not found on the website
-- Competitor context
-
-### 2d. Write the site audit document
-
-**Only for migration sites (when a URL was provided).** Write a comprehensive audit to `briefings/<slug>-audit.md` capturing everything found. This document is the raw research — keep it detailed and factual.
-
-Use the `Write` tool to create the file with this structure:
-
-```markdown
-# <Business Name> — Site Audit
-
-> Auto-generated from crawling <URL> on <date>
-
-## Business Overview
-[What the business does, tagline, specialties]
-
-## Contact Information
-- Email: [email]
-- Phone: [phone]
-- Address: [address]
-- Google Maps: [link if found]
-
-## Social Media
-- Instagram: [url]
-- Facebook: [url]
-- [other platforms]
-
-## Site Map
-
-### Navigation Structure
-[Exact nav items as they appear, including dropdowns]
-
-### Pages Crawled
-
-#### Home (/)
-**Sections:**
-1. [Hero — description, heading text, CTA button text]
-2. [Section name — what content it contains]
-3. [Section name — what content it contains]
-...
-
-**Images:** [notable images, hero background, etc.]
-**Forms:** [any forms on this page]
-
-#### About (/about)
-**Sections:**
-1. [Section — content summary]
-...
-
-[Repeat for every page crawled]
-
-### Footer Structure
-[Columns, links, contact info, social icons, newsletter signup, etc.]
-
-## Design Observations
-- **Colors:** [primary, secondary, accent colors observed]
-- **Typography:** [font families, heading styles]
-- **Layout:** [grid patterns, spacing, visual density]
-- **Mood:** [elegant, playful, corporate, warm, etc.]
-- **Image style:** [photography style, illustrations, icons]
-
-## Notable
-- [Awards, certifications, press mentions]
-- [Google reviews/rating if found]
-- [Unique features or content worth preserving]
-```
-
-Adapt sections as needed — skip what doesn't apply, add what's relevant.
-
-### 2e. Present findings
-
-Show the user a summary of what you found and that the audit has been saved:
-
-```
-Audit saved to `briefings/<slug>-audit.md`
-
-Here's the overview:
-
-**Business:** [summary]
-**Location:** [address]
-**Contact:** [email, phone]
-**Pages found:** [count] — [list page names]
-**Design mood:** [observations]
-
-Does this look right? Anything to correct?
-```
-
-Use `AskUserQuestion` to confirm:
-```
-Question: "Is the audit accurate? Anything to correct?"
-Options: "Looks good — continue", "I'll make corrections" (Other)
-```
-
-If the user provides corrections, update the audit file and confirm.
-
----
-
-## Phase 3: Interactive Questions
-
-Fill in gaps not covered by web research. Use `AskUserQuestion` with structured options wherever possible. **Skip questions you already have answers for** from Phase 2.
-
-### 3a. Languages
-
-```
-AskUserQuestion (multiSelect: true):
-Question: "What languages should the site support?"
-Options:
-- "Portuguese (pt)" — most common default
-- "English (en)"
-- "French (fr)"
-- "Spanish (es)"
-(Other for additional languages)
-```
-
-Then ask which is the default language:
-```
-AskUserQuestion:
-Question: "Which should be the default language?"
-Options: [list selected languages]
-```
-
-### 3b. Pages
-
-Suggest a page structure based on the industry/business type. Use what you know from the website research (if any) to make informed suggestions.
-
-```
-AskUserQuestion (multiSelect: true):
-Question: "Which pages should the site have? (I've suggested based on [industry/current site])"
-Options:
-- "Home" — always included
-- "[Industry-specific page 1]" — e.g. "Menu" for restaurant, "Services" for agency
-- "[Industry-specific page 2]" — e.g. "Gallery", "Portfolio", "Products"
-- "Contact"
-(Other for additional pages)
-```
-
-Then for **each selected page**, ask for details. If you have info from the existing website, propose it:
-
-```
-For the [Page Name] page, what should it include?
-
-[If you have existing website content]: "Based on their current site, I'd suggest:
-- [Section 1 description]
-- [Section 2 description]
-- [Section 3 description]
-
-Want to keep this structure, modify it, or describe something different?"
-```
-
-Be specific about sections — don't accept "the home page" as a description. Probe for:
-- Hero section: what image/message
-- Key content sections
-- CTAs (calls to action)
-- Special features (forms, maps, galleries, pricing tables)
-
-### 3c. Current site feedback (if they have an existing site)
-
-```
-AskUserQuestion:
-Question: "What do you like or dislike about the current site?"
-Options:
-- "Complete redesign — start fresh"
-- "Keep the structure, refresh the look"
-- "I'll describe specific changes" (Other)
-```
-
-### 3d. Design direction
-
-```
-AskUserQuestion (multiSelect: true):
-Question: "What's the design mood you're going for?"
-Options:
-- "Elegant & refined"
-- "Modern & clean"
-- "Bold & energetic"
-- "Warm & inviting"
-(Other for specific colors, fonts, or reference sites)
-```
-
-If the user has specific colors, fonts, or reference sites, note them. If they chose a mood, you'll translate that into specific design values in the briefing.
-
-### 3e. Image strategy
-
-```
-AskUserQuestion:
-Question: "How should we handle images?"
-Options:
-- "Mix of Unsplash + AI (Recommended)" — stock photos for general imagery, AI for custom
-- "Unsplash stock photos only"
-- "AI-generated images only"
-- "Skip for now — add images later"
-```
-
-### 3f. Domain identifier
-
-Suggest a slug based on the business name and location:
-
-```
-AskUserQuestion:
-Question: "What domain identifier should we use for storage? (lowercase, hyphens only)"
-Options:
-- "<suggested-slug>" — e.g. "omoinho-ericeira" based on the business name
-- "<alternative-slug>" — shorter or different variant
-(Other for custom input)
-```
-
-### 3g. Additional requirements
-
-```
-AskUserQuestion:
-Question: "Any special requirements? (accessibility, legal, seasonal content, specific features)"
-Options:
-- "No, that covers everything"
-- "Yes, I'll describe them" (Other)
-```
-
----
-
-## Phase 4: Write the Briefing
-
-**For migration sites:** Use `briefings/<slug>-audit.md` as your primary source. The audit contains the detailed page-by-page content, design observations, and site structure. Draw from it heavily — the briefing should reflect what the existing site has, enhanced by the user's answers from Phase 3.
-
-Compile all gathered information into the **exact format** that `BriefingParser` expects. Read the template first:
-
-```
-Read: briefings/TEMPLATE.md
-```
-
-### File format rules (critical for parsing)
-
-The briefing **must** follow these rules or `BriefingParser` will fail:
-
-1. **Title line:** `# Business Name — Site Briefing`
-2. **Sections** use `## Section Name` (exact names: Business, Languages, Contact, Social Media, Pages, Header, Footer, Design Preferences, Images, Domain, Additional Notes)
-3. **Languages format:**
-   ```
-   - Default: pt (Portuguese)
-   - Additional: en (English), fr (French)
-   ```
-4. **Contact format:**
-   ```
-   - Email: name@example.com
-   - Phone: +351 ...
-   - Address:
-     - pt: Rua ...
-     - en: Street ...
-   - Google Maps: https://maps.google.com/...
-   ```
-   For a single-language site or same address in all languages, just use `- Address: Street Name, City`
-5. **Social Media format:**
-   ```
-   - Instagram: https://instagram.com/handle
-   - Facebook: https://facebook.com/page
-   ```
-   Supported platforms: Instagram, Facebook, LinkedIn, YouTube, Twitter, TikTok, Pinterest, WhatsApp
-6. **Pages format:** Markdown list with bold names:
-   ```
-   - **Page Name**: Description of content and sections...
-   ```
-   Multi-line descriptions are fine — the parser reads until the next `- **` entry.
-7. **Domain:** Just the identifier on its own line, e.g. `my-business-name`
-8. **Images:** Must contain keywords for strategy detection:
-   - "skip" → skip images
-   - "unsplash" + "ai"/"mix"/"both" → mixed strategy
-   - "unsplash" alone → unsplash preferred
-   - anything else → AI generated
-
-### Writing the Business section
-
-This is the **most important section** — it becomes the `project_briefing` that drives ALL AI generation. Make it rich and detailed (3-5 paragraphs):
-
-- What the business does and its specialties
-- History and heritage (if known)
-- Target audience
-- Tone of voice and personality
-- Unique selling points
-- Location context and competitive positioning
-- Awards, press, reputation (if found)
-
-Use everything gathered from web research + user answers. Write it as polished prose, not bullet points.
-
-### Writing the Pages section
-
-For each page, write a **detailed** description with specific sections:
-
-```
-- **Home**: Hero with [specific image/message]. [Section about X]. [Section about Y].
-  Testimonials or social proof. CTA to [action]. [Any other sections].
-
-- **About**: The story of [business] — [specific narrative]. Team introduction.
-  Philosophy/values. Awards and recognition.
-```
-
-Don't be vague. "The home page" is not a description. Describe what sections should exist and what content goes in them.
-
-### Header and Footer
-
-If the user didn't specify, suggest sensible defaults based on the industry:
-
-**Header:** Transparent-to-solid on scroll, logo left, nav links, CTA button right, language switcher, mobile hamburger.
-
-**Footer:** 3-column layout — (1) logo + description + social icons, (2) quick links, (3) contact info. Copyright line below.
-
-### Compute the filename
-
-Slugify the business name: lowercase, replace spaces and special characters with hyphens, remove accents:
-- "O Moinho" → `o-moinho`
-- "Prestige Real Estate Algarve" → `prestige-real-estate-algarve`
-- "Café Central" → `cafe-central`
-
-File path: `briefings/<slug>.md`
-
-### Write the file
-
-Use the `Write` tool to create the briefing file. Then show the user the full output:
-
-```
-Read: briefings/<slug>.md
-```
-
-Ask for confirmation:
-```
-AskUserQuestion:
-Question: "How does the briefing look? Any section you'd like to refine?"
-Options:
-- "Looks great — done!"
-- "Tweak the Business section"
-- "Tweak the Pages"
-- "Tweak Design Preferences"
-(Other for specific edits)
-```
-
-If the user wants changes, edit the file and show it again. Repeat until they're satisfied.
-
----
-
-## Phase 5: Next Steps
-
-Once the briefing is finalized, confirm to the user that it was saved:
-
-```
-Briefing saved to `briefings/<slug>.md`
-```
-
-Then ask whether to proceed straight into site generation. The natural next step after a briefing is generation — don't make the user copy-paste a command if they're ready to go now.
-
-```
-AskUserQuestion:
-Question: "Avançar agora com a geração do site?"
-Options:
-- "Sim — gerar agora" (Recommended) — invokes the generate-site skill with this briefing
-- "Não — só preview (dry-run)" — runs `python manage.py generate_site briefings/<slug>.md --dry-run` so the user can inspect the plan
-- "Não — fico por aqui" — stops; show the commands for later reference
-```
-
-### Branch on the answer
-
-**If "Sim — gerar agora":** Invoke the `generate-site` skill via the Skill tool, passing the briefing path as the argument:
-
-```
-Skill: generate-site
-args: briefings/<slug>.md
-```
-
-The generate-site skill takes over from here and runs the full pipeline (Settings → Pages → Menu → Header → Footer → Translate). Remember the design-first / translate-last rule it enforces: only the default language is generated until the user has signed off on the design.
-
-**If "Não — só preview (dry-run)":** Run the dry-run command and show the output:
+Read the site's current state so the draft does not propose what already exists:
 
 ```bash
-python manage.py generate_site briefings/<slug>.md --dry-run
-```
-
-After showing the plan, ask again if the user wants to proceed with generation.
-
-**If "Não — fico por aqui":** Show the manual commands so the user can return to this later:
-
-```
-When you're ready to generate, run any of these:
-
-  # Preview what will be generated:
-  python manage.py generate_site briefings/<slug>.md --dry-run
-
-  # Generate the full site (Claude Code reviews quality):
-  /generate-site briefings/<slug>.md
-
-  # Or generate without review (faster, non-interactive):
-  python manage.py generate_site briefings/<slug>.md
+python manage.py shell -c "
+from djangopress.core.models import SiteSettings, Page, GlobalSection, DynamicForm
+s = SiteSettings.load()
+print('gcs_folder:', s.gcs_folder); print('languages:', s.get_language_codes())
+print('pages:', [(p.id, p.slug_i18n) for p in Page.objects.all()])
+print('sections:', list(GlobalSection.objects.values_list('key', flat=True)))
+print('forms:', list(DynamicForm.objects.values_list('slug', flat=True)))
+"
 ```
 
 ---
 
-## Key Principles
+## Phase 1: Research — no questions
 
-- **Research first, ask second.** Never ask the user for info you can find on their website or social media.
-- **Show what you found.** Present research results and let the user correct before writing.
-- **The Business section drives everything.** Spend the most effort making it detailed and compelling.
-- **Suggest, don't demand.** Propose design values, page structures, and domain names. Let the user override.
-- **Graceful degradation.** If `WebFetch` fails (site down, blocked, no URL), fall back to manual questions. Never let a failed fetch block the process.
-- **Output must parse.** The file must match `TEMPLATE.md` format exactly — `BriefingParser` in `ai/site_generator.py` parses it.
-- **Don't over-ask.** If you have enough info from research, skip redundant questions. 5 focused questions beat 15 tedious ones.
+Do all of it before writing anything for the operator. A fetch that fails is noted in the audit and skipped; never stop on a failed fetch, never ask for help with one.
+
+### 1a. Crawl the existing site (URL modes)
+
+1. `WebFetch` the homepage. Extract business name, tagline, what they do, contact, social links, hours, awards, visual style.
+2. Collect every internal link from the navigation (including dropdowns), hero CTAs and footer. Drop anchors, `mailto:`, `tel:`, files. Deduplicate.
+3. `WebFetch` every internal page, in parallel. Per page record: title, URL, sections in order with a one-line content summary, forms, galleries, testimonials, prices.
+4. Record the header and footer structure.
+
+### 1b. Integrations
+
+Any link to a reservation system (ResDiary, TheFork, OpenTable, Bookeo), a menu service (PicklyMenu), a booking engine, or a payment/ticketing provider is an **integration to keep**. Record the exact URL and how it is embedded today (link, iframe, widget script). For PicklyMenu, note whether the menu can be extracted (the API returns JSON with dishes, prices and photo URLs) and, if so, extract it to `briefings/<slug>-menu.json`.
+
+### 1c. Socials and reputation
+
+`WebFetch` the Facebook and Instagram pages found. `WebSearch` for `"<business name>" <city>`: Google rating and review count, TripAdvisor rating and rank, awards (PME Líder, Michelin, press), Google Maps listing.
+
+### 1d. Image inventory
+
+List every image found on the site and socials with URL and pixel dimensions. Fetch dimensions with:
+
+```bash
+python -c "
+import sys, urllib.request, io
+from PIL import Image
+for url in sys.argv[1:]:
+    try:
+        data = urllib.request.urlopen(url, timeout=15).read()
+        im = Image.open(io.BytesIO(data)); print(url, im.size[0], im.size[1])
+    except Exception as e: print(url, 'ERR', e)
+" <url1> <url2> ...
+```
+
+Group by subject (dishes, space, exterior, team, products). For each group record the count and the largest width. This decides whether the build may use full-bleed photography: under ~1600px wide, it may not.
+
+### 1e. The document (document modes)
+
+Read it completely. Map every statement onto a template section. Statements that fit nowhere go to `## Additional Notes`. Where the document and the crawl disagree, the document is intent and the crawl is fact; record both and make it a question.
+
+### 1f. Write the audit
+
+Write `briefings/<slug>-audit.md`:
+
+```markdown
+# <Business> — Site Audit
+
+> From <URL and/or document> on <date>
+
+## Business Overview
+## Contact Information
+## Social Media and Reputation
+## Integrations
+## Site Map
+### Navigation
+### Pages
+#### <Page> (<path>)
+**Sections:** 1. ... 2. ...
+**Forms / galleries / prices:** ...
+### Footer
+## Image Inventory
+| Group | Count | Largest width | Source | Example URL |
+|---|---|---|---|---|
+## Design Observations
+## Fetch failures
+```
+
+---
+
+## Phase 2: Draft briefing and the question list
+
+Read `briefings/TEMPLATE.md`. Write `briefings/<slug>.md` following it exactly, **every section filled with a concrete proposal** — no placeholders, no "TBD". The build skill must be able to run from this draft unchanged.
+
+Rules for the draft:
+
+- **Business** is the most important section: three to five paragraphs of polished prose from the audit and the document. Reputation with numbers. Tone of voice stated. Competitive positioning named.
+- **Existing Site** (URL modes): one row per current page with keep / merge / drop and a reason.
+- **Integrations**: from 1b, with the embed method proposed.
+- **Pages**: sections in order per page, with the CTA. For a one-pager, list the anchor sections.
+- **Design Preferences**: a full proposal. Derive the palette from the business and the place, not from the old site's colors unless they are a brand asset. Name the type pair. State the layout signature in one sentence. Fill **Avoid** with what the direct competition does (look at two or three competitors' sites in the same street, marina or niche).
+- **Images**: strategy from the inventory. State the constraints line from the largest widths.
+- **Additional Notes**: SEO focus phrases (two or three, in the default language and in English), the JSON-LD `@type`.
+- **Domain**: the current `gcs_folder`. Never propose changing it.
+
+Then write `## Open Questions` right after the title. Five to eight questions. Each is something only the operator or the client can answer, carries the proposed default, and would change the build if answered differently. Never ask what the research already answered. Typical questions:
+
+- Pages to merge or drop (redesigns)
+- Integration to keep vs. replace (PicklyMenu vs. PDF, reservation widget)
+- Languages beyond the default
+- Contact email when none is published
+- Whether the old photos are acceptable or a shoot is planned
+- A design direction choice when two are plausible (offer both, propose one)
+- Anything the document and the crawl disagree on
+
+Print the questions in the console, numbered, with the proposed defaults, and end the turn:
+
+```
+Draft briefing: briefings/<slug>.md
+Audit: briefings/<slug>-audit.md
+
+Open questions (reply with the numbers you want to change; unanswered ones keep the proposal):
+1. ...
+```
+
+**When `AskUserQuestion` is available** and the operator is present, ask them there instead, in batches of up to four per call, each with the proposed default as the first option. Then continue to Phase 3 in the same turn.
+
+---
+
+## Phase 3: Apply answers and finalize
+
+For each answer, edit the relevant section of the briefing. Questions left unanswered keep the proposal. Anything that still depends on the client moves to `## To Confirm With Client`. Delete the `## Open Questions` section.
+
+Re-read the whole file once. Check: every `## ` section from the template is present; Design Preferences has every bullet filled; Pages describe sections, not pages; Domain equals `gcs_folder`.
+
+Show a short summary (pages, languages, design direction in one line, integrations) and offer the next step:
+
+```
+AskUserQuestion:
+Question: "Briefing finalizado. Avançar com o build?"
+Options:
+- "Sim — /generate-site briefings/<slug>.md" (Recommended)
+- "Não — fico por aqui"
+```
+
+If yes, invoke the `generate-site` skill with `briefings/<slug>.md`. Non-interactively, print the command and stop.
+
+---
+
+## Key principles
+
+- **Research first, ask last, ask once.** The operator's time is the scarce resource.
+- **Every question carries its default.** A briefing with open questions is still buildable.
+- **The draft is complete.** If you would leave a section blank, propose something and make it a question instead.
+- **Facts vs. intent.** Crawl is fact, document is intent, operator answer wins over both.
+- **Output must parse.** `## ` section names exactly as in `briefings/TEMPLATE.md`.
