@@ -16,6 +16,7 @@ total. --budget refuses a call that would push the total past the limit.
 """
 
 import json
+import os
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -40,8 +41,8 @@ def load_costs(path: Path) -> dict:
     if path.exists():
         try:
             return json.loads(path.read_text())
-        except json.JSONDecodeError:
-            pass
+        except json.JSONDecodeError as exc:
+            raise ValueError(f'costs file is not valid JSON: {path} — fix or move it before continuing')
     return {'total_usd': 0.0, 'records': []}
 
 
@@ -50,7 +51,9 @@ def append_cost(path: Path, record: dict) -> dict:
     data['records'].append(record)
     data['total_usd'] = round(sum(r.get('cost_usd', 0.0) for r in data['records']), 6)
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(data, indent=2, ensure_ascii=False))
+    tmp = path.with_suffix('.json.tmp')
+    tmp.write_text(json.dumps(data, indent=2, ensure_ascii=False))
+    os.replace(tmp, path)
     return data
 
 
@@ -116,7 +119,11 @@ class Command(BaseCommand):
             )
             return
 
-        data = load_costs(costs_path)
+        try:
+            data = load_costs(costs_path)
+        except ValueError as exc:
+            self.fail(str(exc))
+
         if options['budget'] is not None:
             projected = data['total_usd'] + estimate_next_cost(data, model_id, options['size'], options['quality'])
             if projected > options['budget']:
@@ -152,7 +159,11 @@ class Command(BaseCommand):
             'cost_usd': result.cost_usd,
             'elapsed_s': result.elapsed_s,
         }
-        data = append_cost(costs_path, record)
+        try:
+            data = append_cost(costs_path, record)
+        except ValueError as exc:
+            self.fail(f'{exc} (image preserved at {out})')
+
         self.stdout.write(
             f"wrote {out}  {result.size}  ${result.cost_usd:.4f}  ({result.elapsed_s}s)  "
             f"site total ${data['total_usd']:.3f}"
