@@ -51,7 +51,7 @@ python manage.py pull_data https://<domain>            # Pull remote DB to local
 
 ## Skills
 
-Use `/generate-site`, `/update-site`, `/add-app`, `/deploy-site-railway`, `/sync-data`, etc.
+Flow for a new site or redesign: `/create-briefing` → `/mockup-site master` (approve one) → `/mockup-site section next` (one at a time) → `/extract-design` → `/generate-site briefings/<slug>.md` (add `rebuild` on a built site) → `/edit-site` → translation pass → `/deploy-site-railway`. The build refuses to start without an approved master and `docs/design-system.md`.
 
 ## Git Conventions
 
