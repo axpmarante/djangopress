@@ -1,7 +1,7 @@
 ---
 name: mockup-site
-description: Generate the approved-design mockups for a site with gpt-image-2.5 — one master one-page at a time from the final briefing until the operator approves it, then every section in high resolution from that master, one at a time with a check after each; for any section, three stacked alternatives in one render and a pick. Runs after the briefing is final and before any build; the build refuses to start without an approved master.
-argument-hint: master [note] | approve <n> | section next | section <name> [note] | section <name> options [note] | section <name> pick <k> [note] | sections | costs
+description: Generate the approved-design mockups for a site with gpt-image-2.5 — one master one-page at a time from the final briefing until the operator approves it, refined with notes or diverged onto a different design direction one render at a time, then every section in high resolution from that master, one at a time with a check after each; for any section, three stacked alternatives in one render and a pick. Runs after the briefing is final and before any build; the build refuses to start without an approved master.
+argument-hint: master [note] | master alt [note] | approve <n> | section next | section <name> [note] | section <name> options [note] | section <name> pick <k> [note] | sections | costs
 allowed-tools: Bash, Read, Write, Edit, Grep, Glob
 ---
 
@@ -28,7 +28,7 @@ Read the briefing (`briefings/<slug>.md`, the only `.md` in `briefings/` besides
 
 ## `master [note]`
 
-Renders **one** master one-page. `<n>` is the next free number (`master-v1.png` if none exists).
+Renders **one** master one-page. `<n>` is the next free number (`master-v1.png` if none exists). When the note begins with the word `alt`, this is the `master alt` mode below and not a note.
 
 ### Prompt: `docs/mockups/prompts/00-master-v<n>.md`
 
@@ -82,8 +82,58 @@ Print and stop:
 
 ```
 Master v<n>: docs/mockups/master-v<n>.png   $<cost>   site total $<total>
-Approve with: /mockup-site approve <n>
-Or ask for another: /mockup-site master <what to change>
+Approve with:       /mockup-site approve <n>
+Refine this one:    /mockup-site master <what to change>
+Different direction: /mockup-site master alt [note]
+```
+
+---
+
+## `master alt [note]`
+
+Renders **one** master one-page in a deliberately different design direction. Same briefing, same facts, and the same numbering as `master` — `<n>` is the next free number in the shared `master-v<n>` sequence, so `approve <n>` picks among refined and alternative masters alike.
+
+If no master exists yet, render the briefing's own direction first with `/mockup-site master`; `alt` needs a baseline to diverge from.
+
+Where `master <note>` refines the previous master and locks its composition, `alt` departs from the briefing's stated direction on exactly one axis:
+
+| Axis | Varied how |
+|---|---|
+| composition | immersive full-bleed / editorial with generous whitespace / split asymmetric |
+| type | a different heading–body pairing of the same formality (high-contrast serif ↔ geometric sans ↔ slab + humanist) |
+| photography | a different treatment (documentary / editorial studio / textural close-up) |
+
+Rotate the axis: pick the first one that no existing `docs/mockups/prompts/00-master-v*.md` records under `VARIED AXIS`. When all three have been used, start again with a second value on the first axis. A note overrides the rotation and names the direction itself ("try it with a quieter, darker type voice").
+
+**The palette stays.** The briefing's hex values are usually a brand constraint rather than a guess, so `alt` keeps them unless the note explicitly asks for a palette change. The `AVOID` list is honoured on every axis.
+
+### Prompt: `docs/mockups/prompts/00-master-v<n>.md`
+
+The `master` prompt verbatim, with the varied axis's line under DESIGN DIRECTION replaced by the new value and no ADJUSTMENT block — preceded by this line, which is what later calls read to rotate:
+
+```
+VARIED AXIS: <composition | type | photography> — <the new value, a few words>
+```
+
+### Render
+
+The `master` command without `--ref`:
+
+```bash
+.venv/bin/python manage.py generate_mockup --prompt-file docs/mockups/prompts/00-master-v<n>.md \
+  --out docs/mockups/master-v<n>.png --model sunburst --size 1280x3840 --quality high --budget <site budget>
+```
+
+The **Long pages** rule under `master` applies here unchanged.
+
+Print and stop:
+
+```
+Master v<n> (alt — <axis>: <value>): docs/mockups/master-v<n>.png   $<cost>   site total $<total>
+Compare: docs/mockups/master-v1.png … master-v<n>.png
+Approve with:      /mockup-site approve <n>
+Another direction: /mockup-site master alt [note]
+Refine this one:   /mockup-site master <what to change>
 ```
 
 ---
