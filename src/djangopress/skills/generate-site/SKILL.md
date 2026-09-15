@@ -120,7 +120,7 @@ Write the home page HTML in the default language to `/tmp/dp-page-new-<lang>.htm
 
 Build the page section by section in the order of `## Sections` in `docs/design-system.md`. For each section, open its image `docs/mockups/NN-<name>.png` with the Read tool and its `### NN-<name>` spec, then write that `<section data-section="<name>" id="<name>">` to match the image's layout, palette, type and rhythm — and take every word, number and link from the briefing, never from the image. The section name in the HTML is the `<name>` from the file name.
 
-Then save it with `edit-site` → *Create Page* (steps 4, 6: create, then set as homepage), including `meta_title_i18n` and `meta_description_i18n`. The `edit-site` recipes loop over every enabled language; in a build write only the default-language key of each `*_i18n` field.
+Then save it with `edit-site` → *Create Page* (steps 4, 6: create, then set as homepage), including `meta_title_i18n` and `meta_description_i18n`. The `edit-site` recipes loop over every enabled language; in a build write only the default-language key of each `*_i18n` field. In rebuild mode, look the page up by its default-language slug, call `page.create_version(change_summary='Rebuild from mockups')`, then overwrite its fields instead of creating a new page.
 
 Internal links are literal with the language prefix: `/pt/reservas/`, `/pt/#menu` (`Rulings` §1).
 
@@ -147,6 +147,8 @@ Sequential is fine for three pages or fewer.
 1. Menu: `edit-site` → *Menu Management* → *Rebuild menu from pages*, then adjust order and add anchor items for a one-pager (`/pt/#menu`) and the reservations CTA as a CTA item.
 2. Header: create `main-header` from `partials/header.html` if the row is absent, then refine it per the briefing's Header section with `edit-site` → *Edit Header/Footer*. Keep `{% url %}` tags; keep the language switcher; make the mobile menu work with Alpine.
 3. Footer: create `main-footer` from `partials/footer.html` if the row is absent, then refine it. Contact, hours, social icons, privacy link, copyright.
+
+In rebuild mode, call `section.create_version(change_summary='Rebuild from mockups')` before overwriting `main-header` / `main-footer`.
 
 ```bash
 .venv/bin/python manage.py check_site --only global-section,menu
@@ -239,8 +241,9 @@ docs/screenshots/<slug>-<width>.png ...
 - Refine: /edit-site <what to change>
 - When design is signed off: /generate-site briefings/<slug>.md  → runs the translation pass
 - Then: /deploy-site-railway
-- (rebuild only) Translation is stale: run /generate-site briefings/<slug>.md for the translation pass after review.
 ```
+
+On a rebuild, also append under `## Next`: `- Translation is stale: run /generate-site briefings/<slug>.md for the translation pass after review.`
 
 ### 8e. Commit
 
