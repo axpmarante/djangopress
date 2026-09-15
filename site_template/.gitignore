@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.py[cod]
+
+# Virtual environment
+.venv/
+venv/
+
+# Secrets — never commit. See HANDOVER.md before transferring this site.
+.env
+.env.*
+!.env.example
+
+# db.sqlite3 IS tracked: it is the site's content record (pages, settings, menus).
+# Litestream side files and backups are not.
+db.sqlite3-wal
+db.sqlite3-shm
+db.sqlite3.bak*
+*.backup-*
+
+# Runtime and uploads
+media/
+staticfiles/
+*.log
+.server.log*
+
+# Tooling
+.playwright-cli/
+.superpowers/
+.idea/
+.vscode/
+.DS_Store

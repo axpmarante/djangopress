@@ -93,8 +93,9 @@ if [ -f "$SOURCE_DIR/.env" ]; then
         # Skip comments and empty lines
         [[ "$key" =~ ^#.*$ || -z "$key" ]] && continue
         # Only copy specific keys (API keys, not project-specific settings)
+        # OPENAI_API_KEY is deliberately not copied: mockups are generated with the manager's key, injected into site processes.
         case "$key" in
-            GEMINI_API_KEY|OPENAI_API_KEY|ANTHROPIC_API_KEY|UNSPLASH_ACCESS_KEY|\
+            GEMINI_API_KEY|ANTHROPIC_API_KEY|UNSPLASH_ACCESS_KEY|\
             GS_BUCKET_NAME|GS_PROJECT_ID|\
             MAILGUN_API_KEY|MAILGUN_API_URL|DEFAULT_FROM_EMAIL)
                 # Replace the key in the new .env

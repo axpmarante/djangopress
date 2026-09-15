@@ -62,6 +62,7 @@ Flow for a new site or redesign: `/create-briefing` → `/mockup-site master` (a
 - **Home page slug must be `home` in ALL languages**
 - **Set domain BEFORE uploading media** (GCS uses domain as folder name)
 - **Decoupled app URLs** must register BEFORE `core.urls` (catch-all)
+- **Before transferring this site to anyone, follow `HANDOVER.md`** (keys, users, git history).
 """
 
 

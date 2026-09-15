@@ -130,7 +130,7 @@ def is_retryable(exc: Exception) -> bool:
 def get_client():
     key = get_env('OPENAI_API_KEY')
     if not key:
-        raise ImageGenerationError('OPENAI_API_KEY is not set in the site .env')
+        raise ImageGenerationError('OPENAI_API_KEY is not set — put it in the DjangoPress Manager .env (it is injected into site processes) or export it in this shell')
     from openai import OpenAI
     return OpenAI(api_key=key)
 
