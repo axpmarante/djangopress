@@ -119,6 +119,8 @@ Skills are symlinked from the djangopress package to `.claude/skills/` in each c
 |-------|-------|-------------|
 | `/create-briefing` | `/create-briefing https://client.pt docs/brief.pdf` | Intake: researches the client without asking, writes a complete draft briefing plus a short list of questions with defaults, finalizes from the answers. |
 | `/generate-site` | `/generate-site briefings/my-client.md` | Unattended build in the default language: settings, design guide, pages, header, footer, menu, SEO, verified by `check_site` and screenshots. Re-run on a built site for the translation pass. |
+| `/mockup-site` | `/mockup-site master` | One master one-page at a time from the final briefing (gpt-image-2.5-sunburst); approve one; render sections one at a time with a check after each; regenerate one; report costs. |
+| `/extract-design` | `/extract-design` | Sampled palette, font pair, layout tokens and per-section UI specs from the approved mockups → `docs/design-system.md`, briefing, SiteSettings. |
 | `/add-app` | `/add-app properties` | Scaffolds a decoupled feature app (models, views, templates, URLs). |
 | `/edit-site` | `/edit-site <what to change>` | Edit site content — pages, sections, header/footer, menu, forms, settings. Claude Code writes the HTML directly. |
 | `/update-djangopress` | `/update-djangopress` | Update to latest djangopress version — pip upgrade, migrations, skill refresh, optional Railway redeploy. |
@@ -132,11 +134,14 @@ The `djangopress-architecture` skill is auto-loaded when Claude needs deep archi
 ### Typical New Site Flow
 
 ```
-1. /create-briefing <url and/or document>   ← research, answer the question block, briefing.md
-2. /generate-site briefings/my-client.md    ← unattended build, ends with docs/build-report.md
-3. /edit-site ...                           ← interactive refinement
-4. /generate-site briefings/my-client.md    ← translation pass, once design is signed off
-5. /deploy-site-railway my-client           ← deploy to Railway (SQLite + Litestream)
+1. /create-briefing <url and/or document>   ← research, one block of questions, FINAL briefing.md
+2. /mockup-site master                      ← one master one-page; approve <n>, or master <note> for another
+3. /mockup-site section next                ← one section at a time from the master; ok → next, or a note
+4. /extract-design                          ← design system + per-section specs
+5. /generate-site briefings/my-client.md    ← unattended build (gated on the master + design system)
+6. /edit-site ...                           ← interactive refinement
+7. /generate-site briefings/my-client.md    ← translation pass, once design is signed off
+8. /deploy-site-railway my-client           ← deploy to Railway (SQLite + Litestream)
 ```
 
 ---
@@ -190,6 +195,9 @@ python manage.py fix_i18n_html --dry-run               # Check for legacy {{ tra
 python manage.py bump_version patch                    # 1.0.0 → 1.0.1 (updates src/djangopress/VERSION)
 python manage.py bump_version minor                    # 1.0.1 → 1.1.0 (pyproject.toml reads from VERSION)
 python manage.py check_site                            # verify site conventions (run inside a child site); exit 1 on failures
+python manage.py generate_mockup --prompt-file F --out P [--ref R ...]   # one gpt-image-2.5 render, cost logged
+python manage.py crop_mockup SRC OUT --top 0.0 --bottom 0.2              # crop a band of a mockup
+python manage.py sample_palette IMG --k 6 --json                         # dominant colors of a mockup
 railway up -d                                          # Redeploy to Railway
 railway logs -f                                        # Stream Railway logs
 ```

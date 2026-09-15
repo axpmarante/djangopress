@@ -18,7 +18,7 @@ dependencies = [
     "django-environ",
     "django-storages[google]",
     "psycopg[binary]",
-    "openai",
+    "openai>=2.36",
     "anthropic",
     "google-genai",
     "Pillow",
