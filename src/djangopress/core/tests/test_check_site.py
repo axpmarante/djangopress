@@ -80,11 +80,16 @@ def check_names(failures):
 
 
 class CheckSiteTestCase(TestCase):
-    """SiteSettings.load() caches across tests; drop it so no stale homepage_id leaks."""
+    """SiteSettings.load() caches across tests; clear the cache on both sides
+    so neither a previous test nor this one leaks a stale homepage_id into
+    the next."""
+
+    def setUp(self):
+        cache.clear()
+        super().setUp()
 
     def tearDown(self):
-        cache.delete('site_settings')
-        cache.delete('default_language_code')
+        cache.clear()
         super().tearDown()
 
 
@@ -229,6 +234,26 @@ class LinksCheckTest(CheckSiteTestCase):
             '<a href="https://example.com/">e</a><a href="/">root</a></section>'
         )
         self.assertEqual(run_checks(only=['links']), [])
+
+    def test_message_names_the_page_language(self):
+        self.home.html_content_i18n = {
+            'pt': VALID_HOME_HTML,
+            'en': VALID_HOME_HTML.replace('/pt/sobre/', '/about/'),
+        }
+        self.home.save()
+        failures = run_checks(only=['links'])
+        self.assertEqual(len(failures), 1)
+        self.assertIn('expected /en/', failures[0]['message'])
+
+    def test_non_i18n_paths_pass(self):
+        self._set_html(
+            '<section data-section="hero" id="hero">'
+            '<a href="/forms/x/">f</a><a href="/sitemap.xml">s</a>'
+            '<a href="/robots.txt">r</a><a href="/django-admin/">a</a>'
+            '</section>'
+        )
+        failures = run_checks(only=['links'])
+        self.assertEqual(check_names(failures), [])
 
 
 class HomeCheckTest(CheckSiteTestCase):

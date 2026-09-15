@@ -18,6 +18,7 @@ import re
 from bs4 import BeautifulSoup
 from django.core.management.base import BaseCommand, CommandError
 
+from djangopress.core.middleware import NON_I18N_PATHS
 from djangopress.core.models import GlobalSection, MenuItem, Page, SiteSettings
 
 
@@ -36,8 +37,11 @@ TEMPLATE_DEFAULT_COLORS = {
     'text_color': '#1f2937',
 }
 
-# Internal paths that legitimately have no language prefix.
-UNPREFIXED_ALLOWED = ('/media/', '/static/', '/backoffice/')
+# Internal paths that legitimately have no language prefix — same list the
+# LocaleMiddleware uses to skip its language-prefix redirect (NON_I18N_PATHS:
+# /django-admin/, /backoffice/, /ai/, /editor-v2/, /site-assistant/, /i18n/,
+# /set-language/, /forms/, /sitemap.xml, /media/, /static/, /robots.txt).
+UNPREFIXED_ALLOWED = NON_I18N_PATHS
 
 JSONLD_REQUIRED = {
     'Restaurant': (
@@ -216,9 +220,9 @@ class SiteChecker:
                     if self.enabled('anchors') and len(href) > 1 and not soup.find(id=href[1:]):
                         self.fail('anchors', f'{label}: {href} has no matching id')
                 elif self.enabled('links'):
-                    self._check_internal_link(label, href)
+                    self._check_internal_link(label, lang, href)
 
-    def _check_internal_link(self, label, href):
+    def _check_internal_link(self, label, lang, href):
         if not href.startswith('/') or href.startswith('//') or href == '/':
             return
         if href.startswith(UNPREFIXED_ALLOWED):
@@ -226,7 +230,7 @@ class SiteChecker:
         for code in self.lang_codes:
             if href == f'/{code}' or href.startswith(f'/{code}/'):
                 return
-        self.fail('links', f'{label}: href {href!r} is missing the language prefix (expected /{self.default_lang}/...)')
+        self.fail('links', f'{label}: href {href!r} is missing the language prefix (expected /{lang}/...)')
 
     # -- cross-language ---------------------------------------------------
 
