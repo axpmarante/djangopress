@@ -117,8 +117,8 @@ Skills are symlinked from the djangopress package to `.claude/skills/` in each c
 
 | Skill | Usage | What It Does |
 |-------|-------|-------------|
-| `/create-briefing` | `/create-briefing O Moinho` | Researches client online, writes a briefing markdown file. |
-| `/generate-site` | `/generate-site briefings/my-site.md` | Full setup + generation — env, settings, pages, header/footer, menu, images. Handles fresh and existing projects. |
+| `/create-briefing` | `/create-briefing https://client.pt docs/brief.pdf` | Intake: researches the client without asking, writes a complete draft briefing plus a short list of questions with defaults, finalizes from the answers. |
+| `/generate-site` | `/generate-site briefings/my-client.md` | Unattended build in the default language: settings, design guide, pages, header, footer, menu, SEO, verified by `check_site` and screenshots. Re-run on a built site for the translation pass. |
 | `/add-app` | `/add-app properties` | Scaffolds a decoupled feature app (models, views, templates, URLs). |
 | `/update-site` | `/update-site` | Update site content — pages, sections, elements, images, settings, header/footer, menu, forms. Auto-loaded for content changes. |
 | `/update-djangopress` | `/update-djangopress` | Update to latest djangopress version — pip upgrade, migrations, skill refresh, optional Railway redeploy. |
@@ -132,14 +132,11 @@ The `djangopress-architecture` skill is auto-loaded when Claude needs deep archi
 ### Typical New Site Flow
 
 ```
-# Full flow
-1. /create-briefing My Client     ← researches client, writes briefing
-2. /generate-site briefings/my-client.md  ← sets up project + generates everything
-3. /add-app blog                  ← if extra features needed
-4. /deploy-site-railway my-client ← deploy to Railway (SQLite + Litestream)
-
-# After making local changes to a deployed site:
-/sync-data push                   ← replicate local DB to GCS, sync to prod
+1. /create-briefing <url and/or document>   ← research, answer the question block, briefing.md
+2. /generate-site briefings/my-client.md    ← unattended build, ends with docs/build-report.md
+3. /edit-site ...                           ← interactive refinement
+4. /generate-site briefings/my-client.md    ← translation pass, once design is signed off
+5. /deploy-site-railway my-client           ← deploy to Railway (SQLite + Litestream)
 ```
 
 ---
@@ -192,6 +189,7 @@ python manage.py migrate_storage_folder                # Copy GCS files from def
 python manage.py fix_i18n_html --dry-run               # Check for legacy {{ trans.xxx }} vars
 python manage.py bump_version patch                    # 1.0.0 → 1.0.1 (updates src/djangopress/VERSION)
 python manage.py bump_version minor                    # 1.0.1 → 1.1.0 (pyproject.toml reads from VERSION)
+python manage.py check_site                            # verify site conventions (run inside a child site); exit 1 on failures
 railway up -d                                          # Redeploy to Railway
 railway logs -f                                        # Stream Railway logs
 ```
