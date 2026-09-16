@@ -119,6 +119,7 @@ The `editor_v2` app powers the `?edit=v2` (or `?edit=true`) mode for staff users
 **Structural verbs (2026-09):**
 - Context menu, floating toolbar (⧉ ↑ ↓ ✕), Content-tab "Add another" panel (repeat groups detected by `findRepeatGroup` in `lib/dom.js`, mirrored by `structure.find_repeat_groups`), Structure-tab arrows, hover "+" bars between sections, Ctrl+K entries.
 - All verbs reload and re-select via `sessionStorage['ev2-after-reload']` (`lib/structural.js`).
+- Undo/Redo: `GET api/history/<id>/`, `POST api/undo|redo|checkpoint|restore-version/`; every operation writes a `checkpoint` PageVersion first; see `editor_v2/history.py`.
 
 ## Site Assistant
 

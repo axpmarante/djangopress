@@ -75,6 +75,7 @@ Decision: **the editor does the deterministic verbs well and nothing more; every
 - Phase 5 shrinks to reliability work on the verbs: selector resolution that ignores runtime-injected nodes everywhere (forms, Alpine, custom elements), the remove endpoints validating on the edited language, and the toolbar / palette acting on the repeat item when the selection is inside one.
 - Phase 6 (`data-repeat`) stays optional and is not scheduled.
 - Open question: staff need an AI path. Either open the editor's AI endpoints to staff (Gemini cost, no human in the loop) or route staff to the manager's AI Console (Claude subscription). Not decided here.
+- Menu primitives (Add paragraph/heading/button/image) were removed from the editor on 2026-09-16; the `insert-element` endpoint stays available for tools/AI.
 
 ---
 

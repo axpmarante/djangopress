@@ -178,6 +178,7 @@ python manage.py migrate
 - **Set domain BEFORE uploading media** (GCS uses domain as folder name)
 - **Decoupled app URLs** must register BEFORE `core.urls` (catch-all)
 - **Editor structural verbs** (duplicate / move / insert element or section) are deterministic BeautifulSoup patches in `editor_v2/structure.py`, applied to every language copy. Never add an LLM call to them.
+- **Editor operations must create a `kind='checkpoint'` PageVersion before mutating, or they are not undoable.**
 
 ## Commands
 
