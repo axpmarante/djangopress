@@ -13,6 +13,12 @@ from bs4 import BeautifulSoup, Tag
 EDITOR_CLASS_PREFIX = 'ev2-'
 NTH_RE = re.compile(r'^(?P<tag>[a-z0-9]+):nth-child\((?P<n>\d+)\)$')
 
+# Tags that are never content items: a pair of these is decoration, not a repeat group.
+DECORATIVE_TAGS = frozenset((
+    'br', 'hr', 'wbr', 'svg', 'path', 'g', 'use', 'circle', 'rect', 'line',
+    'polyline', 'polygon', 'source', 'track', 'option',
+))
+
 
 # ---------------------------------------------------------------------------
 # Signatures and repeat groups (Phase 0 heuristic, mirrored in lib/dom.js)
@@ -59,6 +65,8 @@ def find_repeat_groups(section):
         children = element_children(container)
         by_sig = {}
         for child in children:
+            if child.name in DECORATIVE_TAGS:
+                continue
             by_sig.setdefault(signature_of(child), []).append(child)
         for sig, items in by_sig.items():
             if len(items) < 2:
@@ -85,3 +93,80 @@ def find_repeat_groups(section):
                 g['nested'] = True
                 break
     return groups
+
+
+# ---------------------------------------------------------------------------
+# Selector arithmetic
+# ---------------------------------------------------------------------------
+
+def split_last(selector):
+    """('head', 'tag', n) for a selector ending in `tag:nth-child(n)`, else None."""
+    head, _sep, last = selector.rpartition(' > ')
+    m = NTH_RE.match(last)
+    if not m:
+        return None
+    return head, m.group('tag'), int(m.group('n'))
+
+
+def with_last(selector, tag, n):
+    """Rebuild `selector` with a new last part `tag:nth-child(n)`."""
+    parts = split_last(selector)
+    head = parts[0] if parts else selector
+    return f'{head} > {tag}:nth-child({n})'
+
+
+def shift_last_index(selector, delta):
+    """Return `selector` with the last `:nth-child(n)` moved by `delta` (same tag)."""
+    parts = split_last(selector)
+    if not parts:
+        return selector
+    head, tag, n = parts
+    return with_last(selector, tag, max(1, n + delta))
+
+
+def adjacent_sibling(tag, direction):
+    """Previous/next element sibling, or None."""
+    if direction == 'up':
+        return tag.find_previous_sibling(True)
+    if direction == 'down':
+        return tag.find_next_sibling(True)
+    raise ValueError(f'direction must be "up" or "down", got {direction!r}')
+
+
+def strip_ids(tag):
+    """Remove `id` from `tag` and every descendant (ids must stay unique)."""
+    if tag.has_attr('id'):
+        del tag['id']
+    for t in tag.find_all(id=True):
+        del t['id']
+
+
+# ---------------------------------------------------------------------------
+# Element verbs
+# ---------------------------------------------------------------------------
+
+def duplicate_node(soup, selector):
+    """Clone the node at `selector` right after itself. Returns the clone's selector."""
+    node = soup.select_one(selector)
+    if node is None:
+        return None
+    clone = copy.copy(node)
+    strip_ids(clone)
+    node.insert_after(clone)
+    return shift_last_index(selector, 1)
+
+
+def move_node(soup, selector, direction):
+    """Swap the node with its previous/next element sibling. Returns the new selector, or None."""
+    node = soup.select_one(selector)
+    if node is None:
+        return None
+    other = adjacent_sibling(node, direction)
+    if other is None:
+        return None
+    node = node.extract()
+    if direction == 'up':
+        other.insert_before(node)
+        return shift_last_index(selector, -1)
+    other.insert_after(node)
+    return shift_last_index(selector, 1)

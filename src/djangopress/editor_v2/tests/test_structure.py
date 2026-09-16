@@ -80,6 +80,12 @@ class FindRepeatGroupsTest(SimpleTestCase):
         groups = find_repeat_groups(soup('<section data-section="x"><div><p class="a">1</p></div></section>').section)
         self.assertEqual(groups, [])
 
+    def test_decorative_pairs_are_not_groups(self):
+        html = ('<section data-section="x" id="x"><p class="lead">Line one<br class="hidden lg:inline">'
+                'Line two<br class="hidden lg:inline">Line three</p>'
+                '<svg viewBox="0 0 24 24"><path d="M1 1"/><path d="M2 2"/></svg></section>')
+        self.assertEqual(find_repeat_groups(soup(html).section), [])
+
     def test_identical_siblings_get_distinct_paths(self):
         # Two unedited copies of the same card: bs4 Tag equality is structural,
         # so positions must be computed by identity, not ==.
@@ -95,3 +101,62 @@ class FindRepeatGroupsTest(SimpleTestCase):
         section = soup(html).section
         second = find_repeat_groups(section)[0]['items'][1]
         self.assertEqual(path_from_section(second, section), 'div:nth-child(1) > div:nth-child(2)')
+
+
+from djangopress.editor_v2.structure import (
+    shift_last_index, duplicate_node, move_node,
+)
+
+GRID = ('<section data-section="s" id="s"><div class="grid">'
+        '<div class="card" id="c1"><h3 id="t1">A</h3></div>'
+        '<div class="card"><h3>B</h3></div>'
+        '</div></section>')
+C1 = 'section[data-section="s"] > div:nth-child(1) > div:nth-child(1)'
+C2 = 'section[data-section="s"] > div:nth-child(1) > div:nth-child(2)'
+C3 = 'section[data-section="s"] > div:nth-child(1) > div:nth-child(3)'
+
+
+class SelectorArithmeticTest(SimpleTestCase):
+    def test_shift_last_index(self):
+        self.assertEqual(shift_last_index(C1, 1), C2)
+        self.assertEqual(shift_last_index(C2, -1), C1)
+
+    def test_shift_section_selector_is_unchanged(self):
+        self.assertEqual(shift_last_index('section[data-section="s"]', 1), 'section[data-section="s"]')
+
+
+class DuplicateNodeTest(SimpleTestCase):
+    def test_clone_is_inserted_after_and_ids_stripped(self):
+        s = soup(GRID)
+        new_sel = duplicate_node(s, C1)
+        self.assertEqual(new_sel, C2)
+        cards = s.select('section > div > div')
+        self.assertEqual(len(cards), 3)
+        self.assertEqual(cards[1].h3.get_text(), 'A')
+        self.assertIsNone(cards[1].get('id'))
+        self.assertIsNone(cards[1].h3.get('id'))
+        self.assertEqual(cards[0].get('id'), 'c1')
+
+    def test_missing_selector_returns_none(self):
+        self.assertIsNone(duplicate_node(soup(GRID), C3))
+
+
+class MoveNodeTest(SimpleTestCase):
+    def test_move_down(self):
+        s = soup(GRID)
+        self.assertEqual(move_node(s, C1, 'down'), C2)
+        self.assertEqual([c.h3.get_text() for c in s.select('section > div > div')], ['B', 'A'])
+
+    def test_move_up(self):
+        s = soup(GRID)
+        self.assertEqual(move_node(s, C2, 'up'), C1)
+        self.assertEqual([c.h3.get_text() for c in s.select('section > div > div')], ['B', 'A'])
+
+    def test_move_at_edge_returns_none_and_changes_nothing(self):
+        s = soup(GRID)
+        self.assertIsNone(move_node(s, C1, 'up'))
+        self.assertEqual([c.h3.get_text() for c in s.select('section > div > div')], ['A', 'B'])
+
+    def test_whitespace_between_siblings_is_ignored(self):
+        s = soup(GRID.replace('</div><div class="card">', '</div>\n  <div class="card">'))
+        self.assertEqual(move_node(s, C2, 'up'), C1)
