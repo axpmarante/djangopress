@@ -1,10 +1,12 @@
 import json
+from types import SimpleNamespace as V
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
 
 from djangopress.core.models import Page, PageVersion, SiteSettings
+from djangopress.editor_v2.history import find_undo_target, find_redo_target
 
 User = get_user_model()
 
@@ -66,3 +68,51 @@ class KindFieldTest(HistoryTestCase):
         for i in range(65):
             self.page.create_version(change_summary=f'v{i}', kind='checkpoint')
         self.assertEqual(PageVersion.objects.filter(page=self.page).count(), 60)
+
+
+def seq(*items):
+    """items: (kind, label) oldest→newest; returns newest-first list with version numbers."""
+    out = [V(kind=k, change_summary=l, version_number=i + 1, html_content_i18n={}) for i, (k, l) in enumerate(items)]
+    return list(reversed(out))
+
+
+class UndoTargetTest(TestCase):
+    def test_latest_checkpoint_is_the_target(self):
+        vs = seq(('checkpoint', 'op1'), ('auto', ''), ('checkpoint', 'op2'), ('auto', ''))
+        self.assertEqual(find_undo_target(vs).change_summary, 'op2')
+
+    def test_auto_only_has_no_target(self):
+        self.assertIsNone(find_undo_target(seq(('auto', ''), ('auto', ''))))
+
+    def test_undo_consumes_one_checkpoint(self):
+        vs = seq(('checkpoint', 'op1'), ('auto', ''), ('checkpoint', 'op2'), ('auto', ''), ('undo', 'op2'), ('auto', ''))
+        self.assertEqual(find_undo_target(vs).change_summary, 'op1')
+
+    def test_redo_cancels_an_undo(self):
+        vs = seq(('checkpoint', 'op1'), ('auto', ''), ('checkpoint', 'op2'), ('auto', ''),
+                 ('undo', 'op2'), ('auto', ''), ('redo', 'op2'), ('auto', ''))
+        self.assertEqual(find_undo_target(vs).change_summary, 'op2')
+
+    def test_two_undos_walk_back_twice(self):
+        vs = seq(('checkpoint', 'op1'), ('auto', ''), ('checkpoint', 'op2'), ('auto', ''), ('checkpoint', 'op3'), ('auto', ''),
+                 ('undo', 'op3'), ('auto', ''), ('undo', 'op2'), ('auto', ''))
+        self.assertEqual(find_undo_target(vs).change_summary, 'op1')
+
+
+class RedoTargetTest(TestCase):
+    def test_latest_undo_is_the_redo_target(self):
+        vs = seq(('checkpoint', 'op1'), ('auto', ''), ('undo', 'op1'), ('auto', ''))
+        self.assertEqual(find_redo_target(vs).kind, 'undo')
+
+    def test_redo_consumes_the_undo(self):
+        vs = seq(('checkpoint', 'op1'), ('auto', ''), ('undo', 'op1'), ('auto', ''), ('redo', 'op1'), ('auto', ''))
+        self.assertIsNone(find_redo_target(vs))
+
+    def test_new_checkpoint_invalidates_redo(self):
+        vs = seq(('checkpoint', 'op1'), ('auto', ''), ('undo', 'op1'), ('auto', ''), ('checkpoint', 'op2'), ('auto', ''))
+        self.assertIsNone(find_redo_target(vs))
+
+    def test_two_undos_two_redos(self):
+        vs = seq(('checkpoint', 'op1'), ('auto', ''), ('checkpoint', 'op2'), ('auto', ''),
+                 ('undo', 'op2'), ('auto', ''), ('undo', 'op1'), ('auto', ''), ('redo', 'op1'), ('auto', ''))
+        self.assertEqual(find_redo_target(vs).change_summary, 'op2')
