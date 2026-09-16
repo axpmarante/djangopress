@@ -13,7 +13,7 @@ export function $$(selector, context = document) {
  * data-editor-skip="true" (used by dp-marquee for its duplicated track
  * items and available to other runtime-injected components).
  */
-function isRuntimeInjected(el) {
+export function isRuntimeInjected(el) {
     const cls = el.classList;
     if (cls.contains('splide__slide--clone')
         || cls.contains('splide__arrows')
@@ -259,4 +259,48 @@ export function initDynamicComponents(container) {
             }
         });
     });
+}
+
+/** "tag|sorted classes" (editor classes excluded). Mirrors structure.signature_of. */
+export function signatureOf(el) {
+    const classes = Array.from(el.classList).filter(c => !c.startsWith('ev2-')).sort();
+    return `${el.tagName.toLowerCase()}|${classes.join(' ')}`;
+}
+
+function childSignatureOf(el) {
+    return Array.from(el.children).filter(c => !isRuntimeInjected(c)).map(signatureOf).join(',');
+}
+
+/** Tags that are never content items: a pair of these is decoration, not a repeat group. */
+const DECORATIVE_TAGS = new Set([
+    'BR', 'HR', 'WBR', 'SVG', 'PATH', 'G', 'USE', 'CIRCLE', 'RECT', 'LINE',
+    'POLYLINE', 'POLYGON', 'SOURCE', 'TRACK', 'OPTION',
+]);
+
+/**
+ * Find the repeat group that contains `el`: walking up to the section, the
+ * OUTERMOST level where the current node has at least one sibling with the
+ * same signature. Pairs whose children differ (two columns, not two cards)
+ * are skipped. Returns { item, items, container, index } or null.
+ */
+export function findRepeatGroup(el) {
+    const section = el?.closest?.('[data-section]');
+    if (!section || el === section) return null;
+
+    let found = null;
+    let current = el;
+    while (current && current !== section) {
+        const parent = current.parentElement;
+        if (!parent) break;
+        if (DECORATIVE_TAGS.has(current.tagName)) { current = parent; continue; }
+        const siblings = Array.from(parent.children).filter(s => !isRuntimeInjected(s));
+        const sig = signatureOf(current);
+        const peers = siblings.filter(s => signatureOf(s) === sig);
+        const ambiguousPair = peers.length === 2 && childSignatureOf(peers[0]) !== childSignatureOf(peers[1]);
+        if (peers.length >= 2 && !ambiguousPair) {
+            found = { item: current, items: peers, container: parent, index: peers.indexOf(current) };
+        }
+        current = parent;
+    }
+    return found;
 }
