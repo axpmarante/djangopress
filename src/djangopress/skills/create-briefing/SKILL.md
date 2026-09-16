@@ -126,8 +126,9 @@ Rules for the draft:
 - **Business** is the most important section: three to five paragraphs of polished prose from the audit and the document. Reputation with numbers. Tone of voice stated. Competitive positioning named.
 - **Existing Site** (URL modes): one row per current page with keep / merge / drop and a reason.
 - **Integrations**: from 1b, with the embed method proposed.
-- **Pages**: sections in order per page, with the CTA. For a one-pager, list the anchor sections.
-- **Design Preferences**: a full proposal. Derive the palette from the business and the place, not from the old site's colors unless they are a brand asset. Name the type pair. State the layout signature in one sentence. Fill **Avoid** with what the direct competition does (look at two or three competitors' sites in the same street, marina or niche).
+- **Pages**: one entry per page with its purpose and meta title/description. Do **not** list sections in order — the design concept decides grouping and sequence.
+- **Content**: per page, a flat list of what must be communicated. Mark every fact, name, price, award, label and CTA `(required)`; give messages 3–5 `keywords:`; give CTAs `→ /href/`. Menu items come from `briefings/<slug>-menu.json` when it exists — reference it in the Menu item. This list is the content contract the build verifies.
+- **Design Constraints**: only what every concept must respect. Brand colors **only** if they are a brand asset (logo, existing identity) — otherwise `none`. Fill **Avoid** with what the direct competition does (look at two or three competitors' sites in the same street, marina or niche). References are context, never models. State the image constraints line from the largest widths. Never propose a palette, type pair, layout signature or motif here.
 - **Images**: strategy from the inventory. State the constraints line from the largest widths.
 - **Additional Notes**: SEO focus phrases (two or three, in the default language and in English), the JSON-LD `@type`.
 - **Domain**: the current `gcs_folder`. Never propose changing it.
@@ -139,7 +140,7 @@ Then write `## Open Questions` right after the title. Five to eight questions. E
 - Languages beyond the default
 - Contact email when none is published
 - Whether the old photos are acceptable or a shoot is planned
-- A design direction choice when two are plausible (offer both, propose one)
+- Any non-negotiable colours or fonts (default: none — the concepts choose)
 - Anything the document and the crawl disagree on
 
 Print the questions in the console, numbered, with the proposed defaults, and end the turn:
@@ -160,19 +161,23 @@ Open questions (reply with the numbers you want to change; unanswered ones keep 
 
 For each answer, edit the relevant section of the briefing. Questions left unanswered keep the proposal. Anything that still depends on the client moves to `## To Confirm With Client`. Delete the `## Open Questions` section.
 
-Re-read the whole file once. Check: every `## ` section from the template is present; Design Preferences has every bullet filled; Pages describe sections, not pages; Domain equals `gcs_folder`.
+Re-read the whole file once. Check: every `## ` section from the template is present; Design Constraints is filled (brand colors may be `none`); every `## Content` line parses as `- (required)? Kind: text [— keywords: …] [→ /href/]`; Pages do not fix section order; Domain equals `gcs_folder`.
 
-Show a short summary (pages, languages, design direction in one line, integrations) and offer the next step:
+Show a short summary (pages, languages, required content items, integrations) and offer the next step:
 
 ```
 AskUserQuestion:
-Question: "Briefing finalizado. Gerar o primeiro master one-page?"
+Question: "Briefing finalizado. Construir o site?"
 Options:
-- "Sim — /mockup-site master" (Recommended)
+- "Sim, supervisionado — /build-site briefings/<slug>.md supervised" (Recommended)
+- "Sim, sem supervisão — /build-site briefings/<slug>.md"
 - "Não — fico por aqui"
 ```
 
-If yes, invoke the `mockup-site` skill with `master`. Non-interactively, print `Next: /mockup-site master` and stop. The build comes only after `/mockup-site approve <n>`, the sections and `/extract-design`, never directly from here.
+If yes, invoke the `build-site` skill with the chosen arguments. Non-interactively, print
+`Next: /build-site briefings/<slug>.md supervised` and stop. The mockup path
+(`/mockup-site master` → `/extract-design` → `/generate-site`) remains available for sites
+where the client must approve a rendered look before any build.
 
 ---
 

@@ -7,6 +7,11 @@ allowed-tools: Bash, Read, Write, Edit, Grep, Glob, Agent
 
 # Site Build
 
+> **Fast path:** `/build-site briefings/<slug>.md` builds three HTML concepts in parallel and
+> publishes one in minutes, without mockups. This skill is the mockup-first path for sites
+> where the client approves a rendered look before the build, and it still owns the
+> translation pass (Phase 9) for both paths.
+
 You build a complete DjangoPress site from `$ARGUMENTS` (a briefing file) without asking anything, and you prove it is done with `python manage.py check_site` and screenshots. HTML conventions come from `djangopress-html-reference`; the save recipes come from `edit-site`. Read both before Phase 2.
 
 **Never call `AskUserQuestion`; it is not in your tools.** When the briefing is silent, take the most conventional choice for the business type and record it under "Assumptions" in the build report. The operator reviews assumptions afterwards with `edit-site`.
