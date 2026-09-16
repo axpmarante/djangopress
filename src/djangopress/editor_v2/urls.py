@@ -53,4 +53,11 @@ urlpatterns = [
     # Version navigation endpoints
     path('api/versions/<int:page_id>/', api_views.list_page_versions, name='api_list_versions'),
     path('api/versions/<int:page_id>/<int:version_number>/', api_views.get_page_version, name='api_get_version'),
+
+    # Undo / redo / checkpoints
+    path('api/checkpoint/', api_views.create_checkpoint, name='api_checkpoint'),
+    path('api/history/<int:page_id>/', api_views.history_state, name='api_history'),
+    path('api/undo/', api_views.undo, name='api_undo'),
+    path('api/redo/', api_views.redo, name='api_redo'),
+    path('api/restore-version/', api_views.restore_version, name='api_restore_version'),
 ]

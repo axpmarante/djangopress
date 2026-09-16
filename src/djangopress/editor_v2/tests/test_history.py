@@ -116,3 +116,90 @@ class RedoTargetTest(TestCase):
         vs = seq(('checkpoint', 'op1'), ('auto', ''), ('checkpoint', 'op2'), ('auto', ''),
                  ('undo', 'op2'), ('auto', ''), ('undo', 'op1'), ('auto', ''), ('redo', 'op1'), ('auto', ''))
         self.assertEqual(find_redo_target(vs).change_summary, 'op2')
+
+
+class HistoryApiTest(HistoryTestCase):
+    def state(self):
+        return self.client.get(reverse('editor_v2:api_history', args=[self.page.id])).json()
+
+    def test_state_empty(self):
+        self.assertEqual(self.state(), {'success': True, 'undo': None, 'redo': None})
+
+    def test_undo_reverts_a_verb_in_all_languages(self):
+        self.post('api_duplicate_element', {'selector': CARD_1})
+        self.assertEqual(self.html('pt').count('<h3>Um</h3>'), 2)
+        st = self.state()
+        self.assertEqual(st['undo']['label'], 'Duplicated element')
+        self.assertIsNone(st['redo'])
+        res = self.post('api_undo', {})
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.json()['label'], 'Duplicated element')
+        self.assertEqual(self.html('pt'), PT)
+        self.assertEqual(self.html('en'), EN)
+        st = self.state()
+        self.assertIsNone(st['undo'])
+        self.assertEqual(st['redo']['label'], 'Duplicated element')
+
+    def test_redo_reapplies(self):
+        self.post('api_duplicate_element', {'selector': CARD_1})
+        self.post('api_undo', {})
+        res = self.post('api_redo', {})
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(self.html('pt').count('<h3>Um</h3>'), 2)
+        self.assertEqual(self.html('en').count('<h3>One</h3>'), 2)
+        self.assertEqual(self.state()['undo']['label'], 'Duplicated element')
+        self.assertIsNone(self.state()['redo'])
+
+    def test_new_operation_after_undo_clears_redo(self):
+        self.post('api_duplicate_element', {'selector': CARD_1})
+        self.post('api_undo', {})
+        self.post('api_remove_element', {'selector': CARD_1})
+        self.assertIsNone(self.state()['redo'])
+        self.assertEqual(self.state()['undo']['label'], 'Removed element')
+
+    def test_undo_twice_walks_back_twice(self):
+        self.post('api_duplicate_element', {'selector': CARD_1})
+        self.post('api_remove_element', {'selector': CARD_1})
+        self.post('api_undo', {})
+        self.post('api_undo', {})
+        self.assertEqual(self.html('pt'), PT)
+        self.assertIsNone(self.state()['undo'])
+
+    def test_undo_with_nothing_is_400(self):
+        self.assertEqual(self.post('api_undo', {}).status_code, 400)
+
+    def test_undo_keeps_title(self):
+        self.post('api_duplicate_element', {'selector': CARD_1})
+        self.page.refresh_from_db(); self.page.title_i18n = {'pt': 'Novo', 'en': 'New'}; self.page.save()
+        self.post('api_undo', {})
+        self.page.refresh_from_db()
+        self.assertEqual(self.page.title_i18n['pt'], 'Novo')
+
+    def test_checkpoint_then_manual_edit_is_undoable(self):
+        self.post('api_checkpoint', {'label': 'Edits (1)'})
+        self.client.post(reverse('editor_v2:api_update_page_content'), data=json.dumps({
+            'page_id': self.page.id, 'selector': CARD_1 + ' > h3:nth-child(1)', 'language': 'pt', 'value': 'Alterado'}),
+            content_type='application/json')
+        self.assertIn('Alterado', self.html('pt'))
+        self.post('api_undo', {})
+        self.assertNotIn('Alterado', self.html('pt'))
+
+    def test_restore_version_restores_all_languages_and_is_undoable(self):
+        self.post('api_duplicate_element', {'selector': CARD_1})
+        first = PageVersion.objects.filter(page=self.page, kind='checkpoint').order_by('version_number').first()
+        res = self.post('api_restore_version', {'version_number': first.version_number})
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(self.html('pt'), PT)
+        self.assertEqual(self.html('en'), EN)
+        self.assertEqual(self.state()['undo']['label'], f'Restore to v{first.version_number}')
+
+    def test_list_versions_returns_all_with_kind(self):
+        for i in range(12):
+            self.post('api_checkpoint', {'label': f'c{i}'})
+        res = self.client.get(reverse('editor_v2:api_list_versions', args=[self.page.id])).json()
+        self.assertEqual(len(res['versions']), 12)
+        self.assertEqual(res['versions'][0]['kind'], 'checkpoint')
+
+    def test_non_staff_cannot_undo(self):
+        self.client.force_login(User.objects.create_user('plain', 'p@example.com', 'pw'))
+        self.assertEqual(self.post('api_undo', {}).status_code, 302)

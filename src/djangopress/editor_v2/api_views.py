@@ -21,6 +21,7 @@ from djangopress.ai.utils.llm_config import get_ai_model
 from djangopress.ai.utils.sse import sse_event, sse_response
 from bs4 import BeautifulSoup
 from djangopress.editor_v2 import structure
+from djangopress.editor_v2 import history
 
 
 # ---------------------------------------------------------------------------
@@ -1880,7 +1881,7 @@ def get_editor_session(request, page_id):
 @require_http_methods(["GET"])
 def list_page_versions(request, page_id):
     """
-    List all versions for a page (newest first, max 10).
+    List all versions for a page (newest first).
 
     GET /editor-v2/api/versions/<page_id>/
     """
@@ -1889,7 +1890,7 @@ def list_page_versions(request, page_id):
     except Page.DoesNotExist:
         return JsonResponse({'success': False, 'error': 'Page not found'}, status=404)
 
-    versions = page.versions.order_by('-version_number')[:10]
+    versions = list(page.versions.order_by('-version_number'))
     return JsonResponse({
         'success': True,
         'versions': [{
@@ -1898,6 +1899,7 @@ def list_page_versions(request, page_id):
             'change_summary': v.change_summary,
             'created_at': v.created_at.isoformat(),
             'created_by': str(v.created_by) if v.created_by else 'System',
+            'kind': v.kind,
         } for v in versions],
         'current_version': versions[0].version_number if versions else 0,
     })
@@ -2620,3 +2622,98 @@ def refine_multi_stream(request):
         return sse_response(iter([
             sse_event({'error': str(e)}, event='error')
         ]))
+
+
+# ---------------------------------------------------------------------------
+# One-click undo / redo over PageVersion kinds (see editor_v2/history.py)
+# ---------------------------------------------------------------------------
+
+def _apply_snapshot_html(page, version, summary, kind, user):
+    """Record the current state as `kind`, then set the page HTML to `version`'s and save."""
+    page.create_version(user=user, change_summary=summary, kind=kind)
+    page.html_content_i18n = dict(version.html_content_i18n or {})
+    page._change_summary = summary
+    page._snapshot_user = user
+    page.save()
+
+
+@editor_required
+@require_http_methods(["POST"])
+def create_checkpoint(request):
+    try:
+        data = json.loads(request.body)
+        label = (data.get('label') or '').strip()[:255]
+        if not label:
+            return JsonResponse({'success': False, 'error': 'Missing label'}, status=400)
+        page = _get_editable_object(data)
+        if not page:
+            return JsonResponse({'success': False, 'error': 'Page or editable object not found'}, status=400)
+        if not isinstance(page, Page):
+            return JsonResponse({'success': True, 'version_number': None})
+        v = page.create_version(user=request.user, change_summary=label, kind='checkpoint')
+        return JsonResponse({'success': True, 'version_number': v.version_number})
+    except json.JSONDecodeError:
+        return JsonResponse({'success': False, 'error': 'Invalid JSON'}, status=400)
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
+@editor_required
+@require_http_methods(["GET"])
+def history_state(request, page_id):
+    try:
+        page = Page.objects.get(pk=page_id)
+    except Page.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Page not found'}, status=404)
+    return JsonResponse({'success': True, **history.history_state(page)})
+
+
+def _undo_or_redo(request, direction):
+    try:
+        data = json.loads(request.body)
+        page = _get_editable_object(data)
+        if not page or not isinstance(page, Page):
+            return JsonResponse({'success': False, 'error': 'Page not found'}, status=400)
+        versions = list(page.versions.order_by('-version_number'))
+        target = history.find_undo_target(versions) if direction == 'undo' else history.find_redo_target(versions)
+        if target is None:
+            return JsonResponse({'success': False, 'error': f'Nothing to {direction}'}, status=400)
+        _apply_snapshot_html(page, target, target.change_summary, direction, request.user)
+        return JsonResponse({'success': True, 'label': target.change_summary, 'page_id': page.id,
+                             ('undone_version' if direction == 'undo' else 'redone_version'): target.version_number})
+    except json.JSONDecodeError:
+        return JsonResponse({'success': False, 'error': 'Invalid JSON'}, status=400)
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
+@editor_required
+@require_http_methods(["POST"])
+def undo(request):
+    return _undo_or_redo(request, 'undo')
+
+
+@editor_required
+@require_http_methods(["POST"])
+def redo(request):
+    return _undo_or_redo(request, 'redo')
+
+
+@editor_required
+@require_http_methods(["POST"])
+def restore_version(request):
+    try:
+        data = json.loads(request.body)
+        page = _get_editable_object(data)
+        if not page or not isinstance(page, Page):
+            return JsonResponse({'success': False, 'error': 'Page not found'}, status=400)
+        try:
+            version = page.versions.get(version_number=int(data.get('version_number')))
+        except (PageVersion.DoesNotExist, TypeError, ValueError):
+            return JsonResponse({'success': False, 'error': 'Version not found'}, status=404)
+        _apply_snapshot_html(page, version, f'Restore to v{version.version_number}', 'checkpoint', request.user)
+        return JsonResponse({'success': True, 'page_id': page.id})
+    except json.JSONDecodeError:
+        return JsonResponse({'success': False, 'error': 'Invalid JSON'}, status=400)
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
