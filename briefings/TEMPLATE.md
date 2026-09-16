@@ -51,12 +51,27 @@ This becomes `project_briefing` and drives all generation. Polished prose, not b
 
 ## Pages
 
-[One entry per page. Describe the sections in order, with the content each holds
-and the CTA. "The home page" is not a description.]
+[One entry per page: what the page is for and its meta. Do NOT list sections in order —
+the design concept decides how content is grouped and sequenced.]
 
-- **Home**: 1. Hero — [message, CTAs]. 2. [Section] — [content]. 3. ...
-- **About**: ...
-- **Contact**: form (reuse the template's `contact` DynamicForm), map, hours.
+- **Home**: the one-page site — meta title: [..]; meta description: [..]
+- **Reservas**: form (reuse the template's `contact` DynamicForm), map, hours.
+
+## Content
+
+[What each page must communicate, as a flat list. Items marked `(required)` form the
+content contract: whichever design concept ships, every required item is verified
+present. Grammar: `- (required)? Kind: text [— keywords: a, b, c] [→ /href/]`.
+An item with keywords passes when one keyword appears; without keywords the text must
+appear verbatim (use this for names, prices, awards, labels). A CTA carries `→ /href/`.]
+
+### Home
+- (required) Message: [the one-sentence positioning] — keywords: [3–5 words from it]
+- (required) CTA: [label] → /[page]/
+- (required) Proof: [award, rating, press — exact wording]
+- (required) Contact: phone, address, opening hours (from ## Contact)
+- Story: [what the story block should say]
+- Gallery: [how many photos, of what]
 
 ## Header
 [Navigation style, logo placement, CTA button, language switcher, mobile menu.
@@ -66,24 +81,16 @@ If omitted, the template's default header is refined, not replaced.]
 [Columns, links, contact, social icons, copyright.
 If omitted, the template's default footer is refined, not replaced.]
 
-## Design Preferences
+## Design Constraints
 
-Required. This section is what keeps the site from looking like a template.
+[Only what every design concept must respect. Never a design: no palette roles, no font
+pair, no layout signature — those are chosen per concept by `/build-site`.]
 
-- **Palette** (hex, with roles):
-  - Background:
-  - Surface (cards, blocks):
-  - Text:
-  - Accent (CTAs, prices, highlights):
-  - Secondary (links, supporting):
-  - Dark block (one inverted section):
-- **Type pair** (Google Fonts): headings — [font]; body — [font]
-- **Corner radius**: [e.g. 4px, 12px, pill]
-- **Layout signature**: [one sentence: the recurring compositional idea, e.g.
-  "12-column grid with text in 5 columns and image in 6, vertically offset"]
-- **Motif**: [one decorative device used consistently, or "none"]
-- **Avoid**: [what the local competition does that this site will not]
-- **References**: [up to three URLs]
+- **Brand colors**: [hex values only if non-negotiable — an existing logo or identity — or "none"]
+- **Logo / brand assets**: [path or URL, or "none"]
+- **Avoid**: [what the local competition does that this site will not; anything the client rejected — separated by `;`]
+- **References**: [up to three URLs, context for the art director, never models to copy]
+- **Image constraints**: [largest usable width per group, e.g. "dishes 680px, space 2560px" — decides whether full-bleed photography is possible]
 
 ## Images
 
