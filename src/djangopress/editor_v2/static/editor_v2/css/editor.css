@@ -2656,3 +2656,26 @@ body.ev2-version-preview .editor-v2-content {
   opacity: 0.4;
   cursor: default;
 }
+
+.ev2-tree-actions {
+  display: none;
+  gap: 2px;
+  margin-left: auto;
+}
+.ev2-tree-item:hover .ev2-tree-actions,
+.ev2-tree-item.current .ev2-tree-actions {
+  display: inline-flex;
+}
+.ev2-tree-actions button {
+  width: 22px;
+  height: 22px;
+  border: 1px solid var(--ev2-border);
+  border-radius: var(--ev2-radius);
+  background: var(--ev2-bg);
+  color: var(--ev2-text-secondary);
+  font-size: 11px;
+  line-height: 1;
+  cursor: pointer;
+}
+.ev2-tree-actions button:hover { background: var(--ev2-bg-hover); }
+.ev2-tree-actions button[disabled] { opacity: 0.35; cursor: default; }

@@ -3,7 +3,8 @@ import { api } from '../lib/api.js';
 import { $, $$, getCssSelector, isTextElement, getSections, getTagLabel, getEditableTopLevelDescendants, getAncestors, findCardScope, findRepeatGroup } from '../lib/dom.js';
 import { CATEGORIES, HOVER_CATEGORIES, COLOR_FAMILIES, COLOR_SHADES, COLOR_KEYWORDS } from '../lib/tailwind-classes.js';
 import { parseClasses, buildClassString } from '../lib/class-parser.js';
-import { duplicateElement, moveElement, removeElement, canMove } from '../lib/structural.js';
+import { duplicateElement, moveElement, removeElement, canMove, moveSection, canMoveSection } from '../lib/structural.js';
+import { insertAfterSection } from './section-inserter.js';
 
 let activeTab = 'content';
 let selectedEl = null;
@@ -863,7 +864,13 @@ function renderStructureTab() {
         const sectionSel = getCssSelector(section) || '';
         const isCurrent = sectionSel === selectedSel;
         html += `<div class="ev2-tree-item${isCurrent ? ' current' : ''}" data-tree-selector="${esc(sectionSel)}">`;
-        html += `<strong>${esc(getTagLabel(section))}</strong></div>`;
+        const name = section.getAttribute('data-section') || '';
+        html += `<strong style="flex:1">${esc(getTagLabel(section))}</strong>`;
+        html += `<span class="ev2-tree-actions">`;
+        html += `<button type="button" data-tree-action="up" data-name="${esc(name)}" title="Move section up" ${canMoveSection(section, 'up') ? '' : 'disabled'}>▲</button>`;
+        html += `<button type="button" data-tree-action="down" data-name="${esc(name)}" title="Move section down" ${canMoveSection(section, 'down') ? '' : 'disabled'}>▼</button>`;
+        html += `<button type="button" data-tree-action="insert" data-name="${esc(name)}" title="Insert section after">+</button>`;
+        html += `</span></div>`;
 
         // Show direct children with editable content
         for (const child of section.children) {
@@ -897,12 +904,21 @@ function renderStructureTab() {
     }
     html += '</div>';
     container.innerHTML = html;
-
-    // Click handler for tree items
-    container.addEventListener('click', onTreeClick);
 }
 
 function onTreeClick(e) {
+    if (activeTab !== 'structure') return;
+    const actionBtn = e.target.closest('[data-tree-action]');
+    if (actionBtn) {
+        e.stopPropagation();
+        if (actionBtn.disabled) return;
+        const name = actionBtn.dataset.name;
+        const action = actionBtn.dataset.treeAction;
+        if (action === 'up') moveSection(name, 'up');
+        else if (action === 'down') moveSection(name, 'down');
+        else if (action === 'insert') insertAfterSection(name);
+        return;
+    }
     const item = e.target.closest('.ev2-tree-item');
     if (!item) return;
     const sel = item.dataset.treeSelector;
@@ -1039,6 +1055,7 @@ export function init() {
     handlers.changesError = onChangesError;
     handlers.undoState = onUndoState;
     handlers.switchTab = onSwitchTab;
+    handlers.treeClick = onTreeClick;
 
     // DOM event listeners
     bindEl('.ev2-tabs', 'click', handlers.tabClick);
@@ -1048,6 +1065,7 @@ export function init() {
     bindEl('#ev2-undo-btn', 'click', handlers.undoClick);
     bindEl('#ev2-redo-btn', 'click', handlers.redoClick);
     bindEl('#ev2-save-topbar-btn', 'click', handlers.topbarSave);
+    bindEl('#ev2-tab-content', 'click', handlers.treeClick);
 
     // Event bus listeners
     events.on('selection:changed', handlers.selectionChanged);
@@ -1068,6 +1086,7 @@ export function destroy() {
     unbindEl('#ev2-undo-btn', 'click', handlers.undoClick);
     unbindEl('#ev2-redo-btn', 'click', handlers.redoClick);
     unbindEl('#ev2-save-topbar-btn', 'click', handlers.topbarSave);
+    unbindEl('#ev2-tab-content', 'click', handlers.treeClick);
 
     events.off('selection:changed', handlers.selectionChanged);
     events.off('changes:count', handlers.changesCount);
