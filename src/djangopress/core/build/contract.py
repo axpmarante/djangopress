@@ -6,6 +6,15 @@ import unicodedata
 from bs4 import BeautifulSoup
 
 TIME_RE = re.compile(r'\d{1,2}[:h]\d{2}')
+SEGMENT_RE = re.compile(r'\s+—\s+|\s+–\s+|\s*;\s*|\s+·\s+')
+
+
+def segments(text):
+    """Split a verbatim item's text into its facts (spec §8.3 defect 1): a verbatim item
+    may combine several facts (a quote and its author, a name and a role) that the builder
+    is free to lay out apart on the page, so each segment is checked independently rather
+    than the whole string as one block."""
+    return [s for s in (part.strip() for part in SEGMENT_RE.split(text or '')) if s]
 
 
 def normalise(text):
@@ -74,8 +83,11 @@ def check_contract(packet, parts, lang):
             elif item.get('keywords'):
                 if not any(normalise(k) in text for k in item['keywords']):
                     miss(item, f"none of the keywords {item['keywords']} found")
-            elif not matches(item.get('text', '')):
-                miss(item, f"text {item['text']!r} not found verbatim")
+            else:
+                for seg in segments(item.get('text', '')):
+                    if not matches(seg):
+                        miss(item, f"segment '{seg}' of {item['id']} not found")
+                        break
 
     facts = packet['facts']
     fact_item = {'id': 'facts', 'kind': 'Contact', 'text': ''}

@@ -81,6 +81,28 @@ class ContractTest(SimpleTestCase):
         misses = check_contract(packet, self.parts(page), 'pt')
         self.assertNotIn('home-10', [m['id'] for m in misses])
 
+    def test_verbatim_segments_may_be_apart(self):
+        packet = copy.deepcopy(PACKET)
+        packet['content']['home']['required'].append(
+            {'id': 'home-11', 'kind': 'Testimonial',
+             'text': 'Somos um negócio de pessoas, não um negócio de web design. — António Marante'})
+        page = ('<section><blockquote>«Somos um negócio de pessoas, não um negócio de web design.»</blockquote>'
+                '</section>' + PAGE + '<section><p>Fundador — António Marante</p></section>')
+        misses = check_contract(packet, self.parts(page), 'pt')
+        self.assertNotIn('home-11', [m['id'] for m in misses])
+
+    def test_verbatim_segment_missing_is_reported(self):
+        packet = copy.deepcopy(PACKET)
+        packet['content']['home']['required'].append(
+            {'id': 'home-11', 'kind': 'Testimonial',
+             'text': 'Somos um negócio de pessoas, não um negócio de web design. — António Marante'})
+        page = ('<section><blockquote>«Somos um negócio de pessoas, não um negócio de web design.»</blockquote>'
+                '</section>' + PAGE)
+        misses = check_contract(packet, self.parts(page), 'pt')
+        home_11_misses = [m for m in misses if m['id'] == 'home-11']
+        self.assertEqual(len(home_11_misses), 1)
+        self.assertIn('António Marante', home_11_misses[0]['reason'])
+
     def test_price_stays_strict(self):
         page = PAGE.replace('3,30 €', '330 €')
         misses = check_contract(PACKET, self.parts(page), 'pt')

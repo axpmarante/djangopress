@@ -62,6 +62,10 @@ Read `docs/concepts/screen.json`. A concept with `hard_errors` (truncated, malfo
 rebuilt **once**: dispatch its agent again with the same builder prompt plus
 `The previous attempt stopped at <last section id>; the document must be complete and end with </html>.`,
 then re-run the screening line. A second failure leaves that concept out.
+Any other `hard_errors` line names a tag or a line (a `<footer>`/`<nav>`/`<header>` inside a
+section, a `<style>` in `<main>`, template syntax in the header/footer): fix that line in
+`docs/concepts/concept-<k>.html` yourself — swap the tag for a `<div>`/`<p>`, move the CSS to
+`<head>`, drop the `{{` — and re-run the screening line once. Never rebuild for these.
 
 ## Turn 5 — Pick
 

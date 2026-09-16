@@ -48,7 +48,9 @@ DOCUMENT CONTRACT (the importer relies on this)
   Optional: <script src="https://unpkg.com/lucide@latest"></script>.
 - <body>: exactly one <header>, one <main>, one <footer>, then at most one <script> block.
 - Inside <main>, only <section> elements, each with an English id in lowercase-hyphen form
-  (id="hero", id="chefs-table"). Nothing outside a <section>.
+  (id="hero", id="chefs-table"). Nothing outside a <section>. Never use <header>, <nav>,
+  <footer>, <html>, <head> or <body> anywhere inside <main> — for a quote's attribution, a
+  card's caption or a section's top bar use <div>, <p> or <span>.
 - Inside <header>, one <nav>; place <div data-slot="language-switcher"></div> where the
   language switcher goes. Mobile menu with Alpine.js (x-data / x-show / @click).
 - Internal links: href="#section-id" for anchors; page links (href="/x/") ONLY to these pages: [[PAGES]] — every other navigation item is an anchor to one of your own section ids. No language prefix, the importer adds it. External links, mailto:, tel: as normal.
