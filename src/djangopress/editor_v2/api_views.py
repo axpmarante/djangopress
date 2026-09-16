@@ -875,7 +875,7 @@ def save_ai_section(request):
             }, status=400)
 
         # Create version for rollback
-        page.create_version(user=request.user, change_summary=f'AI refined section: {section_name}')
+        page.create_version(user=request.user, change_summary=f'AI refined section: {section_name}', kind='checkpoint')
 
         # Determine current language
         lang = _detect_language_from_request(request, data)
@@ -1072,7 +1072,8 @@ def save_ai_element(request):
         # Create version for rollback
         page.create_version(
             user=request.user,
-            change_summary=f'AI refined element'
+            change_summary=f'AI refined element',
+            kind='checkpoint'
         )
 
         # Determine current language
@@ -1321,10 +1322,11 @@ def apply_option(request):
 
         # Create version for rollback BEFORE modifying (only if model supports it)
         if hasattr(page, 'create_version'):
-            page.create_version(
-                user=request.user,
-                change_summary=f'AI {"new section" if mode == "insert" else "multi-option"} applied'
-            )
+            _apply_option_summary = f'AI {"new section" if mode == "insert" else "multi-option"} applied'
+            if isinstance(page, Page):
+                page.create_version(user=request.user, change_summary=_apply_option_summary, kind='checkpoint')
+            else:
+                page.create_version(change_summary=_apply_option_summary)
 
         if mode == 'insert':
             # Insert new section into page
@@ -1729,7 +1731,8 @@ def refine_page(request):
         # Create version for rollback
         page.create_version(
             user=request.user,
-            change_summary=f'Before editor refine-page: {instructions[:100]}'
+            change_summary=f'Before editor refine-page: {instructions[:100]}',
+            kind='checkpoint'
         )
 
         # Call AI — full page refinement
@@ -1793,10 +1796,11 @@ def save_ai_page(request):
             return JsonResponse({'success': False, 'error': 'Page or editable object not found'}, status=404)
 
         if hasattr(page, 'create_version'):
-            page.create_version(
-                user=request.user,
-                change_summary='Before save-ai-page (full page replacement)'
-            )
+            if isinstance(page, Page):
+                page.create_version(user=request.user, change_summary='Before save-ai-page (full page replacement)',
+                                    kind='checkpoint')
+            else:
+                page.create_version(change_summary='Before save-ai-page (full page replacement)')
 
         # Determine current language
         lang = _detect_language_from_request(request, data)
@@ -1953,11 +1957,12 @@ def remove_section(request):
             return JsonResponse({'success': False, 'error': f'Section "{section_name}" not found'}, status=400)
 
         # Create version for rollback (only if model supports it)
+        _remove_section_summary = f'Removed section "{section_name}"'
         if hasattr(page, 'create_version'):
-            page.create_version(
-                user=request.user,
-                change_summary=f'Removed section "{section_name}"'
-            )
+            if isinstance(page, Page):
+                page.create_version(user=request.user, change_summary=_remove_section_summary, kind='checkpoint')
+            else:
+                page.create_version(change_summary=_remove_section_summary)
 
         # Remove section from ALL language copies
         def remove_sect(s):
@@ -1968,6 +1973,8 @@ def remove_section(request):
             return True
 
         _apply_structural_change_to_all_langs(page, remove_sect)
+        page._change_summary = _remove_section_summary
+        page._snapshot_user = request.user
         page.save()
 
         return JsonResponse({
@@ -2015,10 +2022,10 @@ def remove_element(request):
 
         # Create version for rollback (only if model supports it)
         if hasattr(page, 'create_version'):
-            page.create_version(
-                user=request.user,
-                change_summary='Removed element'
-            )
+            if isinstance(page, Page):
+                page.create_version(user=request.user, change_summary='Removed element', kind='checkpoint')
+            else:
+                page.create_version(change_summary='Removed element')
 
         # Remove element from ALL language copies
         def remove_el(s):
@@ -2029,6 +2036,8 @@ def remove_element(request):
             return True
 
         _apply_structural_change_to_all_langs(page, remove_el)
+        page._change_summary = 'Removed element'
+        page._snapshot_user = request.user
         page.save()
 
         return JsonResponse({
@@ -2076,7 +2085,10 @@ def _run_structural_verb(request, data, change_summary, apply_fn):
         return page, None, []
 
     if hasattr(page, 'create_version'):
-        page.create_version(user=request.user, change_summary=f'Before: {change_summary}')
+        if isinstance(page, Page):
+            page.create_version(user=request.user, change_summary=change_summary, kind='checkpoint')
+        else:
+            page.create_version(change_summary=change_summary)
 
     skipped = []
     html_i18n = dict(getattr(page, 'html_content_i18n', None) or {})
@@ -2353,7 +2365,8 @@ def refine_page_stream(request):
         # Create version for rollback
         page.create_version(
             user=request.user,
-            change_summary=f'Before editor refine-page: {instructions[:100]}'
+            change_summary=f'Before editor refine-page: {instructions[:100]}',
+            kind='checkpoint'
         )
 
         q = queue.Queue()

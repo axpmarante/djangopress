@@ -975,7 +975,7 @@ class Page(models.Model):
             return f'/{lang}/'
         return f'/{lang}/{slug}/'
 
-    def create_version(self, user=None, change_summary='', max_versions=20):
+    def create_version(self, user=None, change_summary='', max_versions=60, kind='auto'):
         """
         Create a version snapshot of current page state.
         Automatically deletes old versions to keep only the most recent ones.
@@ -983,7 +983,9 @@ class Page(models.Model):
         Args:
             user: User making the change (optional)
             change_summary: Description of the change (optional)
-            max_versions: Maximum number of versions to keep (default: 20)
+            max_versions: Maximum number of versions to keep (default: 60)
+            kind: 'auto' (post-save snapshot), 'checkpoint' (state before a user
+                operation), or 'undo'/'redo' (state before an undo/redo ran)
 
         Returns:
             PageVersion: The created version object
@@ -998,7 +1000,8 @@ class Page(models.Model):
             html_content_i18n=self.html_content_i18n if self.html_content_i18n else {},
             is_active=self.is_active,
             created_by=user,
-            change_summary=change_summary
+            change_summary=change_summary,
+            kind=kind,
         )
 
         # Clean up old versions
@@ -1034,7 +1037,7 @@ class Page(models.Model):
         Creates a version of current state before restoring.
         """
         version = self.versions.get(version_number=version_number)
-        self.create_version(user, f'Before restore to v{version_number}')
+        self.create_version(user, f'Restore to v{version_number}', kind='checkpoint')
         return version.restore()
 
 
@@ -1207,6 +1210,9 @@ class PageVersion(models.Model):
     created_at = models.DateTimeField('Created At', auto_now_add=True)
     created_by = models.ForeignKey(django_settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL)
     change_summary = models.CharField('Change Summary', max_length=255, blank=True, default='')
+    KIND_CHOICES = [('auto', 'Auto'), ('checkpoint', 'Checkpoint'), ('undo', 'Undo'), ('redo', 'Redo')]
+    kind = models.CharField('Kind', max_length=12, default='auto', choices=KIND_CHOICES, db_index=True,
+                            help_text='auto = post-save snapshot; checkpoint = state before a user operation; undo/redo = state before an undo/redo ran')
 
     class Meta:
         verbose_name = 'Page Version'

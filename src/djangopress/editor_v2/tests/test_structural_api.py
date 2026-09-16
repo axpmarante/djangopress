@@ -103,16 +103,13 @@ class DuplicateElementTest(StructuralApiTestCase):
 
     def test_two_versions_have_distinct_labels(self):
         # The pre-change snapshot and the post-save auto-snapshot must not
-        # share the exact same change_summary, or version history can't tell
+        # share the exact same kind, or version history can't tell
         # "before" from "after".
         self.post('api_duplicate_element', {'selector': CARD_1})
-        summaries = list(
-            PageVersion.objects.filter(page=self.page).order_by('version_number').values_list('change_summary', flat=True)
+        kinds = list(
+            PageVersion.objects.filter(page=self.page).order_by('version_number').values_list('kind', 'change_summary')
         )
-        self.assertEqual(len(summaries), 2)
-        self.assertNotEqual(summaries[0], summaries[1])
-        self.assertEqual(summaries[0], 'Before: Duplicated element')
-        self.assertEqual(summaries[1], 'Duplicated element')
+        self.assertEqual(kinds, [('checkpoint', 'Duplicated element'), ('auto', 'Duplicated element')])
 
     def test_language_without_the_element_is_skipped_and_reported(self):
         self.page.html_content_i18n['en'] = '<section data-section="services" id="services"><p>x</p></section>'
