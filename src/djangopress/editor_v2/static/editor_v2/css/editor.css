@@ -468,6 +468,12 @@ body.ev2-viewport-constrained {
   color: #fecaca;
 }
 
+.ev2-context-item--disabled {
+  opacity: 0.4;
+  cursor: default;
+  pointer-events: none;
+}
+
 .ev2-context-sep {
   height: 1px;
   background: #334155;

@@ -2,21 +2,15 @@
  * Context Menu Module — right-click context menu with context-aware actions.
  */
 import { events } from '../lib/events.js';
-import { api } from '../lib/api.js';
 import { $, getContentWrapper, isTextElement, getCssSelector } from '../lib/dom.js';
 import { insertBefore, insertAfterSection } from './section-inserter.js';
+import {
+  duplicateElement, moveElement, duplicateSection, moveSection,
+  removeElement, removeSection, canMove, canMoveSection,
+} from '../lib/structural.js';
 
 function esc(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
-const config = () => window.EDITOR_CONFIG || {};
-function withEditableId(body) {
-    const cfg = config();
-    if (cfg.contentTypeId && cfg.objectId) {
-        body.content_type_id = cfg.contentTypeId;
-        body.object_id = cfg.objectId;
-    }
-    return body;
-}
 const handlers = {};
 let menu;
 
@@ -27,6 +21,7 @@ function getSection(el) {
 function buildItems(el) {
   const items = [];
   const section = getSection(el);
+  const aiEnabled = !!(window.EDITOR_CONFIG || {}).aiEnabled;
 
   if (isTextElement(el)) {
     items.push({ label: 'Edit Text', icon: '✎', hint: 'Dbl-click', action: () => events.emit('inline-edit:trigger', { element: el }) });
@@ -34,85 +29,42 @@ function buildItems(el) {
   if (section) {
     const name = section.getAttribute('data-section');
     const selector = getCssSelector(el);
+    const isElement = el !== section && !!selector;
 
-    items.push(null); // separator
-
-    // AI refine — available for any element (not the section tag itself)
-    if (selector && el !== section) {
-      items.push({ label: 'AI Refine Element', icon: '✦', action: () => events.emit('context:ai-refine', { section: name, selector }) });
+    if (aiEnabled) {
+      items.push(null);
+      if (isElement) items.push({ label: 'AI Refine Element', icon: '✦', action: () => events.emit('context:ai-refine', { section: name, selector }) });
+      items.push({ label: 'AI Refine Section', icon: '✦', action: () => events.emit('context:ai-refine', { section: name }) });
     }
-    items.push({ label: 'AI Refine Section', icon: '✦', action: () => events.emit('context:ai-refine', { section: name }) });
 
-    items.push(null); // separator
-
-    // Process images
+    items.push(null);
     items.push({ label: 'Process Section Images', icon: '⬡', action: () => events.emit('process-images:open', { section: name }) });
 
-    items.push(null); // separator
+    // Element verbs
+    if (isElement) {
+      items.push(null);
+      items.push({ label: 'Duplicate Element', icon: '⧉', action: () => duplicateElement(selector) });
+      items.push({ label: 'Move Element Up', icon: '↑', disabled: !canMove(el, 'up'), action: () => moveElement(selector, 'up') });
+      items.push({ label: 'Move Element Down', icon: '↓', disabled: !canMove(el, 'down'), action: () => moveElement(selector, 'down') });
+      items.push({ label: 'Remove Element', icon: '✕', cls: 'danger', action: () => removeElement(selector) });
+    }
 
-    // Insert section
+    // Section verbs
+    items.push(null);
     items.push({ label: 'Insert Section Before', icon: '+', action: () => insertBefore(name) });
     items.push({ label: 'Insert Section After', icon: '+', action: () => insertAfterSection(name) });
-
-    items.push(null); // separator
-
-    // Remove — any element inside section is removable
-    if (el !== section && selector) {
-      items.push({ label: 'Remove Element', icon: '✕', cls: 'danger', action: () => confirmRemoveElement(selector) });
-    }
-    items.push({ label: 'Remove Section', icon: '✕', cls: 'danger', action: () => confirmRemoveSection(name) });
+    items.push({ label: 'Duplicate Section', icon: '⧉', action: () => duplicateSection(name) });
+    items.push({ label: 'Move Section Up', icon: '↑', disabled: !canMoveSection(section, 'up'), action: () => moveSection(name, 'up') });
+    items.push({ label: 'Move Section Down', icon: '↓', disabled: !canMoveSection(section, 'down'), action: () => moveSection(name, 'down') });
+    items.push({ label: 'Remove Section', icon: '✕', cls: 'danger', action: () => removeSection(name) });
   }
 
-  items.push(null); // separator
+  items.push(null);
   items.push({ label: 'Copy Element HTML', icon: '⎘', action: () => navigator.clipboard.writeText(el.outerHTML) });
   if (section && section !== el) {
     items.push({ label: 'Select Section', icon: '▢', action: () => events.emit('selection:request', section) });
   }
   return items;
-}
-
-// ── Remove with confirmation ──
-
-function confirmRemoveSection(sectionName) {
-  if (!confirm(`Remove section "${sectionName}"? This can be undone via version history.`)) return;
-  removeSection(sectionName);
-}
-
-async function removeSection(sectionName) {
-  try {
-    const res = await api.post('/remove-section/', withEditableId({
-      page_id: config().pageId,
-      section_name: sectionName,
-    }));
-    if (res.success) {
-      window.location.reload();
-    } else {
-      alert('Failed to remove section: ' + (res.error || 'Unknown error'));
-    }
-  } catch (err) {
-    alert('Failed to remove section: ' + (err.message || err));
-  }
-}
-
-function confirmRemoveElement(selector) {
-  if (!confirm('Remove this element? This can be undone via version history.')) return;
-  removeElement(selector);
-}
-
-async function removeElement(selector) {
-  try {
-    const res = await api.post('/remove-element/', withEditableId({
-      page_id: config().pageId,
-      selector: selector,
-    }));
-    if (res.success) {
-      window.location.reload();
-    } else {
-      alert('Failed to remove element: ' + (res.error || 'Unknown error'));
-    }
-  } catch (err) {
-    alert('Failed to remove element: ' + (err.message || err));
-  }
 }
 
 // ── Rendering ──
@@ -121,7 +73,7 @@ function renderMenu(items) {
   menu.innerHTML = items.map(item => {
     if (!item) return '<div class="ev2-context-sep"></div>';
     const hint = item.hint ? `<span class="ev2-command-result-hint">${esc(item.hint)}</span>` : '';
-    const cls = item.cls ? ` ev2-context-item--${item.cls}` : '';
+    const cls = (item.cls ? ` ev2-context-item--${item.cls}` : '') + (item.disabled ? ' ev2-context-item--disabled' : '');
     return `<div class="ev2-context-item${cls}" data-idx="${items.indexOf(item)}">
       <span>${item.icon || ''}</span><span style="flex:1">${esc(item.label)}</span>${hint}
     </div>`;
@@ -144,7 +96,8 @@ function showMenu(x, y, items) {
   menu.querySelectorAll('.ev2-context-item').forEach(el => {
     const idx = parseInt(el.dataset.idx);
     const item = items[idx];
-    if (item) el.addEventListener('click', () => { hideMenu(); item.action(); });
+    if (!item || item.disabled) return;
+    el.addEventListener('click', () => { hideMenu(); item.action(); });
   });
 }
 

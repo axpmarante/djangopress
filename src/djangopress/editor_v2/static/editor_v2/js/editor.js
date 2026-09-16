@@ -19,6 +19,7 @@ import * as sectionInserter  from './modules/section-inserter.js';
 import * as sectionModal     from './modules/section-modal.js';
 import * as processImages    from './modules/process-images.js';
 import * as viewport         from './modules/viewport.js';
+import { restoreSelection }  from './lib/structural.js';
 
 document.addEventListener('DOMContentLoaded', () => {
     changes.init();
@@ -35,6 +36,8 @@ document.addEventListener('DOMContentLoaded', () => {
     sectionModal.init();
     processImages.init();
     viewport.init();
+
+    restoreSelection();
 
     console.log('Editor v2 active');
 });
