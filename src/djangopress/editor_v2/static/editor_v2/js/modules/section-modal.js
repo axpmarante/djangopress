@@ -57,6 +57,12 @@ function open() {
     promptInput.value = '';
     hideStatus();
     showGeneratePhase();
+    if (!(window.EDITOR_CONFIG || {}).aiEnabled) {
+        setStatus('Generating a section with AI needs a superuser account. A section catalogue is coming next.', 'error');
+        generateBtn.disabled = true;
+    } else {
+        generateBtn.disabled = false;
+    }
     promptInput.focus();
 }
 

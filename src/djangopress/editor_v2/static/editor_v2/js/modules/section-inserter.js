@@ -50,6 +50,7 @@ function buildPlaceholderContent(el) {
  */
 function insertPlaceholder(afterSectionName) {
     removePlaceholder();
+    setInserting(true);
 
     insertAfter = afterSectionName;
 
@@ -128,6 +129,51 @@ export function removePlaceholder() {
         placeholder = null;
     }
     insertAfter = null;
+    setInserting(false);
+}
+
+// ---------------------------------------------------------------------------
+// Insertion bars (hover "+" between sections)
+// ---------------------------------------------------------------------------
+let bars = [];
+
+function makeBar(index, afterName) {
+    const bar = document.createElement('div');
+    bar.className = 'ev2-insert-bar';
+    bar.id = `ev2-insert-bar-${index}`;
+    bar.innerHTML = '<div class="ev2-insert-bar-line"></div><button type="button" class="ev2-insert-bar-btn" title="Insert section here">+</button>';
+    bar.querySelector('button').addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        insertPlaceholder(afterName);
+    });
+    return bar;
+}
+
+function renderBars() {
+    removeBars();
+    const sections = getSections();
+    if (sections.length === 0) return;
+    sections.forEach((section, i) => {
+        const prev = i === 0 ? null : sections[i - 1].getAttribute('data-section');
+        const bar = makeBar(i, prev);
+        section.parentNode.insertBefore(bar, section);
+        bars.push(bar);
+    });
+    const last = sections[sections.length - 1];
+    const tail = makeBar(sections.length, last.getAttribute('data-section'));
+    last.parentNode.insertBefore(tail, last.nextSibling);
+    bars.push(tail);
+}
+
+function removeBars() {
+    bars.forEach(b => b.remove());
+    bars = [];
+}
+
+function setInserting(on) {
+    const wrapper = getContentWrapper();
+    if (wrapper) wrapper.classList.toggle('ev2-inserting', on);
 }
 
 /** Return the current insertion state, or null if no placeholder is active. */
@@ -139,9 +185,11 @@ export function getInsertState() {
 /** Tear down — remove all DOM elements created by this module. */
 export function destroy() {
     removePlaceholder();
+    removeBars();
 }
 
 /** Initialise the module. */
 export function init() {
     events.on('inserter:cancel', removePlaceholder);
+    renderBars();
 }

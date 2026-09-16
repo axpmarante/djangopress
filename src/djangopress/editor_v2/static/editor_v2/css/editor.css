@@ -2679,3 +2679,49 @@ body.ev2-version-preview .editor-v2-content {
 }
 .ev2-tree-actions button:hover { background: var(--ev2-bg-hover); }
 .ev2-tree-actions button[disabled] { opacity: 0.35; cursor: default; }
+
+/* --------------------------------------------------------------------------
+   Insertion bars between sections
+   -------------------------------------------------------------------------- */
+.ev2-insert-bar {
+  position: relative;
+  height: 0;
+  z-index: 9990;
+}
+.ev2-insert-bar::before {            /* hit area */
+  content: '';
+  position: absolute;
+  left: 0; right: 0;
+  top: -12px;
+  height: 24px;
+}
+.ev2-insert-bar-line {
+  position: absolute;
+  left: 0; right: 0;
+  top: -1px;
+  height: 2px;
+  background: var(--ev2-accent);
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.ev2-insert-bar-btn {
+  position: absolute;
+  left: 50%;
+  top: -14px;
+  transform: translateX(-50%);
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: none;
+  background: var(--ev2-accent);
+  color: #fff;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s;
+  box-shadow: var(--ev2-shadow-md);
+}
+.ev2-insert-bar:hover .ev2-insert-bar-line,
+.ev2-insert-bar:hover .ev2-insert-bar-btn { opacity: 1; }
+.editor-v2-content.ev2-inserting .ev2-insert-bar { display: none; }
