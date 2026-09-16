@@ -14,6 +14,14 @@
 - Design quality: run on checkin-faro (mechanics) and on the agency's own site pwd-v2 (gate; the operator delegated the pick). Three parallel builders, model fable: 5m41s and 8m06s wall clock, 58–81k tokens each, 7–10 sections, none truncated, no forbidden tags. All three concepts radically distinct (editorial / poster / receipt). Concept C shippable as rendered and picked for home; A and B hid most of their content behind scroll-reveal animations in a static render → visibility rule added to the builder contract and `hidden-content` to the probe. **Gate passed.**
 - Publish path: not yet timed — pwd-v2 needs a first-time Railway deploy (cloud resources; operator's call). `entrypoint.sh` restores from GCS unconditionally on every start; Task 13 Step 2 times it if the site is deployed by then.
 
+## Run results (2026-09-16)
+- **Supervised** (pwd-v2, fresh agent following the skill): 22:54 → pick at 23:07 (13 min: director 2 min, builders 194/200/469 s, screening 30 s). Three concepts visibly distinct, none hid content behind scroll reveals. Resumed with `pick b` at 23:11 after a tooling fix; import 13 s, verify + one fix round 3 min, report + commit at 23:16. `/pt/homepage-v2/` and `/pt/homepage-v3/` render the other two concepts. Not on Railway → `Not on Railway yet` printed. Commit e228764 in pwd-v2.
+- **Unattended** (pwd-v2-unattended): 23:21:41 → 23:34:23 = **12 m 42 s**, zero human input; builders 246/210/272 s, 57–63k tokens each. Rule picked a (b lost `clean` on a verbatim false negative — fixed afterwards by the segment rule; c had a `<footer>` inside a section — fixed by hand per the new Turn 4 rule). Commit e7423ee.
+- **Promote**: exercised by the unit test only (`promote_concept` on pwd-v2-unattended not run — the shipped concept was the one the rule picked).
+- **Probe available**: yes (Chromium in every site venv via the `[build]` extra).
+- **Tooling defects found by the runs and fixed on the branch**: contract `Contact` item never matched (f5f9637); punctuation/segment-insensitive verbatim (f5f9637, +1); relative builder output path (f5f9637); `build_verify` probing another site's dev server on :8000 (db09187); publish line refused by the auto-mode classifier (db09187); page links to non-existent pages (db09187); non-truncation hard errors and semantic tags inside `<main>` (+1).
+- **Honest comparison with the target**: 7–9 min was the spec's estimate; measured 12–16 min. The whole gap is builder wall clock (the slowest of three, 3.5–8 min per page). Everything deterministic totals under 3 min. Next lever: shorter builder outputs or a faster builder model, not more automation.
+
 ## Global Constraints
 
 - **Repo:** `/Users/antoniomarante/Documents/djangopress-sites/djangopress`. Work on branch `feature/fast-site-generation`, created with `git checkout -b feature/fast-site-generation` from the current HEAD of `feature/editor-structural-verbs` (same checkout, no worktree — every child site's venv is an editable install of this path). The working tree already holds **uncommitted editor changes** (`src/djangopress/ai/views.py`, `src/djangopress/editor_v2/…`, `src/djangopress/skills/djangopress-architecture/SKILL.md`, `briefings/lalitana.md`). Never stage them: `git add` only the files each task names. Never `git stash`, `git checkout -- <file>` or `git reset`.
@@ -1372,7 +1380,7 @@ class SplitTest(SimpleTestCase):
 
     def test_split_checkin(self):
         header, main, footer, trailing = split_document(soup_of(CHECKIN))
-        self.assertEqual(len(main.find_all('section', recursive=False)), 10)
+        self.assertEqual(len(main.find_all('section', recursive=False)), 11)
         self.assertIn('lucide.createIcons', trailing[0].get_text())
 
 
@@ -1709,7 +1717,7 @@ def infer_layout(root):
 - [ ] **Step 5: Run the tests**
 
 Run: `cd /Users/antoniomarante/Documents/djangopress-sites/quer-pintar-a-sua-casa && .venv/bin/python manage.py test djangopress.core.tests.test_build_adapter -v 1 2>&1 | tail -5`
-Expected: `Ran 14 tests … OK`
+Expected: `Ran 13 tests … OK`
 
 - [ ] **Step 6: Commit**
 
@@ -1815,10 +1823,10 @@ class AdaptCheckinTest(SimpleTestCase):
     def setUp(self):
         self.r = adapt(CHECKIN, lang='pt', languages=['pt', 'en'], image_map={}, cta_texts=['Reservar'])
 
-    def test_ten_sections_first_is_hero(self):
-        self.assertEqual(len(self.r.sections), 10)
+    def test_eleven_sections_first_is_hero(self):
+        self.assertEqual(len(self.r.sections), 11)   # the fixture has 11 direct children of <main> (Task 4 confirmed)
         self.assertEqual(self.r.sections[0], 'hero')
-        self.assertEqual(len(set(self.r.sections)), 10)
+        self.assertEqual(len(set(self.r.sections)), 11)
         for name in self.r.sections:
             self.assertRegex(name, r'^[a-z][a-z0-9-]*$')
         self.assertIn('carta', self.r.sections)
@@ -2078,7 +2086,7 @@ def adapt(raw, *, lang, languages, image_map, cta_texts=(), contact_phone=''):
 - [ ] **Step 4: Run the tests**
 
 Run: `cd /Users/antoniomarante/Documents/djangopress-sites/quer-pintar-a-sua-casa && .venv/bin/python manage.py test djangopress.core.tests.test_build_adapter -v 1 2>&1 | tail -5`
-Expected: `Ran 31 tests … OK`. If `test_ten_sections_first_is_hero` reports a name like `s-` for a section whose heading is all-symbol, that section's heading text is empty — check the fixture's section and adjust `_unique` only if the name is not a legal slug.
+Expected: `Ran 30 tests … OK` (13 from Task 4 + 17 new). If `test_eleven_sections_first_is_hero` reports a name like `s-` for a section whose heading is all-symbol, that section's heading text is empty — check the fixture's section and adjust `_unique` only if the name is not a legal slug.
 
 - [ ] **Step 5: Commit**
 
