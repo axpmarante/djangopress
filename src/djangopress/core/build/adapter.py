@@ -271,7 +271,12 @@ def _unique(name, seen):
 
 
 def name_sections(main, contact_phone=''):
-    """Every direct child of <main> becomes a <section data-section=id id=...>; names synthesised when missing."""
+    """Every direct child of <main> becomes a <section data-section=id id=...>; names synthesised when missing.
+
+    Returns `(names, id_map)`: `id_map` carries every old id -> new id rewrite so `adapt()` can
+    fix up `href="#old"` anchors before that id disappears — normalised (case), deduped, or
+    synthesised from a heading that itself carried an `id` (that heading id may be exactly what
+    a header/footer anchor points at, even though the section itself had no id)."""
     for child in list(main.children):
         if isinstance(child, Comment):
             child.extract()
@@ -282,10 +287,12 @@ def name_sections(main, contact_phone=''):
             continue
         if child.name != 'section':
             child.wrap(Tag(name='section'))
-    seen, names = set(), []
+    seen, names, id_map = set(), [], {}
     sections = main.find_all('section', recursive=False)
     for i, sec in enumerate(sections):
-        name = (sec.get('id') or '').strip().lower()
+        old_id = (sec.get('id') or '').strip()
+        name = old_id.lower()
+        heading_old_id = ''
         if not name:
             if i == 0:
                 name = 'hero'
@@ -293,12 +300,33 @@ def name_sections(main, contact_phone=''):
                 name = 'contact'
             else:
                 heading = sec.find(['h1', 'h2', 'h3'])
-                name = slugify(heading.get_text(' ', strip=True)) if heading else 'section'
+                if heading is not None:
+                    heading_old_id = (heading.get('id') or '').strip()
+                    name = slugify(heading.get_text(' ', strip=True))
+                else:
+                    name = 'section'
         name = _unique(name or 'section', seen)
         sec['id'] = name
         sec['data-section'] = name
         names.append(name)
-    return names
+        if old_id and old_id != name:
+            id_map[old_id] = name
+        if heading_old_id and heading_old_id != name:
+            id_map[heading_old_id] = name
+    return names, id_map
+
+
+def rewrite_anchor_ids(root, id_map):
+    """Rewrite `href="#old"` to `href="#new"` for every id `name_sections()` changed."""
+    n = 0
+    if not id_map:
+        return n
+    for a in root.find_all('a', href=True):
+        href = a['href']
+        if href.startswith('#') and href[1:] in id_map:
+            a['href'] = '#' + id_map[href[1:]]
+            n += 1
+    return n
 
 
 def prefix_links(root, lang, codes):
@@ -336,10 +364,25 @@ def find_template_syntax(html):
     return bool(TEMPLATE_SYNTAX_RE.search(html))
 
 
+INTERACTIVE_CLICK_ATTRS = ('@click', 'x-on:click', 'onclick', 'x-on:click.away')
+
+
+def _is_interactive(el):
+    """True when the element itself handles clicks (Alpine.js directives, inline onclick, an
+    ARIA button role) — such an element must stay clickable, so it is never marked
+    `pointer-events-none` even when it otherwise looks like a decorative overlay."""
+    attrs = el.attrs
+    if attrs.get('role') == 'button':
+        return True
+    return any(a in attrs for a in INTERACTIVE_CLICK_ATTRS)
+
+
 def apply_editor_contract(root, changes):
     for el in root.find_all(class_=True):
         classes = el['class']
         if not ({'absolute', 'fixed'} & set(classes)) or el.name in NON_OVERLAY_TAGS:
+            continue
+        if _is_interactive(el):
             continue
         if el.find(['img', 'svg', 'video', 'input', 'button']):
             continue
@@ -355,6 +398,8 @@ def apply_editor_contract(root, changes):
         if any(c.startswith('splide') for p in img.parents for c in _class_tokens(p)):
             continue
         src = img.get('src', '')
+        if PLACEHOLDER_HOST in src:
+            continue
         if src in seen and img.get('aria-hidden') != 'true':
             img['aria-hidden'] = 'true'
             img['alt'] = ''
@@ -390,17 +435,34 @@ def normalise_images(root, image_urls, changes, warnings, part):
             img['alt'] = img['data-image-name']
 
 
-def extract_menu(header):
+def extract_menu(header, lang='', site_name=''):
+    """Every <a> inside the header's <nav> becomes a menu item, in document order.
+
+    Dedupes by href (a desktop and a mobile nav sharing the same links must not double the
+    menu) and drops the logo's link to the home page: a link to `/<lang>/` whose label,
+    stripped of anything that isn't a letter, matches the site name stripped the same way —
+    that's the logo, not a menu entry, once a `site_name` is given."""
     nav = header.find('nav') or header
-    items = []
+    home_href = f'/{lang}/' if lang else None
+    site_stripped = ''.join(ch for ch in (site_name or '') if ch.isalpha()).lower()
+    items, seen_hrefs = [], set()
     for a in nav.find_all('a', href=True):
         label = a.get_text(' ', strip=True)
-        if label:
-            items.append({'label': label, 'href': a['href']})
+        href = a['href']
+        if not label:
+            continue
+        if site_stripped and home_href and href == home_href:
+            label_stripped = ''.join(ch for ch in label if ch.isalpha()).lower()
+            if label_stripped == site_stripped:
+                continue
+        if href in seen_hrefs:
+            continue
+        seen_hrefs.add(href)
+        items.append({'label': label, 'href': href})
     return items
 
 
-def adapt(raw, *, lang, languages, image_map, cta_texts=(), contact_phone=''):
+def adapt(raw, *, lang, languages, image_map, cta_texts=(), contact_phone='', site_name=''):
     result = AdaptResult()
     result.errors.extend(check_complete(raw))
     if result.errors:
@@ -435,7 +497,9 @@ def adapt(raw, *, lang, languages, image_map, cta_texts=(), contact_phone=''):
     if result.errors:
         return result
 
-    result.sections = name_sections(main, contact_phone)
+    result.sections, id_map = name_sections(main, contact_phone)
+    for tag in (header, main, footer):
+        rewrite_anchor_ids(tag, id_map)
     codes = list(languages)
     for tag in (header, main, footer):
         result.changes['links-prefixed'] += prefix_links(tag, lang, codes)
@@ -445,7 +509,7 @@ def adapt(raw, *, lang, languages, image_map, cta_texts=(), contact_phone=''):
         normalise_images(tag, image_urls, result.changes, result.warnings, part)
     if main.find('script'):
         result.warnings.append('page: inline <script> inside a section (kept)')
-    result.menu = extract_menu(header)
+    result.menu = extract_menu(header, lang=lang, site_name=site_name)
 
     switcher = ''
     if len(codes) > 1:

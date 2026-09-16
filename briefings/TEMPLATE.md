@@ -63,7 +63,8 @@ the design concept decides how content is grouped and sequenced.]
 content contract: whichever design concept ships, every required item is verified
 present. Grammar: `- (required)? Kind: text [— keywords: a, b, c] [→ /href/]`.
 An item with keywords passes when one keyword appears; without keywords the text must
-appear verbatim (use this for names, prices, awards, labels). A CTA carries `→ /href/`.]
+appear verbatim (use this for names, prices, awards, labels). A CTA carries `→ /page/` or
+`→ #section`.]
 
 ### Home
 - (required) Message: [the one-sentence positioning] — keywords: [3–5 words from it]

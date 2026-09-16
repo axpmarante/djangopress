@@ -2,7 +2,11 @@
 
 from pathlib import Path
 
-PROBE_JS = (Path(__file__).with_name('probe.js')).read_text()
+SCROLL_STEP = 450
+
+
+def _probe_js():
+    return (Path(__file__).with_name('probe.js')).read_text()
 
 
 def run_probe(url, widths=(390, 834, 1440), *, cta_texts=(), fonts=(), screenshot_path=None, screenshot_width=390):
@@ -10,6 +14,7 @@ def run_probe(url, widths=(390, 834, 1440), *, cta_texts=(), fonts=(), screensho
         from playwright.sync_api import sync_playwright
     except ImportError:
         return {'available': False, 'defects': []}
+    probe_js = _probe_js()
     defects, page_errors = [], []
     with sync_playwright() as p:
         browser = p.chromium.launch()
@@ -19,7 +24,17 @@ def run_probe(url, widths=(390, 834, 1440), *, cta_texts=(), fonts=(), screensho
                 page.on('pageerror', lambda e: page_errors.append(str(e)))
                 page.goto(url, wait_until='networkidle', timeout=60000)
                 page.evaluate('() => document.fonts.ready')
-                for d in page.evaluate(PROBE_JS, {'ctaTexts': list(cta_texts), 'fonts': list(fonts)}):
+                # Scroll the whole page first so lazy/intersection-driven content has had
+                # its chance to appear — done here (not inside probe.js) so each step
+                # actually yields to the browser between scrolls.
+                scroll_height = page.evaluate('() => document.documentElement.scrollHeight')
+                y = 0
+                while y < scroll_height:
+                    page.evaluate('y => window.scrollTo(0, y)', y)
+                    page.wait_for_timeout(50)
+                    y += SCROLL_STEP
+                page.evaluate('() => window.scrollTo(0, 0)')
+                for d in page.evaluate(probe_js, {'ctaTexts': list(cta_texts), 'fonts': list(fonts)}):
                     d['width'] = w
                     defects.append(d)
                 if screenshot_path and w == screenshot_width:

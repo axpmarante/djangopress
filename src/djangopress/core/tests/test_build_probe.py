@@ -1,14 +1,16 @@
 """Tests for the probe and build_verify (Task 8)."""
 
 import json
+import re
 import tempfile
 from io import StringIO
 from pathlib import Path
 from unittest.mock import patch
 
 from django.core.management import call_command
-from django.test import TestCase
+from django.test import SimpleTestCase, TestCase
 
+from djangopress.core.build import probe as probe_module
 from djangopress.core.build.adapter import adapt
 from djangopress.core.build.importer import cta_texts_from, import_result
 from djangopress.core.build.probe import run_probe
@@ -23,10 +25,23 @@ BROKEN = """<!DOCTYPE html><html><head><style>body{margin:0}</style></head><body
 <section data-section="empty" id="empty"></section>
 <section data-section="text" id="text" style="height:300px"><p>Body</p></section>
 <section data-section="reveal" id="reveal" style="height:300px"><p style="opacity:0">Hidden until scroll</p></section>
+<section data-section="wrapper" id="wrapper"><div style="opacity:0"><p>Hidden by wrapper</p></div></section>
 </main>
 <footer style="height:200px">footer</footer>
 <div style="position:fixed;bottom:0;left:0;right:0;height:80px;background:#000"></div>
 </body></html>"""
+
+
+class ProbePackagingTest(SimpleTestCase):
+
+    def test_probe_js_is_packaged(self):
+        js_path = Path(probe_module.__file__).with_name('probe.js')
+        self.assertTrue(js_path.exists())
+        pyproject = Path(probe_module.__file__).resolve().parents[4] / 'pyproject.toml'
+        if not pyproject.exists():
+            self.skipTest('pyproject.toml not present (packaged install)')
+        content = pyproject.read_text()
+        self.assertRegex(content, re.escape('core/build/*.js'))
 
 
 def playwright_available():
@@ -59,7 +74,9 @@ class ProbeTest(TestCase):
         self.assertIn('cta-below-fold', kinds)
         self.assertIn('header-contrast', kinds)
         self.assertIn('hidden-content', kinds)
-        self.assertEqual(next(d for d in out['defects'] if d['kind'] == 'hidden-content')['section'], 'reveal')
+        hidden_sections = {d['section'] for d in out['defects'] if d['kind'] == 'hidden-content'}
+        self.assertIn('reveal', hidden_sections)
+        self.assertIn('wrapper', hidden_sections)
         self.assertEqual(next(d for d in out['defects'] if d['kind'] == 'overflow')['section'], 'hero')
 
     def test_clean_page_and_screenshot(self):
@@ -69,11 +86,14 @@ class ProbeTest(TestCase):
             shot = Path(d) / 'home-390.png'
             try:
                 out = run_probe(f.as_uri(), widths=(390,), screenshot_path=shot)
+                out2 = run_probe(f.as_uri(), widths=(390,), fonts=['NoSuchFontZZ'])
             except Exception as exc:
                 self.skipTest(f'chromium unavailable: {exc}')
             self.assertTrue(shot.exists())
         blocking = [x for x in out['defects'] if x['kind'] in BLOCKING_KINDS]
         self.assertEqual(blocking, [])
+        font_defects = [x for x in out2['defects'] if x['kind'] == 'font-not-loaded']
+        self.assertTrue(any(x['detail'] == 'NoSuchFontZZ' for x in font_defects), out2['defects'])
 
 
 class ResidueTest(TestCase):

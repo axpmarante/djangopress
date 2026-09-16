@@ -37,15 +37,27 @@
     return (hi + 0.05) / (lo + 0.05);
   }
 
-  // Scroll the whole page first so lazy/intersection-driven content has had its chance to appear.
-  for (let y = 0; y < de.scrollHeight; y += Math.max(200, h / 2)) window.scrollTo(0, y);
-  window.scrollTo(0, de.scrollHeight);
-  window.scrollTo(0, 0);
+  // The page has already been scrolled through by probe.py (see run_probe) before this
+  // runs, so lazy/intersection-driven content has had its chance to appear.
+
+  function isHidden(el, sec) {
+    if (typeof el.checkVisibility === 'function') {
+      return el.checkVisibility({ opacityProperty: true, visibilityProperty: true }) === false;
+    }
+    let e = el;
+    while (e) {
+      const cs = getComputedStyle(e);
+      if (parseFloat(cs.opacity) === 0 || cs.visibility === 'hidden') return true;
+      if (e === sec) break;
+      e = e.parentElement;
+    }
+    return false;
+  }
 
   for (const sec of document.querySelectorAll('[data-section]')) {
     const texts = [...sec.querySelectorAll('h1,h2,h3,h4,p,li,a,span')].filter(e => e.textContent.trim());
     if (!texts.length) continue;
-    const hidden = texts.filter(e => { const cs = getComputedStyle(e); return parseFloat(cs.opacity) === 0 || cs.visibility === 'hidden'; });
+    const hidden = texts.filter(e => isHidden(e, sec));
     if (hidden.length === texts.length) defects.push({ kind: 'hidden-content', section: sec.dataset.section, detail: `${texts.length} text elements at opacity 0 / hidden after scrolling the page` });
   }
 
@@ -120,8 +132,10 @@
     window.scrollTo(0, 0);
   }
 
-  for (const f of (args.fonts || [])) {
-    if (f && !document.fonts.check(`16px "${f}"`)) defects.push({ kind: 'font-not-loaded', section: 'head', detail: f });
+  for (const fam of (args.fonts || [])) {
+    if (!fam) continue;
+    const loaded = [...document.fonts].some(f => f.family.replace(/["']/g, '').toLowerCase() === fam.toLowerCase() && f.status === 'loaded');
+    if (!loaded) defects.push({ kind: 'font-not-loaded', section: 'head', detail: fam });
   }
   return defects;
 }

@@ -1,12 +1,14 @@
 """Tests for the concept adapter (Tasks 4 and 5)."""
 
+from collections import Counter
 from pathlib import Path
 
 from django.test import SimpleTestCase
 
 from djangopress.core.build import adapter
 from djangopress.core.build.adapter import (
-    check_complete, extract_colors, extract_fonts, fix_body_rules, infer_layout, lift_head, soup_of, split_document,
+    apply_editor_contract, check_complete, extract_colors, extract_fonts, fix_body_rules, infer_layout, lift_head,
+    soup_of, split_document,
 )
 
 FIXTURES = Path(__file__).parent / 'fixtures'
@@ -243,3 +245,74 @@ class AdaptErrorsTest(SimpleTestCase):
     def test_nav_inside_main(self):
         r = adapt(MINIMAL.replace('<ul><li>Couvert', '<nav><a href="#x">x</a></nav><ul><li>Couvert'), lang='pt', languages=['pt'], image_map={})
         self.assertTrue(any('<nav>' in e for e in r.errors))
+
+
+class MenuDedupeAndLogoSkipTest(SimpleTestCase):
+
+    HEADER_WITH_DUPLICATE_NAV = MINIMAL.replace(
+        '<div data-slot="language-switcher"></div>\n  </nav>',
+        '<div data-slot="language-switcher"></div>\n'
+        '    <div class="lg:hidden">\n'
+        '      <a href="/">Casa Teste</a>\n'
+        '      <a href="#menu">Menu</a>\n'
+        '      <a href="/reservas/">Reservar mesa</a>\n'
+        '    </div>\n  </nav>',
+    )
+
+    def test_menu_dedupes_desktop_and_mobile_links(self):
+        r = adapt(self.HEADER_WITH_DUPLICATE_NAV, lang='pt', languages=['pt', 'en'],
+                  image_map={'dish-1': {'url': 'https://example.com/dish.jpg'}},
+                  cta_texts=['Reservar mesa'], contact_phone='+351 289 000 000')
+        self.assertEqual(len(r.menu), 4)
+        self.assertEqual([m['href'] for m in r.menu], ['/pt/', '/pt/#menu', '/pt/#contact', '/pt/reservas/'])
+
+    def test_menu_skips_logo_link_to_home(self):
+        r = adapt(MINIMAL, lang='pt', languages=['pt', 'en'],
+                  image_map={'dish-1': {'url': 'https://example.com/dish.jpg'}},
+                  cta_texts=['Reservar mesa'], contact_phone='+351 289 000 000', site_name='Casa Teste')
+        self.assertNotIn({'label': 'Casa Teste', 'href': '/pt/'}, r.menu)
+        self.assertEqual(len(r.menu), 3)
+
+        r_without_site_name = adapt(MINIMAL, lang='pt', languages=['pt', 'en'],
+                                    image_map={'dish-1': {'url': 'https://example.com/dish.jpg'}},
+                                    cta_texts=['Reservar mesa'], contact_phone='+351 289 000 000')
+        self.assertIn({'label': 'Casa Teste', 'href': '/pt/'}, r_without_site_name.menu)
+
+
+class EditorContractGuardsTest(SimpleTestCase):
+
+    def test_placeholder_duplicates_not_marked_decorative(self):
+        soup = soup_of(
+            '<div><img src="https://placehold.co/600x400?text=x">'
+            '<img src="https://placehold.co/600x400?text=x"></div>'
+        )
+        changes = Counter()
+        apply_editor_contract(soup, changes)
+        imgs = soup.find_all('img')
+        self.assertNotIn('aria-hidden', imgs[1].attrs)
+        self.assertEqual(changes['duplicate-img-decorative'], 0)
+
+    def test_alpine_backdrop_keeps_pointer_events(self):
+        soup = soup_of('<div class="absolute inset-0 bg-black/50" @click="open = false"></div>')
+        changes = Counter()
+        apply_editor_contract(soup, changes)
+        div = soup.find('div')
+        self.assertNotIn('pointer-events-none', div.get('class', []))
+        self.assertEqual(changes['pointer-events-none'], 0)
+
+
+class RenamedSectionAnchorTest(SimpleTestCase):
+
+    DOC = (
+        '<!DOCTYPE html><html><head><title>T</title></head><body>'
+        '<header><nav><a href="#Sobre">Sobre</a></nav></header>'
+        '<main><section id="Sobre"><h2>Sobre</h2><p>Texto</p></section></main>'
+        '<footer><p>f</p></footer>'
+        '</body></html>'
+    )
+
+    def test_renamed_section_id_rewrites_anchors(self):
+        r = adapt(self.DOC, lang='pt', languages=['pt'], image_map={})
+        self.assertEqual(r.errors, [])
+        self.assertEqual(r.sections, ['sobre'])
+        self.assertIn('href="/pt/#sobre"', r.header_html)

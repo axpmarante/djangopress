@@ -108,3 +108,22 @@ class ContractTest(SimpleTestCase):
         misses = check_contract(PACKET, self.parts(page), 'pt')
         self.assertEqual([m['id'] for m in misses], ['home-4'])
         self.assertIn('price', misses[0]['reason'])
+
+    def test_anchor_cta_matches_prefixed_anchor(self):
+        packet = copy.deepcopy(PACKET)
+        packet['content']['home']['required'] = [
+            {'id': 'home-2', 'kind': 'CTA', 'text': 'Reservar mesa', 'href': '#contact'},
+        ]
+        packet['facts'] = {}
+        parts = {'page': '<section><a href="/pt/#contact">Reservar mesa</a></section>', 'header': '<header></header>', 'footer': '<footer></footer>'}
+        misses = check_contract(packet, parts, 'pt')
+        self.assertEqual(misses, [])
+
+    def test_address_with_br_and_commas(self):
+        packet = copy.deepcopy(PACKET)
+        packet['content']['home']['required'] = []
+        packet['facts'] = dict(packet['facts'])
+        packet['facts']['address'] = 'Rua do Castelo 1, Faro'
+        parts = {'page': '<p>Rua do Castelo 1<br>Faro</p>', 'header': '<header></header>', 'footer': '<footer></footer>'}
+        misses = check_contract(packet, parts, 'pt')
+        self.assertFalse(any('address' in m['reason'] for m in misses))

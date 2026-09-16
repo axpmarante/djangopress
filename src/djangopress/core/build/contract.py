@@ -49,6 +49,18 @@ def _price_forms(price):
     return {p, p.replace('.', ',')}
 
 
+def prefixed_href(href, lang):
+    """Same prefix rule the adapter applies to every <a href> (spec §7): `#x` -> `/<lang>/#x`,
+    `/` -> `/<lang>/`, `/x/` -> `/<lang>/x/` unless already `/<lang>/...`."""
+    if href.startswith('#'):
+        return f'/{lang}/{href}'
+    if href == '/':
+        return f'/{lang}/'
+    if href.startswith('/') and not href.startswith(f'/{lang}/'):
+        return f'/{lang}{href}'
+    return href
+
+
 def check_contract(packet, parts, lang):
     text, hrefs = _haystack(parts)
     loose_text = loose(text)
@@ -74,8 +86,7 @@ def check_contract(packet, parts, lang):
                         miss(item, f"price {entry['price']!r} for {entry['name']!r} not found")
                         break
             elif item.get('href'):
-                href = item['href']
-                wanted = f'/{lang}{href}' if href.startswith('/') and not href.startswith(f'/{lang}/') else href
+                wanted = prefixed_href(item['href'], lang)
                 if wanted not in hrefs:
                     miss(item, f'no link to {wanted}')
                 elif not matches(item['text']):
@@ -95,7 +106,7 @@ def check_contract(packet, parts, lang):
         miss(fact_item, f"phone {facts['phone']!r} not found")
     if facts.get('email') and normalise(facts['email']) not in text:
         miss(fact_item, f"email {facts['email']!r} not found")
-    if facts.get('address') and normalise(facts['address']) not in text:
+    if facts.get('address') and not (normalise(facts['address']) in text or loose(facts['address']) in loose_text):
         miss(fact_item, f"address {facts['address']!r} not found")
     for line in facts.get('hours', []):
         for t in TIME_RE.findall(line):

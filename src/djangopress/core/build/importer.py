@@ -1,6 +1,7 @@
 """Save an AdaptResult into the site: Page, GlobalSections, SiteSettings, MenuItems, JSON-LD."""
 
 import json
+from pathlib import Path
 
 from djangopress.core.build.jsonld import build_jsonld
 from djangopress.core.models import GlobalSection, MenuItem, Page, SiteSettings
@@ -12,6 +13,22 @@ TOKEN_FIELDS = ('heading_font', 'body_font', 'background_color', 'text_color', '
 
 def cta_texts_from(packet):
     return [i['text'] for page in packet['content'].values() for i in page['required'] if i.get('href')]
+
+
+def mark_concept_status(concepts_json_path, key, status):
+    """Update docs/concepts/concepts.json in place: set `key`'s status; when the new status is
+    'shipped', demote every other 'shipped' entry to 'rejected' (a concept import always
+    replaces whatever was shipped before). No-op when the file doesn't exist."""
+    path = Path(concepts_json_path)
+    if not path.exists():
+        return
+    index = json.loads(path.read_text())
+    for entry in index:
+        if entry['key'] == key:
+            entry['status'] = status
+        elif status == 'shipped' and entry.get('status') == 'shipped':
+            entry['status'] = 'rejected'
+    path.write_text(json.dumps(index, ensure_ascii=False, indent=2))
 
 
 def _jsonld_block(data):

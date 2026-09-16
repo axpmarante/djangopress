@@ -7,7 +7,7 @@ from pathlib import Path
 from django.core.management.base import BaseCommand, CommandError
 
 from djangopress.core.build.adapter import adapt
-from djangopress.core.build.importer import cta_texts_from, import_result
+from djangopress.core.build.importer import cta_texts_from, import_result, mark_concept_status
 from djangopress.core.build.ledger import Ledger
 
 PUBLISH_CMD = 'bash scripts/sync-to-prod.sh && railway redeploy -y'
@@ -31,7 +31,7 @@ class Command(BaseCommand):
             raise CommandError(f'{path} not found')
         result = adapt(path.read_text(), lang=packet['site']['default_language'], languages=packet['site']['languages'],
                        image_map=packet['images']['map'], cta_texts=cta_texts_from(packet),
-                       contact_phone=packet['facts'].get('phone', ''))
+                       contact_phone=packet['facts'].get('phone', ''), site_name=packet['site']['name'])
         report = result.as_report()
         report['key'] = key
         if not result.ok:
@@ -39,15 +39,7 @@ class Command(BaseCommand):
             raise SystemExit(1)
         report.update(import_result(result, packet=packet, set_home=True, change_summary=f'Promote concept {key}'))
 
-        index_path = concepts_dir / 'concepts.json'
-        if index_path.exists():
-            index = json.loads(index_path.read_text())
-            for entry in index:
-                if entry['key'] == key:
-                    entry['status'] = 'shipped'
-                elif entry.get('status') == 'shipped':
-                    entry['status'] = 'rejected'
-            index_path.write_text(json.dumps(index, ensure_ascii=False, indent=2))
+        mark_concept_status(concepts_dir / 'concepts.json', key, 'shipped')
         Ledger().mark_shipped(packet['site']['slug'], key)
 
         report['published'] = False

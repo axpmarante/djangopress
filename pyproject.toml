@@ -41,4 +41,5 @@ djangopress = [
     "static/**/*",
     "briefings/*.md",
     "skills/**/*.md",
+    "core/build/*.js",
 ]

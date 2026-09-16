@@ -28,7 +28,7 @@ def is_residue(failure):
 def _adapt(path, packet):
     return adapt(path.read_text(), lang=packet['site']['default_language'], languages=packet['site']['languages'],
                  image_map=packet['images']['map'], cta_texts=cta_texts_from(packet),
-                 contact_phone=packet['facts'].get('phone', ''))
+                 contact_phone=packet['facts'].get('phone', ''), site_name=packet['site']['name'])
 
 
 def _fonts(settings):

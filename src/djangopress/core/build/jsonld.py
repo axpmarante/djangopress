@@ -13,11 +13,17 @@ CLOSED_WORDS = ('encerrado', 'fechado', 'closed')
 TIME_RANGE_RE = re.compile(r'(\d{1,2})[:h](\d{2})\s*[–\-—a]+\s*(\d{1,2})[:h](\d{2})')
 WORD_RE = re.compile(r'[a-záéíóúâêôãõç]+', re.I)
 RANGE_WORDS = ('a', 'to', '-', '–', 'até')
+_DAY_ALT = '|'.join(sorted((re.escape(t) for t in DAY_TOKENS), key=len, reverse=True))
+DASHED_DAY_RANGE_RE = re.compile(rf'\b({_DAY_ALT})\b\s*[-–—]\s*\b({_DAY_ALT})\b', re.I)
 GEO_RES = (re.compile(r'@(-?\d+\.\d+),(-?\d+\.\d+)'), re.compile(r'[?&]q=(-?\d+\.\d+),(-?\d+\.\d+)'),
            re.compile(r'!3d(-?\d+\.\d+)!4d(-?\d+\.\d+)'))
 
 
 def _days_from(text):
+    m = DASHED_DAY_RANGE_RE.search(text or '')
+    if m:
+        a, b = DAY_TOKENS[m.group(1).lower()], DAY_TOKENS[m.group(2).lower()]
+        return [DAYS[i % 7] for i in range(a, b + 1 if b >= a else b + 8)]
     tokens = [w.lower() for w in WORD_RE.findall(text)]
     idx = [(i, DAY_TOKENS[t]) for i, t in enumerate(tokens) if t in DAY_TOKENS]
     if not idx:

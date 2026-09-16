@@ -7,7 +7,7 @@ from pathlib import Path
 from django.core.management.base import BaseCommand, CommandError
 
 from djangopress.core.build.adapter import adapt
-from djangopress.core.build.importer import cta_texts_from, import_as_page, import_result
+from djangopress.core.build.importer import cta_texts_from, import_as_page, import_result, mark_concept_status
 
 
 def concept_key(path):
@@ -37,14 +37,17 @@ class Command(BaseCommand):
         key = opts['key'] or concept_key(path)
         result = adapt(path.read_text(), lang=packet['site']['default_language'], languages=packet['site']['languages'],
                        image_map=packet['images']['map'], cta_texts=cta_texts_from(packet),
-                       contact_phone=packet['facts'].get('phone', ''))
+                       contact_phone=packet['facts'].get('phone', ''), site_name=packet['site']['name'])
         report = result.as_report()
         report['key'] = key
         if result.ok and not opts['dry_run']:
             if opts['as_page']:
                 saved = import_as_page(result, packet=packet, slug=opts['as_page'], change_summary=f"Import concept {key} as {opts['as_page']}")
+                mark_concept_status(path.parent / 'concepts.json', key, 'rejected')
             else:
                 saved = import_result(result, packet=packet, set_home=opts['home'], change_summary=f'Import concept {key}')
+                if opts['home']:
+                    mark_concept_status(path.parent / 'concepts.json', key, 'shipped')
             report.update(saved)
             out = path.parent / f'import-{key}.json'
             out.write_text(json.dumps(report, ensure_ascii=False, indent=2))

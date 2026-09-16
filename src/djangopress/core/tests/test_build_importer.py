@@ -56,6 +56,14 @@ class JsonLdTest(TestCase):
     def test_closed_line_gives_nothing(self):
         self.assertEqual(parse_hours_line('Domingo e Segunda: encerrado'), [])
 
+    def test_hours_dashed_range(self):
+        specs = parse_hours_line('Ter–Sáb: 19:00–23:00')
+        self.assertEqual(specs[0]['dayOfWeek'], ['Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'])
+        self.assertEqual((specs[0]['opens'], specs[0]['closes']), ('19:00', '23:00'))
+        specs2 = parse_hours_line('Seg-Sex 09:00–18:00')
+        self.assertEqual(specs2[0]['dayOfWeek'], ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'])
+        self.assertEqual((specs2[0]['opens'], specs2[0]['closes']), ('09:00', '18:00'))
+
     def test_unparseable_with_time_keeps_description(self):
         specs = parse_hours_line('Todos os dias exceto feriados: 10:00–18:00')
         self.assertEqual(specs[0]['opens'], '10:00')
@@ -226,3 +234,15 @@ class ImportConceptCommandTest(TestCase):
         with self.assertRaises(SystemExit):
             self.run_cmd('--home')
         self.assertFalse(Page.objects.filter(slug_i18n__pt='home').exists())
+
+    def test_home_import_marks_index(self):
+        concepts_json = self.root / 'docs' / 'concepts' / 'concepts.json'
+        concepts_json.write_text(json.dumps([
+            {'key': 'a', 'status': 'pending'},
+            {'key': 'b', 'status': 'pending'},
+            {'key': 'c', 'status': 'pending'},
+        ]))
+        self.run_cmd('--home')
+        index = json.loads(concepts_json.read_text())
+        statuses = {e['key']: e['status'] for e in index}
+        self.assertEqual(statuses, {'a': 'pending', 'b': 'shipped', 'c': 'pending'})
