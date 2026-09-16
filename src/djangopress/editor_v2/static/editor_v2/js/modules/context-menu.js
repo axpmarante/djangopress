@@ -8,7 +8,7 @@ import {
   duplicateElement, moveElement, duplicateSection, moveSection,
   removeElement, removeSection, canMove, canMoveSection, insertElement,
 } from '../lib/structural.js';
-import { PRIMITIVES, buildSnippet } from '../lib/snippets.js';
+import { PRIMITIVES, buildSnippet, primitiveAnchor } from '../lib/snippets.js';
 
 function esc(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
@@ -44,8 +44,12 @@ function buildItems(el) {
     // Element verbs
     if (isElement) {
       items.push(null);
-      for (const p of PRIMITIVES) {
-        items.push({ label: p.label, icon: '+', action: () => insertElement(selector, 'after', buildSnippet(p.kind, el), { after: p.after }) });
+      const anchor = primitiveAnchor(el);
+      const anchorSel = getCssSelector(anchor);
+      if (anchorSel) {
+        for (const p of PRIMITIVES) {
+          items.push({ label: p.label, icon: '+', action: () => insertElement(anchorSel, 'after', buildSnippet(p.kind, anchor), { after: p.after }) });
+        }
       }
       items.push({ label: 'Duplicate Element', icon: '⧉', action: () => duplicateElement(selector) });
       items.push({ label: 'Move Element Up', icon: '↑', disabled: !canMove(el, 'up'), action: () => moveElement(selector, 'up') });

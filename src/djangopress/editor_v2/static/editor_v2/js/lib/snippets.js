@@ -26,6 +26,27 @@ export const PRIMITIVES = [
     { kind: 'image',     label: 'Add Image After',     after: 'image-picker' },
 ];
 
+/** Text-level containers: a primitive must never be inserted inside one of these. */
+const TEXT_LEVEL_TAGS = new Set([
+    'P', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'SPAN', 'A', 'BUTTON', 'STRONG', 'EM',
+    'B', 'I', 'SMALL', 'LABEL', 'LI', 'BLOCKQUOTE', 'TD', 'TH',
+]);
+
+/**
+ * The element a primitive is inserted after: walk up from `el` while its
+ * parent is a text-level container (a <span> inside an <h2> anchors on the
+ * <h2>; a link inside a <p> anchors on the <p>). Stops at the section.
+ */
+export function primitiveAnchor(el) {
+    let anchor = el;
+    while (anchor.parentElement
+        && !anchor.parentElement.hasAttribute('data-section')
+        && TEXT_LEVEL_TAGS.has(anchor.parentElement.tagName.toUpperCase())) {
+        anchor = anchor.parentElement;
+    }
+    return anchor;
+}
+
 function esc(s) {
     return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
