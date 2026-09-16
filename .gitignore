@@ -21,7 +21,7 @@ venv.bak/
 # Distribution / packaging
 *.egg-info/
 dist/
-build/
+/build/
 develop-eggs/
 downloads/
 eggs/
