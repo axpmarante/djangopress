@@ -2092,10 +2092,11 @@ def _run_structural_verb(request, data, change_summary, apply_fn):
         html_i18n[lang_code] = new_html
     page.html_content_i18n = html_i18n
 
-    # Page's post_save signal auto-snapshots the post-state, labelling it from
-    # _change_summary / _snapshot_user when set. Every other editor endpoint
-    # follows this convention (explicit pre-snapshot via create_version(),
-    # then save() for the labelled post-snapshot) — match it here too.
+    # Existing endpoints do an explicit pre-snapshot via create_version() and
+    # then save(), which also fires Page's post_save signal and auto-snapshots
+    # the post-state. Here we additionally label that automatic post-save
+    # snapshot via _change_summary / _snapshot_user, which core/signals.py
+    # reads off the instance.
     page._change_summary = change_summary
     page._snapshot_user = request.user
     page.save()
@@ -2149,7 +2150,7 @@ def move_element(request):
         if node is None:
             return JsonResponse({'success': False, 'error': 'Element not found for selector'}, status=400)
         if structure.adjacent_sibling(node, direction) is None:
-            return JsonResponse({'success': True, 'moved': False, 'selector': selector, 'skipped_languages': []})
+            return JsonResponse({'success': True, 'moved': False, 'selector': selector, 'skipped_languages': [], 'page_id': page.id})
 
         outcome = _run_structural_verb(
             request, data, f'Moved element {direction}',

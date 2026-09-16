@@ -130,6 +130,7 @@ class MoveElementTest(StructuralApiTestCase):
         data = res.json()
         self.assertTrue(data['success'])
         self.assertFalse(data['moved'])
+        self.assertEqual(data['page_id'], self.page.id)
         self.assertEqual(PageVersion.objects.count(), 0)
 
     def test_bad_direction_is_400(self):
