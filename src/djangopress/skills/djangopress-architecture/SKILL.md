@@ -116,6 +116,10 @@ The `editor_v2` app powers the `?edit=v2` (or `?edit=true`) mode for staff users
 - `POST /editor-v2/api/duplicate-element/`, `move-element/`, `insert-element/` — clone / swap / insert a node at a selector, applied to every language, no LLM (staff)
 - `POST /editor-v2/api/duplicate-section/`, `move-section/` — same for whole sections; duplicate renames to `name-2`, `name-3`… (staff)
 
+**Structural verbs (2026-09):**
+- Context menu, floating toolbar (⧉ ↑ ↓ ✕), Content-tab "Add another" panel (repeat groups detected by `findRepeatGroup` in `lib/dom.js`, mirrored by `structure.find_repeat_groups`), Structure-tab arrows, hover "+" bars between sections, Ctrl+K entries.
+- All verbs reload and re-select via `sessionStorage['ev2-after-reload']` (`lib/structural.js`).
+
 ## Site Assistant
 
 The `site_assistant` app provides a chat-based interface at `/site-assistant/` (superuser only) for managing the entire site via natural language.

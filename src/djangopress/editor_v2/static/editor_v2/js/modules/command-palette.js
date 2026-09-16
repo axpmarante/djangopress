@@ -1,9 +1,19 @@
 import { events } from '../lib/events.js';
 import { shortcuts } from '../lib/shortcuts.js';
+import { getSelected } from './selection.js';
+import { getCssSelector } from '../lib/dom.js';
+import { duplicateElement, moveElement, removeElement } from '../lib/structural.js';
 
 let paletteEl, inputEl, resultsEl, backdropEl;
 let selectedIndex = 0;
 let filtered = [];
+
+function sel() {
+  const el = getSelected();
+  const s = el ? getCssSelector(el) : null;
+  if (!s) alert('Select an element inside a section first.');
+  return s;
+}
 
 const commands = [
   { label: 'Save changes', shortcut: 'Ctrl+S', action: () => events.emit('changes:save') },
@@ -15,6 +25,10 @@ const commands = [
   { label: 'Switch to Structure tab', action: () => events.emit('sidebar:switch-tab', 'structure') },
   { label: 'Switch to AI tab', action: () => events.emit('sidebar:switch-tab', 'ai') },
   { label: 'Process Images', action: () => events.emit('process-images:open', {}) },
+  { label: 'Duplicate selected element', action: () => { const s = sel(); if (s) duplicateElement(s); } },
+  { label: 'Move selected element up',   action: () => { const s = sel(); if (s) moveElement(s, 'up'); } },
+  { label: 'Move selected element down', action: () => { const s = sel(); if (s) moveElement(s, 'down'); } },
+  { label: 'Remove selected element',    action: () => { const s = sel(); if (s) removeElement(s); } },
 ];
 
 function getAllCommands() {
