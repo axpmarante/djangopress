@@ -66,6 +66,16 @@ The remaining ~350 of 363 sections match the visually-obvious group cleanly by s
 
 **Phase 6 needed: yes, narrowly.** Two concrete failure modes showed up on real sites — decorative-pair false positives in sections that have no actual repeatable content, and per-item class variation silently dropping a card from the group — both of which `data-repeat` would fix directly. They affect a small slice (well under 5% of sections), so Phase 6 should stay optional/annotation-only rather than a prerequisite for Phase 1; the heuristic alone is good enough to ship "Add another" for the large majority of sections found here.
 
+
+### Direction update (2026-09-16, after Phases 0–2 landed)
+
+Decision: **the editor does the deterministic verbs well and nothing more; everything else goes through chat/AI.** Consequences for the remaining phases:
+
+- Phase 3 (section catalogue) and Phase 4 (design presets) are **dropped as planned**. New sections and design changes are requested through the AI panel / AI Console, not built into the editor.
+- Phase 5 shrinks to reliability work on the verbs: selector resolution that ignores runtime-injected nodes everywhere (forms, Alpine, custom elements), the remove endpoints validating on the edited language, and the toolbar / palette acting on the repeat item when the selection is inside one.
+- Phase 6 (`data-repeat`) stays optional and is not scheduled.
+- Open question: staff need an AI path. Either open the editor's AI endpoints to staff (Gemini cost, no human in the loop) or route staff to the manager's AI Console (Claude subscription). Not decided here.
+
 ---
 
 ## Phase 1 — Structural verbs and permissions
