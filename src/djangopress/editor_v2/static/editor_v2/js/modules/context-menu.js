@@ -6,8 +6,9 @@ import { $, getContentWrapper, isTextElement, getCssSelector } from '../lib/dom.
 import { insertBefore, insertAfterSection } from './section-inserter.js';
 import {
   duplicateElement, moveElement, duplicateSection, moveSection,
-  removeElement, removeSection, canMove, canMoveSection,
+  removeElement, removeSection, canMove, canMoveSection, insertElement,
 } from '../lib/structural.js';
+import { PRIMITIVES, buildSnippet } from '../lib/snippets.js';
 
 function esc(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
@@ -43,6 +44,9 @@ function buildItems(el) {
     // Element verbs
     if (isElement) {
       items.push(null);
+      for (const p of PRIMITIVES) {
+        items.push({ label: p.label, icon: '+', action: () => insertElement(selector, 'after', buildSnippet(p.kind, el), { after: p.after }) });
+      }
       items.push({ label: 'Duplicate Element', icon: '⧉', action: () => duplicateElement(selector) });
       items.push({ label: 'Move Element Up', icon: '↑', disabled: !canMove(el, 'up'), action: () => moveElement(selector, 'up') });
       items.push({ label: 'Move Element Down', icon: '↓', disabled: !canMove(el, 'down'), action: () => moveElement(selector, 'down') });
