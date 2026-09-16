@@ -145,7 +145,8 @@ source .venv/bin/activate
 pip install -q -r requirements.txt
 # Re-install djangopress as editable from the local source so skills stay in sync
 # (requirements.txt pins a git tag for Railway deploys, but locally we want current)
-pip install -q -e "$SOURCE_DIR"
+pip install -q -e "$SOURCE_DIR[build]"
+.venv/bin/playwright install chromium >/dev/null 2>&1 || echo "  (chromium not installed — build_verify will skip the layout probe)"
 echo "  Dependencies installed (djangopress from local source: $SOURCE_DIR)"
 
 # --- Step 4: Database ---

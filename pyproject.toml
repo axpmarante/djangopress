@@ -25,6 +25,9 @@ dependencies = [
     "beautifulsoup4",
 ]
 
+[project.optional-dependencies]
+build = ["playwright>=1.45"]
+
 [tool.setuptools.packages.find]
 where = ["src"]
 
