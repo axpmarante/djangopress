@@ -41,6 +41,31 @@ What is missing is the other half of structural editing:
 
 **Exit criteria:** heuristic finds the visually obvious groups (service cards, team members, testimonials, FAQ items, gallery slides, pricing tiers) on the existing sites with no false positives that would place "Add another" at the wrong level. If it fails on a class of sections, Phase 6 becomes mandatory for those and the failure mode is recorded here.
 
+### Results (2026-09-16)
+
+Ran `python manage.py audit_repeat_groups` (read-only, no writes) against every project under `~/Documents/djangopress-sites/` that has its own `.venv/bin/python` and `manage.py`. Full output: `/tmp/repeat-groups-audit.md`.
+
+- **Sites audited:** 10 real DjangoPress sites — checkinfaro, checkinfaro-v2, checkinfaro-v3, kitchen-boutique, lealpet, o-marisco, quer-pintar-a-sua-casa, quinta-do-rogel, sanctuary-swiss, sea-algarve. `djangopress-manager` also matched the directory filter but is not a DjangoPress site (`Unknown command: 'audit_repeat_groups'`) and was skipped. Every other site under `djangopress-sites/` has no local `.venv` (shared/remote setup) and was skipped by the loop's own guard, so this run does not cover the whole fleet.
+- **Sections scanned:** 363 (`<section data-section>` elements, default language, active pages, across all pages of all 10 sites).
+- **Groups found:** 532, of which 162 are `nested` (a group whose container sits inside an item of a larger group — mostly per-card icon/decoration repeats).
+- **Ambiguous pairs (`pair-with-different-children`):** 27.
+
+Judged by signature and container path only (no rendered screenshots), the following look suspicious and are worth a manual look before or during Phase 1:
+
+- **Outermost group is a decorative pair, not a card list (7 sections):** the section has no real card grid, and the only non-nested, non-ambiguous group the heuristic finds is a coincidental pair of icon paths or `<br>` tags. "Add another" placed here would duplicate an SVG path or line break, not content.
+  - kitchen-boutique `home/introduction` (`br|hidden lg:inline`)
+  - lealpet `home/hero`, `servicos/intro` (`path|`)
+  - lealpet `contactos/onde-estamos` (`br|`)
+  - quer-pintar-a-sua-casa `servicos/overview`, `contactos/quick-contacts` (`path|`)
+  - sanctuary-swiss `contact/contact-details` (`br|`)
+- **Per-item class variation undercounts a real card (1 section, likely more hidden this way):** quer-pintar-a-sua-casa `home/testimonials` — the card group has `size: 2`, but three separate 5-star-icon groups exist underneath (one of them not marked `nested`), which is the signature of a third testimonial card whose wrapper has a slightly different class and is invisible to the heuristic and to "Add another".
+- **Card-suggestive section names with zero groups (6, can't tell from signature alone whether that's correct):** kitchen-boutique `sobre/showroom`, `servicos/showroom`; o-marisco `home-v2/wines`; sanctuary-swiss `services/tax-and-estate-planning`; sea-algarve `home/boats`, `activities/faq-link`. Either there's genuinely one item (fine) or every item has a distinct class (a miss) — needs a look at the page.
+- **Ambiguous pairs that look like they're actually two cards, by signature (2 of the 27):** quer-pintar-a-sua-casa `contactos/quick-contacts` (`a|bg-slate-50 ... rounded-xl`, likely a phone/email card pair with different icons inside) and o-marisco `reservas/booking` (`div|bg-[#FFFDF9] border ... rounded shadow-sm`, likely two booking option cards). The rest of the 27 read as genuine two-column layouts or form-field pairs, not cards.
+
+The remaining ~350 of 363 sections match the visually-obvious group cleanly by signature (services, team, testimonials, FAQ, gallery, pricing-style sections all come back as one clean non-ambiguous, non-nested group at the expected container level).
+
+**Phase 6 needed: yes, narrowly.** Two concrete failure modes showed up on real sites — decorative-pair false positives in sections that have no actual repeatable content, and per-item class variation silently dropping a card from the group — both of which `data-repeat` would fix directly. They affect a small slice (well under 5% of sections), so Phase 6 should stay optional/annotation-only rather than a prerequisite for Phase 1; the heuristic alone is good enough to ship "Add another" for the large majority of sections found here.
+
 ---
 
 ## Phase 1 — Structural verbs and permissions
