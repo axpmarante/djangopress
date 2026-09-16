@@ -292,7 +292,8 @@ export function findRepeatGroup(el) {
     while (current && current !== section) {
         const parent = current.parentElement;
         if (!parent) break;
-        if (DECORATIVE_TAGS.has(current.tagName)) { current = parent; continue; }
+        // SVG-namespaced elements keep a lower-case tagName; normalise before matching.
+        if (DECORATIVE_TAGS.has(current.tagName.toUpperCase())) { current = parent; continue; }
         const siblings = Array.from(parent.children).filter(s => !isRuntimeInjected(s));
         const sig = signatureOf(current);
         const peers = siblings.filter(s => signatureOf(s) === sig);
