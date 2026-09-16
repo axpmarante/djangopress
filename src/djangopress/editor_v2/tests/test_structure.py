@@ -160,3 +160,54 @@ class MoveNodeTest(SimpleTestCase):
     def test_whitespace_between_siblings_is_ignored(self):
         s = soup(GRID.replace('</div><div class="card">', '</div>\n  <div class="card">'))
         self.assertEqual(move_node(s, C2, 'up'), C1)
+
+
+from djangopress.editor_v2.structure import validate_snippet, insert_snippet
+
+
+class ValidateSnippetTest(SimpleTestCase):
+    def test_single_element_ok(self):
+        self.assertEqual(validate_snippet('<p class="a">x</p>').name, 'p')
+
+    def test_surrounding_whitespace_ok(self):
+        self.assertEqual(validate_snippet('\n  <p>x</p>\n').name, 'p')
+
+    def test_two_roots_rejected(self):
+        with self.assertRaises(ValueError):
+            validate_snippet('<p>a</p><p>b</p>')
+
+    def test_text_only_rejected(self):
+        with self.assertRaises(ValueError):
+            validate_snippet('just text')
+
+    def test_script_and_section_rejected(self):
+        with self.assertRaises(ValueError):
+            validate_snippet('<script>1</script>')
+        with self.assertRaises(ValueError):
+            validate_snippet('<div><script>1</script></div>')
+        with self.assertRaises(ValueError):
+            validate_snippet('<section data-section="x"></section>')
+
+
+class InsertSnippetTest(SimpleTestCase):
+    P2 = 'section[data-section="s"] > div:nth-child(1) > p:nth-child(2)'
+
+    def test_after(self):
+        s = soup(GRID)
+        self.assertEqual(insert_snippet(s, C1, 'after', '<p class="new">n</p>'), self.P2)
+        self.assertEqual([c.name for c in s.select('section > div > *')], ['div', 'p', 'div'])
+        self.assertEqual(s.select_one(self.P2).get_text(), 'n')
+
+    def test_before(self):
+        s = soup(GRID)
+        self.assertEqual(insert_snippet(s, C2, 'before', '<p class="new">n</p>'), self.P2)
+        self.assertEqual([c.name for c in s.select('section > div > *')], ['div', 'p', 'div'])
+
+    def test_append(self):
+        s = soup(GRID)
+        sel = insert_snippet(s, C1, 'append', '<p class="new">n</p>')
+        self.assertEqual(sel, C1 + ' > p:nth-child(2)')
+        self.assertEqual(s.select_one(sel).get_text(), 'n')
+
+    def test_missing_anchor_returns_none(self):
+        self.assertIsNone(insert_snippet(soup(GRID), C3, 'after', '<p>n</p>'))

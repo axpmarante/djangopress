@@ -136,3 +136,23 @@ class MoveElementTest(StructuralApiTestCase):
     def test_bad_direction_is_400(self):
         res = self.post('api_move_element', {'selector': CARD_1, 'direction': 'left'})
         self.assertEqual(res.status_code, 400)
+
+
+class InsertElementTest(StructuralApiTestCase):
+    def test_inserts_identical_snippet_in_all_languages(self):
+        res = self.post('api_insert_element', {'selector': CARD_2, 'position': 'after', 'html': '<p class="lead">New</p>'})
+        data = res.json()
+        self.assertTrue(data['success'])
+        self.assertEqual(data['selector'], CARD_2.replace('div:nth-child(2)', 'p:nth-child(3)'))
+        self.assertIn('<p class="lead">New</p>', self.html('pt'))
+        self.assertIn('<p class="lead">New</p>', self.html('en'))
+
+    def test_invalid_snippet_is_400(self):
+        res = self.post('api_insert_element', {'selector': CARD_2, 'position': 'after', 'html': '<script>x</script>'})
+        self.assertEqual(res.status_code, 400)
+        self.assertIn('script', res.json()['error'])
+        self.assertEqual(PageVersion.objects.count(), 0)
+
+    def test_bad_position_is_400(self):
+        res = self.post('api_insert_element', {'selector': CARD_2, 'position': 'inside', 'html': '<p>x</p>'})
+        self.assertEqual(res.status_code, 400)

@@ -170,3 +170,43 @@ def move_node(soup, selector, direction):
         return shift_last_index(selector, -1)
     other.insert_after(node)
     return shift_last_index(selector, 1)
+
+
+FORBIDDEN_SNIPPET_TAGS = ('script', 'style', 'section', 'html', 'head', 'body', 'iframe')
+
+
+def validate_snippet(html):
+    """Parse a snippet and return its single root Tag; raise ValueError otherwise."""
+    parsed = BeautifulSoup(html or '', 'html.parser')
+    roots = [c for c in parsed.contents if isinstance(c, Tag)]
+    stray_text = [c for c in parsed.contents if not isinstance(c, Tag) and str(c).strip()]
+    if len(roots) != 1 or stray_text:
+        raise ValueError('Snippet must contain exactly one top-level element')
+    root = roots[0]
+    for name in FORBIDDEN_SNIPPET_TAGS:
+        if root.name == name or root.find(name):
+            raise ValueError(f'Snippet may not contain <{name}>')
+    return root
+
+
+def insert_snippet(soup, selector, position, snippet_html):
+    """
+    Insert a validated snippet relative to the node at `selector`.
+    position: 'before' | 'after' | 'append' (as last child).
+    Returns the selector of the inserted node, or None if the anchor is missing.
+    """
+    anchor = soup.select_one(selector)
+    if anchor is None:
+        return None
+    node = validate_snippet(snippet_html)
+    parts = split_last(selector)          # None when the anchor is the section itself
+    if position == 'before':
+        anchor.insert_before(node)
+        return with_last(selector, node.name, parts[2]) if parts else None
+    if position == 'after':
+        anchor.insert_after(node)
+        return with_last(selector, node.name, parts[2] + 1) if parts else None
+    if position == 'append':
+        anchor.append(node)
+        return f'{selector} > {node.name}:nth-child({len(element_children(anchor))})'
+    raise ValueError('position must be "before", "after" or "append"')

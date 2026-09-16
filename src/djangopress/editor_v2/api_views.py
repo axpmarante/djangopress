@@ -2168,6 +2168,40 @@ def move_element(request):
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
 
 
+@editor_required
+@require_http_methods(["POST"])
+def insert_element(request):
+    """Insert a small HTML snippet before/after/inside the element at `selector`, in every language."""
+    try:
+        data = json.loads(request.body)
+        selector = data.get('selector')
+        position = data.get('position', 'after')
+        html = (data.get('html') or '').strip()
+        if not selector:
+            return JsonResponse({'success': False, 'error': 'Missing selector'}, status=400)
+        if position not in ('before', 'after', 'append'):
+            return JsonResponse({'success': False, 'error': 'position must be "before", "after" or "append"'}, status=400)
+        try:
+            structure.validate_snippet(html)
+        except ValueError as e:
+            return JsonResponse({'success': False, 'error': str(e)}, status=400)
+
+        outcome = _run_structural_verb(
+            request, data, f'Inserted element ({position})',
+            lambda soup: structure.insert_snippet(soup, selector, position, html),
+        )
+        if isinstance(outcome, JsonResponse):
+            return outcome
+        page, new_selector, skipped = outcome
+        if new_selector is None:
+            return JsonResponse({'success': False, 'error': 'Element not found for selector'}, status=400)
+        return JsonResponse({'success': True, 'selector': new_selector, 'skipped_languages': skipped, 'page_id': page.id})
+    except json.JSONDecodeError:
+        return JsonResponse({'success': False, 'error': 'Invalid JSON'}, status=400)
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
 # ---------------------------------------------------------------------------
 # SSE streaming endpoints for editor AI refinement
 # ---------------------------------------------------------------------------
