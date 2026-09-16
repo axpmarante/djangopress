@@ -135,19 +135,41 @@ export function removePlaceholder() {
 // ---------------------------------------------------------------------------
 // Insertion bars (hover "+" between sections)
 // ---------------------------------------------------------------------------
-let bars = [];
+// Bars are re-created by renderBars() but never carry their own listeners —
+// clicks are handled by a single delegated listener on the wrapper
+// (onWrapperClick), so bars keep working even after something else (version
+// preview/restore, AI panel page-scope apply) replaces the wrapper's
+// innerHTML wholesale and recreates bar-shaped markup without JS behaviour.
+let clickWrapper = null;
 
-function makeBar(index, afterName) {
+function makeBar(index) {
     const bar = document.createElement('div');
     bar.className = 'ev2-insert-bar';
     bar.id = `ev2-insert-bar-${index}`;
     bar.innerHTML = '<div class="ev2-insert-bar-line"></div><button type="button" class="ev2-insert-bar-btn" title="Insert section here">+</button>';
-    bar.querySelector('button').addEventListener('click', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        insertPlaceholder(afterName);
-    });
     return bar;
+}
+
+/** Walk backwards from a bar to find the section it follows, or null if it's the first bar. */
+function anchorForBar(bar) {
+    let node = bar.previousElementSibling;
+    while (node) {
+        if (node.hasAttribute && node.hasAttribute('data-section')) {
+            return node.getAttribute('data-section');
+        }
+        node = node.previousElementSibling;
+    }
+    return null;
+}
+
+function onWrapperClick(e) {
+    const btn = e.target.closest('.ev2-insert-bar-btn');
+    if (!btn) return;
+    const bar = btn.closest('.ev2-insert-bar');
+    if (!bar) return;
+    e.preventDefault();
+    e.stopPropagation();
+    insertPlaceholder(anchorForBar(bar));
 }
 
 function renderBars() {
@@ -155,20 +177,18 @@ function renderBars() {
     const sections = getSections();
     if (sections.length === 0) return;
     sections.forEach((section, i) => {
-        const prev = i === 0 ? null : sections[i - 1].getAttribute('data-section');
-        const bar = makeBar(i, prev);
+        const bar = makeBar(i);
         section.parentNode.insertBefore(bar, section);
-        bars.push(bar);
     });
     const last = sections[sections.length - 1];
-    const tail = makeBar(sections.length, last.getAttribute('data-section'));
+    const tail = makeBar(sections.length);
     last.parentNode.insertBefore(tail, last.nextSibling);
-    bars.push(tail);
 }
 
 function removeBars() {
-    bars.forEach(b => b.remove());
-    bars = [];
+    const wrapper = getContentWrapper();
+    if (!wrapper) return;
+    wrapper.querySelectorAll('.ev2-insert-bar').forEach(b => b.remove());
 }
 
 function setInserting(on) {
@@ -186,10 +206,16 @@ export function getInsertState() {
 export function destroy() {
     removePlaceholder();
     removeBars();
+    if (clickWrapper) {
+        clickWrapper.removeEventListener('click', onWrapperClick);
+        clickWrapper = null;
+    }
 }
 
 /** Initialise the module. */
 export function init() {
     events.on('inserter:cancel', removePlaceholder);
+    clickWrapper = getContentWrapper();
+    if (clickWrapper) clickWrapper.addEventListener('click', onWrapperClick);
     renderBars();
 }

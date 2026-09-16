@@ -126,6 +126,7 @@ function hideStatus() {
 // ---------------------------------------------------------------------------
 
 async function generate() {
+    if (generateBtn?.disabled) return;
     const text = promptInput?.value?.trim();
     if (!text) return;
 
@@ -244,7 +245,7 @@ function bindEvents() {
     promptInput?.addEventListener('keydown', (e) => {
         if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault();
-            if (generateBtn.style.display !== 'none') {
+            if (generateBtn.style.display !== 'none' && !generateBtn.disabled) {
                 generate();
             }
         }
