@@ -2092,18 +2092,13 @@ def _run_structural_verb(request, data, change_summary, apply_fn):
         html_i18n[lang_code] = new_html
     page.html_content_i18n = html_i18n
 
-    # Persist without a plain page.save(): Page has a post_save signal that
-    # auto-creates a version snapshot on every save, and create_version()
-    # above already recorded the pre-change snapshot. A normal save() here
-    # would fire that signal again and record a second, redundant, blank
-    # -summary version for the *post*-change state. .update() writes the
-    # new HTML straight to the row without re-triggering post_save.
-    update_fields = {'html_content_i18n': html_i18n}
-    if hasattr(page, 'updated_at'):
-        from django.utils import timezone
-        page.updated_at = timezone.now()
-        update_fields['updated_at'] = page.updated_at
-    type(page).objects.filter(pk=page.pk).update(**update_fields)
+    # Page's post_save signal auto-snapshots the post-state, labelling it from
+    # _change_summary / _snapshot_user when set. Every other editor endpoint
+    # follows this convention (explicit pre-snapshot via create_version(),
+    # then save() for the labelled post-snapshot) — match it here too.
+    page._change_summary = change_summary
+    page._snapshot_user = request.user
+    page.save()
     return page, result, skipped
 
 
