@@ -110,8 +110,8 @@ The `editor_v2` app powers the `?edit=v2` (or `?edit=true`) mode for staff users
 - `POST /editor-v2/api/refine-page/` — AI full-page refinement (superuser)
 - `POST /editor-v2/api/save-ai-page/` — save AI-refined page (superuser)
 - `GET /editor-v2/api/session/<page_id>/` — load chat session history (superuser)
-- `GET /editor-v2/api/versions/<page_id>/` — list page versions (superuser)
-- `GET /editor-v2/api/versions/<page_id>/<version>/` — get specific version (superuser)
+- `GET /editor-v2/api/versions/<page_id>/` — list page versions (staff)
+- `GET /editor-v2/api/versions/<page_id>/<version>/` — get specific version (staff)
 - `POST /editor-v2/api/remove-section/`, `remove-element/` — structural removes (staff)
 - `POST /editor-v2/api/duplicate-element/`, `move-element/`, `insert-element/` — clone / swap / insert a node at a selector, applied to every language, no LLM (staff)
 - `POST /editor-v2/api/duplicate-section/`, `move-section/` — same for whole sections; duplicate renames to `name-2`, `name-3`… (staff)
@@ -119,7 +119,7 @@ The `editor_v2` app powers the `?edit=v2` (or `?edit=true`) mode for staff users
 **Structural verbs (2026-09):**
 - Context menu, floating toolbar (⧉ ↑ ↓ ✕), Content-tab "Add another" panel (repeat groups detected by `findRepeatGroup` in `lib/dom.js`, mirrored by `structure.find_repeat_groups`), Structure-tab arrows, hover "+" bars between sections, Ctrl+K entries.
 - All verbs reload and re-select via `sessionStorage['ev2-after-reload']` (`lib/structural.js`).
-- Undo/Redo: `GET api/history/<id>/`, `POST api/undo|redo|checkpoint|restore-version/`; every operation writes a `checkpoint` PageVersion first; see `editor_v2/history.py`.
+- Undo/Redo: `GET api/history/<id>/`, `POST api/undo|redo|checkpoint|restore-version/`; every operation writes a `checkpoint` PageVersion first; see `editor_v2/history.py`. Mutations outside the editor (backoffice, site assistant, CLI) write `auto` snapshots and are not undo steps.
 
 ## Site Assistant
 

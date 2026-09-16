@@ -71,13 +71,23 @@ export function isPreviewing() {
 }
 
 async function loadVersions() {
+    // GlobalSection editing has no page-scoped version history — hide the
+    // nav entirely instead of hitting an endpoint that doesn't apply to it.
+    if (config().contentTypeId) {
+        const nav = $('#ev2-version-nav');
+        if (nav) nav.style.display = 'none';
+        return;
+    }
+
     const pageId = config().pageId;
     if (!pageId) return;
 
     try {
         const res = await api.get(`/versions/${pageId}/`);
         if (res.success) {
-            versionList = res.versions || [];
+            // The stepper is for labelled operations only; unlabelled
+            // post-save 'auto' snapshots are filtered out client-side.
+            versionList = (res.versions || []).filter(v => v.kind !== 'auto');
             // If we were previewing, reset to current
             if (!isPreview) currentIndex = 0;
             updateUI();

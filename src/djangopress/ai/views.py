@@ -1681,10 +1681,12 @@ def process_page_images_api(request):
                 'error': f'Page with id {page_id} not found'
             }, status=400)
 
-        page.create_version(
-            user=request.user,
-            change_summary=f'Before image processing: {len(images)} image(s)'
-        )
+        if hasattr(page, 'create_version') and isinstance(page, Page):
+            page.create_version(
+                user=request.user,
+                change_summary='Processed images',
+                kind='checkpoint',
+            )
 
         service = ContentGenerationService()
         result = service.process_page_images(

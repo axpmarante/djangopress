@@ -7,6 +7,8 @@ import json
 import re
 import queue
 import threading
+from django.core.exceptions import ObjectDoesNotExist
+from django.db import transaction
 from django.http import JsonResponse
 from django.utils.text import slugify
 from django.utils.translation import get_language
@@ -1073,7 +1075,7 @@ def save_ai_element(request):
         # Create version for rollback
         page.create_version(
             user=request.user,
-            change_summary=f'AI refined element',
+            change_summary='AI refined element',
             kind='checkpoint'
         )
 
@@ -1543,6 +1545,14 @@ def update_section_video(request):
                 'error': f'Section "{section_id}" not found'
             }, status=400)
 
+        # Create version for rollback (only if model supports it)
+        _video_summary = 'Changed section video' if video_url else 'Removed section video'
+        if hasattr(page, 'create_version'):
+            if isinstance(page, Page):
+                page.create_version(user=request.user, change_summary=_video_summary, kind='checkpoint')
+            else:
+                page.create_version(change_summary=_video_summary)
+
         # Apply video change to ALL language copies (structural change)
         def apply_video(s):
             sec = (
@@ -1606,6 +1616,8 @@ def update_section_video(request):
             return True
 
         _apply_structural_change_to_all_langs(page, apply_video)
+        page._change_summary = _video_summary
+        page._snapshot_user = request.user
         page.save()
 
         action = 'removed' if not video_url else ('YouTube' if video_url and 'youtu' in video_url else 'video')
@@ -1727,13 +1739,14 @@ def refine_page(request):
             session.save()
 
         session.add_user_message(instructions)
-        history = session.get_history_for_prompt()
+        chat_history = session.get_history_for_prompt()
 
-        # Create version for rollback
+        # Create version for rollback. This precedes an LLM call, not a
+        # mutation — save_ai_page checkpoints the actual page change.
         page.create_version(
             user=request.user,
             change_summary=f'Before editor refine-page: {instructions[:100]}',
-            kind='checkpoint'
+            kind='auto'
         )
 
         # Call AI — full page refinement
@@ -1743,7 +1756,7 @@ def refine_page(request):
             page_id=page_id,
             instructions=instructions,
             model_override=get_ai_model('refinement_page'),
-            conversation_history=history or None,
+            conversation_history=chat_history or None,
         )
 
         assistant_msg = "I've refined the page based on your instructions."
@@ -1890,7 +1903,8 @@ def list_page_versions(request, page_id):
     except Page.DoesNotExist:
         return JsonResponse({'success': False, 'error': 'Page not found'}, status=404)
 
-    versions = list(page.versions.order_by('-version_number'))
+    versions = list(page.versions.order_by('-version_number').only(
+        'version_number', 'change_summary', 'created_at', 'created_by', 'kind'))
     return JsonResponse({
         'success': True,
         'versions': [{
@@ -1983,6 +1997,7 @@ def remove_section(request):
             'success': True,
             'message': f'Section "{section_name}" removed',
             'page_id': page.id,
+            'label': _remove_section_summary,
         })
 
     except Page.DoesNotExist:
@@ -2046,6 +2061,7 @@ def remove_element(request):
             'success': True,
             'message': 'Element removed',
             'page_id': page.id,
+            'label': 'Removed element',
         })
 
     except Page.DoesNotExist:
@@ -2137,7 +2153,7 @@ def duplicate_element(request):
         page, new_selector, skipped = outcome
         if new_selector is None:
             return JsonResponse({'success': False, 'error': 'Element not found for selector'}, status=400)
-        return JsonResponse({'success': True, 'selector': new_selector, 'skipped_languages': skipped, 'page_id': page.id})
+        return JsonResponse({'success': True, 'selector': new_selector, 'skipped_languages': skipped, 'page_id': page.id, 'label': 'Duplicated element'})
     except json.JSONDecodeError:
         return JsonResponse({'success': False, 'error': 'Invalid JSON'}, status=400)
     except Exception as e:
@@ -2175,7 +2191,7 @@ def move_element(request):
         if isinstance(outcome, JsonResponse):
             return outcome
         page, new_selector, skipped = outcome
-        return JsonResponse({'success': True, 'moved': True, 'selector': new_selector, 'skipped_languages': skipped, 'page_id': page.id})
+        return JsonResponse({'success': True, 'moved': True, 'selector': new_selector, 'skipped_languages': skipped, 'page_id': page.id, 'label': f'Moved element {direction}'})
     except Page.DoesNotExist:
         return JsonResponse({'success': False, 'error': 'Page not found'}, status=400)
     except json.JSONDecodeError:
@@ -2211,7 +2227,7 @@ def insert_element(request):
         page, new_selector, skipped = outcome
         if new_selector is None:
             return JsonResponse({'success': False, 'error': 'Element not found for selector'}, status=400)
-        return JsonResponse({'success': True, 'selector': new_selector, 'skipped_languages': skipped, 'page_id': page.id})
+        return JsonResponse({'success': True, 'selector': new_selector, 'skipped_languages': skipped, 'page_id': page.id, 'label': f'Inserted element ({position})'})
     except json.JSONDecodeError:
         return JsonResponse({'success': False, 'error': 'Invalid JSON'}, status=400)
     except Exception as e:
@@ -2254,7 +2270,7 @@ def duplicate_section(request):
         if isinstance(outcome, JsonResponse):
             return outcome
         page, _ok, skipped = outcome
-        return JsonResponse({'success': True, 'section_name': new_name, 'skipped_languages': skipped, 'page_id': page.id})
+        return JsonResponse({'success': True, 'section_name': new_name, 'skipped_languages': skipped, 'page_id': page.id, 'label': f'Duplicated section "{section_name}" as "{new_name}"'})
     except Page.DoesNotExist:
         return JsonResponse({'success': False, 'error': 'Page not found'}, status=400)
     except json.JSONDecodeError:
@@ -2294,7 +2310,7 @@ def move_section(request):
         if isinstance(outcome, JsonResponse):
             return outcome
         page, _ok, skipped = outcome
-        return JsonResponse({'success': True, 'moved': True, 'skipped_languages': skipped, 'page_id': page.id})
+        return JsonResponse({'success': True, 'moved': True, 'skipped_languages': skipped, 'page_id': page.id, 'label': f'Moved section "{section_name}" {direction}'})
     except Page.DoesNotExist:
         return JsonResponse({'success': False, 'error': 'Page not found'}, status=400)
     except json.JSONDecodeError:
@@ -2362,13 +2378,14 @@ def refine_page_stream(request):
             session.save()
 
         session.add_user_message(instructions)
-        history = session.get_history_for_prompt()
+        chat_history = session.get_history_for_prompt()
 
-        # Create version for rollback
+        # Create version for rollback. This precedes an LLM call, not a
+        # mutation — save_ai_page checkpoints the actual page change.
         page.create_version(
             user=request.user,
             change_summary=f'Before editor refine-page: {instructions[:100]}',
-            kind='checkpoint'
+            kind='auto'
         )
 
         q = queue.Queue()
@@ -2385,7 +2402,7 @@ def refine_page_stream(request):
                     page_id=page_id,
                     instructions=instructions,
                     model_override=get_ai_model('refinement_page'),
-                    conversation_history=history or None,
+                    conversation_history=chat_history or None,
                     on_progress=on_progress,
                 )
 
@@ -2629,12 +2646,20 @@ def refine_multi_stream(request):
 # ---------------------------------------------------------------------------
 
 def _apply_snapshot_html(page, version, summary, kind, user):
-    """Record the current state as `kind`, then set the page HTML to `version`'s and save."""
-    page.create_version(user=user, change_summary=summary, kind=kind)
-    page.html_content_i18n = dict(version.html_content_i18n or {})
-    page._change_summary = summary
-    page._snapshot_user = user
-    page.save()
+    """Record the current state as `kind`, then merge `version`'s HTML in and save.
+
+    Merging (rather than replacing) html_content_i18n means a language added
+    after the snapshot was taken (e.g. a translation pass) survives an
+    undo/redo/restore instead of being dropped.
+    """
+    with transaction.atomic():
+        page.create_version(user=user, change_summary=summary, kind=kind)
+        merged = dict(page.html_content_i18n or {})
+        merged.update(version.html_content_i18n or {})
+        page.html_content_i18n = merged
+        page._change_summary = summary
+        page._snapshot_user = user
+        page.save()
 
 
 @editor_required
@@ -2645,7 +2670,10 @@ def create_checkpoint(request):
         label = (data.get('label') or '').strip()[:255]
         if not label:
             return JsonResponse({'success': False, 'error': 'Missing label'}, status=400)
-        page = _get_editable_object(data)
+        try:
+            page = _get_editable_object(data)
+        except (Page.DoesNotExist, ObjectDoesNotExist):
+            return JsonResponse({'success': False, 'error': 'Page not found'}, status=404)
         if not page:
             return JsonResponse({'success': False, 'error': 'Page or editable object not found'}, status=400)
         if not isinstance(page, Page):
@@ -2671,13 +2699,24 @@ def history_state(request, page_id):
 def _undo_or_redo(request, direction):
     try:
         data = json.loads(request.body)
-        page = _get_editable_object(data)
+        try:
+            page = _get_editable_object(data)
+        except (Page.DoesNotExist, ObjectDoesNotExist):
+            return JsonResponse({'success': False, 'error': 'Page not found'}, status=404)
         if not page or not isinstance(page, Page):
             return JsonResponse({'success': False, 'error': 'Page not found'}, status=400)
-        versions = list(page.versions.order_by('-version_number'))
+        versions = list(page.versions.order_by('-version_number').only(
+            'kind', 'change_summary', 'version_number'))
         target = history.find_undo_target(versions) if direction == 'undo' else history.find_redo_target(versions)
         if target is None:
             return JsonResponse({'success': False, 'error': f'Nothing to {direction}'}, status=400)
+        expected_version = data.get('expected_version')
+        if expected_version is not None and expected_version != target.version_number:
+            return JsonResponse({
+                'success': False,
+                'error': 'This page changed in another window. Reload and try again.',
+            }, status=409)
+        target = page.versions.get(version_number=target.version_number)
         _apply_snapshot_html(page, target, target.change_summary, direction, request.user)
         return JsonResponse({'success': True, 'label': target.change_summary, 'page_id': page.id,
                              ('undone_version' if direction == 'undo' else 'redone_version'): target.version_number})
@@ -2704,13 +2743,18 @@ def redo(request):
 def restore_version(request):
     try:
         data = json.loads(request.body)
-        page = _get_editable_object(data)
+        try:
+            page = _get_editable_object(data)
+        except (Page.DoesNotExist, ObjectDoesNotExist):
+            return JsonResponse({'success': False, 'error': 'Page not found'}, status=404)
         if not page or not isinstance(page, Page):
             return JsonResponse({'success': False, 'error': 'Page not found'}, status=400)
         try:
             version = page.versions.get(version_number=int(data.get('version_number')))
         except (PageVersion.DoesNotExist, TypeError, ValueError):
             return JsonResponse({'success': False, 'error': 'Version not found'}, status=404)
+        if not any((version.html_content_i18n or {}).values()):
+            return JsonResponse({'success': False, 'error': 'This version has no HTML content'}, status=400)
         _apply_snapshot_html(page, version, f'Restore to v{version.version_number}', 'checkpoint', request.user)
         return JsonResponse({'success': True, 'page_id': page.id})
     except json.JSONDecodeError:

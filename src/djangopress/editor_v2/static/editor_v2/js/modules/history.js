@@ -6,6 +6,7 @@
 import { events } from '../lib/events.js';
 import { api } from '../lib/api.js';
 import { $ } from '../lib/dom.js';
+import { getPendingCount } from './changes.js';
 
 const config = () => window.EDITOR_CONFIG || {};
 let state = { undo: null, redo: null };
@@ -41,19 +42,26 @@ function body() {
 async function run(direction) {
     if (direction === 'undo' && !state.undo) return;
     if (direction === 'redo' && !state.redo) return;
+    const expectedVersion = state[direction]?.version_number;
     try {
-        const res = await api.post(`/${direction}/`, body());
+        const res = await api.post(`/${direction}/`, { ...body(), expected_version: expectedVersion });
         if (!res.success) { alert(res.error || `${direction} failed`); return; }
         try { sessionStorage.setItem('ev2-toast-pending', JSON.stringify({ label: `${direction === 'undo' ? 'Undone' : 'Redone'}: ${res.label}`, noUndoToast: true })); } catch (_) {}
         window.location.reload();
-    } catch (err) { alert(`${direction} failed: ` + (err.message || err)); }
+    } catch (err) { alert(err.message || `${direction} failed`); }
+}
+
+/** Entry point for the topbar buttons and the toast's Undo link: block on unsaved edits first. */
+function runFromUi(direction) {
+    if (getPendingCount() > 0) { alert('Save or discard your changes first.'); return; }
+    run(direction);
 }
 
 function showToast(text, withUndo) {
     const t = $('#ev2-toast'), txt = $('#ev2-toast-text'), btn = $('#ev2-toast-undo');
     if (!t) return;
-    txt.textContent = text;
-    btn.style.display = withUndo ? '' : 'none';
+    if (txt) txt.textContent = text;
+    if (btn) btn.style.display = withUndo ? '' : 'none';
     t.classList.remove('hidden');
     clearTimeout(toastTimer);
     toastTimer = setTimeout(() => t.classList.add('hidden'), 6000);
@@ -65,15 +73,16 @@ function toastFromReload() {
     if (st?.label) showToast(st.label, !st.noUndoToast);
 }
 
-export function init() {
-    $('#ev2-undo-topbar-btn')?.addEventListener('click', () => run('undo'));
-    $('#ev2-redo-topbar-btn')?.addEventListener('click', () => run('redo'));
-    $('#ev2-toast-undo')?.addEventListener('click', () => run('undo'));
-    unsubs.push(events.on('history:refresh', refresh));
+export async function init() {
+    $('#ev2-undo-topbar-btn')?.addEventListener('click', () => runFromUi('undo'));
+    $('#ev2-redo-topbar-btn')?.addEventListener('click', () => runFromUi('redo'));
+    $('#ev2-toast-undo')?.addEventListener('click', () => runFromUi('undo'));
+    // Ctrl+Z/Ctrl+Shift+Z (changes.js) only emit these once nothing is pending,
+    // so they bypass the unsaved-changes guard above.
     unsubs.push(events.on('history:undo', () => run('undo')));
     unsubs.push(events.on('history:redo', () => run('redo')));
     unsubs.push(events.on('changes:saved', refresh));
-    refresh();
+    await refresh();
     toastFromReload();
 }
 

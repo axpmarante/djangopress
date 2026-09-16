@@ -203,3 +203,87 @@ class HistoryApiTest(HistoryTestCase):
     def test_non_staff_cannot_undo(self):
         self.client.force_login(User.objects.create_user('plain', 'p@example.com', 'pw'))
         self.assertEqual(self.post('api_undo', {}).status_code, 302)
+
+    # -- Final-review fixes --------------------------------------------------
+
+    def test_video_set_checkpoints_and_is_undoable(self):
+        res = self.post('api_update_section_video', {'section_id': 'services', 'video_url': 'https://example.com/x.mp4'})
+        self.assertEqual(res.status_code, 200)
+        self.assertIn('<video', self.html('pt'))
+        self.assertIn('<video', self.html('en'))
+        self.assertEqual(self.state()['undo']['label'], 'Changed section video')
+        undo_res = self.post('api_undo', {})
+        self.assertEqual(undo_res.json()['label'], 'Changed section video')
+        self.assertNotIn('<video', self.html('pt'))
+
+    def test_video_removed_checkpoints_with_its_own_label(self):
+        self.post('api_update_section_video', {'section_id': 'services', 'video_url': 'https://example.com/x.mp4'})
+        res = self.post('api_update_section_video', {'section_id': 'services', 'video_url': ''})
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(self.state()['undo']['label'], 'Removed section video')
+
+    def test_undo_keeps_a_language_gained_after_the_checkpoint(self):
+        self.post('api_checkpoint', {'label': 'Before add ES'})
+        self.page.refresh_from_db()
+        html_i18n = dict(self.page.html_content_i18n)
+        html_i18n['es'] = PT
+        self.page.html_content_i18n = html_i18n
+        self.page.save()
+        self.assertEqual(self.html('es'), PT)
+        self.post('api_undo', {})
+        self.assertEqual(self.html('es'), PT)
+        self.assertEqual(self.html('pt'), PT)
+
+    def test_restore_of_empty_snapshot_is_400(self):
+        empty = PageVersion.objects.create(
+            page=self.page,
+            version_number=PageVersion.next_version_number_for(self.page),
+            html_content_i18n={'pt': '', 'en': ''},
+            change_summary='Empty',
+            kind='checkpoint',
+        )
+        res = self.post('api_restore_version', {'version_number': empty.version_number})
+        self.assertEqual(res.status_code, 400)
+        self.assertIn('no HTML content', res.json()['error'])
+
+    def test_undo_with_stale_expected_version_is_409(self):
+        self.post('api_duplicate_element', {'selector': CARD_1})
+        target_version = self.state()['undo']['version_number']
+        res = self.post('api_undo', {'expected_version': target_version - 1})
+        self.assertEqual(res.status_code, 409)
+        self.assertIn('changed in another window', res.json()['error'])
+        # Nothing was applied: still undoable, HTML untouched.
+        self.assertEqual(self.html('pt').count('<h3>Um</h3>'), 2)
+
+    def test_undo_with_matching_expected_version_succeeds(self):
+        self.post('api_duplicate_element', {'selector': CARD_1})
+        target_version = self.state()['undo']['version_number']
+        res = self.post('api_undo', {'expected_version': target_version})
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(self.html('pt'), PT)
+
+    def test_structural_verb_responses_include_label(self):
+        self.assertEqual(self.post('api_duplicate_element', {'selector': CARD_1}).json()['label'], 'Duplicated element')
+        self.assertEqual(self.post('api_remove_element', {'selector': CARD_1}).json()['label'], 'Removed element')
+        self.assertEqual(
+            self.post('api_remove_section', {'section_name': 'services'}).json()['label'],
+            'Removed section "services"',
+        )
+
+    def test_checkpoint_with_missing_page_is_404(self):
+        res = self.client.post(reverse('editor_v2:api_checkpoint'),
+                                data=json.dumps({'page_id': 999999, 'label': 'x'}),
+                                content_type='application/json')
+        self.assertEqual(res.status_code, 404)
+
+    def test_undo_with_missing_page_is_404(self):
+        res = self.client.post(reverse('editor_v2:api_undo'),
+                                data=json.dumps({'page_id': 999999}),
+                                content_type='application/json')
+        self.assertEqual(res.status_code, 404)
+
+    def test_restore_version_with_missing_page_is_404(self):
+        res = self.client.post(reverse('editor_v2:api_restore_version'),
+                                data=json.dumps({'page_id': 999999, 'version_number': 1}),
+                                content_type='application/json')
+        self.assertEqual(res.status_code, 404)
