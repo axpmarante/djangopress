@@ -39,7 +39,7 @@ def path_from_section(tag, section):
         parent = current.parent
         if parent is None:
             break
-        index = element_children(parent).index(current) + 1
+        index = next(i for i, c in enumerate(element_children(parent)) if c is current) + 1
         parts.insert(0, f'{current.name}:nth-child({index})')
         current = parent
     return ' > '.join(parts)
@@ -80,7 +80,8 @@ def find_repeat_groups(section):
         for other in groups:
             if other is g:
                 continue
-            if any(item in g['container'].parents or item is g['container'] for item in other['items']):
+            if any(item is g['container'] or any(item is anc for anc in g['container'].parents)
+                   for item in other['items']):
                 g['nested'] = True
                 break
     return groups

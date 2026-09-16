@@ -2,7 +2,7 @@ from bs4 import BeautifulSoup
 from django.test import SimpleTestCase
 
 from djangopress.editor_v2.structure import (
-    signature_of, find_repeat_groups,
+    signature_of, find_repeat_groups, path_from_section,
 )
 
 
@@ -79,3 +79,19 @@ class FindRepeatGroupsTest(SimpleTestCase):
     def test_single_child_is_not_a_group(self):
         groups = find_repeat_groups(soup('<section data-section="x"><div><p class="a">1</p></div></section>').section)
         self.assertEqual(groups, [])
+
+    def test_identical_siblings_get_distinct_paths(self):
+        # Two unedited copies of the same card: bs4 Tag equality is structural,
+        # so positions must be computed by identity, not ==.
+        html = ('<section data-section="s" id="s"><div class="grid">'
+                '<div class="card"><h3>Same</h3></div><div class="card"><h3>Same</h3></div>'
+                '</div></section>')
+        groups = find_repeat_groups(soup(html).section)
+        self.assertEqual(len(groups), 1)
+        self.assertEqual(groups[0]['size'], 2)
+        self.assertEqual(groups[0]['container_path'], 'div:nth-child(1)')
+        self.assertFalse(groups[0]['nested'])
+        # path of the second identical card must be nth-child(2)
+        section = soup(html).section
+        second = find_repeat_groups(section)[0]['items'][1]
+        self.assertEqual(path_from_section(second, section), 'div:nth-child(1) > div:nth-child(2)')
