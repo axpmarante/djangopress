@@ -51,6 +51,27 @@ export function getCssSelector(el) {
     return `section[data-section="${sectionAttr}"] > ${parts.join(' > ')}`;
 }
 
+/**
+ * Resolve an editor selector against the live DOM, skipping runtime-injected
+ * siblings (mirror of getCssSelector). Needed because Splide prepends cloned
+ * slides before the real ones, which throws off a plain
+ * `document.querySelector` on the `nth-child` selectors the editor stores.
+ */
+export function resolveSelector(selector) {
+    if (!selector) return null;
+    const parts = selector.split(' > ');
+    const wrapper = getContentWrapper();
+    let node = (wrapper || document).querySelector(parts[0]);
+    for (let i = 1; node && i < parts.length; i++) {
+        const m = parts[i].match(/^([a-z0-9]+):nth-child\((\d+)\)$/);
+        if (!m) return null;
+        const children = Array.from(node.children).filter(c => !isRuntimeInjected(c));
+        node = children[parseInt(m[2], 10) - 1] || null;
+        if (node && node.tagName.toLowerCase() !== m[1]) return null;
+    }
+    return node;
+}
+
 /** Short human-readable label like "h1" or "div.hero-content" */
 export function getElementLabel(el) {
     const tag = el.tagName.toLowerCase();
@@ -261,9 +282,20 @@ export function initDynamicComponents(container) {
     });
 }
 
-/** "tag|sorted classes" (editor classes excluded). Mirrors structure.signature_of. */
+// Runtime-only state classes that a component (Splide, etc.) toggles on an
+// element after mount; they must not affect whether two elements look like
+// the same repeatable item. `ev2-` covers our own editor classes.
+const RUNTIME_CLASS_RE = /^(ev2-|is-active$|is-visible$|is-next$|is-prev$)/;
+
+/**
+ * "tag|sorted classes" (editor and runtime-state classes excluded). The
+ * signature format is shared with structure.signature_of, but the two
+ * signature_of/signatureOf are used differently: find_repeat_groups (Python)
+ * reports every candidate group in a section, while findRepeatGroup (below)
+ * returns only the outermost one containing a given element.
+ */
 export function signatureOf(el) {
-    const classes = Array.from(el.classList).filter(c => !c.startsWith('ev2-')).sort();
+    const classes = Array.from(el.classList).filter(c => !RUNTIME_CLASS_RE.test(c)).sort();
     return `${el.tagName.toLowerCase()}|${classes.join(' ')}`;
 }
 
@@ -282,6 +314,11 @@ const DECORATIVE_TAGS = new Set([
  * OUTERMOST level where the current node has at least one sibling with the
  * same signature. Pairs whose children differ (two columns, not two cards)
  * are skipped. Returns { item, items, container, index } or null.
+ *
+ * Unlike structure.find_repeat_groups (Python), which reports every
+ * candidate group in a section for the audit/measurement tooling, this
+ * returns only the single outermost group that contains `el` — the one the
+ * "Add another" panel acts on.
  */
 export function findRepeatGroup(el) {
     const section = el?.closest?.('[data-section]');

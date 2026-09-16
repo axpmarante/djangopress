@@ -2069,13 +2069,14 @@ def _run_structural_verb(request, data, change_summary, apply_fn):
     if not page:
         return JsonResponse({'success': False, 'error': 'Page or editable object not found'}, status=400)
 
-    current_html, _lang = _get_page_html(page)
+    lang = _detect_language_from_request(request, data)
+    current_html, _lang = _get_page_html(page, lang)
     result = apply_fn(BeautifulSoup(current_html or '', 'html.parser'))
     if result is None:
         return page, None, []
 
     if hasattr(page, 'create_version'):
-        page.create_version(user=request.user, change_summary=change_summary)
+        page.create_version(user=request.user, change_summary=f'Before: {change_summary}')
 
     skipped = []
     html_i18n = dict(getattr(page, 'html_content_i18n', None) or {})
@@ -2144,7 +2145,8 @@ def move_element(request):
 
         # Distinguish "not found" (400) from "at the edge" (no-op) before running the verb.
         page = _get_editable_object(data)
-        current_html, _lang = _get_page_html(page)
+        lang = _detect_language_from_request(request, data)
+        current_html, _lang = _get_page_html(page, lang)
         probe = BeautifulSoup(current_html or '', 'html.parser')
         node = probe.select_one(selector)
         if node is None:
@@ -2213,11 +2215,23 @@ def duplicate_section(request):
             return JsonResponse({'success': False, 'error': 'Missing section_name'}, status=400)
 
         page = _get_editable_object(data)
-        current_html, _lang = _get_page_html(page)
+        lang = _detect_language_from_request(request, data)
+        current_html, _lang = _get_page_html(page, lang)
         probe = BeautifulSoup(current_html or '', 'html.parser')
         if probe.find('section', attrs={'data-section': section_name}) is None:
             return JsonResponse({'success': False, 'error': f'Section "{section_name}" not found'}, status=400)
-        new_name = structure.next_free_section_name(probe, section_name)
+
+        # Union data-section names across every language copy: a drifted copy
+        # (one language already duplicated ahead of the others) must not be
+        # able to collide with a name picked from only the current language.
+        used = set()
+        html_i18n = dict(getattr(page, 'html_content_i18n', None) or {})
+        for lang_html in html_i18n.values():
+            if not lang_html:
+                continue
+            lang_soup = BeautifulSoup(lang_html, 'html.parser')
+            used.update(s.get('data-section') for s in lang_soup.find_all('section'))
+        new_name = structure.next_free_section_name(probe, section_name, extra_used=used)
 
         outcome = _run_structural_verb(
             request, data, f'Duplicated section "{section_name}" as "{new_name}"',
@@ -2249,7 +2263,8 @@ def move_section(request):
             return JsonResponse({'success': False, 'error': 'direction must be "up" or "down"'}, status=400)
 
         page = _get_editable_object(data)
-        current_html, _lang = _get_page_html(page)
+        lang = _detect_language_from_request(request, data)
+        current_html, _lang = _get_page_html(page, lang)
         probe = BeautifulSoup(current_html or '', 'html.parser')
         section = probe.find('section', attrs={'data-section': section_name})
         if section is None:

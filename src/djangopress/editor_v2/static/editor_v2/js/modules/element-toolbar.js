@@ -42,6 +42,9 @@ function position() {
     const h = bar.offsetHeight || 32;
     let top = rect.top - h - 30;                // leave room for the label badge
     if (top < 4) top = rect.bottom + 8;
+    // Sections taller than the viewport push `top` (and the fallback below
+    // the element) off-screen in either direction; clamp inside the viewport.
+    top = Math.min(Math.max(top, 4), window.innerHeight - h - 4);
     const left = Math.max(4, Math.min(rect.right - bar.offsetWidth, window.innerWidth - bar.offsetWidth - 4));
     bar.style.top = `${top}px`;
     bar.style.left = `${left}px`;

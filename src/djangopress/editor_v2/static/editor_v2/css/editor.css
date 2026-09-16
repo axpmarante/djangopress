@@ -436,6 +436,8 @@ body.ev2-viewport-constrained {
   padding: 4px;
   min-width: 200px;
   box-shadow: var(--ev2-shadow-lg);
+  max-height: calc(100vh - 8px);
+  overflow-y: auto;
 }
 
 .ev2-context-menu.hidden {
@@ -2692,8 +2694,8 @@ body.ev2-version-preview .editor-v2-content {
   content: '';
   position: absolute;
   left: 0; right: 0;
-  top: -12px;
-  height: 24px;
+  top: -8px;
+  height: 16px;
 }
 .ev2-insert-bar-line {
   position: absolute;
@@ -2718,12 +2720,13 @@ body.ev2-version-preview .editor-v2-content {
   font-size: 18px;
   line-height: 1;
   cursor: pointer;
+  visibility: hidden;
   opacity: 0;
   transition: opacity 0.15s;
   box-shadow: var(--ev2-shadow-md);
 }
-.ev2-insert-bar:hover .ev2-insert-bar-line,
-.ev2-insert-bar:hover .ev2-insert-bar-btn { opacity: 1; }
+.ev2-insert-bar:hover .ev2-insert-bar-line { opacity: 1; }
+.ev2-insert-bar:hover .ev2-insert-bar-btn { visibility: visible; opacity: 1; }
 .editor-v2-content.ev2-inserting .ev2-insert-bar { display: none; }
 
 /* --------------------------------------------------------------------------

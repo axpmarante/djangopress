@@ -6,7 +6,7 @@
  */
 import { api } from './api.js';
 import { events } from './events.js';
-import { isRuntimeInjected } from './dom.js';
+import { isRuntimeInjected, resolveSelector } from './dom.js';
 
 const AFTER_RELOAD_KEY = 'ev2-after-reload';
 const config = () => window.EDITOR_CONFIG || {};
@@ -97,7 +97,7 @@ export function restoreSelection() {
         state = raw ? JSON.parse(raw) : null;
     } catch (_) { state = null; }
     if (!state?.selector) return;
-    const el = document.querySelector(state.selector);
+    const el = resolveSelector(state.selector);
     if (!el) return;
     events.emit('selection:request', el);
     el.scrollIntoView({ behavior: 'smooth', block: 'center' });

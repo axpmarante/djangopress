@@ -99,6 +99,10 @@ function showMenu(x, y, items) {
   const rect = menu.getBoundingClientRect();
   if (rect.right > window.innerWidth) menu.style.left = (x - rect.width) + 'px';
   if (rect.bottom > window.innerHeight) menu.style.top = (y - rect.height) + 'px';
+  // A menu taller than the viewport (many items near the top edge) can still
+  // end up with a negative top after the adjustment above; pin it on-screen
+  // and let its own max-height/overflow handle the rest.
+  if (menu.getBoundingClientRect().top < 0) menu.style.top = '4px';
 
   // Attach click handlers to items
   menu.querySelectorAll('.ev2-context-item').forEach(el => {

@@ -35,7 +35,7 @@ What is missing is the other half of structural editing:
 
 **Purpose:** decide, with numbers, whether annotations are needed before building "Add another".
 
-**Heuristic (`findRepeatGroup(el)`):** walk up from `el` to the section root; at each level, look at the parent's children (excluding runtime-injected nodes); the first level where `current` has at least one sibling with the same tag and the same sorted class set is the repeat group, and `current` is the repeat item.
+**Heuristic (`findRepeatGroup(el)`):** walk up from `el` to the section root; at each level, look at the parent's children (excluding runtime-injected nodes); the OUTERMOST level (closest to the section root) where `current` has at least one sibling with the same tag and the same sorted class set is the repeat group, and `current` is the repeat item. Nested repeats inside a repeated card are reached by editing the card, not from the panel.
 
 **Spike:** a management command or one-off script that opens every site's `db.sqlite3` under `~/Documents/djangopress-sites/`, parses every page's HTML for the default language, and reports per section: number of candidate groups, group sizes, and ambiguous cases (nested groups, groups of size 2 whose items differ in child structure, items with per-item class variations such as `md:col-span-2`). Output is a markdown table; nothing is written to the sites.
 

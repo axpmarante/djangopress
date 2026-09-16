@@ -188,6 +188,46 @@ class ValidateSnippetTest(SimpleTestCase):
         with self.assertRaises(ValueError):
             validate_snippet('<section data-section="x"></section>')
 
+    def test_object_embed_base_link_meta_form_rejected(self):
+        for tag, html in (
+            ('object', '<object data="x.swf"></object>'),
+            ('embed', '<embed src="x.swf">'),
+            ('base', '<div><base href="/"></div>'),
+            ('link', '<div><link rel="stylesheet" href="x.css"></div>'),
+            ('meta', '<div><meta http-equiv="refresh" content="0"></div>'),
+            ('form', '<form action="/x"></form>'),
+        ):
+            with self.assertRaises(ValueError, msg=tag):
+                validate_snippet(html)
+
+    def test_on_attributes_are_stripped(self):
+        root = validate_snippet('<div onclick="alert(1)" data-x="1"><p onmouseover="x()">t</p></div>')
+        self.assertNotIn('onclick', root.attrs)
+        self.assertEqual(root['data-x'], '1')
+        self.assertNotIn('onmouseover', root.p.attrs)
+
+    def test_on_attributes_stripped_case_insensitively(self):
+        root = validate_snippet('<div OnClick="alert(1)">t</div>')
+        self.assertFalse(any(k.lower() == 'onclick' for k in root.attrs))
+
+    def test_javascript_url_rejected(self):
+        with self.assertRaises(ValueError):
+            validate_snippet('<a href="javascript:alert(1)">x</a>')
+        with self.assertRaises(ValueError):
+            validate_snippet('<a href="  JavaScript:alert(1)">x</a>')
+        with self.assertRaises(ValueError):
+            validate_snippet('<div><img src="javascript:alert(1)"></div>')
+
+    def test_data_text_html_url_rejected(self):
+        with self.assertRaises(ValueError):
+            validate_snippet('<a href="data:text/html,hi">x</a>')
+        with self.assertRaises(ValueError):
+            validate_snippet('<a formaction="data:text/html,x">x</a>')
+
+    def test_benign_data_url_is_allowed(self):
+        root = validate_snippet('<img src="data:image/png;base64,iVBORw0KGgo=">')
+        self.assertEqual(root.name, 'img')
+
 
 class InsertSnippetTest(SimpleTestCase):
     P2 = 'section[data-section="s"] > div:nth-child(1) > p:nth-child(2)'

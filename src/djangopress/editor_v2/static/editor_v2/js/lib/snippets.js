@@ -68,10 +68,11 @@ function looksLikeButton(a) {
     return surface && padding;
 }
 
-/** Tags that count as "the same kind" as the primitive. */
+/** Tags that count as "the same kind" as the primitive. h1 is excluded so
+ * "Add Heading After" never clones the page's single <h1>. */
 const MODEL_TAGS = {
     paragraph: ['p'],
-    heading: ['h1', 'h2', 'h3', 'h4', 'h5', 'h6'],
+    heading: ['h2', 'h3', 'h4', 'h5', 'h6'],
     button: ['a', 'button'],
     image: ['img'],
 };
@@ -101,7 +102,11 @@ export function buildSnippet(kind, anchorEl) {
     const model = findModel(kind, anchorEl);
     const tag = model ? model.tagName.toLowerCase() : d.tag;
     const classes = model ? cleanClasses(model) : d.classes;
-    const attrs = Object.entries(d.attrs || {}).map(([k, v]) => ` ${k}="${esc(v)}"`).join('');
+    // Only classes are copied from the model; attributes always come from DEFAULTS.
+    // A button's `href` only makes sense once the resolved tag is actually
+    // an <a> — a model of <button> must not gain a stray href.
+    const defAttrs = kind === 'button' && tag !== 'a' ? {} : (d.attrs || {});
+    const attrs = Object.entries(defAttrs).map(([k, v]) => ` ${k}="${esc(v)}"`).join('');
     if (tag === 'img') return `<img class="${esc(classes)}"${attrs}>`;
     return `<${tag} class="${esc(classes)}"${attrs}>${esc(d.text)}</${tag}>`;
 }

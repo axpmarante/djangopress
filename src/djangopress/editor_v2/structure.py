@@ -21,7 +21,12 @@ DECORATIVE_TAGS = frozenset((
 
 
 # ---------------------------------------------------------------------------
-# Signatures and repeat groups (Phase 0 heuristic, mirrored in lib/dom.js)
+# Signatures and repeat groups (Phase 0 heuristic). The signature format
+# (`tag|sorted classes`) is shared with lib/dom.js's signatureOf, but the two
+# group-finding functions are not equivalent: find_repeat_groups below
+# reports every candidate group in a section (used by the audit/measurement
+# tooling), while lib/dom.js's findRepeatGroup returns only the single
+# outermost group that contains a given element (used by "Add another").
 # ---------------------------------------------------------------------------
 
 def element_children(tag):
@@ -172,7 +177,33 @@ def move_node(soup, selector, direction):
     return shift_last_index(selector, 1)
 
 
-FORBIDDEN_SNIPPET_TAGS = ('script', 'style', 'section', 'html', 'head', 'body', 'iframe')
+FORBIDDEN_SNIPPET_TAGS = (
+    'script', 'style', 'section', 'html', 'head', 'body', 'iframe',
+    'object', 'embed', 'base', 'link', 'meta', 'form',
+)
+
+# Attributes checked for javascript: / data:text/html URLs. xlink:href covers
+# SVG <use>/<a> links; bs4 keeps the attribute name as-is (no namespace split).
+URL_ATTRS = ('href', 'src', 'action', 'formaction', 'xlink:href')
+
+
+def _strip_event_handlers(tag):
+    """Remove every attribute starting with `on` (case-insensitive) from `tag` and descendants."""
+    for t in [tag] + tag.find_all(True):
+        for attr in [a for a in t.attrs if a.lower().startswith('on')]:
+            del t[attr]
+
+
+def _reject_dangerous_urls(tag):
+    """Raise ValueError if any URL-bearing attribute uses a javascript:/data:text/html scheme."""
+    for t in [tag] + tag.find_all(True):
+        for attr in URL_ATTRS:
+            value = t.get(attr)
+            if not value:
+                continue
+            normalized = value.strip().lower()
+            if normalized.startswith('javascript:') or normalized.startswith('data:text/html'):
+                raise ValueError('Snippet may not use javascript: or data: URLs')
 
 
 def validate_snippet(html):
@@ -186,6 +217,8 @@ def validate_snippet(html):
     for name in FORBIDDEN_SNIPPET_TAGS:
         if root.name == name or root.find(name):
             raise ValueError(f'Snippet may not contain <{name}>')
+    _reject_dangerous_urls(root)
+    _strip_event_handlers(root)
     return root
 
 
@@ -220,9 +253,15 @@ def _find_section(soup, name):
     return soup.find('section', attrs={'data-section': name})
 
 
-def next_free_section_name(soup, base):
-    """`base-2`, `base-3`, … whichever data-section name is not yet used."""
+def next_free_section_name(soup, base, extra_used=()):
+    """`base-2`, `base-3`, … whichever data-section name is not yet used.
+
+    `extra_used` lets a caller union in names from other language copies of
+    the same page, so a drifted copy (one language already ahead of the
+    others) can't collide with a name picked from `soup` alone.
+    """
     used = {s.get('data-section') for s in soup.find_all('section')}
+    used.update(extra_used)
     n = 2
     while f'{base}-{n}' in used:
         n += 1
