@@ -10,6 +10,7 @@ import * as selection     from './modules/selection.js';
 import * as sidebar       from './modules/sidebar.js';
 import * as inlineEdit    from './modules/inline-edit.js';
 import * as contextMenu   from './modules/context-menu.js';
+import * as elementToolbar from './modules/element-toolbar.js';
 import * as commandPalette from './modules/command-palette.js';
 import * as aiPanel       from './modules/ai-panel.js';
 import * as imagePicker   from './modules/image-picker.js';
@@ -27,6 +28,7 @@ document.addEventListener('DOMContentLoaded', () => {
     sidebar.init();
     inlineEdit.init();
     contextMenu.init();
+    elementToolbar.init();
     commandPalette.init();
     aiPanel.init();
     imagePicker.init();
