@@ -13,7 +13,7 @@ from django.utils.translation import get_language
 from django.views.decorators.http import require_http_methods
 from django.contrib.admin.views.decorators import staff_member_required
 from django.contrib.auth.decorators import login_required
-from djangopress.core.decorators import superuser_required
+from djangopress.core.decorators import superuser_required, editor_required
 from django.views.decorators.csrf import csrf_exempt
 from djangopress.core.models import Page, PageVersion, SiteImage, SiteSettings
 from djangopress.ai.models import RefinementSession
@@ -1871,7 +1871,7 @@ def get_editor_session(request, page_id):
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
 
 
-@superuser_required
+@editor_required
 @require_http_methods(["GET"])
 def list_page_versions(request, page_id):
     """
@@ -1898,7 +1898,7 @@ def list_page_versions(request, page_id):
     })
 
 
-@superuser_required
+@editor_required
 @require_http_methods(["GET"])
 def get_page_version(request, page_id, version_number):
     """
@@ -1922,7 +1922,7 @@ def get_page_version(request, page_id, version_number):
     })
 
 
-@superuser_required
+@editor_required
 @require_http_methods(["POST"])
 def remove_section(request):
     """
@@ -1983,7 +1983,7 @@ def remove_section(request):
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
 
 
-@superuser_required
+@editor_required
 @require_http_methods(["POST"])
 def remove_element(request):
     """

@@ -20,3 +20,15 @@ class SuperuserRequiredMixin(UserPassesTestMixin):
 
     def test_func(self):
         return self.request.user.is_active and self.request.user.is_superuser
+
+
+def editor_required(view_func=None, redirect_field_name=REDIRECT_FIELD_NAME, login_url=None):
+    """Decorator for inline-editor endpoints: active staff user (not necessarily superuser)."""
+    actual_decorator = user_passes_test(
+        lambda u: u.is_active and u.is_staff,
+        login_url=login_url,
+        redirect_field_name=redirect_field_name,
+    )
+    if view_func:
+        return actual_decorator(view_func)
+    return actual_decorator
