@@ -210,3 +210,51 @@ def insert_snippet(soup, selector, position, snippet_html):
         anchor.append(node)
         return f'{selector} > {node.name}:nth-child({len(element_children(anchor))})'
     raise ValueError('position must be "before", "after" or "append"')
+
+
+# ---------------------------------------------------------------------------
+# Section verbs
+# ---------------------------------------------------------------------------
+
+def _find_section(soup, name):
+    return soup.find('section', attrs={'data-section': name})
+
+
+def next_free_section_name(soup, base):
+    """`base-2`, `base-3`, … whichever data-section name is not yet used."""
+    used = {s.get('data-section') for s in soup.find_all('section')}
+    n = 2
+    while f'{base}-{n}' in used:
+        n += 1
+    return f'{base}-{n}'
+
+
+def duplicate_section(soup, name, new_name):
+    """Clone section `name` right after itself as `new_name`; rewrite in-clone `#name` anchors."""
+    section = _find_section(soup, name)
+    if section is None:
+        return False
+    clone = copy.copy(section)
+    strip_ids(clone)
+    clone['data-section'] = new_name
+    clone['id'] = new_name
+    for a in clone.find_all('a', href=f'#{name}'):
+        a['href'] = f'#{new_name}'
+    section.insert_after(clone)
+    return True
+
+
+def move_section(soup, name, direction):
+    """Swap section `name` with the adjacent <section>. False when missing or at the edge."""
+    section = _find_section(soup, name)
+    if section is None:
+        return False
+    other = section.find_previous_sibling('section') if direction == 'up' else section.find_next_sibling('section')
+    if other is None:
+        return False
+    section = section.extract()
+    if direction == 'up':
+        other.insert_before(section)
+    else:
+        other.insert_after(section)
+    return True

@@ -177,6 +177,7 @@ python manage.py migrate
 - **Home page slug must be `home` in ALL languages**
 - **Set domain BEFORE uploading media** (GCS uses domain as folder name)
 - **Decoupled app URLs** must register BEFORE `core.urls` (catch-all)
+- **Editor structural verbs** (duplicate / move / insert element or section) are deterministic BeautifulSoup patches in `editor_v2/structure.py`, applied to every language copy. Never add an LLM call to them.
 
 ## Commands
 

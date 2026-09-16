@@ -2202,6 +2202,78 @@ def insert_element(request):
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
 
 
+@editor_required
+@require_http_methods(["POST"])
+def duplicate_section(request):
+    """Clone a section after itself with a fresh `name-N` in every language copy."""
+    try:
+        data = json.loads(request.body)
+        section_name = data.get('section_name')
+        if not section_name:
+            return JsonResponse({'success': False, 'error': 'Missing section_name'}, status=400)
+
+        page = _get_editable_object(data)
+        current_html, _lang = _get_page_html(page)
+        probe = BeautifulSoup(current_html or '', 'html.parser')
+        if probe.find('section', attrs={'data-section': section_name}) is None:
+            return JsonResponse({'success': False, 'error': f'Section "{section_name}" not found'}, status=400)
+        new_name = structure.next_free_section_name(probe, section_name)
+
+        outcome = _run_structural_verb(
+            request, data, f'Duplicated section "{section_name}" as "{new_name}"',
+            lambda soup: True if structure.duplicate_section(soup, section_name, new_name) else None,
+        )
+        if isinstance(outcome, JsonResponse):
+            return outcome
+        page, _ok, skipped = outcome
+        return JsonResponse({'success': True, 'section_name': new_name, 'skipped_languages': skipped, 'page_id': page.id})
+    except Page.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Page not found'}, status=400)
+    except json.JSONDecodeError:
+        return JsonResponse({'success': False, 'error': 'Invalid JSON'}, status=400)
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
+@editor_required
+@require_http_methods(["POST"])
+def move_section(request):
+    """Swap a section with the previous ('up') or next ('down') section in every language copy."""
+    try:
+        data = json.loads(request.body)
+        section_name = data.get('section_name')
+        direction = data.get('direction')
+        if not section_name:
+            return JsonResponse({'success': False, 'error': 'Missing section_name'}, status=400)
+        if direction not in ('up', 'down'):
+            return JsonResponse({'success': False, 'error': 'direction must be "up" or "down"'}, status=400)
+
+        page = _get_editable_object(data)
+        current_html, _lang = _get_page_html(page)
+        probe = BeautifulSoup(current_html or '', 'html.parser')
+        section = probe.find('section', attrs={'data-section': section_name})
+        if section is None:
+            return JsonResponse({'success': False, 'error': f'Section "{section_name}" not found'}, status=400)
+        neighbour = section.find_previous_sibling('section') if direction == 'up' else section.find_next_sibling('section')
+        if neighbour is None:
+            return JsonResponse({'success': True, 'moved': False, 'skipped_languages': [], 'page_id': page.id})
+
+        outcome = _run_structural_verb(
+            request, data, f'Moved section "{section_name}" {direction}',
+            lambda soup: True if structure.move_section(soup, section_name, direction) else None,
+        )
+        if isinstance(outcome, JsonResponse):
+            return outcome
+        page, _ok, skipped = outcome
+        return JsonResponse({'success': True, 'moved': True, 'skipped_languages': skipped, 'page_id': page.id})
+    except Page.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Page not found'}, status=400)
+    except json.JSONDecodeError:
+        return JsonResponse({'success': False, 'error': 'Invalid JSON'}, status=400)
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
 # ---------------------------------------------------------------------------
 # SSE streaming endpoints for editor AI refinement
 # ---------------------------------------------------------------------------

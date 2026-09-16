@@ -39,6 +39,8 @@ urlpatterns = [
     path('api/duplicate-element/', api_views.duplicate_element, name='api_duplicate_element'),
     path('api/move-element/', api_views.move_element, name='api_move_element'),
     path('api/insert-element/', api_views.insert_element, name='api_insert_element'),
+    path('api/duplicate-section/', api_views.duplicate_section, name='api_duplicate_section'),
+    path('api/move-section/', api_views.move_section, name='api_move_section'),
 
     # AI full-page refinement endpoints
     path('api/refine-page/', api_views.refine_page, name='api_refine_page'),

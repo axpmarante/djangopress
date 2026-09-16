@@ -112,6 +112,9 @@ The `editor_v2` app powers the `?edit=v2` (or `?edit=true`) mode for staff users
 - `GET /editor-v2/api/session/<page_id>/` — load chat session history (superuser)
 - `GET /editor-v2/api/versions/<page_id>/` — list page versions (superuser)
 - `GET /editor-v2/api/versions/<page_id>/<version>/` — get specific version (superuser)
+- `POST /editor-v2/api/remove-section/`, `remove-element/` — structural removes (staff)
+- `POST /editor-v2/api/duplicate-element/`, `move-element/`, `insert-element/` — clone / swap / insert a node at a selector, applied to every language, no LLM (staff)
+- `POST /editor-v2/api/duplicate-section/`, `move-section/` — same for whole sections; duplicate renames to `name-2`, `name-3`… (staff)
 
 ## Site Assistant
 
@@ -377,3 +380,4 @@ Use `/add-app appname` to scaffold automatically, or follow the reference manual
 - **Editor language detection** — editor API endpoints are outside `i18n_patterns`, so `_detect_language_from_request()` extracts language from Referer URL
 - **Auto-translation on apply** — when user applies an AI change in the editor, only the modified section/element is translated and surgically replaced in other languages' HTML
 - **GlobalSection refinement** has truncation validation — rejects refined output if <40% of original length to prevent saving corrupted HTML
+- **Structural verbs are staff-level (`editor_required`); AI endpoints stay superuser-only.**

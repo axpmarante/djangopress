@@ -211,3 +211,45 @@ class InsertSnippetTest(SimpleTestCase):
 
     def test_missing_anchor_returns_none(self):
         self.assertIsNone(insert_snippet(soup(GRID), C3, 'after', '<p>n</p>'))
+
+
+from djangopress.editor_v2.structure import next_free_section_name, duplicate_section, move_section
+
+PAGE = ('<section data-section="hero" id="hero"><a href="#hero">top</a></section>'
+        '<section data-section="services" id="services"><a href="#services" class="x">s</a></section>')
+
+
+class SectionNamesTest(SimpleTestCase):
+    def test_first_free_suffix(self):
+        s = soup(PAGE)
+        self.assertEqual(next_free_section_name(s, 'hero'), 'hero-2')
+        s.append(soup('<section data-section="hero-2" id="hero-2"></section>').section)
+        self.assertEqual(next_free_section_name(s, 'hero'), 'hero-3')
+
+
+class DuplicateSectionTest(SimpleTestCase):
+    def test_clone_renamed_and_anchor_rewritten(self):
+        s = soup(PAGE)
+        self.assertTrue(duplicate_section(s, 'services', 'services-2'))
+        names = [x['data-section'] for x in s.find_all('section')]
+        self.assertEqual(names, ['hero', 'services', 'services-2'])
+        clone = s.find('section', attrs={'data-section': 'services-2'})
+        self.assertEqual(clone['id'], 'services-2')
+        self.assertEqual(clone.a['href'], '#services-2')
+        original = s.find('section', attrs={'data-section': 'services'})
+        self.assertEqual(original.a['href'], '#services')
+
+    def test_missing_section_returns_false(self):
+        self.assertFalse(duplicate_section(soup(PAGE), 'nope', 'nope-2'))
+
+
+class MoveSectionTest(SimpleTestCase):
+    def test_move_up(self):
+        s = soup(PAGE)
+        self.assertTrue(move_section(s, 'services', 'up'))
+        self.assertEqual([x['data-section'] for x in s.find_all('section')], ['services', 'hero'])
+
+    def test_move_at_edge_is_false(self):
+        s = soup(PAGE)
+        self.assertFalse(move_section(s, 'hero', 'up'))
+        self.assertEqual([x['data-section'] for x in s.find_all('section')], ['hero', 'services'])

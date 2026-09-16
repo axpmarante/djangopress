@@ -156,3 +156,42 @@ class InsertElementTest(StructuralApiTestCase):
     def test_bad_position_is_400(self):
         res = self.post('api_insert_element', {'selector': CARD_2, 'position': 'inside', 'html': '<p>x</p>'})
         self.assertEqual(res.status_code, 400)
+
+
+class DuplicateSectionTest(StructuralApiTestCase):
+    def test_duplicate_section_in_all_languages(self):
+        res = self.post('api_duplicate_section', {'section_name': 'services'})
+        data = res.json()
+        self.assertTrue(data['success'])
+        self.assertEqual(data['section_name'], 'services-2')
+        for lang in ('pt', 'en'):
+            self.assertIn('data-section="services-2"', self.html(lang))
+            self.assertIn('id="services-2"', self.html(lang))
+        self.assertTrue(
+            PageVersion.objects.filter(page=self.page, change_summary__contains='Duplicated section').exists()
+        )
+
+    def test_second_duplicate_gets_next_suffix(self):
+        self.post('api_duplicate_section', {'section_name': 'services'})
+        res = self.post('api_duplicate_section', {'section_name': 'services'})
+        self.assertEqual(res.json()['section_name'], 'services-3')
+
+    def test_missing_section_is_400(self):
+        res = self.post('api_duplicate_section', {'section_name': 'nope'})
+        self.assertEqual(res.status_code, 400)
+
+
+class MoveSectionTest(StructuralApiTestCase):
+    def test_move_section_down(self):
+        res = self.post('api_move_section', {'section_name': 'services', 'direction': 'down'})
+        self.assertTrue(res.json()['moved'])
+        for lang in ('pt', 'en'):
+            html = self.html(lang)
+            self.assertLess(html.index('data-section="cta"'), html.index('data-section="services"'))
+
+    def test_move_section_at_edge_is_noop(self):
+        res = self.post('api_move_section', {'section_name': 'services', 'direction': 'up'})
+        self.assertTrue(res.json()['success'])
+        self.assertFalse(res.json()['moved'])
+        self.assertEqual(res.json()['page_id'], self.page.id)
+        self.assertEqual(PageVersion.objects.count(), 0)
