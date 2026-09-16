@@ -2631,3 +2631,28 @@ body.ev2-version-preview .editor-v2-content {
   text-overflow: ellipsis;
   color: var(--ev2-text-secondary);
 }
+
+/* --------------------------------------------------------------------------
+   Repeat-group panel (Content tab)
+   -------------------------------------------------------------------------- */
+.ev2-repeat-panel {
+  margin: 0 0 12px;
+  padding: 10px;
+  border: 1px solid var(--ev2-border);
+  border-radius: var(--ev2-radius);
+  background: var(--ev2-bg-subtle);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ev2-repeat-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.ev2-repeat-actions .ev2-btn-sm[disabled] {
+  opacity: 0.4;
+  cursor: default;
+}
