@@ -1,5 +1,7 @@
 """Tests for the content contract (Task 7)."""
 
+import copy
+
 from django.test import SimpleTestCase
 
 from djangopress.core.build.contract import check_contract, normalise
@@ -57,3 +59,30 @@ class ContractTest(SimpleTestCase):
         reasons = [m['reason'] for m in check_contract(PACKET, self.parts(page), 'pt')]
         self.assertTrue(any('phone' in r for r in reasons))
         self.assertTrue(any('19:00' in r for r in reasons))
+
+    def test_contact_kind_item_is_covered_by_facts(self):
+        packet = copy.deepcopy(PACKET)
+        packet['content']['home']['required'].append(
+            {'id': 'home-9', 'kind': 'Contact', 'text': 'phone, email, address (from ## Contact)'})
+        misses = check_contract(packet, self.parts(), 'pt')
+        self.assertNotIn('home-9', [m['id'] for m in misses])
+        page = PAGE.replace('+351 289 000 000', '')
+        misses = check_contract(packet, self.parts(page), 'pt')
+        self.assertNotIn('home-9', [m['id'] for m in misses])
+        self.assertTrue(any('phone' in m['reason'] for m in misses))
+
+    def test_verbatim_ignores_quotes_and_dashes(self):
+        packet = copy.deepcopy(PACKET)
+        packet['content']['home']['required'].append(
+            {'id': 'home-10', 'kind': 'Testimonial',
+             'text': '"Somos um negócio de pessoas, não um negócio de web design." — António Marante'})
+        page = PAGE + ('<section><p>«Somos um negócio de pessoas, não um negócio de web design.»</p>'
+                        '<p>— António Marante</p></section>')
+        misses = check_contract(packet, self.parts(page), 'pt')
+        self.assertNotIn('home-10', [m['id'] for m in misses])
+
+    def test_price_stays_strict(self):
+        page = PAGE.replace('3,30 €', '330 €')
+        misses = check_contract(PACKET, self.parts(page), 'pt')
+        self.assertEqual([m['id'] for m in misses], ['home-4'])
+        self.assertIn('price', misses[0]['reason'])

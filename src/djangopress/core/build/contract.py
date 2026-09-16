@@ -13,6 +13,13 @@ def normalise(text):
     return re.sub(r'\s+', ' ', text).strip().casefold()
 
 
+def loose(text):
+    """normalise() with anything that isn't a letter, digit or space stripped — for
+    punctuation-insensitive verbatim matching (quotes, dashes, em/en spacing)."""
+    text = re.sub(r'[^\w\s]', '', normalise(text), flags=re.UNICODE)
+    return re.sub(r'\s+', ' ', text).strip()
+
+
 def _digits(text):
     return re.sub(r'\D', '', text or '')
 
@@ -35,16 +42,23 @@ def _price_forms(price):
 
 def check_contract(packet, parts, lang):
     text, hrefs = _haystack(parts)
+    loose_text = loose(text)
     misses = []
+
+    def matches(s):
+        return normalise(s) in text or loose(s) in loose_text
 
     def miss(item, reason):
         misses.append({'id': item['id'], 'kind': item['kind'], 'text': item.get('text', ''), 'reason': reason})
 
     for page in packet['content'].values():
         for item in page['required']:
+            if (item.get('kind') or '').casefold() == 'contact':
+                # facts (phone/email/address/hours) are checked separately below.
+                continue
             if item.get('items'):
                 for entry in item['items']:
-                    if normalise(entry['name']) not in text:
+                    if not matches(entry['name']):
                         miss(item, f"menu item {entry['name']!r} not found")
                         break
                     if entry.get('price') and not any(f in text for f in _price_forms(entry['price'])):
@@ -55,12 +69,12 @@ def check_contract(packet, parts, lang):
                 wanted = f'/{lang}{href}' if href.startswith('/') and not href.startswith(f'/{lang}/') else href
                 if wanted not in hrefs:
                     miss(item, f'no link to {wanted}')
-                elif normalise(item['text']) not in text:
+                elif not matches(item['text']):
                     miss(item, f"CTA label {item['text']!r} not found")
             elif item.get('keywords'):
                 if not any(normalise(k) in text for k in item['keywords']):
                     miss(item, f"none of the keywords {item['keywords']} found")
-            elif normalise(item.get('text', '')) not in text:
+            elif not matches(item.get('text', '')):
                 miss(item, f"text {item['text']!r} not found verbatim")
 
     facts = packet['facts']

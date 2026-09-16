@@ -96,5 +96,6 @@ class CommandTest(TestCase):
         self.assertEqual(rep['prompt'], str(p))
         self.assertEqual(rep['output'], 'docs/concepts/concept-b.html')
         self.assertIn('Boarding Pass', p.read_text())
+        self.assertIn(str(self.root / 'docs' / 'concepts' / 'concept-b.html'), p.read_text())
         rows = json.loads((self.root / 'docs' / 'concepts' / 'concepts.json').read_text())
         self.assertEqual(rows[0]['key'], 'b')

@@ -39,7 +39,8 @@ class Command(BaseCommand):
         if not brief.exists():
             raise CommandError(f'{brief} not found — write the director output there first')
         output = f'docs/concepts/concept-{key}.html'
+        abs_output = str(root / 'docs' / 'concepts' / f'concept-{key}.html')
         out = prompts / f'builder-{key}.md'
-        out.write_text(fill_builder(packet, brief.read_text(), output))
+        out.write_text(fill_builder(packet, brief.read_text(), abs_output))
         entry = upsert_concept_index(root / 'docs' / 'concepts' / 'concepts.json', key, brief.read_text())
         self.stdout.write(json.dumps({'prompt': str(out), 'output': output, 'concept': entry}, ensure_ascii=False))
