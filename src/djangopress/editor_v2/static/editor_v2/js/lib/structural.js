@@ -21,12 +21,15 @@ function body(extra) {
     return b;
 }
 
-function reloadWith(state) {
+function reloadWith(state, label) {
     try { sessionStorage.setItem(AFTER_RELOAD_KEY, JSON.stringify(state || {})); } catch (_) {}
+    if (label) {
+        try { sessionStorage.setItem('ev2-toast-pending', JSON.stringify({ label })); } catch (_) {}
+    }
     window.location.reload();
 }
 
-async function run(endpoint, payload, afterState) {
+async function run(endpoint, payload, afterState, label) {
     try {
         const res = await api.post(endpoint, body(payload));
         if (!res.success) { alert(res.error || 'Operation failed'); return null; }
@@ -34,7 +37,7 @@ async function run(endpoint, payload, afterState) {
         if (res.skipped_languages && res.skipped_languages.length) {
             alert(`Applied, but not in: ${res.skipped_languages.join(', ')} (element not found there).`);
         }
-        reloadWith(afterState ? afterState(res) : null);
+        reloadWith(afterState ? afterState(res) : null, res.label || label);
         return res;
     } catch (err) {
         alert('Operation failed: ' + (err.message || err));
@@ -43,35 +46,35 @@ async function run(endpoint, payload, afterState) {
 }
 
 export function duplicateElement(selector) {
-    return run('/duplicate-element/', { selector }, r => ({ selector: r.selector }));
+    return run('/duplicate-element/', { selector }, r => ({ selector: r.selector }), 'Duplicated element');
 }
 
 export function moveElement(selector, direction) {
-    return run('/move-element/', { selector, direction }, r => ({ selector: r.selector }));
+    return run('/move-element/', { selector, direction }, r => ({ selector: r.selector }), 'Moved element');
 }
 
 export function insertElement(selector, position, html, { after = null } = {}) {
-    return run('/insert-element/', { selector, position, html }, r => ({ selector: r.selector, after }));
+    return run('/insert-element/', { selector, position, html }, r => ({ selector: r.selector, after }), 'Inserted element');
 }
 
 export function duplicateSection(name) {
     return run('/duplicate-section/', { section_name: name },
-        r => ({ selector: `section[data-section="${r.section_name}"]` }));
+        r => ({ selector: `section[data-section="${r.section_name}"]` }), 'Duplicated section');
 }
 
 export function moveSection(name, direction) {
     return run('/move-section/', { section_name: name, direction },
-        () => ({ selector: `section[data-section="${name}"]` }));
+        () => ({ selector: `section[data-section="${name}"]` }), 'Moved section');
 }
 
 export function removeElement(selector) {
     if (!confirm('Remove this element? This can be undone via version history.')) return Promise.resolve(null);
-    return run('/remove-element/', { selector }, null);
+    return run('/remove-element/', { selector }, null, 'Removed element');
 }
 
 export function removeSection(name) {
     if (!confirm(`Remove section "${name}"? This can be undone via version history.`)) return Promise.resolve(null);
-    return run('/remove-section/', { section_name: name }, null);
+    return run('/remove-section/', { section_name: name }, null, 'Removed section');
 }
 
 /** True when `el` has an element sibling in that direction (ignoring runtime clones). */

@@ -1,0 +1,80 @@
+/**
+ * One-click Undo / Redo over server-side version checkpoints.
+ * In-memory (unsaved) edits are undone by changes.js; once nothing is pending,
+ * Ctrl+Z falls through to `history:undo` handled here.
+ */
+import { events } from '../lib/events.js';
+import { api } from '../lib/api.js';
+import { $ } from '../lib/dom.js';
+
+const config = () => window.EDITOR_CONFIG || {};
+let state = { undo: null, redo: null };
+let unsubs = [];
+let toastTimer = null;
+
+async function refresh() {
+    const pageId = config().pageId;
+    if (!pageId || config().contentTypeId) { render(); return; }
+    try {
+        const res = await api.get(`/history/${pageId}/`);
+        if (res.success) state = { undo: res.undo, redo: res.redo };
+    } catch (_) { state = { undo: null, redo: null }; }
+    render();
+}
+
+function render() {
+    const u = $('#ev2-undo-topbar-btn'), r = $('#ev2-redo-topbar-btn'), l = $('#ev2-undo-label');
+    if (u) { u.disabled = !state.undo; u.title = state.undo ? `Undo: ${state.undo.label}` : 'Nothing to undo'; }
+    if (l) l.textContent = state.undo ? `Undo ${shorten(state.undo.label)}` : 'Undo';
+    if (r) { r.disabled = !state.redo; r.title = state.redo ? `Redo: ${state.redo.label}` : 'Nothing to redo'; }
+}
+
+function shorten(s) { return s.length > 22 ? s.slice(0, 21) + '…' : s; }
+
+function body() {
+    const cfg = config();
+    const b = { page_id: cfg.pageId };
+    if (cfg.contentTypeId && cfg.objectId) { b.content_type_id = cfg.contentTypeId; b.object_id = cfg.objectId; }
+    return b;
+}
+
+async function run(direction) {
+    if (direction === 'undo' && !state.undo) return;
+    if (direction === 'redo' && !state.redo) return;
+    try {
+        const res = await api.post(`/${direction}/`, body());
+        if (!res.success) { alert(res.error || `${direction} failed`); return; }
+        try { sessionStorage.setItem('ev2-toast-pending', JSON.stringify({ label: `${direction === 'undo' ? 'Undone' : 'Redone'}: ${res.label}`, noUndoToast: true })); } catch (_) {}
+        window.location.reload();
+    } catch (err) { alert(`${direction} failed: ` + (err.message || err)); }
+}
+
+function showToast(text, withUndo) {
+    const t = $('#ev2-toast'), txt = $('#ev2-toast-text'), btn = $('#ev2-toast-undo');
+    if (!t) return;
+    txt.textContent = text;
+    btn.style.display = withUndo ? '' : 'none';
+    t.classList.remove('hidden');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => t.classList.add('hidden'), 6000);
+}
+
+function toastFromReload() {
+    let st = null;
+    try { st = JSON.parse(sessionStorage.getItem('ev2-toast-pending') || 'null'); sessionStorage.removeItem('ev2-toast-pending'); } catch (_) {}
+    if (st?.label) showToast(st.label, !st.noUndoToast);
+}
+
+export function init() {
+    $('#ev2-undo-topbar-btn')?.addEventListener('click', () => run('undo'));
+    $('#ev2-redo-topbar-btn')?.addEventListener('click', () => run('redo'));
+    $('#ev2-toast-undo')?.addEventListener('click', () => run('undo'));
+    unsubs.push(events.on('history:refresh', refresh));
+    unsubs.push(events.on('history:undo', () => run('undo')));
+    unsubs.push(events.on('history:redo', () => run('redo')));
+    unsubs.push(events.on('changes:saved', refresh));
+    refresh();
+    toastFromReload();
+}
+
+export function destroy() { unsubs.forEach(u => u()); unsubs = []; clearTimeout(toastTimer); }

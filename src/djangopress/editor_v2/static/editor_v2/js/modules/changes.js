@@ -85,7 +85,7 @@ function record(change) {
 // --- Undo / Redo ---
 
 function undo() {
-    if (undoStack.length === 0) return;
+    if (undoStack.length === 0) { events.emit('history:undo'); return; }
     const change = undoStack.pop();
     const reversed = reverseChange(change);
     applyToDOM(reversed);
@@ -108,7 +108,7 @@ function undo() {
 }
 
 function redo() {
-    if (redoStack.length === 0) return;
+    if (redoStack.length === 0) { events.emit('history:redo'); return; }
     const change = redoStack.pop();
     applyToDOM(change);
     undoStack.push(change);
@@ -149,6 +149,8 @@ async function save() {
     const attrChanges = changes.filter(c => c.type === 'attribute');
 
     try {
+        await api.post('/checkpoint/', withEditableId({ page_id: pageId, label: `Edits (${changes.length})` }, cfg));
+
         for (const c of contentChanges) {
             console.log('[ev2] save content:', c.fieldKey);
             await api.post('/update-page-content/', withEditableId({

@@ -23,6 +23,14 @@
     </div>
   </div>
   <div class="ev2-topbar-right">
+    <button id="ev2-undo-topbar-btn" class="ev2-topbar-btn" title="Undo" disabled>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 14 4 9 9 4"/><path d="M20 20v-7a4 4 0 0 0-4-4H4"/></svg>
+      <span id="ev2-undo-label" class="ev2-history-label">Undo</span>
+    </button>
+    <button id="ev2-redo-topbar-btn" class="ev2-topbar-btn" title="Redo" disabled>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 14 20 9 15 4"/><path d="M4 20v-7a4 4 0 0 1 4-4h12"/></svg>
+    </button>
+    <div class="ev2-topbar-sep"></div>
     <!-- Version Navigation -->
     <div id="ev2-version-nav" class="ev2-version-nav" style="display:none">
       <button id="ev2-version-prev" class="ev2-topbar-btn" title="Previous version (Ctrl+[)" disabled>
@@ -266,6 +274,9 @@
     </div>
   </div>
 </div>
+
+<!-- Undo/Redo Toast -->
+<div id="ev2-toast" class="ev2-toast hidden"><span id="ev2-toast-text"></span><button id="ev2-toast-undo" type="button">Undo</button></div>
 
 <!-- Context Menu -->
 <div id="ev2-context-menu" class="ev2-context-menu hidden"></div>

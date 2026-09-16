@@ -166,17 +166,10 @@ function cancel() {
 async function restore() {
     if (!previewVersion) return;
 
-    const lang = config().language || 'pt';
-    const html = pickHtmlForLang(previewVersion.html_content_i18n, lang);
-    if (!html) {
-        alert('This version has no HTML content to restore.');
-        return;
-    }
-
     try {
-        await api.post('/save-ai-page/', withEditableId({
+        await api.post('/restore-version/', withEditableId({
             page_id: config().pageId,
-            html_template: html,
+            version_number: previewVersion.version_number,
         }));
         // Reload to show the restored version as current
         window.location.reload();
