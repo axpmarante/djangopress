@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+<meta charset="UTF-8">
+<title>Casa Teste — Início</title>
+<meta name="description" content="Descrição de teste.">
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Lora:wght@400;600&family=Inter:wght@400;500&display=swap" rel="stylesheet">
+<script>
+tailwind.config = { theme: { extend: { colors: { cream: '#F5F0E8', ink: '#2B2520', brick: '#C05B3E', teal: '#3E6B73' }, fontFamily: { sans: ['Inter', 'sans-serif'], display: ['Lora', 'serif'] } } } }
+</script>
+<style>
+body { background: #F5F0E8; color: #2B2520; }
+.grain { opacity: .1; }
+</style>
+</head>
+<body>
+<header class="absolute inset-x-0 top-0 z-50">
+  <nav class="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
+    <a href="/" class="font-display text-xl">Casa Teste</a>
+    <a href="#menu" class="text-sm uppercase tracking-wide">Menu</a>
+    <a href="#contact" class="text-sm uppercase tracking-wide">Contactos</a>
+    <a href="/reservas/" class="rounded-lg bg-brick px-4 py-2 text-white">Reservar mesa</a>
+    <div data-slot="language-switcher"></div>
+  </nav>
+</header>
+<main>
+  <section class="relative min-h-screen bg-ink text-white">
+    <img src="https://example.com/dish.jpg" alt="Prato" class="absolute inset-0 h-full w-full object-cover">
+    <div class="absolute inset-0 bg-gradient-to-t from-black to-transparent"></div>
+    <div class="relative mx-auto max-w-6xl px-6 py-32">
+      <h1 class="font-display text-6xl">Cozinha de autor algarvia</h1>
+      <p class="mt-4 text-lg">À carta, para partilhar.</p>
+      <a href="/reservas/" class="mt-8 inline-block rounded-lg bg-brick px-6 py-3 text-white shadow-lg">Reservar mesa</a>
+    </div>
+  </section>
+  <section id="menu" class="bg-cream py-20">
+    <div class="mx-auto max-w-6xl px-6">
+      <h2 class="font-display text-4xl">A carta</h2>
+      <ul><li>Couvert — 3.30 €</li></ul>
+      <div class="flex gap-4">
+        <img src="https://images.unsplash.com/photo-1?w=800" alt="Sala" class="rounded-lg">
+        <img src="https://example.com/dish.jpg" alt="Prato outra vez" class="rounded-lg">
+      </div>
+    </div>
+  </section>
+  <div class="bg-teal py-20 text-white">
+    <div class="mx-auto max-w-6xl px-6">
+      <h2 class="font-display text-4xl">Contactos</h2>
+      <p>+351 289 000 000 · Rua do Castelo 1, Faro</p>
+      <p>Guia Michelin 2024</p>
+      <form action="/forms/contact/" method="post"><label>Nome</label><input name="name"><button class="rounded-lg bg-brick px-4 py-2 text-white">Enviar</button></form>
+    </div>
+  </div>
+</main>
+<footer class="bg-ink py-10 text-white">
+  <div class="mx-auto max-w-6xl px-6">
+    <a href="/politica-de-privacidade/">Política de Privacidade</a>
+    <span>© 2026 Casa Teste</span>
+  </div>
+</footer>
+<script>console.log('ready');</script>
+</body>
+</html>
