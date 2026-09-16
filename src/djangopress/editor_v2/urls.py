@@ -35,6 +35,10 @@ urlpatterns = [
     path('api/remove-section/', api_views.remove_section, name='api_remove_section'),
     path('api/remove-element/', api_views.remove_element, name='api_remove_element'),
 
+    # Structural verbs (no LLM)
+    path('api/duplicate-element/', api_views.duplicate_element, name='api_duplicate_element'),
+    path('api/move-element/', api_views.move_element, name='api_move_element'),
+
     # AI full-page refinement endpoints
     path('api/refine-page/', api_views.refine_page, name='api_refine_page'),
     path('api/refine-page/stream/', api_views.refine_page_stream, name='api_refine_page_stream'),

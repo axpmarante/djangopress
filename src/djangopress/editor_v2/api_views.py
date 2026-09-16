@@ -20,6 +20,7 @@ from djangopress.ai.models import RefinementSession
 from djangopress.ai.utils.llm_config import get_ai_model
 from djangopress.ai.utils.sse import sse_event, sse_response
 from bs4 import BeautifulSoup
+from djangopress.editor_v2 import structure
 
 
 # ---------------------------------------------------------------------------
@@ -2036,6 +2037,133 @@ def remove_element(request):
             'page_id': page.id,
         })
 
+    except Page.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Page not found'}, status=400)
+    except json.JSONDecodeError:
+        return JsonResponse({'success': False, 'error': 'Invalid JSON'}, status=400)
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
+# ---------------------------------------------------------------------------
+# Structural verbs (no LLM): duplicate / move / insert
+# ---------------------------------------------------------------------------
+
+def _run_structural_verb(request, data, change_summary, apply_fn):
+    """
+    Shared driver for structural endpoints.
+
+    `apply_fn(soup)` mutates a soup and returns a result (truthy on success,
+    None when the target was not found or the verb was a no-op). It is run
+    once on the current-language HTML for validation and to get the result,
+    then on every language copy through _apply_structural_change_to_all_langs.
+
+    Returns a JsonResponse on a request error, otherwise the tuple
+    (page, result, skipped_languages); `result` is None when the target
+    was not found in the current language (nothing was changed or saved).
+    """
+    try:
+        page = _get_editable_object(data)
+    except Exception:
+        page = None
+    if not page:
+        return JsonResponse({'success': False, 'error': 'Page or editable object not found'}, status=400)
+
+    current_html, _lang = _get_page_html(page)
+    result = apply_fn(BeautifulSoup(current_html or '', 'html.parser'))
+    if result is None:
+        return page, None, []
+
+    if hasattr(page, 'create_version'):
+        page.create_version(user=request.user, change_summary=change_summary)
+
+    skipped = []
+    html_i18n = dict(getattr(page, 'html_content_i18n', None) or {})
+    for lang_code, lang_html in html_i18n.items():
+        if not lang_html:
+            continue
+        soup = BeautifulSoup(lang_html, 'html.parser')
+        if apply_fn(soup) is None:
+            skipped.append(lang_code)
+            continue
+        new_html = str(soup)
+        if new_html.startswith('<html><body>'):
+            new_html = new_html[12:-14]
+        html_i18n[lang_code] = new_html
+    page.html_content_i18n = html_i18n
+
+    # Persist without a plain page.save(): Page has a post_save signal that
+    # auto-creates a version snapshot on every save, and create_version()
+    # above already recorded the pre-change snapshot. A normal save() here
+    # would fire that signal again and record a second, redundant, blank
+    # -summary version for the *post*-change state. .update() writes the
+    # new HTML straight to the row without re-triggering post_save.
+    update_fields = {'html_content_i18n': html_i18n}
+    if hasattr(page, 'updated_at'):
+        from django.utils import timezone
+        page.updated_at = timezone.now()
+        update_fields['updated_at'] = page.updated_at
+    type(page).objects.filter(pk=page.pk).update(**update_fields)
+    return page, result, skipped
+
+
+@editor_required
+@require_http_methods(["POST"])
+def duplicate_element(request):
+    """Clone the element at `selector` right after itself, in every language copy."""
+    try:
+        data = json.loads(request.body)
+        selector = data.get('selector')
+        if not selector:
+            return JsonResponse({'success': False, 'error': 'Missing selector'}, status=400)
+
+        outcome = _run_structural_verb(
+            request, data, 'Duplicated element',
+            lambda soup: structure.duplicate_node(soup, selector),
+        )
+        if isinstance(outcome, JsonResponse):
+            return outcome
+        page, new_selector, skipped = outcome
+        if new_selector is None:
+            return JsonResponse({'success': False, 'error': 'Element not found for selector'}, status=400)
+        return JsonResponse({'success': True, 'selector': new_selector, 'skipped_languages': skipped, 'page_id': page.id})
+    except json.JSONDecodeError:
+        return JsonResponse({'success': False, 'error': 'Invalid JSON'}, status=400)
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
+@editor_required
+@require_http_methods(["POST"])
+def move_element(request):
+    """Swap the element at `selector` with its previous ('up') or next ('down') sibling."""
+    try:
+        data = json.loads(request.body)
+        selector = data.get('selector')
+        direction = data.get('direction')
+        if not selector:
+            return JsonResponse({'success': False, 'error': 'Missing selector'}, status=400)
+        if direction not in ('up', 'down'):
+            return JsonResponse({'success': False, 'error': 'direction must be "up" or "down"'}, status=400)
+
+        # Distinguish "not found" (400) from "at the edge" (no-op) before running the verb.
+        page = _get_editable_object(data)
+        current_html, _lang = _get_page_html(page)
+        probe = BeautifulSoup(current_html or '', 'html.parser')
+        node = probe.select_one(selector)
+        if node is None:
+            return JsonResponse({'success': False, 'error': 'Element not found for selector'}, status=400)
+        if structure.adjacent_sibling(node, direction) is None:
+            return JsonResponse({'success': True, 'moved': False, 'selector': selector, 'skipped_languages': []})
+
+        outcome = _run_structural_verb(
+            request, data, f'Moved element {direction}',
+            lambda soup: structure.move_node(soup, selector, direction),
+        )
+        if isinstance(outcome, JsonResponse):
+            return outcome
+        page, new_selector, skipped = outcome
+        return JsonResponse({'success': True, 'moved': True, 'selector': new_selector, 'skipped_languages': skipped, 'page_id': page.id})
     except Page.DoesNotExist:
         return JsonResponse({'success': False, 'error': 'Page not found'}, status=400)
     except json.JSONDecodeError:
