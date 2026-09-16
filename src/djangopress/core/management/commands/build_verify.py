@@ -14,7 +14,8 @@ class Command(BaseCommand):
     def add_arguments(self, parser):
         parser.add_argument('--files', nargs='*', default=[])
         parser.add_argument('--widths', default='390,834,1440')
-        parser.add_argument('--port', type=int, default=8000)
+        parser.add_argument('--port', type=int, default=None,
+                            help='reuse/start the dev server on this port; default: a free port with its own server')
         parser.add_argument('--no-screenshot', action='store_true')
         parser.add_argument('--packet', default='docs/build-packet.json')
 

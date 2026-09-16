@@ -51,8 +51,7 @@ DOCUMENT CONTRACT (the importer relies on this)
   (id="hero", id="chefs-table"). Nothing outside a <section>.
 - Inside <header>, one <nav>; place <div data-slot="language-switcher"></div> where the
   language switcher goes. Mobile menu with Alpine.js (x-data / x-show / @click).
-- Internal links: href="#section-id" for anchors, href="/reservas/" for pages — no language
-  prefix, the importer adds it. External links, mailto:, tel: as normal.
+- Internal links: href="#section-id" for anchors; page links (href="/x/") ONLY to these pages: [[PAGES]] — every other navigation item is an anchor to one of your own section ids. No language prefix, the importer adds it. External links, mailto:, tel: as normal.
 - Tailwind utility classes and the tailwind.config theme only; arbitrary values (bg-[#…])
   are fine. No <style> outside <head>. No inline style="" except for background-image.
 - Do not use {{ or {% anywhere.

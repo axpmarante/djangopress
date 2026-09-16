@@ -1,5 +1,6 @@
 """Tests for prompt filling and build_prompt (Task 10)."""
 
+import copy
 import json
 import tempfile
 from io import StringIO
@@ -48,6 +49,14 @@ class FillTest(SimpleTestCase):
         self.assertIn('https://example.com/dish.jpg', text)
         self.assertIn('+351 289 000 000', text)
         self.assertIn('Português', text)
+        self.assertIn('ONLY to these pages: none — use anchors only', text)
+        self.assertNotIn('[[', text)
+
+    def test_builder_lists_pages(self):
+        packet = copy.deepcopy(PACKET)
+        packet['pages'] = [{'slug': 'home'}, {'slug': 'contactos'}, {'slug': 'reservas'}]
+        text = fill_builder(packet, BRIEF, 'docs/concepts/concept-b.html')
+        self.assertIn('ONLY to these pages: /contactos/, /reservas/', text)
         self.assertNotIn('[[', text)
 
 

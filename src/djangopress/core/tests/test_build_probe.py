@@ -12,7 +12,7 @@ from django.test import TestCase
 from djangopress.core.build.adapter import adapt
 from djangopress.core.build.importer import cta_texts_from, import_result
 from djangopress.core.build.probe import run_probe
-from djangopress.core.build.verify import BLOCKING_KINDS, is_residue, screen_file, verify_live
+from djangopress.core.build.verify import BLOCKING_KINDS, free_port, is_residue, screen_file, verify_live
 from djangopress.core.models import Page, SiteSettings
 from djangopress.core.tests.test_build_importer import MINIMAL, PACKET
 
@@ -124,6 +124,17 @@ class ScreenFileTest(TestCase):
         self.assertFalse(r['clean'])
 
 
+class FreePortTest(TestCase):
+
+    def test_free_port_is_bindable(self):
+        import socket
+        port = free_port()
+        self.assertIsInstance(port, int)
+        self.assertTrue(1024 <= port <= 65535)
+        with socket.socket() as s:
+            s.bind(('127.0.0.1', port))
+
+
 class VerifyLiveTest(TestCase):
 
     def setUp(self):
@@ -139,7 +150,7 @@ class VerifyLiveTest(TestCase):
         import_result(result, packet=PACKET)
 
     def test_verify_live_clean_with_residue(self):
-        with patch('djangopress.core.build.verify.ensure_server', return_value=None):
+        with patch('djangopress.core.build.verify.ensure_server', return_value=(None, 8999)):
             r = verify_live(PACKET, port=8999, probe=FAKE_PROBE_OK, screenshot=False)
         self.assertEqual(r['check_site'], [])
         self.assertGreater(r['residue'], 0)
@@ -147,10 +158,21 @@ class VerifyLiveTest(TestCase):
         self.assertTrue(r['clean'])
 
     def test_probe_unavailable_reported(self):
-        with patch('djangopress.core.build.verify.ensure_server', return_value=None):
+        with patch('djangopress.core.build.verify.ensure_server', return_value=(None, 8999)):
             r = verify_live(PACKET, port=8999, probe=FAKE_PROBE_NONE, screenshot=False)
         self.assertFalse(r['probe']['available'])
         self.assertTrue(r['clean'])
+
+    def test_verify_live_uses_the_port_ensure_server_returns(self):
+        urls = []
+
+        def fake_probe(url, **kw):
+            urls.append(url)
+            return {'available': True, 'defects': []}
+
+        with patch('djangopress.core.build.verify.ensure_server', return_value=(None, 8123)):
+            verify_live(PACKET, probe=fake_probe, screenshot=False)
+        self.assertEqual(urls, ['http://127.0.0.1:8123/pt/'])
 
 
 class BuildVerifyCommandTest(TestCase):

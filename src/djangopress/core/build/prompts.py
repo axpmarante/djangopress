@@ -60,6 +60,11 @@ def _facts_lines(packet):
     return '\n'.join(lines)
 
 
+def _pages_text(packet):
+    slugs = [p['slug'] for p in packet['pages'] if p['slug'] != 'home']
+    return ', '.join(f'/{s}/' for s in slugs) if slugs else 'none — use anchors only'
+
+
 def _images_lines(packet):
     rows = [f"- {k} — {v['url']} — max width {v.get('width') or 'unknown'}px — {v.get('alt', '')}" for k, v in packet['images']['map'].items()]
     return '\n'.join(rows) if rows else '(none — use placeholders everywhere)'
@@ -105,6 +110,7 @@ def fill_builder(packet, brief_text, output_path):
         'HEADER': packet.get('header') or 'logo, links, one CTA, language switcher',
         'FOOTER': packet.get('footer') or 'contact, hours, social, privacy link, copyright',
         'IMAGES': _images_lines(packet),
+        'PAGES': _pages_text(packet),
     })
 
 

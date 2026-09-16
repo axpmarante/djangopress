@@ -68,10 +68,14 @@ def _port_open(port):
         return s.connect_ex(('127.0.0.1', port)) == 0
 
 
-def ensure_server(port):
-    """Start `manage.py runserver` if nothing answers on the port. Returns the Popen to stop, or None."""
-    if _port_open(port):
-        return None
+def free_port():
+    """Bind to an OS-assigned port on 127.0.0.1 and return its number."""
+    with socket.socket() as s:
+        s.bind(('127.0.0.1', 0))
+        return s.getsockname()[1]
+
+
+def _start_server(port):
     proc = subprocess.Popen([sys.executable, 'manage.py', 'runserver', f'127.0.0.1:{port}', '--noreload'],
                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     for _ in range(40):
@@ -82,7 +86,21 @@ def ensure_server(port):
     raise RuntimeError(f'dev server did not answer on port {port}')
 
 
-def verify_live(packet, *, port=8000, probe=None, screenshot=True, widths=(390, 834, 1440)):
+def ensure_server(port):
+    """Start `manage.py runserver` on the given port, or on a free one if `port` is None.
+
+    An explicit port is reused if something already answers there; `port=None` always starts a
+    server of our own on a free port, so we never probe a server we did not start. Returns
+    `(proc, port)` — `proc` is the Popen to stop, or None if an existing server was reused."""
+    if port is None:
+        port = free_port()
+        return _start_server(port), port
+    if _port_open(port):
+        return None, port
+    return _start_server(port), port
+
+
+def verify_live(packet, *, port=None, probe=None, screenshot=True, widths=(390, 834, 1440)):
     probe = probe or run_probe
     lang = packet['site']['default_language']
     failures, residue = run_check_site()
@@ -93,7 +111,7 @@ def verify_live(packet, *, port=8000, probe=None, screenshot=True, widths=(390, 
         'footer': ((GlobalSection.objects.filter(key='main-footer').first() or GlobalSection()).html_template_i18n or {}).get(lang, ''),
     }
     missing = check_contract(packet, parts, lang)
-    proc = ensure_server(port)
+    proc, port = ensure_server(port)
     try:
         from djangopress.core.models import SiteSettings
         s = SiteSettings.load()

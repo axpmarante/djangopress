@@ -96,6 +96,8 @@ extra pages stay out of the menu; they render inside the shipped concept's heade
 .venv/bin/python manage.py build_verify
 ```
 
+(starts its own dev server on a free port; pass `--port N` only to reuse a server you started)
+
 Read `docs/verify.json`: `check_site` (non-residue failures), `content_missing`, `probe.defects`.
 
 ## Turn 8 — One fix round
@@ -108,6 +110,8 @@ and apply every fix by editing `docs/concepts/concept-<k>.html` — never the da
 .venv/bin/python manage.py import_concept docs/concepts/concept-<k>.html --home
 .venv/bin/python manage.py build_verify
 ```
+
+(starts its own dev server on a free port; pass `--port N` only to reuse a server you started)
 
 **One round.** Whatever remains goes to the report as open items.
 
@@ -150,12 +154,17 @@ No `Co-Authored-By` lines.
 ## Turn 10 — Publish
 
 ```bash
-railway status >/dev/null 2>&1 && bash scripts/sync-to-prod.sh && railway redeploy -y
+railway status
 ```
 
-If `railway status` fails, print `Not on Railway yet: run /deploy-site-railway` instead. Print
-the live URL from `railway domain` (or the `.env` `RAILWAY_URL`), the report's Result section,
-and stop.
+If this fails, print `Not on Railway yet: run /deploy-site-railway` and stop.
+
+```bash
+bash scripts/sync-to-prod.sh && railway redeploy -y
+```
+
+Print the live URL from `railway domain` (or the `.env` `RAILWAY_URL`), the report's Result
+section, and stop.
 
 ## Error handling
 
