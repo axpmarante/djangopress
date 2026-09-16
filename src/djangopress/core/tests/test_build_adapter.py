@@ -115,3 +115,123 @@ class TokensTest(SimpleTestCase):
     def test_layout_defaults_when_nothing_found(self):
         layout = infer_layout(soup_of('<html><body><main><section><p>x</p></section></main></body></html>'))
         self.assertEqual(layout, {'container_width': '7xl', 'border_radius_preset': 'none', 'shadow_preset': 'none'})
+
+
+from djangopress.core.build.adapter import adapt
+
+
+class AdaptMinimalTest(SimpleTestCase):
+
+    def setUp(self):
+        self.r = adapt(MINIMAL, lang='pt', languages=['pt', 'en'],
+                       image_map={'dish-1': {'url': 'https://example.com/dish.jpg'}},
+                       cta_texts=['Reservar mesa'], contact_phone='+351 289 000 000')
+
+    def test_no_errors(self):
+        self.assertEqual(self.r.errors, [])
+
+    def test_sections_named_and_wrapped(self):
+        self.assertEqual(self.r.sections, ['hero', 'menu', 'contact'])
+        page = soup_of(self.r.page_html)
+        secs = page.find_all('section', recursive=False)
+        self.assertEqual([s['data-section'] for s in secs], ['hero', 'menu', 'contact'])
+        self.assertEqual([s['id'] for s in secs], ['hero', 'menu', 'contact'])
+        self.assertIsNone(page.find('main'))
+
+    def test_links_prefixed(self):
+        hrefs = [a['href'] for a in soup_of(self.r.header_html).find_all('a')]
+        self.assertEqual(hrefs[:4], ['/pt/', '/pt/#menu', '/pt/#contact', '/pt/reservas/'])
+        self.assertIn('/pt/politica-de-privacidade/', self.r.footer_html)
+        self.assertIn('href="/pt/reservas/"', self.r.page_html)
+
+    def test_overlay_gets_pointer_events_none_but_img_does_not(self):
+        page = soup_of(self.r.page_html)
+        overlay = page.select_one('section#hero div.bg-gradient-to-t')
+        self.assertIn('pointer-events-none', overlay['class'])
+        img = page.select_one('section#hero img')
+        self.assertNotIn('pointer-events-none', img.get('class', []))
+        self.assertEqual(self.r.changes['pointer-events-none'], 1)
+
+    def test_duplicate_image_marked_decorative(self):
+        imgs = soup_of(self.r.page_html).select('section#menu img')
+        dup = imgs[1]
+        self.assertEqual(dup['aria-hidden'], 'true')
+        self.assertEqual(dup['alt'], '')
+
+    def test_foreign_image_becomes_placeholder(self):
+        img = soup_of(self.r.page_html).select('section#menu img')[0]
+        self.assertIn('placehold.co', img['src'])
+        self.assertTrue(img['data-image-name'])
+        self.assertTrue(img['data-image-prompt'])
+        self.assertTrue(any('unsplash' in w for w in self.r.warnings))
+
+    def test_language_switcher_injected_in_slot(self):
+        self.assertIn("{% url 'set_language' %}", self.r.header_html)
+        self.assertIn('{% load i18n %}', self.r.header_html)
+        self.assertNotIn('data-slot="language-switcher"', self.r.header_html)
+
+    def test_menu_extracted(self):
+        self.assertEqual(self.r.menu, [
+            {'label': 'Casa Teste', 'href': '/pt/'}, {'label': 'Menu', 'href': '/pt/#menu'},
+            {'label': 'Contactos', 'href': '/pt/#contact'}, {'label': 'Reservar mesa', 'href': '/pt/reservas/'},
+        ])
+
+    def test_head_code_and_settings(self):
+        self.assertIn('body.bg-white { background: #F5F0E8', self.r.head_code)
+        self.assertNotIn('cdn.tailwindcss.com', self.r.head_code)
+        self.assertEqual(self.r.settings['heading_font'], 'Lora')
+        self.assertEqual(self.r.settings['body_font'], 'Inter')
+        self.assertEqual(self.r.settings['primary_color'], '#c05b3e')
+        self.assertEqual(self.r.settings['container_width'], '6xl')
+        self.assertEqual(self.r.meta_title, 'Casa Teste — Início')
+
+    def test_trailing_script_kept_in_page(self):
+        self.assertTrue(self.r.page_html.rstrip().endswith("<script>console.log('ready');</script>"))
+
+    def test_single_language_has_no_switcher(self):
+        r = adapt(MINIMAL, lang='pt', languages=['pt'], image_map={})
+        self.assertNotIn('set_language', r.header_html)
+        self.assertNotIn('data-slot', r.header_html)
+
+
+class AdaptCheckinTest(SimpleTestCase):
+
+    def setUp(self):
+        self.r = adapt(CHECKIN, lang='pt', languages=['pt', 'en'], image_map={}, cta_texts=['Reservar'])
+
+    def test_eleven_sections_first_is_hero(self):
+        self.assertEqual(len(self.r.sections), 11)   # the fixture has 11 direct children of <main> (Task 4 confirmed)
+        self.assertEqual(self.r.sections[0], 'hero')
+        self.assertEqual(len(set(self.r.sections)), 11)
+        for name in self.r.sections:
+            self.assertRegex(name, r'^[a-z][a-z0-9-]*$')
+        self.assertIn('carta', self.r.sections)
+
+    def test_no_forbidden_tags_and_no_errors(self):
+        page = soup_of(self.r.page_html)
+        for tag in ('html', 'head', 'body', 'header', 'nav', 'footer'):
+            self.assertIsNone(page.find(tag), tag)
+        self.assertEqual(self.r.errors, [])
+
+    def test_switcher_appended_when_no_slot(self):
+        self.assertIn("{% url 'set_language' %}", self.r.header_html)
+
+
+class AdaptErrorsTest(SimpleTestCase):
+
+    def test_truncated(self):
+        r = adapt(MINIMAL[: MINIMAL.index('<footer')], lang='pt', languages=['pt'], image_map={})
+        self.assertFalse(r.ok)
+        self.assertTrue(any('truncated' in e for e in r.errors))
+
+    def test_template_syntax_in_footer(self):
+        r = adapt(MINIMAL.replace('© 2026 Casa Teste', '© {{ year }} Casa Teste'), lang='pt', languages=['pt'], image_map={})
+        self.assertTrue(any('template syntax' in e and 'footer' in e for e in r.errors))
+
+    def test_style_inside_main(self):
+        r = adapt(MINIMAL.replace('<h2 class="font-display text-4xl">A carta</h2>', '<style>.x{}</style><h2>A carta</h2>'), lang='pt', languages=['pt'], image_map={})
+        self.assertTrue(any('<style>' in e for e in r.errors))
+
+    def test_nav_inside_main(self):
+        r = adapt(MINIMAL.replace('<ul><li>Couvert', '<nav><a href="#x">x</a></nav><ul><li>Couvert'), lang='pt', languages=['pt'], image_map={})
+        self.assertTrue(any('<nav>' in e for e in r.errors))

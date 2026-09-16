@@ -8,7 +8,7 @@ import re
 from collections import Counter
 from dataclasses import dataclass, field
 
-from bs4 import BeautifulSoup, Tag
+from bs4 import BeautifulSoup, Comment, Tag
 from django.utils.text import slugify
 
 from djangopress.core.middleware import NON_I18N_PATHS
@@ -245,3 +245,219 @@ def infer_layout(root):
         'border_radius_preset': radii.most_common(1)[0][0] if radii else 'none',
         'shadow_preset': shadows.most_common(1)[0][0] if shadows else 'none',
     }
+
+
+# --- part 2: structure ------------------------------------------------------
+
+SWITCHER_HTML = (
+    '{% load i18n %}<form action="{% url \'set_language\' %}" method="post" class="inline-block">{% csrf_token %}'
+    '<input name="next" type="hidden" value="{{ request.path }}">'
+    '<select name="language" onchange="this.form.submit()" class="bg-transparent cursor-pointer CLASSES">'
+    '{% get_current_language as LANGUAGE_CODE %}{% get_available_languages as LANGUAGES %}'
+    '{% for lang_code, lang_name in LANGUAGES %}<option value="{{ lang_code }}" {% if lang_code == LANGUAGE_CODE %}selected{% endif %}>'
+    '{{ lang_code|upper }}</option>{% endfor %}</select></form>'
+)
+
+
+def _unique(name, seen):
+    base = name if SECTION_NAME_RE.match(name) else 's-' + re.sub(r'[^a-z0-9-]', '', name.lower()) or 's'
+    if not SECTION_NAME_RE.match(base):
+        base = 'section'
+    candidate, n = base, 2
+    while candidate in seen:
+        candidate, n = f'{base}-{n}', n + 1
+    seen.add(candidate)
+    return candidate
+
+
+def name_sections(main, contact_phone=''):
+    """Every direct child of <main> becomes a <section data-section=id id=...>; names synthesised when missing."""
+    for child in list(main.children):
+        if isinstance(child, Comment):
+            continue
+        if getattr(child, 'name', None) is None:
+            if str(child).strip():
+                child.wrap(Tag(name='section'))
+            continue
+        if child.name != 'section':
+            child.wrap(Tag(name='section'))
+    seen, names = set(), []
+    sections = main.find_all('section', recursive=False)
+    for i, sec in enumerate(sections):
+        name = (sec.get('id') or '').strip().lower()
+        if not name:
+            if i == 0:
+                name = 'hero'
+            elif sec.find('form') or (contact_phone and contact_phone in sec.get_text(' ')):
+                name = 'contact'
+            else:
+                heading = sec.find(['h1', 'h2', 'h3'])
+                name = slugify(heading.get_text(' ', strip=True)) if heading else 'section'
+        name = _unique(name or 'section', seen)
+        sec['id'] = name
+        sec['data-section'] = name
+        names.append(name)
+    return names
+
+
+def prefix_links(root, lang, codes):
+    n = 0
+    for a in root.find_all('a', href=True):
+        href = a['href'].strip()
+        new = href
+        if href.startswith('#'):
+            new = f'/{lang}/{href}'
+        elif href == '/':
+            new = f'/{lang}/'
+        elif href.startswith('/') and not href.startswith('//'):
+            if not href.startswith(NON_I18N_PATHS) and not any(href == f'/{c}' or href.startswith(f'/{c}/') for c in codes):
+                new = f'/{lang}{href}'
+        if new != href:
+            a['href'] = new
+            n += 1
+    return n
+
+
+def inject_language_switcher(header):
+    """Replace <div data-slot="language-switcher"> (or append to <nav>) with a token swapped after serialisation."""
+    slot = header.find(attrs={'data-slot': 'language-switcher'})
+    nav = header.find('nav') or header
+    first_link = nav.find('a')
+    classes = ' '.join(c for c in _class_tokens(first_link) if c.startswith(('text-', 'uppercase', 'tracking-', 'font-')))
+    if slot is not None:
+        slot.replace_with(SWITCHER_TOKEN)
+    else:
+        nav.append(SWITCHER_TOKEN)
+    return SWITCHER_HTML.replace('CLASSES', classes)
+
+
+def find_template_syntax(html):
+    return bool(TEMPLATE_SYNTAX_RE.search(html))
+
+
+def apply_editor_contract(root, changes):
+    for el in root.find_all(class_=True):
+        classes = el['class']
+        if not ({'absolute', 'fixed'} & set(classes)) or el.name in NON_OVERLAY_TAGS:
+            continue
+        if el.find(['img', 'svg', 'video', 'input', 'button']):
+            continue
+        if el.name in EDITABLE_TAGS and el.get_text(strip=True):
+            continue
+        if any(d.name in EDITABLE_TAGS and d.get_text(strip=True) for d in el.find_all(True)):
+            continue
+        if 'pointer-events-none' not in classes:
+            classes.append('pointer-events-none')
+            changes['pointer-events-none'] += 1
+    seen = set()
+    for img in root.find_all('img'):
+        if any(c.startswith('splide') for p in img.parents for c in _class_tokens(p)):
+            continue
+        src = img.get('src', '')
+        if src in seen and img.get('aria-hidden') != 'true':
+            img['aria-hidden'] = 'true'
+            img['alt'] = ''
+            changes['duplicate-img-decorative'] += 1
+        seen.add(src)
+
+
+def normalise_images(root, image_urls, changes, warnings, part):
+    counter = 0
+    for img in root.find_all('img'):
+        src = img.get('src', '').strip()
+        section = img.find_parent('section')
+        sec_name = section.get('id', part) if section else part
+        counter += 1
+        if PLACEHOLDER_HOST in src:
+            pass
+        elif src in image_urls or src.startswith(('/media/', '/static/')):
+            if not img.get('alt') and img.get('aria-hidden') != 'true':
+                img['alt'] = img.get('data-image-name') or sec_name
+                changes['alt-filled'] += 1
+            continue
+        else:
+            warnings.append(f'{part}/{sec_name}: image {src[:80]!r} not in the inventory — replaced by a placeholder')
+            img['src'] = f'https://{PLACEHOLDER_HOST}/1200x800?text={sec_name}'
+            changes['img-replaced'] += 1
+        if not img.get('data-image-name'):
+            img['data-image-name'] = f'{sec_name}-img-{counter}'
+        if not img.get('data-image-prompt'):
+            img['data-image-prompt'] = img.get('alt') or f'photo for {sec_name}'
+        if img.get('aria-hidden') == 'true':
+            img['alt'] = ''
+        elif not img.get('alt'):
+            img['alt'] = img['data-image-name']
+
+
+def extract_menu(header):
+    nav = header.find('nav') or header
+    items = []
+    for a in nav.find_all('a', href=True):
+        label = a.get_text(' ', strip=True)
+        if label:
+            items.append({'label': label, 'href': a['href']})
+    return items
+
+
+def adapt(raw, *, lang, languages, image_map, cta_texts=(), contact_phone=''):
+    result = AdaptResult()
+    result.errors.extend(check_complete(raw))
+    if result.errors:
+        return result
+    soup = soup_of(raw)
+    header, main, footer, trailing = split_document(soup)
+    if header is None or main is None or footer is None:
+        result.errors.append('document must have one <header>, one <main> and one <footer>')
+        return result
+
+    head = lift_head(soup)
+    css, n = fix_body_rules(head['css'])
+    result.changes['body-rule-rewritten'] = n
+    result.changes.update(head['removed'])
+    head_code = head['head_code'].replace(head['css'], css) if head['css'] else head['head_code']
+    result.head_code = head_code
+    result.meta_title, result.meta_description = head['meta_title'], head['meta_description']
+
+    heading_font, body_font = extract_fonts(head['config_js'], head['google_families'])
+    result.settings = {'heading_font': heading_font, 'body_font': body_font}
+    result.settings.update(extract_colors(head['config_js'], css, soup, cta_texts))
+    result.settings.update(infer_layout(soup))
+
+    for part, tag in (('header', header), ('footer', footer)):
+        if find_template_syntax(str(tag)):
+            result.errors.append(f'{part}: contains Django template syntax ({{{{, {{% or {{#) — not allowed')
+    for tag in FORBIDDEN_IN_PAGE:
+        if main.find(tag):
+            result.errors.append(f'page: contains <{tag}> inside <main> — forbidden in page HTML')
+    if main.find('style'):
+        result.errors.append('page: <style> inside <main> — CSS belongs in <head>')
+    if result.errors:
+        return result
+
+    result.sections = name_sections(main, contact_phone)
+    codes = list(languages)
+    for tag in (header, main, footer):
+        result.changes['links-prefixed'] += prefix_links(tag, lang, codes)
+    image_urls = {v['url'] for v in image_map.values() if v.get('url')}
+    for part, tag in (('header', header), ('page', main), ('footer', footer)):
+        apply_editor_contract(tag, result.changes)
+        normalise_images(tag, image_urls, result.changes, result.warnings, part)
+    if main.find('script'):
+        result.warnings.append('page: inline <script> inside a section (kept)')
+    result.menu = extract_menu(header)
+
+    switcher = ''
+    if len(codes) > 1:
+        switcher = inject_language_switcher(header)
+    else:
+        slot = header.find(attrs={'data-slot': 'language-switcher'})
+        if slot is not None:
+            slot.decompose()
+
+    result.header_html = str(header).replace(SWITCHER_TOKEN, switcher)
+    result.footer_html = str(footer)
+    page = ''.join(str(c) for c in main.children).strip()
+    if trailing:
+        page += '\n' + '\n'.join(str(s) for s in trailing)
+    result.page_html = page
+    return result
