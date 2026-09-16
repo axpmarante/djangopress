@@ -34,22 +34,41 @@ function cleanClasses(el) {
     return Array.from(el.classList).filter(c => !c.startsWith('ev2-')).join(' ');
 }
 
-function looksLikeButton(a) {
-    const cls = a.className || '';
-    return /\bbg-/.test(cls) || /\bborder\b|\bborder-/.test(cls);
+/** Unprefixed utility present (`bg-`, not `hover:bg-`). */
+function hasUtility(cls, prefixes) {
+    return cls.split(/\s+/).some(c => prefixes.some(p => c === p || c.startsWith(p + '-') || (p.endsWith('-') && c.startsWith(p))));
 }
 
-/** Nearest element inside the section to copy classes from, or null. */
+/** A link styled as a button: an unprefixed background or border AND padding. */
+function looksLikeButton(a) {
+    const cls = a.className || '';
+    const surface = hasUtility(cls, ['bg-', 'border']);
+    const padding = hasUtility(cls, ['p-', 'px-', 'py-']);
+    return surface && padding;
+}
+
+/** Tags that count as "the same kind" as the primitive. */
+const MODEL_TAGS = {
+    paragraph: ['p'],
+    heading: ['h1', 'h2', 'h3', 'h4', 'h5', 'h6'],
+    button: ['a', 'button'],
+    image: ['img'],
+};
+
+/**
+ * Nearest element inside the section to copy classes from, or null.
+ * Siblings of the anchor win over the rest of the section; the anchor
+ * itself is a valid model (adding a heading after a heading copies it).
+ */
 function findModel(kind, anchorEl) {
     const section = anchorEl.closest('[data-section]');
     if (!section) return null;
-    const d = DEFAULTS[kind];
+    const tags = MODEL_TAGS[kind];
     const siblings = Array.from(anchorEl.parentElement?.children || []);
-    const pool = [...siblings, ...Array.from(section.querySelectorAll(d.tag))];
+    const pool = [...siblings, ...Array.from(section.querySelectorAll(tags.join(',')))];
     for (const el of pool) {
-        if (el.tagName.toLowerCase() !== d.tag) continue;
+        if (!tags.includes(el.tagName.toLowerCase())) continue;
         if (kind === 'button' && !looksLikeButton(el)) continue;
-        if (kind === 'heading' && el === anchorEl) continue;
         if (cleanClasses(el)) return el;
     }
     return null;
