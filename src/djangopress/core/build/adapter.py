@@ -274,6 +274,7 @@ def name_sections(main, contact_phone=''):
     """Every direct child of <main> becomes a <section data-section=id id=...>; names synthesised when missing."""
     for child in list(main.children):
         if isinstance(child, Comment):
+            child.extract()
             continue
         if getattr(child, 'name', None) is None:
             if str(child).strip():

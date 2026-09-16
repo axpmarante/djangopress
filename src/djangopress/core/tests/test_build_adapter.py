@@ -216,6 +216,14 @@ class AdaptCheckinTest(SimpleTestCase):
     def test_switcher_appended_when_no_slot(self):
         self.assertIn("{% url 'set_language' %}", self.r.header_html)
 
+    def test_no_stray_content_outside_sections(self):
+        page = soup_of(self.r.page_html)
+        for node in page.contents:
+            if getattr(node, 'name', None) in ('section', 'script'):
+                continue
+            text = str(node)
+            self.assertEqual(text.strip(), '', f'stray content outside a <section>: {text!r}')
+
 
 class AdaptErrorsTest(SimpleTestCase):
 
