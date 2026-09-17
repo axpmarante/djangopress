@@ -15,8 +15,19 @@ if [ -z "$GOOGLE_APPLICATION_CREDENTIALS" ]; then
     exit 1
 fi
 
-echo "1. Stopping local Litestream (flushing pending WAL frames)..."
-pkill -f "litestream replicate" 2>/dev/null && echo "   Stopped." || echo "   Not running."
+echo "1. Flushing the local database to the dev replica..."
+if pkill -f "litestream replicate" 2>/dev/null; then
+    echo "   Stopped the running Litestream (pending WAL frames flushed)."
+else
+    # No replicator running: push the current db.sqlite3 with a one-shot replicate,
+    # otherwise local edits made since the last replication never reach prod.
+    LS_BIN="${LITESTREAM_BIN:-$HOME/bin/litestream}"; command -v litestream >/dev/null 2>&1 && LS_BIN=litestream
+    sqlite3 db.sqlite3 "PRAGMA journal_mode=WAL;" >/dev/null 2>&1 || true
+    "$LS_BIN" replicate -config litestream.yml >/dev/null 2>&1 &
+    sleep 12
+    pkill -f "litestream replicate" 2>/dev/null
+    echo "   One-shot replicate done."
+fi
 sleep 2
 
 echo "2. Checking dev replica..."
