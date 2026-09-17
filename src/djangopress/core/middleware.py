@@ -24,8 +24,16 @@ def non_i18n_paths():
     NON_I18N_PATHS itself stays a plain module constant: other engine modules
     import it by name for link checking in page HTML, where site-local machine
     endpoints are not relevant.
+
+    A bare string is read as one prefix, not iterated. ('/shop/stripe/') is a
+    str, not a 1-tuple — the classic missing comma — and tuple() would spread
+    it into ('/', 's', 'h', ...). The '/' entry alone then matches every path
+    on the site, so both middlewares would bypass locale handling entirely,
+    with no error and no log. Coerce instead of exploding.
     """
-    return NON_I18N_PATHS + tuple(getattr(settings, 'NON_I18N_PATHS_EXTRA', ()))
+    extra = getattr(settings, 'NON_I18N_PATHS_EXTRA', ())
+    extra = (extra,) if isinstance(extra, str) else tuple(extra)
+    return NON_I18N_PATHS + extra
 
 
 class LocaleMiddleware(DjangoLocaleMiddleware):

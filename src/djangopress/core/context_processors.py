@@ -195,5 +195,16 @@ def backoffice_nav(request):
 
     Empty unless a site sets BACKOFFICE_EXTRA_NAV in its own settings, so the
     sidebar renders byte-identically on every site that does not use the hook.
+
+    Each item is copied with an added 'is_active'. The highlight has to be a
+    startswith test against url_prefix — Django's {% if %} only offers `in`,
+    which would also light an item up for a path that merely contains its
+    prefix somewhere in the middle — and the cheapest place to get startswith
+    semantics is here, in Python, rather than a new filter and a {% load %}
+    tag in the sidebar.
     """
-    return {'backoffice_extra_nav': getattr(django_settings, 'BACKOFFICE_EXTRA_NAV', [])}
+    items = []
+    for item in getattr(django_settings, 'BACKOFFICE_EXTRA_NAV', []):
+        prefix = item.get('url_prefix') or ''
+        items.append({**item, 'is_active': bool(prefix) and request.path.startswith(prefix)})
+    return {'backoffice_extra_nav': items}
