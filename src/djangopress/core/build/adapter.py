@@ -35,6 +35,8 @@ RADIUS_MAP = {None: 'md', 'none': 'none', 'sm': 'sm', 'md': 'md', 'lg': 'lg', 'x
 SHADOW_MAP = {None: 'md', 'none': 'none', 'sm': 'sm', 'md': 'md', 'lg': 'lg', 'xl': 'xl', '2xl': '2xl'}
 PLACEHOLDER_HOST = 'placehold.co'
 SWITCHER_TOKEN = '__DP_LANGUAGE_SWITCHER__'
+CSRF_TOKEN = '__DP_CSRF__'
+TEMPLATE_OPEN_RE = re.compile(r'\{\{|\{%|\{#')
 
 
 @dataclass
@@ -407,6 +409,44 @@ def apply_editor_contract(root, changes):
         seen.add(src)
 
 
+def inject_csrf(root, changes):
+    """Insert a CSRF-token placeholder as the first child of every `<form method="post">`
+    that doesn't already reference one. Page HTML is template-rendered (Template(html) in
+    core/views.py), so a POST form with no `{% csrf_token %}` 403s on every submission — but a
+    literal `{%` here would trip the header/footer template-syntax hard-error and the page's own
+    stray-syntax neutralisation, so a placeholder token is swapped for the real tag only after
+    every other adaptation step, exactly like the language switcher."""
+    n = 0
+    for form in root.find_all('form'):
+        if (form.get('method') or '').strip().casefold() != 'post':
+            continue
+        inner = ''.join(str(c) for c in form.children)
+        if 'csrf' in inner.lower():
+            continue
+        form.insert(0, CSRF_TOKEN)
+        n += 1
+    changes['csrf-injected'] += n
+    return n
+
+
+def _neutralise_open_pair(match):
+    pair = match.group(0)
+    return pair[0] + ' ' + pair[1]
+
+
+def neutralise_template_syntax(html, section_name, changes, warnings):
+    """Page HTML is rendered through Template(html) (core/views.py) exactly like a
+    GlobalSection, so `{{`, `{%` or `{#` written as literal text (a JS template placeholder, a
+    price range typed as `{{`, …) would either explode or silently vanish. Header/footer keep
+    the hard error (Task 5); the page gets its stray syntax broken up instead, since real content
+    shouldn't be thrown away over a builder mistake the importer can trivially defuse."""
+    new_html, n = TEMPLATE_OPEN_RE.subn(_neutralise_open_pair, html)
+    if n:
+        changes['template-syntax-neutralised'] += n
+        warnings.append(f'page/{section_name}: {n} stray template syntax sequence(s) neutralised')
+    return new_html
+
+
 def normalise_images(root, image_urls, changes, warnings, part):
     counter = 0
     for img in root.find_all('img'):
@@ -507,6 +547,8 @@ def adapt(raw, *, lang, languages, image_map, cta_texts=(), contact_phone='', si
     for part, tag in (('header', header), ('page', main), ('footer', footer)):
         apply_editor_contract(tag, result.changes)
         normalise_images(tag, image_urls, result.changes, result.warnings, part)
+    for tag in (header, main, footer):
+        inject_csrf(tag, result.changes)
     if main.find('script'):
         result.warnings.append('page: inline <script> inside a section (kept)')
     result.menu = extract_menu(header, lang=lang, site_name=site_name)
@@ -519,10 +561,16 @@ def adapt(raw, *, lang, languages, image_map, cta_texts=(), contact_phone='', si
         if slot is not None:
             slot.decompose()
 
-    result.header_html = str(header).replace(SWITCHER_TOKEN, switcher)
-    result.footer_html = str(footer)
-    page = ''.join(str(c) for c in main.children).strip()
+    result.header_html = str(header).replace(SWITCHER_TOKEN, switcher).replace(CSRF_TOKEN, '{% csrf_token %}')
+    result.footer_html = str(footer).replace(CSRF_TOKEN, '{% csrf_token %}')
+
+    page_parts = []
+    for child in main.children:
+        sec_name = child.get('id') if getattr(child, 'name', None) == 'section' else 'page'
+        page_parts.append(neutralise_template_syntax(str(child), sec_name or 'page', result.changes, result.warnings))
+    page = ''.join(page_parts).strip()
     if trailing:
         page += '\n' + '\n'.join(str(s) for s in trailing)
+    page = page.replace(CSRF_TOKEN, '{% csrf_token %}')
     result.page_html = page
     return result

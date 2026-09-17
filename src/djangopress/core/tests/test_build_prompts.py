@@ -50,6 +50,9 @@ class FillTest(SimpleTestCase):
         self.assertIn('+351 289 000 000', text)
         self.assertIn('Português', text)
         self.assertIn('ONLY to these pages: none — use anchors only', text)
+        self.assertIn('/forms/contact/submit/', text)
+        self.assertIn('name, email, message', text)
+        self.assertIn('name="website_url"', text)
         self.assertNotIn('[[', text)
 
     def test_builder_lists_pages(self):

@@ -110,11 +110,12 @@ def import_as_page(result, *, packet, slug, change_summary='Import concept as pa
     """A non-shipped concept as an extra page: its sections plus page-scoped fonts, config and CSS.
 
     Header, footer, menu, settings and the homepage are untouched — the page renders inside the
-    shipped concept's header and footer. `{{` is broken up so a raw page never holds template syntax.
+    shipped concept's header and footer. `{{`, `{%` and `{#` are broken up so a raw page never
+    holds template syntax.
     """
     lang = packet['site']['default_language']
     page = next((p for p in Page.objects.all() if (p.slug_i18n or {}).get(lang) == slug), None)
-    scoped = (_fonts_link(result.settings) + '\n' + result.head_code).replace('{{', '{ {').replace('{%', '{ %')
+    scoped = (_fonts_link(result.settings) + '\n' + result.head_code).replace('{{', '{ {').replace('{%', '{ %').replace('{#', '{ #')
     new_page_fields = {
         'title_i18n': {lang: f"{packet['site']['name']} — {slug}"},
         'slug_i18n': {lang: slug},

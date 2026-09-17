@@ -103,6 +103,9 @@ def fill_director(packet, ledger_text, n):
 
 
 def fill_builder(packet, brief_text, output_path):
+    form = packet.get('form') or {}
+    fields = form.get('fields') or ['name', 'email', 'message']
+    service_options = form.get('service_options') or []
     return _fill((PROMPTS_DIR / 'builder.md').read_text(), {
         'OUTPUT_PATH': output_path, 'DESIGN': brief_text.strip(),
         'LANGUAGE_NAME': packet['site']['default_language_name'], 'SITE_NAME': packet['site']['name'],
@@ -111,6 +114,9 @@ def fill_builder(packet, brief_text, output_path):
         'FOOTER': packet.get('footer') or 'contact, hours, social, privacy link, copyright',
         'IMAGES': _images_lines(packet),
         'PAGES': _pages_text(packet),
+        'FORM_ACTION': form.get('action') or '/forms/contact/submit/',
+        'FORM_FIELDS': ', '.join(fields),
+        'FORM_SERVICE_OPTIONS': ' / '.join(service_options) if service_options else 'none',
     })
 
 

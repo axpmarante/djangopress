@@ -39,6 +39,20 @@ For any image slot without a photo, use
 Never use any other external image URL.
 
 ==================================================
+LEAD FORM
+==================================================
+
+The quote/contact form posts to [[FORM_ACTION]] with method="post" and EXACTLY these field
+names: [[FORM_FIELDS]]. Write the fields with <label> + <input>/<select>/<textarea>, a
+required attribute where sensible, and a submit <button>. Do not add a CSRF token or any
+template tag — the importer adds it. No JavaScript submission; a plain HTML form.
+Include the spam honeypot exactly as:
+  <input type="text" name="website_url" tabindex="-1" autocomplete="off" class="hidden" aria-hidden="true">
+inside the form (the endpoint silently drops submissions that fill it). Also support a
+select field with these options when the field list contains "service":
+[[FORM_SERVICE_OPTIONS]].
+
+==================================================
 DOCUMENT CONTRACT (the importer relies on this)
 ==================================================
 

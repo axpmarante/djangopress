@@ -118,6 +118,17 @@ def _item_dict(item, menus, lang):
     return d
 
 
+def _form_fields(briefing):
+    raw = briefing.notes.get('form fields', '')
+    fields = [f.strip() for f in raw.split(',') if f.strip()]
+    return fields or ['name', 'email', 'message']
+
+
+def _form_service_options(briefing):
+    raw = briefing.notes.get('form service options', '')
+    return [o.strip() for o in raw.split(',') if o.strip()]
+
+
 def build_packet(briefing, *, site_slug, image_map, menus):
     vertical = detect_vertical(briefing)
     spec = VERTICALS[vertical]
@@ -160,4 +171,9 @@ def build_packet(briefing, *, site_slug, image_map, menus):
         'design_constraints': briefing.constraints,
         'header': briefing.header,
         'footer': briefing.footer,
+        'notes': dict(briefing.notes),
+        'form': {
+            'slug': 'contact', 'action': '/forms/contact/submit/',
+            'fields': _form_fields(briefing), 'service_options': _form_service_options(briefing),
+        },
     }

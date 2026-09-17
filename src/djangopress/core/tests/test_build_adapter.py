@@ -301,6 +301,49 @@ class EditorContractGuardsTest(SimpleTestCase):
         self.assertEqual(changes['pointer-events-none'], 0)
 
 
+class CsrfInjectionTest(SimpleTestCase):
+
+    def test_post_form_gets_csrf_token(self):
+        r = adapt(MINIMAL, lang='pt', languages=['pt', 'en'],
+                  image_map={'dish-1': {'url': 'https://example.com/dish.jpg'}},
+                  cta_texts=['Reservar mesa'], contact_phone='+351 289 000 000')
+        self.assertEqual(r.errors, [])
+        self.assertIn('<form action="/forms/contact/" method="post">{% csrf_token %}', r.page_html)
+        self.assertEqual(r.changes['csrf-injected'], 1)
+
+    def test_get_form_untouched(self):
+        doc = (
+            '<!DOCTYPE html><html><head><title>T</title></head><body>'
+            '<header><nav><a href="#x">x</a></nav></header>'
+            '<main><section id="hero"><form method="get" action="/search/"><input name="q"></form></section></main>'
+            '<footer><p>f</p></footer>'
+            '</body></html>'
+        )
+        r = adapt(doc, lang='pt', languages=['pt'], image_map={})
+        self.assertEqual(r.errors, [])
+        self.assertNotIn('csrf_token', r.page_html)
+        self.assertEqual(r.changes['csrf-injected'], 0)
+
+
+class StrayTemplateSyntaxInPageTest(SimpleTestCase):
+
+    DOC = (
+        '<!DOCTYPE html><html><head><title>T</title></head><body>'
+        '<header><nav><a href="#hero">x</a></nav></header>'
+        '<main><section id="hero"><p>{{ year }}</p></section></main>'
+        '<footer><p>f</p></footer>'
+        '</body></html>'
+    )
+
+    def test_stray_template_syntax_in_page_is_neutralised(self):
+        r = adapt(self.DOC, lang='pt', languages=['pt'], image_map={})
+        self.assertEqual(r.errors, [])
+        self.assertIn('{ { year }}', r.page_html)
+        self.assertNotIn('{{ year', r.page_html)
+        self.assertEqual(r.changes['template-syntax-neutralised'], 1)
+        self.assertTrue(any('hero' in w for w in r.warnings), r.warnings)
+
+
 class RenamedSectionAnchorTest(SimpleTestCase):
 
     DOC = (
