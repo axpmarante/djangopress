@@ -70,7 +70,7 @@ DOCUMENT CONTRACT (the importer relies on this)
 - Internal links: href="#section-id" for anchors; page links (href="/x/") ONLY to these pages: [[PAGES]] — every other navigation item is an anchor to one of your own section ids. No language prefix, the importer adds it. External links, mailto:, tel: as normal.
 - Tailwind utility classes and the tailwind.config theme only; arbitrary values (bg-[#…])
   are fine. No <style> outside <head>. No inline style="" except for background-image.
-- Do not use {{ or {% anywhere.
+- Do not use `{{`, `{%` or `{#` anywhere.
 - Decorative overlays with no text (gradients, tints) get class pointer-events-none.
 - An image repeated for a marquee/loop: the copies get aria-hidden="true" alt="".
 - Editable text lives in h1–h6, p, span, a, li, td, th, label, button, blockquote.

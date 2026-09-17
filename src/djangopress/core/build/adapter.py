@@ -439,11 +439,18 @@ def neutralise_template_syntax(html, section_name, changes, warnings):
     GlobalSection, so `{{`, `{%` or `{#` written as literal text (a JS template placeholder, a
     price range typed as `{{`, …) would either explode or silently vanish. Header/footer keep
     the hard error (Task 5); the page gets its stray syntax broken up instead, since real content
-    shouldn't be thrown away over a builder mistake the importer can trivially defuse."""
-    new_html, n = TEMPLATE_OPEN_RE.subn(_neutralise_open_pair, html)
-    if n:
-        changes['template-syntax-neutralised'] += n
-        warnings.append(f'page/{section_name}: {n} stray template syntax sequence(s) neutralised')
+    shouldn't be thrown away over a builder mistake the importer can trivially defuse. Loops
+    until no `{{`/`{%`/`{#` remains, since breaking up an outer pair (e.g. `{{{x}}}`) can
+    expose a fresh inner one."""
+    new_html, total = html, 0
+    while True:
+        new_html, n = TEMPLATE_OPEN_RE.subn(_neutralise_open_pair, new_html)
+        if not n:
+            break
+        total += n
+    if total:
+        changes['template-syntax-neutralised'] += total
+        warnings.append(f'page/{section_name}: {total} stray template syntax sequence(s) neutralised')
     return new_html
 
 

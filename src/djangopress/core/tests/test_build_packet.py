@@ -61,6 +61,20 @@ class DetectVerticalTest(TestCase):
         b.notes = {}
         self.assertEqual(detect_vertical(b), 'services')
 
+    def test_canalizamos_prose_does_not_trigger_construction(self):
+        b = parse_briefing(SAMPLE.replace(
+            'Cozinha de autor algarvia, à carta, para partilhar. Chef Leonel Pereira.',
+            'Canalizamos os nossos recursos para o cliente.'))
+        b.notes = {}
+        self.assertEqual(detect_vertical(b), 'services')
+
+    def test_canalizador_prose_triggers_construction(self):
+        b = parse_briefing(SAMPLE.replace(
+            'Cozinha de autor algarvia, à carta, para partilhar. Chef Leonel Pereira.',
+            'Canalizador 24 horas ao seu dispor.'))
+        b.notes = {}
+        self.assertEqual(detect_vertical(b), 'construction')
+
 
 class BuildPacketTest(TestCase):
 
@@ -103,6 +117,12 @@ class BuildPacketTest(TestCase):
         b2 = parse_briefing(sample_with_fields)
         packet2 = build_packet(b2, site_slug='checkin-faro', image_map={}, menus={})
         self.assertEqual(packet2['form']['fields'], ['nome', 'telefone', 'email', 'mensagem'])
+
+    def test_form_service_options_note(self):
+        sample = SAMPLE.replace('price range: €€€', 'price range: €€€\nform service options: Pintura, Canalização')
+        b = parse_briefing(sample)
+        packet = build_packet(b, site_slug='checkin-faro', image_map={}, menus={})
+        self.assertEqual(packet['form']['service_options'], ['Pintura', 'Canalização'])
 
 
 class BuildPrepareCommandTest(TestCase):

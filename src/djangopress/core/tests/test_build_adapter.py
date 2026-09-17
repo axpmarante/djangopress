@@ -344,6 +344,22 @@ class StrayTemplateSyntaxInPageTest(SimpleTestCase):
         self.assertTrue(any('hero' in w for w in r.warnings), r.warnings)
 
 
+class TripleBraceTemplateSyntaxTest(SimpleTestCase):
+
+    DOC = (
+        '<!DOCTYPE html><html><head><title>T</title></head><body>'
+        '<header><nav><a href="#hero">x</a></nav></header>'
+        '<main><section id="hero"><p>{{{x}}}</p></section></main>'
+        '<footer><p>f</p></footer>'
+        '</body></html>'
+    )
+
+    def test_triple_brace_is_fully_neutralised(self):
+        r = adapt(self.DOC, lang='pt', languages=['pt'], image_map={})
+        self.assertEqual(r.errors, [])
+        self.assertNotIn('{{', r.page_html)
+
+
 class RenamedSectionAnchorTest(SimpleTestCase):
 
     DOC = (

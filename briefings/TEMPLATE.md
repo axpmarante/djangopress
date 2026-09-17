@@ -61,7 +61,7 @@ the design concept decides how content is grouped and sequenced.]
 
 [What each page must communicate, as a flat list. Items marked `(required)` form the
 content contract: whichever design concept ships, every required item is verified
-present. Grammar: `- (required)? Kind: text [— keywords: a, b, c] [→ /href/]`.
+present. Grammar: `- (required)? Kind: text [— keywords: a, b, c] [→ /page/ or → #section]`.
 An item with keywords passes when one keyword appears; without keywords the text must
 appear verbatim (use this for names, prices, awards, labels). A CTA carries `→ /page/` or
 `→ #section`.]
@@ -112,6 +112,12 @@ pair, no layout signature — those are chosen per concept by `/build-site`.]
 
 [SEO focus keywords, JSON-LD type, legal requirements, seasonal content,
 anything out of scope.]
+
+- form fields: name, phone, email, service, message
+  [sets the lead form's field names and order — read from the site's `contact` DynamicForm
+  schema; defaults to name, email, message when omitted]
+- form service options: A, B, C
+  [options for the form's service `<select>`, also read from the `contact` DynamicForm schema]
 
 ## To Confirm With Client
 

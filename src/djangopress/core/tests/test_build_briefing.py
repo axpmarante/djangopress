@@ -185,4 +185,24 @@ class ParseBriefingTest(SimpleTestCase):
         b = parse_briefing(text)
         self.assertEqual(b.contact['email'], 'geral@remodelacoes24.pt')
         self.assertEqual(b.contact['address'], 'Algarve, Portugal')
-        self.assertEqual(b.contact['phone'], '+351 969 240 223')
+        # "(WhatsApp too)" carries no annotation cue (no ";" / "not published" / "the client" / …)
+        # so it is real content, not a note to strip.
+        self.assertEqual(b.contact['phone'], '+351 969 240 223 (WhatsApp too)')
+
+    def test_address_parenthetical_without_cue_is_kept(self):
+        text = SAMPLE.replace('- Address: Rua do Castelo 1, Faro', '- Address: Rua do Castelo 1 (Edifício A, 3º andar)')
+        b = parse_briefing(text)
+        self.assertEqual(b.contact['address'], 'Rua do Castelo 1 (Edifício A, 3º andar)')
+
+    def test_address_parenthetical_with_cue_is_stripped(self):
+        text = SAMPLE.replace(
+            '- Address: Rua do Castelo 1, Faro',
+            '- Address: Rua do Castelo 1, Faro (not published today; the client will confirm)')
+        b = parse_briefing(text)
+        self.assertEqual(b.contact['address'], 'Rua do Castelo 1, Faro')
+
+    def test_hash_like_prose_is_not_an_href(self):
+        line = '- (required) Proof: o melhor → #1 no ranking'
+        item = _parse_content_line(line, 'home', 1)
+        self.assertIsNone(item.href)
+        self.assertEqual(item.text, 'o melhor → #1 no ranking')

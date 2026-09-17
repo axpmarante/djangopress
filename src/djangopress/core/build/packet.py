@@ -97,8 +97,8 @@ VERTICALS = {
         ),
     },
     'construction': {
-        'keywords': ['remodela', 'construç', 'construc', 'obras', 'renovation', 'canaliza', 'eletricista', 'plumb',
-                     'builder', 'reparaç', 'home repair'],
+        'keywords': ['remodela', 'construç', 'construc', 'obras', 'renovation', 'canalizaç', 'canalizador',
+                     'eletricista', 'plumb', 'reparaç', 'home repair'],
         'specialization': 'home services, construction and skilled trades',
         'jsonld': 'HomeAndConstructionBusiness',
         'families': ['vernacular / regional', 'architectural modernism', 'graphic-design-led', 'editorial',

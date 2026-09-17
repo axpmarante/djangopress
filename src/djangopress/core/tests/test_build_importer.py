@@ -161,7 +161,9 @@ class ImportResultTest(TestCase):
     def test_import_as_page_is_scoped(self):
         import_result(self.result, packet=PACKET)
         header_before = GlobalSection.objects.get(key='main-header').html_template_i18n['pt']
-        out = import_as_page(self.result, packet=PACKET, slug='homepage-v2')
+        result = copy.copy(self.result)
+        result.head_code = self.result.head_code + '\n<!-- {# c #} -->'
+        out = import_as_page(result, packet=PACKET, slug='homepage-v2')
         page = Page.objects.get(slug_i18n__pt='homepage-v2')
         self.assertEqual(out['page_id'], page.id)
         html = page.html_content_i18n['pt']
@@ -170,6 +172,7 @@ class ImportResultTest(TestCase):
         self.assertIn('tailwind.config', html)
         self.assertIn('body.bg-white', html)
         self.assertNotIn('{{', html)
+        self.assertNotIn('{#', html)
         self.assertEqual(GlobalSection.objects.get(key='main-header').html_template_i18n['pt'], header_before)
         self.assertEqual(SiteSettings.load().homepage_id, Page.objects.get(slug_i18n__pt='home').id)
         self.assertEqual(MenuItem.objects.count(), 4)

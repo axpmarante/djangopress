@@ -74,6 +74,24 @@ class FillTest(SimpleTestCase):
         self.assertNotIn('ALLOWED in this mode', text)
         self.assertNotIn('[[', text)
 
+    def test_final_check_conventional(self):
+        text = fill_director(PACKET, '', 3)
+        self.assertIn('differ only in hue', text)
+        self.assertNotIn('variants of the same template', text)
+
+    def test_final_check_bold(self):
+        packet = copy.deepcopy(PACKET)
+        packet['design_constraints']['mode'] = 'bold'
+        text = fill_director(packet, '', 3)
+        self.assertIn('variants of the same template', text)
+        self.assertNotIn('differ only in hue', text)
+
+    def test_structure_and_diversity_labels_scale_with_n(self):
+        text = fill_director(PACKET, '', 6)
+        self.assertIn('required for A, B, C, D and E; F may vary the order but keeps the components', text)
+        self.assertIn('A, B, C, D and E keep the same section order and components', text)
+        self.assertIn('F may reorder or merge sections but keeps every component', text)
+
     def test_director_references(self):
         packet = copy.deepcopy(PACKET)
         packet['design_constraints']['references'] = ['https://example.com/a']

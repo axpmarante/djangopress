@@ -14,7 +14,7 @@ HEADING_RE = re.compile(r'^(#{2,3})\s+(.*?)\s*$')
 CONTENT_LINE_RE = re.compile(r'^-\s*(?P<req>\(required\)\s*)?(?P<kind>[^:]+?):\s*(?P<rest>.*)$')
 KEYWORDS_SPLIT_RE = re.compile(r'\s+[—-]\s+keywords:\s*', re.I)
 HREF_SPLIT_RE = re.compile(r'\s+→\s+|\s+->\s+')
-HREF_LIKE_RE = re.compile(r'^(?:/|#|https?://|tel:|mailto:)')
+HREF_LIKE_RE = re.compile(r'^(?:/\S*|#[\w-]+|https?://\S+|tel:\S+|mailto:\S+)$')
 MENU_JSON_RE = re.compile(r'(briefings/[\w.-]+-menu\.json)')
 HEX_RE = re.compile(r'#[0-9a-fA-F]{6}\b|#[0-9a-fA-F]{3}\b')
 WIDTH_RE = re.compile(r'([\wÀ-ÿ /]+?)\s+(\d{3,4})\s*px', re.I)
@@ -24,11 +24,18 @@ LANG_RE = re.compile(r'([a-z]{2})(?:\s*\(([^)]*)\))?')
 NOTE_BULLET_RE = re.compile(r'^[-*]\s+')
 EMAIL_RE = re.compile(r'[\w.+-]+@[\w-]+\.[\w.-]+')
 TRAILING_PAREN_RE = re.compile(r'\s*\([^()]*\)\s*$')
+ANNOTATION_CUES = (';', 'not published', 'the client', 'see to confirm', 'to confirm', 'não publicad', 'proposed')
 
 
 def _strip_trailing_paren(value):
-    """Remove a trailing " (...)" annotation (only when the parenthesis closes the line)."""
-    return TRAILING_PAREN_RE.sub('', value or '').strip()
+    """Remove a trailing " (...)" annotation, but only when it reads as an annotation — a
+    semicolon or a cue like "not published"/"the client"/"to confirm"/"proposed" — never a
+    real address part such as "(Edifício A, 3º andar)"."""
+    value = (value or '').strip()
+    m = TRAILING_PAREN_RE.search(value)
+    if m and any(cue in m.group(0).lower() for cue in ANNOTATION_CUES):
+        return TRAILING_PAREN_RE.sub('', value).strip()
+    return value
 
 
 def _extract_email(value):

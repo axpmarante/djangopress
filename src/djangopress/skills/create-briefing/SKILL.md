@@ -127,10 +127,10 @@ Rules for the draft:
 - **Existing Site** (URL modes): one row per current page with keep / merge / drop and a reason.
 - **Integrations**: from 1b, with the embed method proposed.
 - **Pages**: one entry per page with its purpose and meta title/description. Do **not** list sections in order — the design concept decides grouping and sequence.
-- **Content**: per page, a flat list of what must be communicated. Mark every fact, name, price, award, label and CTA `(required)`; give messages 3–5 `keywords:`; give CTAs `→ /href/`. Menu items come from `briefings/<slug>-menu.json` when it exists — reference it in the Menu item. This list is the content contract the build verifies.
+- **Content**: per page, a flat list of what must be communicated. Mark every fact, name, price, award, label and CTA `(required)`; give messages 3–5 `keywords:`; give CTAs `→ /page/` or `→ #section`. Menu items come from `briefings/<slug>-menu.json` when it exists — reference it in the Menu item. This list is the content contract the build verifies.
 - **Design Constraints**: only what every concept must respect. Brand colors **only** if they are a brand asset (logo, existing identity) — otherwise `none`. Fill **Direction** only with what the operator or the client actually said; never invent a direction. Set **Mode** to `conventional` unless the operator or the document asked for something different; write `bold` only then. Fill **Avoid** with what the direct competition does (look at two or three competitors' sites in the same street, marina or niche). References are context, never models. State the image constraints line from the largest widths. Never propose a palette, type pair, layout signature or motif here.
 - **Images**: strategy from the inventory. State the constraints line from the largest widths.
-- **Additional Notes**: SEO focus phrases (two or three, in the default language and in English), the JSON-LD `@type`.
+- **Additional Notes**: SEO focus phrases (two or three, in the default language and in English), the JSON-LD `@type`. Also read the site's `contact` DynamicForm schema and write a `form fields:` line with its field names in order (proposing `phone` when the schema doesn't already have it) and a `form service options:` line with the service `<select>`'s options.
 - **Domain**: the current `gcs_folder`. Never propose changing it.
 
 ### 2b. Reference candidates
@@ -169,7 +169,7 @@ Open questions (reply with the numbers you want to change; unanswered ones keep 
 
 For each answer, edit the relevant section of the briefing. Questions left unanswered keep the proposal. Anything that still depends on the client moves to `## To Confirm With Client`. Delete the `## Open Questions` section.
 
-Re-read the whole file once. Check: every `## ` section from the template is present; Design Constraints is filled (brand colors may be `none`); every `## Content` line parses as `- (required)? Kind: text [— keywords: …] [→ /href/]`; Pages do not fix section order; Domain equals `gcs_folder`.
+Re-read the whole file once. Check: every `## ` section from the template is present; Design Constraints is filled (brand colors may be `none`); every `## Content` line parses as `- (required)? Kind: text [— keywords: …] [→ /page/ or → #section]`; Pages do not fix section order; Domain equals `gcs_folder`.
 
 Show a short summary (pages, languages, required content items, integrations) and offer the next step:
 

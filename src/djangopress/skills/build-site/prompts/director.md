@@ -108,10 +108,3 @@ required content items appear (name them by their ids from the brief).
 SIGNATURE MOMENT: one memorable section or interaction unique to this concept.
 WHY IT FITS: maximum 3 sentences.
 AVOID: 3 design choices that would weaken this particular concept.
-
-==================================================
-FINAL DIVERSITY CHECK
-==================================================
-
-Before outputting, compare all concepts internally. If any two could plausibly be variants
-of the same template, redesign one. Do not output that internal analysis.

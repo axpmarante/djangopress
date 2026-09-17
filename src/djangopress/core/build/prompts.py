@@ -43,22 +43,6 @@ TASTE_LINE = (
     'and think "this one is better made".'
 )
 
-DIVERSITY_CONVENTIONAL = (
-    '==================================================\n'
-    'CORE OBJECTIVE\n'
-    '==================================================\n\n'
-    "Every concept is a well-made version of the sector's canonical site.\n\n"
-    '==================================================\n'
-    'DIVERSITY REQUIREMENT\n'
-    '==================================================\n\n'
-    'A and B keep the same section order and components; they must differ on at least 5 of\n'
-    'the 16 Design DNA dimensions among these — visual personality, hero architecture (within\n'
-    'the canonical hero), typographic system, color logic, photography style, cropping,\n'
-    'graphic device, geometry, density, navigation style, CTA style, motion, mobile behaviour.\n'
-    'C may reorder or merge sections but keeps every component. Never two concepts that differ\n'
-    'only in hue.'
-)
-
 DIVERSITY_BOLD = (
     '==================================================\n'
     'CORE OBJECTIVE\n'
@@ -74,12 +58,54 @@ DIVERSITY_BOLD = (
     'change at least 7 of the 16 Design DNA dimensions. Never allow two concepts to share all of:\n'
     'same hero architecture, same layout grammar, same typography class, same dominant color\n'
     'logic, same graphic device. If two concepts begin to feel visually similar, redesign one\n'
-    'before returning the result.'
+    'before returning the result.\n\n'
+    '==================================================\n'
+    'FINAL CHECK\n'
+    '==================================================\n\n'
+    'Before outputting, compare all concepts internally. If any two could plausibly be\n'
+    'variants of the same template, redesign one. Do not output that internal analysis.'
 )
 
 
-def diversity_block(mode):
-    return DIVERSITY_CONVENTIONAL if mode == 'conventional' else DIVERSITY_BOLD
+def _label_list(labels):
+    """'A' / 'A and B' / 'A, B, C, D and E' — an Oxford-less "and" join."""
+    labels = list(labels)
+    if not labels:
+        return ''
+    if len(labels) == 1:
+        return labels[0]
+    return ', '.join(labels[:-1]) + ' and ' + labels[-1]
+
+
+def _diversity_conventional(labels):
+    labels = list(labels) or ['A', 'B', 'C']
+    required, last = labels[:-1], labels[-1]
+    required_text = _label_list(required) or last
+    return (
+        '==================================================\n'
+        'CORE OBJECTIVE\n'
+        '==================================================\n\n'
+        "Every concept is a well-made version of the sector's canonical site.\n\n"
+        '==================================================\n'
+        'DIVERSITY REQUIREMENT\n'
+        '==================================================\n\n'
+        f'{required_text} keep the same section order and components; they must differ on at least 5 of\n'
+        'the 16 Design DNA dimensions among these — visual personality, hero architecture (within\n'
+        'the canonical hero), typographic system, color logic, photography style, cropping,\n'
+        'graphic device, geometry, density, navigation style, CTA style, motion, mobile behaviour.\n'
+        f'{last} may reorder or merge sections but keeps every component. Never two concepts that differ\n'
+        'only in hue.\n\n'
+        '==================================================\n'
+        'FINAL CHECK\n'
+        '==================================================\n\n'
+        'FINAL CHECK: if two concepts differ only in hue or hero photo, redesign one; do not make\n'
+        'them structurally different on purpose.'
+    )
+
+
+def diversity_block(mode, labels=None):
+    labels = labels or list(LABELS[:3])
+    return _diversity_conventional(labels) if mode == 'conventional' else DIVERSITY_BOLD
 
 
 def _mode(packet):
@@ -106,11 +132,14 @@ def avoid_block(mode):
     return AVOID_CONVENTIONAL if mode == 'conventional' else AVOID_BOLD
 
 
-def structure_block(packet, mode):
+def structure_block(packet, mode, labels=None):
     vertical = packet['business'].get('type', '')
     structure = packet['business'].get('structure') or VERTICALS.get(vertical, {}).get('structure', '')
     if mode == 'conventional':
-        head = 'CANONICAL STRUCTURE (required for A and B; C may vary the order but keeps the components)'
+        labels = list(labels) or ['A', 'B', 'C']
+        required, last = labels[:-1], labels[-1]
+        required_text = _label_list(required) or last
+        head = f'CANONICAL STRUCTURE (required for {required_text}; {last} may vary the order but keeps the components)'
         body = f'{structure}\n\n{TASTE_LINE}'
     else:
         head = 'CANONICAL STRUCTURE (for reference — the concepts may leave it)'
@@ -183,6 +212,7 @@ def _constraints_text(packet):
 def fill_director(packet, ledger_text, n):
     mode = _mode(packet)
     regs = registers_for(n, mode)
+    labels = [l for l, _ in regs]
     specialization = VERTICALS.get(packet['business']['type'], {}).get('specialization') or packet['business']['specialization']
     brief = '\n\n'.join([
         packet['business']['prose'],
@@ -197,8 +227,8 @@ def fill_director(packet, ledger_text, n):
         'DESIGN_CONSTRAINTS': _constraints_text(packet), 'N': n,
         'LABELS': ', '.join(l for l, _ in regs), 'REGISTERS': ' · '.join(f'{l} {r}' for l, r in regs),
         'FAMILIES': ', '.join(packet['families']), 'LEDGER': ledger_text or 'none yet',
-        'STRUCTURE_BLOCK': structure_block(packet, mode), 'AVOID_BLOCK': avoid_block(mode),
-        'DIVERSITY_BLOCK': diversity_block(mode),
+        'STRUCTURE_BLOCK': structure_block(packet, mode, labels), 'AVOID_BLOCK': avoid_block(mode),
+        'DIVERSITY_BLOCK': diversity_block(mode, labels),
     })
 
 
