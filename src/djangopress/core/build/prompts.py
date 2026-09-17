@@ -77,6 +77,8 @@ def _constraints_text(packet):
     return '\n'.join([
         f'Brand colors (must appear, may be used sparingly): {colors}',
         f"Logo: {c.get('logo') or 'none'}",
+        f"Direction from the operator (a steer, not a template — the concepts must still differ on at least "
+        f"7 of the 16 DNA dimensions): {c.get('direction') or 'none — roam freely'}",
         f"Avoid: {'; '.join(c.get('avoid') or []) or 'nothing specific'}",
         f"References (context only, never copy): {', '.join(c.get('references') or []) or 'none'}",
         f'Image constraints: {widths}',

@@ -37,6 +37,14 @@ class FillTest(SimpleTestCase):
         self.assertIn('editorial', text)
         self.assertIn('Cozinha de autor algarvia.', text)
         self.assertNotIn('+351 289 000 000', text)   # the director never sees facts
+        self.assertIn('roam freely', text)
+        self.assertNotIn('[[', text)
+
+    def test_director_with_direction(self):
+        packet = copy.deepcopy(PACKET)
+        packet['design_constraints']['direction'] = 'Sólido e de confiança, claro'
+        text = fill_director(packet, 'PREVIOUS DNA HERE', 3)
+        self.assertIn('Sólido e de confiança, claro', text)
         self.assertNotIn('[[', text)
 
     def test_builder(self):

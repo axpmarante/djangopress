@@ -134,6 +134,7 @@ def _parse_constraints(lines):
     return {
         'brand_colors': colors,
         'logo': None if logo.lower() in ('', 'none') else logo,
+        'direction': b.get('direction', '').strip(),
         'avoid': [a.strip() for a in re.split(r';|\n', b.get('avoid', '')) if a.strip()],
         'references': [r.strip() for r in b.get('references', '').split(',') if r.strip()],
         'image_max_widths': widths,

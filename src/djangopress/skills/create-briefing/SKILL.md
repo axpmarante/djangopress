@@ -128,7 +128,7 @@ Rules for the draft:
 - **Integrations**: from 1b, with the embed method proposed.
 - **Pages**: one entry per page with its purpose and meta title/description. Do **not** list sections in order — the design concept decides grouping and sequence.
 - **Content**: per page, a flat list of what must be communicated. Mark every fact, name, price, award, label and CTA `(required)`; give messages 3–5 `keywords:`; give CTAs `→ /href/`. Menu items come from `briefings/<slug>-menu.json` when it exists — reference it in the Menu item. This list is the content contract the build verifies.
-- **Design Constraints**: only what every concept must respect. Brand colors **only** if they are a brand asset (logo, existing identity) — otherwise `none`. Fill **Avoid** with what the direct competition does (look at two or three competitors' sites in the same street, marina or niche). References are context, never models. State the image constraints line from the largest widths. Never propose a palette, type pair, layout signature or motif here.
+- **Design Constraints**: only what every concept must respect. Brand colors **only** if they are a brand asset (logo, existing identity) — otherwise `none`. Fill **Direction** only with what the operator or the client actually said; never invent a direction. Fill **Avoid** with what the direct competition does (look at two or three competitors' sites in the same street, marina or niche). References are context, never models. State the image constraints line from the largest widths. Never propose a palette, type pair, layout signature or motif here.
 - **Images**: strategy from the inventory. State the constraints line from the largest widths.
 - **Additional Notes**: SEO focus phrases (two or three, in the default language and in English), the JSON-LD `@type`.
 - **Domain**: the current `gcs_folder`. Never propose changing it.
@@ -141,6 +141,10 @@ Then write `## Open Questions` right after the title. Five to eight questions. E
 - Contact email when none is published
 - Whether the old photos are acceptable or a shoot is planned
 - Any non-negotiable colours or fonts (default: none — the concepts choose)
+- Design direction for the three concepts: register (solid/trustworthy · premium/architectural ·
+  direct/urgent · warm/local · other), light or dark, what makes the current site look
+  unprofessional (default: none — the concepts roam; the answer goes into Design Constraints →
+  Direction and Avoid)
 - Anything the document and the crawl disagree on
 
 Print the questions in the console, numbered, with the proposed defaults, and end the turn:

@@ -89,6 +89,7 @@ pair, no layout signature — those are chosen per concept by `/build-site`.]
 
 - **Brand colors**: [hex values only if non-negotiable — an existing logo or identity — or "none"]
 - **Logo / brand assets**: [path or URL, or "none"]
+- **Direction**: [the operator's steer in one or two sentences — register (e.g. "solid and trustworthy", "premium/architectural", "direct and urgent", "warm and local"), light or dark, photography-led or type-led. Concepts diverge within this; leave empty to let them roam]
 - **Avoid**: [what the local competition does that this site will not; anything the client rejected — separated by `;`]
 - **References**: [up to three URLs, context for the art director, never models to copy]
 - **Image constraints**: [largest usable width per group, e.g. "dishes 680px, space 2560px" — decides whether full-bleed photography is possible]

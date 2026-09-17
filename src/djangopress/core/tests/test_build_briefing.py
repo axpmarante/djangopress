@@ -55,6 +55,7 @@ contact, hours, social icons, privacy link, copyright
 ## Design Constraints
 - **Brand colors**: #C51B17 red, #40308A plum
 - **Logo / brand assets**: none
+- **Direction**: Sólido e de confiança, claro, fotografia real em destaque
 - **Avoid**: orange accents; photo carousel hero
 - **References**: https://example.com/a, https://example.com/b
 - **Image constraints**: dishes 2048px, interiors 1600px
@@ -120,6 +121,7 @@ class ParseBriefingTest(SimpleTestCase):
         c = self.b.constraints
         self.assertEqual(c['brand_colors'], ['#C51B17', '#40308A'])
         self.assertIsNone(c['logo'])
+        self.assertEqual(c['direction'], 'Sólido e de confiança, claro, fotografia real em destaque')
         self.assertEqual(c['avoid'], ['orange accents', 'photo carousel hero'])
         self.assertEqual(c['references'], ['https://example.com/a', 'https://example.com/b'])
         self.assertEqual(c['image_max_widths'], {'dishes': 2048, 'interiors': 1600})

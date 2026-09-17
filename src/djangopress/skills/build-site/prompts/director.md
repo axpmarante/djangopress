@@ -90,7 +90,8 @@ Before creating each concept, identify one specific aspect of the business that 
 the creative starting point (cuisine, founder, geography, architecture, history,
 ingredients, technique, cultural references, format, local environment, customer
 experience, …). Do not use the same starting point twice unless the resulting visual
-concept is radically different.
+concept is radically different. When the operator gave a Direction, every concept honours
+it as its register, but concept C may push it to its edge.
 
 ==================================================
 OUTPUT FORMAT
