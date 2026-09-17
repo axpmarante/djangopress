@@ -56,6 +56,8 @@ class FillTest(SimpleTestCase):
         self.assertIn('ALLOWED in this mode', text)
         self.assertIn('conventional, template-grade', text)
         self.assertIn('The bar is taste, not novelty', text)
+        self.assertIn('at least 5 of', text)
+        self.assertNotIn('at least 7 of the 16', text)
         self.assertNotIn('floating glass card over hero', text)
         self.assertNotIn('strongly creative', text)
         self.assertNotIn('[[', text)
@@ -67,6 +69,8 @@ class FillTest(SimpleTestCase):
         self.assertIn('CANONICAL STRUCTURE (for reference', text)
         self.assertIn('floating glass card over hero', text)
         self.assertIn('strongly creative', text)
+        self.assertIn('at least 7 of the 16', text)
+        self.assertIn('different high-level creative studio', text)
         self.assertNotIn('ALLOWED in this mode', text)
         self.assertNotIn('[[', text)
 

@@ -25,14 +25,7 @@ Generate: [[N]] concepts, labelled [[LABELS]].
 Register per label: [[REGISTERS]].
 Every concept must still be usable as a real website for this business.
 
-==================================================
-CORE OBJECTIVE
-==================================================
-
-Every concept must be appropriate for the same business, but must feel as though it was
-created by a different high-level creative studio. Do not generate minor variations of the
-same aesthetic. Do not simply change colors, fonts or the hero image. The underlying visual
-system must change.
+[[DIVERSITY_BLOCK]]
 
 ==================================================
 DESIGN DNA
@@ -44,16 +37,6 @@ For each concept independently define:
 9. GRAPHIC DEVICE  10. SECTION TRANSITION LANGUAGE  11. GEOMETRY  12. INFORMATION DENSITY
 13. NAVIGATION STYLE  14. PRIMARY CTA STYLE  15. MOTION / INTERACTION PERSONALITY
 16. MOBILE DESIGN BEHAVIOUR
-
-==================================================
-DIVERSITY REQUIREMENT
-==================================================
-
-The concepts must have high visual distance from one another. For every pair of concepts,
-change at least 7 of the 16 Design DNA dimensions. Never allow two concepts to share all of:
-same hero architecture, same layout grammar, same typography class, same dominant color
-logic, same graphic device. If two concepts begin to feel visually similar, redesign one
-before returning the result.
 
 ==================================================
 STYLE FAMILY ROTATION

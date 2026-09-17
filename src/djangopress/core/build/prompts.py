@@ -43,6 +43,44 @@ TASTE_LINE = (
     'and think "this one is better made".'
 )
 
+DIVERSITY_CONVENTIONAL = (
+    '==================================================\n'
+    'CORE OBJECTIVE\n'
+    '==================================================\n\n'
+    "Every concept is a well-made version of the sector's canonical site.\n\n"
+    '==================================================\n'
+    'DIVERSITY REQUIREMENT\n'
+    '==================================================\n\n'
+    'A and B keep the same section order and components; they must differ on at least 5 of\n'
+    'the 16 Design DNA dimensions among these — visual personality, hero architecture (within\n'
+    'the canonical hero), typographic system, color logic, photography style, cropping,\n'
+    'graphic device, geometry, density, navigation style, CTA style, motion, mobile behaviour.\n'
+    'C may reorder or merge sections but keeps every component. Never two concepts that differ\n'
+    'only in hue.'
+)
+
+DIVERSITY_BOLD = (
+    '==================================================\n'
+    'CORE OBJECTIVE\n'
+    '==================================================\n\n'
+    'Every concept must be appropriate for the same business, but must feel as though it was\n'
+    'created by a different high-level creative studio. Do not generate minor variations of the\n'
+    'same aesthetic. Do not simply change colors, fonts or the hero image. The underlying visual\n'
+    'system must change.\n\n'
+    '==================================================\n'
+    'DIVERSITY REQUIREMENT\n'
+    '==================================================\n\n'
+    'The concepts must have high visual distance from one another. For every pair of concepts,\n'
+    'change at least 7 of the 16 Design DNA dimensions. Never allow two concepts to share all of:\n'
+    'same hero architecture, same layout grammar, same typography class, same dominant color\n'
+    'logic, same graphic device. If two concepts begin to feel visually similar, redesign one\n'
+    'before returning the result.'
+)
+
+
+def diversity_block(mode):
+    return DIVERSITY_CONVENTIONAL if mode == 'conventional' else DIVERSITY_BOLD
+
 
 def _mode(packet):
     return 'bold' if (packet.get('design_constraints') or {}).get('mode') == 'bold' else 'conventional'
@@ -133,8 +171,8 @@ def _constraints_text(packet):
     return '\n'.join([
         f'Brand colors (must appear, may be used sparingly): {colors}',
         f"Logo: {c.get('logo') or 'none'}",
-        f"Direction from the operator (a steer, not a template — the concepts must still differ on at least "
-        f"7 of the 16 DNA dimensions): {c.get('direction') or 'none — roam freely'}",
+        f"Direction from the operator (a steer, not a template — see DIVERSITY): "
+        f"{c.get('direction') or 'none — roam freely'}",
         f"Avoid: {'; '.join(c.get('avoid') or []) or 'nothing specific'}",
         (f"References chosen by the operator (structure and register to adapt, never copy): {', '.join(c['references'])}"
          if c.get('references') else 'References: none'),
@@ -160,6 +198,7 @@ def fill_director(packet, ledger_text, n):
         'LABELS': ', '.join(l for l, _ in regs), 'REGISTERS': ' · '.join(f'{l} {r}' for l, r in regs),
         'FAMILIES': ', '.join(packet['families']), 'LEDGER': ledger_text or 'none yet',
         'STRUCTURE_BLOCK': structure_block(packet, mode), 'AVOID_BLOCK': avoid_block(mode),
+        'DIVERSITY_BLOCK': diversity_block(mode),
     })
 
 
