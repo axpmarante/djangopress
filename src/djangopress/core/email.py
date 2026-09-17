@@ -8,6 +8,12 @@ from django.conf import settings
 logger = logging.getLogger(__name__)
 
 
+def _notification_bcc():
+    """Addresses that get a blind copy of every form notification."""
+    raw = getattr(settings, 'FORM_NOTIFICATION_BCC', '') or ''
+    return [addr.strip() for addr in raw.split(',') if addr.strip()]
+
+
 def send_form_notification(form_def, submission):
     """Send notification email to site owner with submission data."""
     to_email = form_def.get_notification_email()
@@ -41,6 +47,7 @@ def send_form_notification(form_def, submission):
             body=body,
             from_email=settings.DEFAULT_FROM_EMAIL,
             to=[to_email],
+            bcc=_notification_bcc(),
             reply_to=reply_to_list,
         )
         email.send(fail_silently=False)
