@@ -2,7 +2,7 @@
 
 from django.test import SimpleTestCase
 
-from djangopress.core.build.briefing import parse_briefing
+from djangopress.core.build.briefing import parse_briefing, _parse_content_line
 
 
 SAMPLE = """# CHECKin Faro — Site Briefing
@@ -151,3 +151,31 @@ class ParseBriefingTest(SimpleTestCase):
         with self.assertRaises(ValueError) as cm:
             parse_briefing(bad)
         self.assertIn('no colon here', str(cm.exception))
+
+    def test_arrow_inside_prose_is_not_an_href(self):
+        line = ('- (required) Gallery: Antes e depois — the 2026 build documented as Início / Meio / Fim '
+                '(brick shell → finished house), plus … — keywords: antes e depois, início, fim')
+        item = _parse_content_line(line, 'home', 1)
+        self.assertIsNone(item.href)
+        self.assertEqual(item.text, 'Antes e depois — the 2026 build documented as Início / Meio / Fim '
+                                     '(brick shell → finished house), plus …')
+        self.assertEqual(item.keywords, ['antes e depois', 'início', 'fim'])
+
+    def test_last_arrow_wins_when_href_like(self):
+        line = '- (required) CTA: Falar → agora → #contact'
+        item = _parse_content_line(line, 'home', 1)
+        self.assertEqual(item.href, '#contact')
+        self.assertEqual(item.text, 'Falar → agora')
+
+    def test_contact_annotations_are_stripped(self):
+        text = """# Test Co — Site Briefing
+
+## Contact
+- Email: geral@remodelacoes24.pt (not published today; the client creates the mailbox)
+- Phone: +351 969 240 223 (WhatsApp too)
+- Address: Algarve, Portugal (no street address published; the client works multiple sites)
+"""
+        b = parse_briefing(text)
+        self.assertEqual(b.contact['email'], 'geral@remodelacoes24.pt')
+        self.assertEqual(b.contact['address'], 'Algarve, Portugal')
+        self.assertEqual(b.contact['phone'], '+351 969 240 223')

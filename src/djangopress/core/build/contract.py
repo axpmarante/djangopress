@@ -61,7 +61,7 @@ def prefixed_href(href, lang):
     return href
 
 
-def check_contract(packet, parts, lang):
+def check_contract(packet, parts, lang, page='home'):
     text, hrefs = _haystack(parts)
     loose_text = loose(text)
     misses = []
@@ -72,33 +72,33 @@ def check_contract(packet, parts, lang):
     def miss(item, reason):
         misses.append({'id': item['id'], 'kind': item['kind'], 'text': item.get('text', ''), 'reason': reason})
 
-    for page in packet['content'].values():
-        for item in page['required']:
-            if (item.get('kind') or '').casefold() == 'contact':
-                # facts (phone/email/address/hours) are checked separately below.
-                continue
-            if item.get('items'):
-                for entry in item['items']:
-                    if not matches(entry['name']):
-                        miss(item, f"menu item {entry['name']!r} not found")
-                        break
-                    if entry.get('price') and not any(f in text for f in _price_forms(entry['price'])):
-                        miss(item, f"price {entry['price']!r} for {entry['name']!r} not found")
-                        break
-            elif item.get('href'):
-                wanted = prefixed_href(item['href'], lang)
-                if wanted not in hrefs:
-                    miss(item, f'no link to {wanted}')
-                elif not matches(item['text']):
-                    miss(item, f"CTA label {item['text']!r} not found")
-            elif item.get('keywords'):
-                if not any(normalise(k) in text for k in item['keywords']):
-                    miss(item, f"none of the keywords {item['keywords']} found")
-            else:
-                for seg in segments(item.get('text', '')):
-                    if not matches(seg):
-                        miss(item, f"segment '{seg}' of {item['id']} not found")
-                        break
+    required = packet['content'].get(page, {}).get('required', [])
+    for item in required:
+        if (item.get('kind') or '').casefold() == 'contact':
+            # facts (phone/email/address/hours) are checked separately below.
+            continue
+        if item.get('items'):
+            for entry in item['items']:
+                if not matches(entry['name']):
+                    miss(item, f"menu item {entry['name']!r} not found")
+                    break
+                if entry.get('price') and not any(f in text for f in _price_forms(entry['price'])):
+                    miss(item, f"price {entry['price']!r} for {entry['name']!r} not found")
+                    break
+        elif item.get('href'):
+            wanted = prefixed_href(item['href'], lang)
+            if wanted not in hrefs:
+                miss(item, f'no link to {wanted}')
+            elif not matches(item['text']):
+                miss(item, f"CTA label {item['text']!r} not found")
+        elif item.get('keywords'):
+            if not any(normalise(k) in text for k in item['keywords']):
+                miss(item, f"none of the keywords {item['keywords']} found")
+        else:
+            for seg in segments(item.get('text', '')):
+                if not matches(seg):
+                    miss(item, f"segment '{seg}' of {item['id']} not found")
+                    break
 
     facts = packet['facts']
     fact_item = {'id': 'facts', 'kind': 'Contact', 'text': ''}

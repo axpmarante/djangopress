@@ -14,6 +14,7 @@ HEADING_RE = re.compile(r'^(#{2,3})\s+(.*?)\s*$')
 CONTENT_LINE_RE = re.compile(r'^-\s*(?P<req>\(required\)\s*)?(?P<kind>[^:]+?):\s*(?P<rest>.*)$')
 KEYWORDS_SPLIT_RE = re.compile(r'\s+[—-]\s+keywords:\s*', re.I)
 HREF_SPLIT_RE = re.compile(r'\s+→\s+|\s+->\s+')
+HREF_LIKE_RE = re.compile(r'^(?:/|#|https?://|tel:|mailto:)')
 MENU_JSON_RE = re.compile(r'(briefings/[\w.-]+-menu\.json)')
 HEX_RE = re.compile(r'#[0-9a-fA-F]{6}\b|#[0-9a-fA-F]{3}\b')
 WIDTH_RE = re.compile(r'([\wÀ-ÿ /]+?)\s+(\d{3,4})\s*px', re.I)
@@ -21,6 +22,22 @@ BULLET_RE = re.compile(r'^-\s*(?:\*\*(?P<bkey>[^*]+)\*\*|(?P<key>[^:]+?))\s*:\s*
 PAGE_RE = re.compile(r'^-\s*\*\*(?P<name>[^*]+)\*\*\s*:\s*(?P<desc>.*)$')
 LANG_RE = re.compile(r'([a-z]{2})(?:\s*\(([^)]*)\))?')
 NOTE_BULLET_RE = re.compile(r'^[-*]\s+')
+EMAIL_RE = re.compile(r'[\w.+-]+@[\w-]+\.[\w.-]+')
+TRAILING_PAREN_RE = re.compile(r'\s*\([^()]*\)\s*$')
+
+
+def _strip_trailing_paren(value):
+    """Remove a trailing " (...)" annotation (only when the parenthesis closes the line)."""
+    return TRAILING_PAREN_RE.sub('', value or '').strip()
+
+
+def _extract_email(value):
+    """First token that looks like an email address, else the value with any trailing
+    " (...)" annotation removed."""
+    m = EMAIL_RE.search(value or '')
+    if m:
+        return m.group(0)
+    return _strip_trailing_paren(value)
 
 
 @dataclass
@@ -91,9 +108,12 @@ def _parse_content_line(line, page_slug, index):
         rest, kw = parts
         keywords = [k.strip() for k in kw.split(',') if k.strip()]
     href = None
-    parts = HREF_SPLIT_RE.split(rest, maxsplit=1)
-    if len(parts) == 2:
-        rest, href = parts[0].strip(), parts[1].strip()
+    arrows = list(HREF_SPLIT_RE.finditer(rest))
+    if arrows:
+        last = arrows[-1]
+        candidate_text, candidate_href = rest[:last.start()].strip(), rest[last.end():].strip()
+        if HREF_LIKE_RE.match(candidate_href.strip('`').strip()):
+            rest, href = candidate_text, candidate_href.strip('`').strip()
     menu = MENU_JSON_RE.search(rest)
     return ContentItem(
         id=f'{page_slug}-{index}',
@@ -161,8 +181,10 @@ def parse_briefing(text):
         elif level == 2 and key == 'contact':
             b = _bullets(lines)
             briefing.contact = {
-                'email': b.get('email', ''), 'phone': b.get('phone', ''),
-                'address': b.get('address', ''), 'maps_url': b.get('google maps', ''),
+                'email': _extract_email(b.get('email', '')),
+                'phone': _strip_trailing_paren(b.get('phone', '')),
+                'address': _strip_trailing_paren(b.get('address', '')),
+                'maps_url': b.get('google maps', ''),
             }
         elif level == 3 and key == 'opening hours':
             briefing.hours = [l.strip()[2:].strip() for l in lines if l.strip().startswith('- ')]

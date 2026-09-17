@@ -127,3 +127,13 @@ class ContractTest(SimpleTestCase):
         parts = {'page': '<p>Rua do Castelo 1<br>Faro</p>', 'header': '<header></header>', 'footer': '<footer></footer>'}
         misses = check_contract(packet, parts, 'pt')
         self.assertFalse(any('address' in m['reason'] for m in misses))
+
+    def test_only_the_requested_page_items_are_checked(self):
+        packet = copy.deepcopy(PACKET)
+        packet['content']['politica-de-privacidade'] = {'required': [
+            {'id': 'privacy-1', 'kind': 'Message', 'text': 'Política de Privacidade completa'},
+        ], 'optional': []}
+        misses = check_contract(packet, self.parts(), 'pt')
+        self.assertNotIn('privacy-1', [m['id'] for m in misses])
+        misses = check_contract(packet, self.parts(), 'pt', page='politica-de-privacidade')
+        self.assertIn('privacy-1', [m['id'] for m in misses])
