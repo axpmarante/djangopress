@@ -188,3 +188,12 @@ def site_settings(request):
         # Feature flags
         'UNSPLASH_ENABLED': unsplash.is_configured(),
     }
+
+
+def backoffice_nav(request):
+    """Nav items contributed by site-local apps, for the backoffice sidebar.
+
+    Empty unless a site sets BACKOFFICE_EXTRA_NAV in its own settings, so the
+    sidebar renders byte-identically on every site that does not use the hook.
+    """
+    return {'backoffice_extra_nav': getattr(django_settings, 'BACKOFFICE_EXTRA_NAV', [])}
