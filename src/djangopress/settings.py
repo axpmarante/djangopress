@@ -258,9 +258,12 @@ else:
     ANYMAIL = {
         "MAILGUN_API_KEY": env('MAILGUN_API_KEY', default=''),
         "MAILGUN_API_URL": env('MAILGUN_API_URL', default='https://api.eu.mailgun.net/v3'),
+        # The verified sending domain on the agency's Mailgun account (EU). Without it
+        # anymail derives the domain from the From address and Mailgun answers 401.
+        "MAILGUN_SENDER_DOMAIN": env('MAILGUN_SENDER_DOMAIN', default='mg.sendermail.io'),
     }
 
-DEFAULT_FROM_EMAIL = env('DEFAULT_FROM_EMAIL', default='noreply@sendermail.io')
+DEFAULT_FROM_EMAIL = env('DEFAULT_FROM_EMAIL', default='noreply@mg.sendermail.io')
 SERVER_EMAIL = DEFAULT_FROM_EMAIL
 
 
