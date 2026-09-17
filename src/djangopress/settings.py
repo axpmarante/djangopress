@@ -261,10 +261,17 @@ LOGOUT_REDIRECT_URL = '/backoffice/login/'
 # Extra backoffice nav items contributed by site-local apps.
 # Each item: {'label': str, 'url_name': str, 'url_prefix': str, 'icon_svg': str (optional)}
 # Sites append to this in their own config/settings.py.
+# url_name must reverse in EVERY environment the site runs in: the sidebar is
+# on every backoffice page, so a name that cannot be reversed raises
+# NoReverseMatch and takes the whole backoffice down, not just this link.
 BACKOFFICE_EXTRA_NAV = []
 
 # Extra unprefixed path prefixes contributed by site-local apps (webhooks,
 # machine endpoints). Sites append to this in their own config/settings.py.
+# Honoured by the locale middlewares only: check_site and the build adapter
+# keep the unextended NON_I18N_PATHS for link-checking page HTML, so never
+# hand-link one of these prefixes from page content — it will be reported as
+# a broken link.
 NON_I18N_PATHS_EXTRA = ()
 
 
