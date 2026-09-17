@@ -263,6 +263,10 @@ else:
 DEFAULT_FROM_EMAIL = env('DEFAULT_FROM_EMAIL', default='noreply@sendermail.io')
 SERVER_EMAIL = DEFAULT_FROM_EMAIL
 
+# Blind copy of every form notification, for whoever maintains the site. Comma-separated;
+# empty (the default) sends no copy, so sites that do not set it are unaffected.
+FORM_NOTIFICATION_BCC = env('FORM_NOTIFICATION_BCC', default='')
+
 
 # ---------------------------------------------------------------------------
 # AI provider API keys
