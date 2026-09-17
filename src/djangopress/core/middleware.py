@@ -13,11 +13,26 @@ NON_I18N_PATHS = ('/django-admin/', '/backoffice/', '/ai/', '/editor-v2/',
                    '/sitemap.xml', '/media/', '/static/', '/robots.txt')
 
 
+def non_i18n_paths():
+    """The engine's non-i18n prefixes plus any a site contributed.
+
+    A site's own apps can own unprefixed URLs too — a payment webhook posts to
+    one fixed address and must never be locale-redirected. Sites list those
+    prefixes in NON_I18N_PATHS_EXTRA; the default is empty, so this returns
+    exactly NON_I18N_PATHS unless a site opts in.
+
+    NON_I18N_PATHS itself stays a plain module constant: other engine modules
+    import it by name for link checking in page HTML, where site-local machine
+    endpoints are not relevant.
+    """
+    return NON_I18N_PATHS + tuple(getattr(settings, 'NON_I18N_PATHS_EXTRA', ()))
+
+
 class LocaleMiddleware(DjangoLocaleMiddleware):
     """Django's LocaleMiddleware but skip redirect for non-i18n paths."""
 
     def __call__(self, request):
-        if any(request.path_info.startswith(p) for p in NON_I18N_PATHS):
+        if any(request.path_info.startswith(p) for p in non_i18n_paths()):
             return self.get_response(request)
         return super().__call__(request)
 
@@ -93,8 +108,11 @@ class DynamicLanguageMiddleware:
 
     def __init__(self, get_response):
         self.get_response = get_response
-        # Paths that should bypass language handling
-        self.bypass_paths = NON_I18N_PATHS
+        # Paths that should bypass language handling. Snapshotted once, at
+        # middleware construction: NON_I18N_PATHS_EXTRA must be set in
+        # settings before the middleware chain is built (it always is, when
+        # it lives in config/settings.py).
+        self.bypass_paths = non_i18n_paths()
 
     def __call__(self, request):
         from django.urls import resolve, Resolver404

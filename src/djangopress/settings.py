@@ -107,6 +107,7 @@ TEMPLATES = [
                 'django.contrib.messages.context_processors.messages',
                 'django.template.context_processors.i18n',
                 'djangopress.core.context_processors.site_settings',
+                'djangopress.core.context_processors.backoffice_nav',
             ],
             'debug': DEBUG,
         },
@@ -246,6 +247,25 @@ CSRF_TRUSTED_ORIGINS = [
 LOGIN_URL = '/backoffice/login/'
 LOGIN_REDIRECT_URL = '/backoffice/'
 LOGOUT_REDIRECT_URL = '/backoffice/login/'
+
+
+# ---------------------------------------------------------------------------
+# Site-local extension hooks
+#
+# The engine ships to every site, so it cannot know about a site's own apps.
+# These two settings let a site contribute to engine-owned surfaces from its
+# own config/settings.py. Both are empty by default: an untouched site
+# behaves exactly as it did before they existed.
+# ---------------------------------------------------------------------------
+
+# Extra backoffice nav items contributed by site-local apps.
+# Each item: {'label': str, 'url_name': str, 'url_prefix': str, 'icon_svg': str (optional)}
+# Sites append to this in their own config/settings.py.
+BACKOFFICE_EXTRA_NAV = []
+
+# Extra unprefixed path prefixes contributed by site-local apps (webhooks,
+# machine endpoints). Sites append to this in their own config/settings.py.
+NON_I18N_PATHS_EXTRA = ()
 
 
 # ---------------------------------------------------------------------------
