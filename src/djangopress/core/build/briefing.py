@@ -20,6 +20,7 @@ WIDTH_RE = re.compile(r'([\wÀ-ÿ /]+?)\s+(\d{3,4})\s*px', re.I)
 BULLET_RE = re.compile(r'^-\s*(?:\*\*(?P<bkey>[^*]+)\*\*|(?P<key>[^:]+?))\s*:\s*(?P<val>.*)$')
 PAGE_RE = re.compile(r'^-\s*\*\*(?P<name>[^*]+)\*\*\s*:\s*(?P<desc>.*)$')
 LANG_RE = re.compile(r'([a-z]{2})(?:\s*\(([^)]*)\))?')
+NOTE_BULLET_RE = re.compile(r'^[-*]\s+')
 
 
 @dataclass
@@ -195,7 +196,8 @@ def parse_briefing(text):
             briefing.domain = body.strip('`').strip()
         elif level == 2 and key == 'additional notes':
             for line in lines:
-                if ':' in line and not line.startswith('#'):
-                    k, v = line.split(':', 1)
+                candidate = NOTE_BULLET_RE.sub('', line.strip())
+                if ':' in candidate and not candidate.startswith('#'):
+                    k, v = candidate.split(':', 1)
                     briefing.notes[k.strip().lower()] = v.strip()
     return briefing

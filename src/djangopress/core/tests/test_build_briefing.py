@@ -132,6 +132,14 @@ class ParseBriefingTest(SimpleTestCase):
         self.assertEqual(self.b.images['strategy'], 'reuse existing')
         self.assertEqual(self.b.header, 'logo left, 5 links, one CTA, language switcher')
 
+    def test_notes_accept_bullets(self):
+        text = SAMPLE.replace(
+            '## Additional Notes\njsonld: Restaurant\ncuisine: Algarvia\nprice range: €€€\n',
+            '## Additional Notes\n- jsonld: HomeAndConstructionBusiness\n* cuisine: Algarvia\n')
+        b = parse_briefing(text)
+        self.assertEqual(b.notes['jsonld'], 'HomeAndConstructionBusiness')
+        self.assertEqual(b.notes['cuisine'], 'Algarvia')
+
     def test_open_questions_detected(self):
         b = parse_briefing(SAMPLE.replace('## Business', '## Open Questions\n1. x?\n\n## Business'))
         self.assertTrue(b.has_open_questions)

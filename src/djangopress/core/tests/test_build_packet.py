@@ -10,7 +10,7 @@ from django.core.management import call_command
 from django.test import TestCase, override_settings
 
 from djangopress.core.build.briefing import parse_briefing
-from djangopress.core.build.packet import build_packet, detect_vertical
+from djangopress.core.build.packet import VERTICALS, build_packet, detect_vertical
 from djangopress.core.models import Page, SiteImage, SiteSettings
 from djangopress.core.tests.test_build_briefing import SAMPLE
 
@@ -45,6 +45,21 @@ class DetectVerticalTest(TestCase):
         b = parse_briefing(SAMPLE)
         b.notes['vertical'] = 'legal'
         self.assertEqual(detect_vertical(b), 'legal')
+
+    def test_construction_from_prose(self):
+        b = parse_briefing(SAMPLE.replace(
+            'Cozinha de autor algarvia, à carta, para partilhar. Chef Leonel Pereira.',
+            'Remodelações e reparações 24 horas no Algarve.'))
+        b.notes = {}
+        self.assertEqual(detect_vertical(b), 'construction')
+        self.assertEqual(VERTICALS['construction']['jsonld'], 'HomeAndConstructionBusiness')
+
+    def test_values_list_does_not_trigger_tourism(self):
+        b = parse_briefing(SAMPLE.replace(
+            'Cozinha de autor algarvia, à carta, para partilhar. Chef Leonel Pereira.',
+            'Consultoria. Valores: Experiência, Honestidade.'))
+        b.notes = {}
+        self.assertEqual(detect_vertical(b), 'services')
 
 
 class BuildPacketTest(TestCase):

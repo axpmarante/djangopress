@@ -43,11 +43,19 @@ VERTICALS = {
                      'editorial', 'neo-brutalism', 'expressive typography'],
     },
     'tourism': {
-        'keywords': ['tour', 'passeio', 'boat', 'barco', 'transfer', 'excurs', 'experiênc', 'experience', 'activit'],
+        'keywords': ['tour', 'passeio', 'boat', 'barco', 'transfer', 'excurs'],
         'specialization': 'travel, tours and outdoor experience brands',
         'jsonld': 'TouristInformationCenter',
         'families': ['immersive photography', 'resort lifestyle', 'narrative / storytelling', 'cinematic hospitality',
                      'graphic-design-led', 'vernacular / regional', 'editorial'],
+    },
+    'construction': {
+        'keywords': ['remodela', 'construç', 'construc', 'obras', 'renovation', 'canaliza', 'eletricista', 'plumb',
+                     'builder', 'reparaç', 'home repair'],
+        'specialization': 'home services, construction and skilled trades',
+        'jsonld': 'HomeAndConstructionBusiness',
+        'families': ['vernacular / regional', 'architectural modernism', 'graphic-design-led', 'editorial',
+                     'product-led', 'immersive photography', 'neo-brutalism', 'cultural / craft'],
     },
     'services': {
         'keywords': [],
