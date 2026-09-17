@@ -83,12 +83,8 @@ DOCUMENT CONTRACT (the importer relies on this)
   label's language.
 
 ==================================================
-AVOID GENERIC AI DESIGN
+WHAT TO AVOID
 ==================================================
 
-Avoid repeating common AI-generated landing page patterns: text left / image right hero,
-floating glass card over hero, endless rounded cards, identical 3-column grids,
-gradient-heavy backgrounds, generic luxury black + gold, SaaS-style feature cards,
-excessive pills, excessive shadows, identical centered headings, repeating alternating
-text/image sections. Use these only when clearly justified by the concept.
+[[AVOID_BLOCK]]
 Also avoid the three items under this concept's own AVOID.

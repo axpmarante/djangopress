@@ -126,6 +126,13 @@ class ParseBriefingTest(SimpleTestCase):
         self.assertEqual(c['references'], ['https://example.com/a', 'https://example.com/b'])
         self.assertEqual(c['image_max_widths'], {'dishes': 2048, 'interiors': 1600})
 
+    def test_mode_defaults_to_conventional(self):
+        self.assertEqual(self.b.constraints['mode'], 'conventional')
+
+    def test_mode_bold(self):
+        b = parse_briefing(SAMPLE.replace('- **Avoid**: orange accents', '- **Mode**: bold\n- **Avoid**: orange accents'))
+        self.assertEqual(b.constraints['mode'], 'bold')
+
     def test_notes_and_flags(self):
         self.assertEqual(self.b.notes['jsonld'], 'Restaurant')
         self.assertEqual(self.b.notes['cuisine'], 'Algarvia')

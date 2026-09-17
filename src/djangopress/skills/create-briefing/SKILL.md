@@ -128,10 +128,14 @@ Rules for the draft:
 - **Integrations**: from 1b, with the embed method proposed.
 - **Pages**: one entry per page with its purpose and meta title/description. Do **not** list sections in order — the design concept decides grouping and sequence.
 - **Content**: per page, a flat list of what must be communicated. Mark every fact, name, price, award, label and CTA `(required)`; give messages 3–5 `keywords:`; give CTAs `→ /href/`. Menu items come from `briefings/<slug>-menu.json` when it exists — reference it in the Menu item. This list is the content contract the build verifies.
-- **Design Constraints**: only what every concept must respect. Brand colors **only** if they are a brand asset (logo, existing identity) — otherwise `none`. Fill **Direction** only with what the operator or the client actually said; never invent a direction. Fill **Avoid** with what the direct competition does (look at two or three competitors' sites in the same street, marina or niche). References are context, never models. State the image constraints line from the largest widths. Never propose a palette, type pair, layout signature or motif here.
+- **Design Constraints**: only what every concept must respect. Brand colors **only** if they are a brand asset (logo, existing identity) — otherwise `none`. Fill **Direction** only with what the operator or the client actually said; never invent a direction. Set **Mode** to `conventional` unless the operator or the document asked for something different; write `bold` only then. Fill **Avoid** with what the direct competition does (look at two or three competitors' sites in the same street, marina or niche). References are context, never models. State the image constraints line from the largest widths. Never propose a palette, type pair, layout signature or motif here.
 - **Images**: strategy from the inventory. State the constraints line from the largest widths.
 - **Additional Notes**: SEO focus phrases (two or three, in the default language and in English), the JSON-LD `@type`.
 - **Domain**: the current `gcs_folder`. Never propose changing it.
+
+### 2b. Reference candidates
+
+Search (WebSearch) for four or five well-made sites or templates of the same sector — real company sites and template demos both count — and list them with the URL and one line on their structure and register. Put the list under `## Design Constraints` → `References (candidates)` in the draft, and add ONE question to the block: which one or two the operator likes and what in them (hero, colours, where the form sits). In Phase 3, keep only the chosen ones as `- **References**:` with a one-line structure note each; drop the rest.
 
 Then write `## Open Questions` right after the title. Five to eight questions. Each is something only the operator or the client can answer, carries the proposed default, and would change the build if answered differently. Never ask what the research already answered. Typical questions:
 

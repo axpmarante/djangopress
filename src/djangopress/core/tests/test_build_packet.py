@@ -84,6 +84,12 @@ class BuildPacketTest(TestCase):
         self.assertEqual(packet['design_constraints']['brand_colors'], ['#C51B17', '#40308A'])
         self.assertIn('editorial', packet['families'])
 
+    def test_structure_present(self):
+        for name, spec in VERTICALS.items():
+            self.assertTrue(spec.get('structure'), name)
+        packet = build_packet(parse_briefing(SAMPLE), site_slug='checkin-faro', image_map={}, menus={})
+        self.assertIn('reservation', packet['business']['structure'])
+
     def test_form_and_notes(self):
         b = parse_briefing(SAMPLE)
         packet = build_packet(b, site_slug='checkin-faro', image_map={}, menus={})

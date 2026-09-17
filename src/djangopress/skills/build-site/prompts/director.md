@@ -15,6 +15,8 @@ DESIGN CONSTRAINTS (every concept must respect these)
 
 [[DESIGN_CONSTRAINTS]]
 
+[[STRUCTURE_BLOCK]]
+
 ==================================================
 NUMBER OF CONCEPTS
 ==================================================
@@ -61,14 +63,10 @@ Explore different families where appropriate: [[FAMILIES]].
 Do not use all of these. Select combinations that make sense for this business.
 
 ==================================================
-AVOID GENERIC AI DESIGN
+WHAT TO AVOID
 ==================================================
 
-Avoid repeating common AI-generated landing page patterns: text left / image right hero,
-floating glass card over hero, endless rounded cards, identical 3-column grids,
-gradient-heavy backgrounds, generic luxury black + gold, SaaS-style feature cards,
-excessive pills, excessive shadows, identical centered headings, repeating alternating
-text/image sections. Use these only when clearly justified by the concept.
+[[AVOID_BLOCK]]
 
 ==================================================
 PREVIOUSLY USED DESIGN DNA
@@ -101,7 +99,7 @@ Return exactly [[N]] concepts. Delimit each with a line `===== CONCEPT <LABEL> =
 and inside it write, in this order:
 
 CONCEPT NAME:
-REGISTER: safe | distinctive | creative | experimental
+REGISTER: the register assigned to this label above, in a few words
 CREATIVE PREMISE: one concise paragraph.
 BRAND IDEA: the business characteristic that inspired the concept.
 DESIGN DNA:

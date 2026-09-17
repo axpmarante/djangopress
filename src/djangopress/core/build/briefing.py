@@ -65,7 +65,7 @@ class Briefing:
     content: dict = field(default_factory=dict)            # page slug -> [ContentItem]
     header: str = ''
     footer: str = ''
-    constraints: dict = field(default_factory=dict)        # brand_colors, logo, avoid, references, image_max_widths
+    constraints: dict = field(default_factory=dict)        # brand_colors, logo, direction, mode, avoid, references, image_max_widths
     images: dict = field(default_factory=dict)             # strategy, sources, constraints
     domain: str = ''
     notes: dict = field(default_factory=dict)              # lowercased "key: value" lines from Additional Notes
@@ -155,6 +155,7 @@ def _parse_constraints(lines):
         'brand_colors': colors,
         'logo': None if logo.lower() in ('', 'none') else logo,
         'direction': b.get('direction', '').strip(),
+        'mode': 'bold' if b.get('mode', '').strip().lower().startswith('bold') else 'conventional',
         'avoid': [a.strip() for a in re.split(r';|\n', b.get('avoid', '')) if a.strip()],
         'references': [r.strip() for r in b.get('references', '').split(',') if r.strip()],
         'image_max_widths': widths,
