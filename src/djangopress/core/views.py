@@ -9,6 +9,7 @@ from django.utils.translation import get_language
 from django.views.decorators.http import require_POST
 
 from django.core.cache import cache
+from django.urls import translate_url
 
 from .models import Page, DynamicForm, FormSubmission, SiteSettings
 
@@ -246,23 +247,35 @@ def set_language(request):
     stripped_path = lang_prefix_re.sub('/', next_url) if match else next_url
     slug = stripped_path.strip('/')
 
-    # Try to find the page by its slug in the source language and get the
-    # equivalent slug in the target language
+    # A CMS page's address is data, so only the database knows its slug in the
+    # other language. Try that first.
+    redirect_url = None
     target_slug = slug
     if slug:
         check_lang = source_lang or translation.get_language()
         page = Page.get_by_slug(slug, check_lang)
         if page:
             target_slug = page.get_slug(target_lang) or slug
+            redirect_url = f'/{target_lang}/{target_slug}/'
+        else:
+            # Not a page: it belongs to a decoupled app, whose prefix lives in
+            # the URLconf as a lazily translated string — `path(_('shop/'), …)`.
+            # Only resolving and reversing turns `/en/shop/` into `/pt/loja/`,
+            # and the resolving half works only while the SOURCE language is
+            # active: under any other language that path is not in the URLconf
+            # at all, and translate_url quietly hands back what it was given.
+            with translation.override(check_lang):
+                translated = translate_url(next_url, target_lang)
+            if translated != next_url:
+                redirect_url = translated
+
+    # Neither a known page nor a reversible route. Land the visitor in the
+    # language they asked for and let the usual 404 handling take it from there.
+    if redirect_url is None:
+        redirect_url = f'/{target_lang}/{target_slug}/' if target_slug else f'/{target_lang}/'
 
     # Activate the target language and set cookie
     translation.activate(target_lang)
-
-    # Build redirect URL with new language prefix and translated slug
-    if target_slug:
-        redirect_url = f'/{target_lang}/{target_slug}/'
-    else:
-        redirect_url = f'/{target_lang}/'
 
     response = HttpResponseRedirect(redirect_url)
     response.set_cookie(
