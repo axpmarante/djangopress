@@ -194,8 +194,7 @@ bash scripts/sync-to-prod.sh                                       # Push local 
 bash scripts/pull-from-prod.sh                                     # Pull production DB to local via GCS
 python manage.py migrate_storage_folder                # Copy GCS files from default/ to domain
 python manage.py fix_i18n_html --dry-run               # Check for legacy {{ trans.xxx }} vars
-python manage.py bump_version patch                    # 1.0.0 → 1.0.1 (updates src/djangopress/VERSION)
-python manage.py bump_version minor                    # 1.0.1 → 1.1.0 (pyproject.toml reads from VERSION)
+python manage.py bump_version minor                    # bump the engine version — see "Releasing a version" below
 python manage.py check_site                            # verify site conventions (run inside a child site); exit 1 on failures
 python manage.py generate_mockup --prompt-file F --out P [--ref R ...]   # one gpt-image-2.5 render, cost logged
 python manage.py crop_mockup SRC OUT --top 0.0 --bottom 0.2              # crop a band of a mockup
@@ -203,3 +202,24 @@ python manage.py sample_palette IMG --k 6 --json                         # domin
 railway up -d                                          # Redeploy to Railway
 railway logs -f                                        # Stream Railway logs
 ```
+
+### Releasing a version
+
+The version lives only in `src/djangopress/VERSION` (`pyproject.toml` reads it). The DjangoPress
+Manager compares each site's installed version against this file, so a site is only offered
+"Update DjangoPress" (pip upgrade + `migrate`) after a bump. **Bump whenever you add a migration**
+— otherwise sites keep running new code against an old schema (e.g. "no column named kind").
+
+1. Pick the part: `patch` for fixes, `minor` for features or any new migration, `major` for breaking changes.
+2. Bump. This repo has no `manage.py`; run the command from any child site whose venv has the
+   engine installed editable (`pip show djangopress` shows "Editable project location" pointing here):
+   ```bash
+   cd ../<site> && .venv/bin/python manage.py bump_version minor   # writes ../djangopress/src/djangopress/VERSION
+   ```
+   Or edit `src/djangopress/VERSION` by hand — it is one line, `X.Y.Z`.
+3. Commit here: `chore: bump version to X.Y.Z (<what changed>)`.
+4. Merge to `main` and push. Production sites install `djangopress @ git+…@main`, so a bump that
+   stays on a feature branch reaches local sites but not Railway — deploying a migrated site then
+   breaks production with the same missing-column error.
+5. Update each site from the Manager (site page → Update DjangoPress, or bulk), which runs
+   `pip install --upgrade [-e] <engine>` and `manage.py migrate`.
