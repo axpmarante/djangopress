@@ -240,6 +240,12 @@ CSRF_TRUSTED_ORIGINS = [
     'https://*.up.railway.app',
 ]
 
+# Custom domains the site is served on (e.g. "example.pt,www.example.pt").
+# Set on Railway by the DjangoPress Manager's Domain card.
+CUSTOM_DOMAINS = [d.strip().lower() for d in env('CUSTOM_DOMAINS', default='').split(',') if d.strip()]
+ALLOWED_HOSTS += CUSTOM_DOMAINS
+CSRF_TRUSTED_ORIGINS += [f'https://{d}' for d in CUSTOM_DOMAINS]
+
 
 # ---------------------------------------------------------------------------
 # Authentication URLs

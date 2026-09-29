@@ -180,6 +180,18 @@ python manage.py migrate
 - **Editor structural verbs** (duplicate / move / insert element or section) are deterministic BeautifulSoup patches in `editor_v2/structure.py`, applied to every language copy. Never add an LLM call to them.
 - **Editor operations must create a `kind='checkpoint'` PageVersion before mutating, or they are not undoable.**
 
+## Configuration
+
+### Environment Variables
+
+Optional environment variables (`.env`):
+
+- `SECRET_KEY` — Django secret key (required for production)
+- `GEMINI_API_KEY` — API key for Google Gemini (required for AI features)
+- `CUSTOM_DOMAINS` — comma-separated hosts the site is served on (`example.pt,www.example.pt`). Appended to `ALLOWED_HOSTS` and (as `https://…`) to `CSRF_TRUSTED_ORIGINS`. Set on Railway by the manager's Domain card; no per-site settings edit needed.
+
+---
+
 ## Commands
 
 ```bash
