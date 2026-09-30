@@ -13,7 +13,10 @@ let cache = null;
 let allImages = [];
 let currentEl = null;
 let currentSelector = null;
-let currentMode = 'img'; // 'img' or 'background'
+let currentMode = 'img'; // 'img', 'background' or 'pick' (hand images to a callback)
+let pickCallback = null;
+let pickMultiple = false;
+let pickedImages = [];
 let selectedImage = null;
 let selectedFile = null;
 let activeModalTab = 'library';
@@ -46,6 +49,12 @@ const el = {
 function open(data) {
     const mode = (data && data.mode) || 'img';
     // In img mode, require an IMG element; in background mode, accept any element
+    if (mode === 'pick') {
+        pickCallback = typeof data.onPick === 'function' ? data.onPick : null;
+        pickMultiple = !!data.multiple;
+        pickedImages = [];
+        if (!pickCallback) return;
+    }
     if (mode === 'img' && (!currentEl || currentEl.tagName !== 'IMG')) return;
     if (mode === 'background' && !currentEl) return;
 
@@ -55,7 +64,7 @@ function open(data) {
 
     // Update modal title
     const titleEl = modal.querySelector('.ev2-image-modal-header h3');
-    if (titleEl) titleEl.textContent = mode === 'background' ? 'Select Background Image' : 'Select Image';
+    if (titleEl) titleEl.textContent = mode === 'background' ? 'Select Background Image' : mode === 'pick' && pickMultiple ? 'Select Images' : 'Select Image';
 
     selectedImage = null;
     selectedFile = null;
@@ -83,6 +92,9 @@ function close() {
     selectedImage = null;
     selectedFile = null;
     currentMode = 'img';
+    pickCallback = null;
+    pickMultiple = false;
+    pickedImages = [];
     resetUpload();
 }
 
@@ -106,6 +118,8 @@ function switchModalTab(tab) {
 
     selectedImage = null;
     selectedFile = null;
+    pickedImages = [];
+    el.grid()?.querySelectorAll('.ev2-image-modal-item.selected').forEach(i => i.classList.remove('selected'));
     setStatus('');
     updateButtons();
 }
@@ -174,6 +188,15 @@ function renderGrid(images) {
 }
 
 function selectLibraryImage(item) {
+    if (currentMode === 'pick' && pickMultiple) {
+        const img = { id: item.dataset.imgId, url: item.dataset.url, alt: item.dataset.alt, title: item.dataset.title };
+        const at = pickedImages.findIndex(p => p.id === img.id);
+        if (at >= 0) { pickedImages.splice(at, 1); item.classList.remove('selected'); }
+        else { pickedImages.push(img); item.classList.add('selected'); }
+        setStatus(pickedImages.length ? `${pickedImages.length} selected` : '');
+        updateButtons();
+        return;
+    }
     // Deselect all
     const grid = el.grid();
     if (grid) grid.querySelectorAll('.ev2-image-modal-item').forEach(i => i.classList.remove('selected'));
@@ -238,7 +261,7 @@ function resetUpload() {
 }
 
 async function uploadAndSelect() {
-    if (!selectedFile || !currentEl) return;
+    if (!selectedFile || (!currentEl && currentMode !== 'pick')) return;
 
     const uploadBtn = el.uploadBtn();
     if (uploadBtn) { uploadBtn.disabled = true; uploadBtn.textContent = 'Uploading...'; }
@@ -266,6 +289,13 @@ async function uploadAndSelect() {
 
         // Apply the uploaded image
         const img = result.image;
+        if (currentMode === 'pick') {
+            const cb = pickCallback;
+            cache = null;
+            close();
+            if (cb) cb([{ id: img.id, url: img.url, alt: img.alt_text || alt }]);
+            return;
+        }
         applyImage(img.url, img.alt_text || alt, img.id);
 
         // Invalidate cache
@@ -280,6 +310,14 @@ async function uploadAndSelect() {
 // --- Apply selection ---
 
 function applySelection() {
+    if (currentMode === 'pick') {
+        const images = (pickMultiple ? pickedImages : [selectedImage]).filter(Boolean)
+            .map(i => ({ id: i.id, url: i.url, alt: i.alt || '' }));
+        const cb = pickCallback;
+        close();
+        if (images.length && cb) cb(images);
+        return;
+    }
     if (!selectedImage || !currentEl) return;
     applyImage(selectedImage.url, selectedImage.alt, selectedImage.id);
     close();
@@ -356,7 +394,11 @@ function setStatus(text) {
 function updateButtons() {
     const selectB = el.selectBtn();
     const uploadB = el.uploadBtn();
-    if (selectB) selectB.disabled = !selectedImage;
+    if (selectB) {
+        const n = currentMode === 'pick' && pickMultiple ? pickedImages.length : (selectedImage ? 1 : 0);
+        selectB.disabled = n === 0;
+        selectB.textContent = currentMode === 'pick' && pickMultiple ? (n ? `Add ${n} image${n === 1 ? '' : 's'}` : 'Add images') : 'Select Image';
+    }
     if (uploadB) {
         uploadB.disabled = !selectedFile;
         uploadB.textContent = 'Upload & Select';
