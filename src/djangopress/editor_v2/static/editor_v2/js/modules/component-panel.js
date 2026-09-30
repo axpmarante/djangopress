@@ -55,7 +55,9 @@ function rowHtml(comp, item, i, isOpen, n) {
     const thumb = f.image
         ? `<img class="ev2-comp-thumb" src="${esc(f.image.getAttribute('src'))}" alt="">`
         : `<span class="ev2-comp-thumb ev2-comp-thumb-text">${i + 1}</span>`;
-    const summary = f.texts[0]?.value || f.image?.getAttribute('alt') || `Item ${i + 1}`;
+    // Text sliders are known by their first line; image items by caption / alt (overlay labels like "Ver" say nothing).
+    const imageLabel = f.link?.getAttribute('data-alt') || f.image?.getAttribute('alt');
+    const summary = (comp.kind === 'text-slider' ? f.texts[0]?.value || imageLabel : imageLabel || f.texts[0]?.value) || `Item ${i + 1}`;
     return `<li class="ev2-comp-row${isOpen ? ' is-open' : ''}" data-index="${i}">
         <div class="ev2-comp-row-head" data-act="open">
             <span class="ev2-comp-grip" title="Drag to reorder" aria-hidden="true">⋮⋮</span>${thumb}
