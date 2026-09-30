@@ -114,6 +114,7 @@ The `editor_v2` app powers the `?edit=v2` (or `?edit=true`) mode for staff users
 - `GET /editor-v2/api/versions/<page_id>/<version>/` — get specific version (staff)
 - `POST /editor-v2/api/remove-section/`, `remove-element/` — structural removes (staff)
 - `POST /editor-v2/api/duplicate-element/`, `move-element/`, `insert-element/` — clone / swap / insert a node at a selector, applied to every language, no LLM (staff)
+- `POST /editor-v2/api/component/` — component panel operations on a slider / text slider / lightbox gallery (`reorder`, `remove`, `set_settings`, `replace_image`, `add_images`, `add_text_item`, `update_item`); recognition in `editor_v2/components.py` mirrored by `static/editor_v2/js/lib/components.js`; checkpointed, every language (update_item: current language), new text translated (staff)
 - `POST /editor-v2/api/duplicate-section/`, `move-section/` — same for whole sections; duplicate renames to `name-2`, `name-3`… (staff)
 
 **Structural verbs (2026-09):**

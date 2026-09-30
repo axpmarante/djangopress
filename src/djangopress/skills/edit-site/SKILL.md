@@ -632,6 +632,8 @@ rm /tmp/dp-page-<PAGE_ID>-*.html
 
 ## Images
 
+- Staff reorder, add and remove slides and gallery images themselves from the editor's component panel — don't assume slide order or count is fixed, and keep new sliders/galleries in the shapes from `djangopress-html-reference` ("Editable components").
+
 ### List media library
 
 ```bash

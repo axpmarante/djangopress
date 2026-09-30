@@ -9,7 +9,8 @@ Usage:
     python manage.py check_site --only sections,links
 
 Checks: settings, page-html, forbidden-tag, sections, images, anchors,
-links, meta, home, dom-parity, global-section, menu, seo.
+links, meta, home, dom-parity, global-section, menu, seo, components
+(components problems are warnings: printed, never a failure).
 """
 
 import json
@@ -20,11 +21,12 @@ from django.core.management.base import BaseCommand, CommandError
 
 from djangopress.core.middleware import NON_I18N_PATHS
 from djangopress.core.models import GlobalSection, MenuItem, Page, SiteSettings
+from djangopress.editor_v2 import components as editor_components
 
 
 CHECK_NAMES = (
     'settings', 'page-html', 'forbidden-tag', 'sections', 'images', 'anchors',
-    'links', 'meta', 'home', 'dom-parity', 'global-section', 'menu', 'seo',
+    'links', 'meta', 'home', 'dom-parity', 'global-section', 'menu', 'seo', 'components',
 )
 
 FORBIDDEN_TAGS = ('html', 'head', 'body', 'header', 'nav', 'footer')
@@ -84,6 +86,7 @@ class SiteChecker:
     def __init__(self, only=None):
         self.only = set(only) if only else None
         self.failures = []
+        self.warnings = []
         self.settings = SiteSettings.load()
         self.default_lang = self.settings.get_default_language()
         self.lang_codes = self.settings.get_language_codes() or [self.default_lang]
@@ -96,10 +99,14 @@ class SiteChecker:
     def fail(self, check, message):
         self.failures.append({'check': check, 'message': message})
 
+    def warn(self, check, message):
+        self.warnings.append({'check': check, 'message': message})
+
     def run(self):
         self.check_settings()
         self.check_pages()
         self.check_dom_parity()
+        self.check_components()
         self.check_global_sections()
         self.check_menu()
         self.check_seo()
@@ -255,6 +262,17 @@ class SiteChecker:
                         self.fail('dom-parity', f'page {page.id}: element {i} differs — {base_lang}={a!r} vs {lang}={b!r}')
                         break
 
+    def check_components(self):
+        """Sliders / galleries the editor's component panel can't manage. Warnings only."""
+        if not self.enabled('components'):
+            return
+        for page in Page.objects.filter(is_active=True):
+            for lang, html in sorted((page.html_content_i18n or {}).items()):
+                if not html:
+                    continue
+                for problem in editor_components.audit(soup_of(html)):
+                    self.warn('components', f'page {page.id} ({lang}): {problem}')
+
     # -- global sections, menu, seo ---------------------------------------
 
     def check_global_sections(self):
@@ -330,11 +348,22 @@ class Command(BaseCommand):
         if unknown:
             raise CommandError(f"Unknown check(s): {', '.join(unknown)}. Known: {', '.join(CHECK_NAMES)}")
 
-        failures = SiteChecker(only=only or None).run()
+        checker = SiteChecker(only=only or None)
+        failures = checker.run()
 
         if options['json']:
-            self.stdout.write(json.dumps({'ok': not failures, 'failures': failures}, ensure_ascii=False))
-        elif failures:
+            payload = {'ok': not failures, 'failures': failures}
+            if checker.warnings:
+                payload['warnings'] = checker.warnings
+            self.stdout.write(json.dumps(payload, ensure_ascii=False))
+            if failures:
+                raise SystemExit(1)
+            return
+        if checker.warnings:
+            self.stdout.write(f'WARN — {len(checker.warnings)} warning(s):\n')
+            for w in checker.warnings:
+                self.stdout.write(f"  [{w['check']}] {w['message']}")
+        if failures:
             self.stdout.write(f'FAIL — {len(failures)} problem(s):\n')
             for f in failures:
                 self.stdout.write(f"  [{f['check']}] {f['message']}")

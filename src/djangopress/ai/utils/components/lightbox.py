@@ -103,12 +103,13 @@ navigable in the lightbox. This is useful for "show 4, but lightbox has 12":
       <span class="text-white text-xl font-bold">+8 more</span>
     </div>
   </a>
+  <!-- Hidden items still navigable in lightbox. Keep them INSIDE the grid (hidden
+       items take no grid cell) so the editor's gallery panel can manage them. -->
+  <a href="{{ MEDIA_URL }}site_images/img-5.jpg" data-lightbox="portfolio" data-alt="Project 5" class="hidden"></a>
+  <a href="{{ MEDIA_URL }}site_images/img-6.jpg" data-lightbox="portfolio" data-alt="Project 6" class="hidden"></a>
+  <a href="{{ MEDIA_URL }}site_images/img-7.jpg" data-lightbox="portfolio" data-alt="Project 7" class="hidden"></a>
+  <!-- ... more hidden items ... -->
 </div>
-<!-- Hidden items still navigable in lightbox -->
-<a href="{{ MEDIA_URL }}site_images/img-5.jpg" data-lightbox="portfolio" data-alt="Project 5" class="hidden"></a>
-<a href="{{ MEDIA_URL }}site_images/img-6.jpg" data-lightbox="portfolio" data-alt="Project 6" class="hidden"></a>
-<a href="{{ MEDIA_URL }}site_images/img-7.jpg" data-lightbox="portfolio" data-alt="Project 7" class="hidden"></a>
-<!-- ... more hidden items ... -->
 ```
 
 #### Combining with Splide Carousel

@@ -71,6 +71,11 @@ You can also opt an `<img>` (or any wrapper) out of the editor with `data-editor
 </a>
 ```
 
+**Editable components (editor panel):** the inline editor gives sliders and galleries a panel (thumbnails, drag to reorder, replace/add/remove, slider settings) when they use these shapes — keep to them:
+- **Slider:** `.splide > .splide__track > ul.splide__list > li.splide__slide`, options in `data-splide='{…}'` (valid JSON, single-quoted attribute). Image slides hold one `<img>` (a short caption is fine); text slides (testimonials, cards) hold their text in plain elements — `blockquote`, `p`, `h3`, `cite` — one per field, with only `<br>` inside if staff should edit it from the panel (inline formatting like `<strong>` makes that field read-only there).
+- **Gallery:** the grid's direct children are the items; each item is, or contains exactly one, `<a href="full.jpg" data-lightbox="group" data-alt="Caption"><img …></a>`. Don't wrap some items differently from others.
+- `data-media-collection` is optional. `check_site --only components` warns when a slider or lightbox group doesn't match.
+
 **Marquee pattern (`dp-marquee`):** Auto-scrolling row of items (images, logos, cards). The user lists originals; `marquee.js` clones the track contents once at runtime — marking clones with `aria-hidden="true"` + `data-editor-skip="true"` — so `translateX(-50%)` loops seamlessly. The editor filters those clones from selectors and the Images sidebar, so only originals appear and `nth-child` paths stay stable.
 
 ```html

@@ -357,3 +357,33 @@ def update_item(root, kind, index, alt=None, caption=None, texts=None):
     if texts:
         _write_texts(item, texts)
     return index
+
+
+# --- audit (check_site) ----------------------------------------------------------
+
+def _where(el):
+    section = el.find_parent(attrs={'data-section': True})
+    return f' in section "{section["data-section"]}"' if section else ''
+
+
+def audit(soup):
+    """Problems that stop the editor's component panel from managing a slider or gallery."""
+    problems = []
+    for root in soup.select('.splide'):
+        if not splide_slides(root):
+            problems.append(f'slider{_where(root)} has no slides (needs .splide__track > ul.splide__list > li.splide__slide)')
+        raw = root.get('data-splide')
+        if raw:
+            try:
+                ok = isinstance(json.loads(raw), dict)
+            except ValueError:
+                ok = False
+            if not ok:
+                problems.append(f'slider{_where(root)}: data-splide is not a JSON object')
+    groups = {}
+    for a in soup.select('a[data-lightbox]'):
+        groups.setdefault(a.get('data-lightbox'), []).append(a)
+    for name, links in groups.items():
+        if len(links) >= 2 and any(find_for(a) is None for a in links):
+            problems.append(f'lightbox group "{name}": items are not siblings in one container — the editor cannot manage them')
+    return problems

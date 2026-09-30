@@ -121,9 +121,10 @@ class ComponentRegistry:
             f"{index}\n\n"
             "Return a JSON array of component names that are needed for this request. "
             "Examples:\n"
-            '- User wants a carousel/slider: ["splide"]\n'
+            '- User wants a single-image slider: ["slider"]\n'
+            '- User wants a multi-card carousel: ["carousel"]\n'
             '- User wants a gallery with lightbox: ["lightbox"]\n'
-            '- User wants tabs and an accordion: ["alpine-tabs", "alpine-accordion"]\n\n'
+            '- User wants tabs and an accordion: ["tabs", "accordion"]\n\n'
             "Return [] (empty array) when NO interactive components are needed. "
             "This includes:\n"
             "- Simple text edits (rewrite copy, fix typos, change headings)\n"

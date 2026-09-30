@@ -218,3 +218,42 @@ class OperationsTest(SimpleTestCase):
             components.update_item(root, kind, 0, caption='x')    # no lightbox link
         with self.assertRaises(ValueError):
             components.update_item(root, kind, 0, texts={'7': 'x'})
+
+
+import importlib
+
+
+class AuditTest(SimpleTestCase):
+    def test_fixtures_have_no_problems(self):
+        for p in FIXTURES.glob('*.html'):
+            with self.subTest(fixture=p.stem):
+                self.assertEqual(components.audit(load(p.stem)), [])
+
+    def test_reports_broken_slider_and_scattered_gallery(self):
+        soup = BeautifulSoup(
+            '<section data-section="a"><div class="splide" data-splide="{bad"><ul><li>x</li></ul></div></section>'
+            '<section data-section="b"><div><a href="/1.jpg" data-lightbox="z"><img src="/1.jpg"/></a></div>'
+            '<p>t</p><div><div><a href="/2.jpg" data-lightbox="z"><img src="/2.jpg"/></a></div></div></section>',
+            'html.parser')
+        problems = components.audit(soup)
+        self.assertEqual(len(problems), 3, problems)
+        self.assertTrue(any('no slides' in p for p in problems))
+        self.assertTrue(any('not a JSON object' in p for p in problems))
+        self.assertTrue(any('lightbox group "z"' in p for p in problems))
+
+
+class RegistryExamplesTest(SimpleTestCase):
+    """The AI component docs must produce markup the editor panel recognises."""
+
+    def test_examples_are_recognised(self):
+        import re
+        for name in ('slider', 'carousel', 'lightbox'):
+            module = importlib.import_module(f'djangopress.ai.utils.components.{name}')
+            blocks = re.findall(r'```html\n(.*?)```', module.FULL_REFERENCE, re.S)
+            self.assertTrue(blocks, name)
+            for block in blocks:
+                soup = BeautifulSoup(f'<section data-section="x">{block}</section>', 'html.parser')
+                with self.subTest(component=name, block=block[:60]):
+                    self.assertEqual(components.audit(soup), [])
+                    for root in soup.select('.splide'):
+                        self.assertIsNotNone(components.detect(root))

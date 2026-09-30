@@ -179,6 +179,7 @@ python manage.py migrate
 - **Decoupled app URLs** must register BEFORE `core.urls` (catch-all)
 - **Editor structural verbs** (duplicate / move / insert element or section) are deterministic BeautifulSoup patches in `editor_v2/structure.py`, applied to every language copy. Never add an LLM call to them.
 - **Editor operations must create a `kind='checkpoint'` PageVersion before mutating, or they are not undoable.**
+- **Editor component panel** (sliders, galleries) recognises components by structure in `editor_v2/components.py` and `editor_v2/static/editor_v2/js/lib/components.js`. Change the two together and keep `editor_v2/tests/fixtures/components/` passing on both sides (`test_components` + the browser harness `editor_v2/tests/js/components_test.html`).
 
 ## Configuration
 

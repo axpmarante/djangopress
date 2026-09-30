@@ -401,3 +401,33 @@ class CommandInterfaceTest(CheckSiteTestCase):
         make_valid_site()
         with self.assertRaises(CommandError):
             call_command('check_site', '--only', 'nope')
+
+
+BROKEN_SLIDER_HTML = (
+    '<section data-section="a" id="a"><div class="splide" data-splide="{bad">'
+    '<div class="splide__track"><ul class="splide__list"><li class="splide__slide">x</li>'
+    '</ul></div></div></section>'
+)
+
+
+class ComponentsCheckTest(TestCase):
+    def setUp(self):
+        cache.clear()
+        home = make_valid_site()
+        home.html_content_i18n = {'pt': VALID_HOME_HTML + BROKEN_SLIDER_HTML}
+        home.save()
+
+    def test_component_problems_are_warnings(self):
+        from djangopress.core.management.commands.check_site import SiteChecker
+        checker = SiteChecker(only=['components'])
+        self.assertEqual(checker.run(), [])
+        self.assertEqual(len(checker.warnings), 1)
+        self.assertEqual(checker.warnings[0]['check'], 'components')
+        self.assertIn('not a JSON object', checker.warnings[0]['message'])
+
+    def test_json_output_lists_warnings_without_failing(self):
+        out = StringIO()
+        call_command('check_site', '--json', '--only', 'components', stdout=out)
+        data = json.loads(out.getvalue())
+        self.assertTrue(data['ok'])
+        self.assertEqual(len(data['warnings']), 1)
