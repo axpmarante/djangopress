@@ -1,9 +1,9 @@
 import { events } from '../lib/events.js';
 import { api } from '../lib/api.js';
-import { $, $$, getCssSelector, isTextElement, getSections, getTagLabel, getEditableTopLevelDescendants, getAncestors, findCardScope, findRepeatGroup, resolveSelector, isRuntimeClass } from '../lib/dom.js';
+import { $, $$, getCssSelector, isTextElement, getSections, getTagLabel, getEditableTopLevelDescendants, getAncestors, findCardScope, resolveSelector, isRuntimeClass } from '../lib/dom.js';
 import { CATEGORIES, HOVER_CATEGORIES, COLOR_FAMILIES, COLOR_SHADES, COLOR_KEYWORDS } from '../lib/tailwind-classes.js';
 import { parseClasses, buildClassString } from '../lib/class-parser.js';
-import { duplicateElement, moveElement, removeElement, canMove, moveSection, canMoveSection } from '../lib/structural.js';
+import { moveSection, canMoveSection } from '../lib/structural.js';
 import { insertAfterSection } from './section-inserter.js';
 import { findComponent } from '../lib/components.js';
 import { prependComponentCard } from './component-panel.js';
@@ -194,46 +194,8 @@ function renderContentTab() {
         }
     }
 
-    if (!prependComponentCard(c, selectedEl)) prependRepeatPanel(c);
+    prependComponentCard(c, selectedEl);
     prependContentBreadcrumb(c);
-}
-
-/**
- * When the selection sits inside a repeated group (cards, slides, FAQ
- * items…), show the group's size and the verbs that act on the item that
- * contains the selection, not on the selection itself.
- */
-function prependRepeatPanel(container) {
-    if (!selectedEl) return;
-    const group = findRepeatGroup(selectedEl);
-    if (!group) return;
-    const itemSel = getCssSelector(group.item);
-    if (!itemSel) return;
-
-    const wrap = document.createElement('div');
-    wrap.className = 'ev2-repeat-panel';
-    const n = group.items.length;
-    const label = group.item.tagName === 'LI' ? 'item' : 'card';
-    wrap.innerHTML = `
-        <div class="ev2-children-heading">${n} repeated ${label}${n === 1 ? '' : 's'} (this is #${group.index + 1})</div>
-        <div class="ev2-repeat-actions">
-            <button type="button" class="ev2-btn-sm ev2-btn-sm-primary" data-repeat="add">+ Add another ${esc(label)}</button>
-            <button type="button" class="ev2-btn-sm" data-repeat="up" title="Move before" ${canMove(group.item, 'up') ? '' : 'disabled'}>←</button>
-            <button type="button" class="ev2-btn-sm" data-repeat="down" title="Move after" ${canMove(group.item, 'down') ? '' : 'disabled'}>→</button>
-            <button type="button" class="ev2-btn-sm ev2-btn-sm-danger" data-repeat="remove">Remove this ${esc(label)}</button>
-        </div>`;
-
-    wrap.addEventListener('click', (e) => {
-        const btn = e.target.closest('[data-repeat]');
-        if (!btn || btn.disabled) return;
-        const verb = btn.dataset.repeat;
-        if (verb === 'add') duplicateElement(itemSel);
-        else if (verb === 'up') moveElement(itemSel, 'up');
-        else if (verb === 'down') moveElement(itemSel, 'down');
-        else if (verb === 'remove') removeElement(itemSel);
-    });
-
-    container.insertBefore(wrap, container.firstChild);
 }
 
 /**

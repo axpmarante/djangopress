@@ -2634,31 +2634,6 @@ body.ev2-version-preview .editor-v2-content {
   color: var(--ev2-text-secondary);
 }
 
-/* --------------------------------------------------------------------------
-   Repeat-group panel (Content tab)
-   -------------------------------------------------------------------------- */
-.ev2-repeat-panel {
-  margin: 0 0 12px;
-  padding: 10px;
-  border: 1px solid var(--ev2-border);
-  border-radius: var(--ev2-radius);
-  background: var(--ev2-bg-subtle);
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.ev2-repeat-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.ev2-repeat-actions .ev2-btn-sm[disabled] {
-  opacity: 0.4;
-  cursor: default;
-}
-
 .ev2-tree-actions {
   display: none;
   gap: 2px;
@@ -2801,3 +2776,4 @@ body.ev2-version-preview .editor-v2-content {
 .ev2-comp-perrow { margin-top: 6px; }
 .ev2-comp-status { font-size: 11px; color: var(--ev2-text-secondary); min-height: 14px; margin-top: 6px; }
 .ev2-comp-num input, .ev2-comp-num select { font: inherit; font-size: 12px; color: var(--ev2-text); border: 1px solid var(--ev2-border); border-radius: 4px; padding: 3px 6px; background: var(--ev2-bg); }
+.ev2-comp-row-actions .ev2-btn-sm[disabled] { opacity: .4; cursor: default; }
