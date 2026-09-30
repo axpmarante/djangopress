@@ -1,0 +1,90 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>running</title>
+<div class="editor-v2-content" id="host"></div>
+<pre id="out"></pre>
+<script type="module">
+import {
+    findComponent, itemsOf, itemFields, minItems, readSliderOptions,
+    settingsFromOptions, settingsChanges, canSwapInPlace,
+} from '../../static/editor_v2/js/lib/components.js';
+
+const FIXTURES = ['hero_fade', 'loop_carousel', 'testimonials', 'card_carousel', 'gallery_grid',
+                  'gallery_wrapped', 'splide_lightbox', 'gallery_hint', 'not_component'];
+const fails = [];
+let passed = 0;
+const eq = (name, got, want) => {
+    if (JSON.stringify(got) === JSON.stringify(want)) passed++;
+    else fails.push(`${name}: got ${JSON.stringify(got)}, want ${JSON.stringify(want)}`);
+};
+const host = document.getElementById('host');
+const load = async (name) => { host.innerHTML = await (await fetch(`../fixtures/components/${name}.html`)).text(); };
+
+for (const name of FIXTURES) {
+    await load(name);
+    const want = host.querySelector('section').dataset;
+    const comp = findComponent(host.querySelector('[data-probe]'));
+    eq(`${name} kind`, comp ? comp.kind : 'none', want.expectKind);
+    if (!comp) continue;
+    const items = itemsOf(comp);
+    eq(`${name} count`, items.length, Number(want.expectCount));
+    const f = itemFields(items[0]);
+    eq(`${name} texts`, f.texts.length, Number(want.expectTexts));
+    eq(`${name} editable`, f.texts.filter(t => t.editable).length, Number(want.expectEditable));
+    eq(`${name} image`, f.image ? 1 : 0, Number(want.expectImage));
+}
+
+// clone ignored and stored order kept
+await load('loop_carousel');
+let comp = findComponent(host.querySelector('[data-probe]'));
+eq('loop order', itemsOf(comp).map(i => itemFields(i).image.getAttribute('alt')), ['Um', 'Dois', 'Três', 'Quatro']);
+
+// text reading
+await load('testimonials');
+comp = findComponent(host.querySelector('[data-probe]'));
+eq('testimonial values', itemFields(itemsOf(comp)[1]).texts.map(t => t.value),
+   ['“Best restaurant we\'ve been to in Faro. The meal was a symphony.”', 'travbud1 · Tripadvisor']);
+eq('testimonial labels', itemFields(itemsOf(comp)[1]).texts.map(t => t.label), ['Quote', 'Text']);
+
+// minimum items
+await load('gallery_grid');
+eq('gallery min', minItems(findComponent(host.querySelector('[data-probe]'))), 2);
+await load('gallery_hint');
+eq('hinted gallery min', minItems(findComponent(host.querySelector('[data-probe]'))), 1);
+
+// settings: fade hero
+await load('hero_fade');
+comp = findComponent(host.querySelector('[data-probe]'));
+let { ok, opts } = readSliderOptions(comp.root);
+eq('fade ok', ok, true);
+let s = settingsFromOptions(opts);
+eq('fade settings', [s.effect, s.loop, s.autoplay, s.seconds, s.speed, s.arrows, s.dots, s.multi],
+   ['fade', true, true, 5, 'slow', true, true, false]);
+s.loop = false; s.seconds = 3;
+eq('fade changes', settingsChanges(s, opts),
+   { type: 'fade', rewind: false, autoplay: true, interval: 3000, speed: 1200, arrows: true, pagination: true, pauseOnHover: true });
+s.effect = 'slide'; s.loop = true;
+eq('slide+loop changes type/rewind', [settingsChanges(s, opts).type, settingsChanges(s, opts).rewind], ['loop', null]);
+
+// settings: multi-item loop carousel
+await load('loop_carousel');
+comp = findComponent(host.querySelector('[data-probe]'));
+({ opts } = readSliderOptions(comp.root));
+s = settingsFromOptions(opts);
+eq('multi settings', [s.effect, s.loop, s.multi, s.perPage, s.tablet, s.mobile], ['slide', true, true, 3, 2, 1]);
+s.perPage = 4; s.mobile = 2;
+eq('breakpoints merge', settingsChanges(s, opts).breakpoints, { '1024': { perPage: 2 }, '768': { perPage: 2 } });
+eq('perPage', settingsChanges(s, opts).perPage, 4);
+
+// invalid JSON
+comp.root.setAttribute('data-splide', '{type: fade');
+eq('invalid json', readSliderOptions(comp.root).ok, false);
+
+// in-place swap guard
+eq('swap plain', canSwapInPlace('<div class="splide"></div>'), true);
+eq('swap template var', canSwapInPlace('<img src="{{ MEDIA_URL }}a.jpg">'), false);
+eq('swap template tag', canSwapInPlace('<p>{% trans "x" %}</p>'), false);
+
+document.title = fails.length ? `FAIL ${fails.length}` : `PASS ${passed}`;
+document.getElementById('out').textContent = fails.join('\n') || `all ${passed} passed`;
+</script>

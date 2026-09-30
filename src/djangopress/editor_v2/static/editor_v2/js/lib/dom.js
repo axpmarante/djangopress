@@ -285,7 +285,12 @@ export function initDynamicComponents(container) {
 // Runtime-only state classes that a component (Splide, etc.) toggles on an
 // element after mount; they must not affect whether two elements look like
 // the same repeatable item. `ev2-` covers our own editor classes.
-const RUNTIME_CLASS_RE = /^(ev2-|is-active$|is-visible$|is-next$|is-prev$)/;
+const RUNTIME_CLASS_RE = /^(ev2-|is-(active|visible|prev|next|initialized|rendered|overflow|focus-in)$|splide--|splide__slide--clone$)/;
+
+/** Runtime/editor state class (Splide, ev2-) — shown to nobody, saved never. Mirror of components.RUNTIME_CLASS_RE. */
+export function isRuntimeClass(c) {
+    return RUNTIME_CLASS_RE.test(c);
+}
 
 /**
  * "tag|sorted classes" (editor and runtime-state classes excluded). The
