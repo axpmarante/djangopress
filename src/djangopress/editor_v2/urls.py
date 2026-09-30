@@ -2,7 +2,7 @@
 URL configuration for the editor.
 """
 from django.urls import path
-from . import api_views
+from . import api_views, component_views
 
 app_name = 'editor_v2'
 
@@ -41,6 +41,7 @@ urlpatterns = [
     path('api/insert-element/', api_views.insert_element, name='api_insert_element'),
     path('api/duplicate-section/', api_views.duplicate_section, name='api_duplicate_section'),
     path('api/move-section/', api_views.move_section, name='api_move_section'),
+    path('api/component/', component_views.component_op, name='api_component_op'),
 
     # AI full-page refinement endpoints
     path('api/refine-page/', api_views.refine_page, name='api_refine_page'),

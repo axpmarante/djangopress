@@ -2076,14 +2076,15 @@ def remove_element(request):
 # Structural verbs (no LLM): duplicate / move / insert
 # ---------------------------------------------------------------------------
 
-def _run_structural_verb(request, data, change_summary, apply_fn):
+def _run_structural_verb(request, data, change_summary, apply_fn, *, pass_lang=False, only_lang=None):
     """
     Shared driver for structural endpoints.
 
-    `apply_fn(soup)` mutates a soup and returns a result (truthy on success,
-    None when the target was not found or the verb was a no-op). It is run
-    once on the current-language HTML for validation and to get the result,
-    then on every language copy through _apply_structural_change_to_all_langs.
+    `apply_fn(soup)` — or `apply_fn(soup, lang_code)` when `pass_lang` —
+    mutates a soup and returns a result (truthy or an int on success, None
+    when the target was not found or the verb was a no-op). It is run once on
+    the current-language HTML for validation and to get the result, then on
+    every language copy (only `only_lang` when given).
 
     Returns a JsonResponse on a request error, otherwise the tuple
     (page, result, skipped_languages); `result` is None when the target
@@ -2098,7 +2099,8 @@ def _run_structural_verb(request, data, change_summary, apply_fn):
 
     lang = _detect_language_from_request(request, data)
     current_html, _lang = _get_page_html(page, lang)
-    result = apply_fn(BeautifulSoup(current_html or '', 'html.parser'))
+    call = (lambda soup, code: apply_fn(soup, code)) if pass_lang else (lambda soup, code: apply_fn(soup))
+    result = call(BeautifulSoup(current_html or '', 'html.parser'), lang)
     if result is None:
         return page, None, []
 
@@ -2113,8 +2115,10 @@ def _run_structural_verb(request, data, change_summary, apply_fn):
     for lang_code, lang_html in html_i18n.items():
         if not lang_html:
             continue
+        if only_lang and lang_code != only_lang:
+            continue
         soup = BeautifulSoup(lang_html, 'html.parser')
-        if apply_fn(soup) is None:
+        if call(soup, lang_code) is None:
             skipped.append(lang_code)
             continue
         new_html = str(soup)
