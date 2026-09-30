@@ -51,7 +51,9 @@ New module `editor_v2/static/editor_v2/js/lib/components.js`, an ordered list of
 
 **gallery** — root is the nearest element that has two or more item children, where an item is a child that is, or contains exactly one, `a[data-lightbox] > img`. Items are those children in order.
 
-**Hint:** `data-media-collection="slider|carousel"` forces `slider`; `data-media-collection="lightbox"` forces `gallery`.
+**Hint:** for a `.splide` the slides decide (`slider` vs `text-slider`); `data-media-collection="lightbox"` lets a container with a single lightbox item count as a `gallery`.
+
+**Every item has the same field model:** its first non-decorative `<img>` (if any), its lightbox link (if any), and its *text leaves* — the outermost elements whose children are only inline tags (`strong`, `em`, `span`, `a`, `br`, …) and that contain text. A leaf whose only child elements are `<br>` is editable in the panel; a leaf with inline formatting is shown read-only ("double-click it on the page to edit") so the panel never strips formatting. A survey of the 19 sites (2026-10-01) found most Splide sliders are text or card sliders (`div` per slide, some with an image) and lightbox links often carry caption overlays, so the kind only changes the heading, the add button and the settings, not the fields.
 
 **Addressing:** the client sends `root` as a selector computed with clone-free indices (`getCssSelector`, which already skips runtime-injected nodes) plus an item **index**. Never an `nth-child` path into the slide list.
 
@@ -73,7 +75,7 @@ Heading: `Slider · 5 images`, `Testimonials · 4`, `Gallery · 8`.
 | text-slider | Quote / main text, Author / secondary line (the item's text elements in order; generic: every editable text leaf of the item, labelled by tag) |
 | gallery | Replace image, Alt text, Caption (`data-alt` on the link) |
 
-Each row has **Remove** (confirm; disabled when it is the last item).
+Each row has **Remove** (confirm; disabled at the minimum: 1 slide, or 2 gallery items unless the container carries `data-media-collection="lightbox"`, because a single item would no longer be recognised as a gallery). Text fields can't be emptied (an empty leaf would disappear from the field list and break index parity between languages) — remove the item instead.
 
 **Add** — sliders and galleries: `+ Add images` opens the image picker in a new multi-select mode (library and upload); chosen images are inserted after the selected item (or at the end). Text sliders: `+ Add testimonial` opens a small inline form with the same fields as an item.
 
@@ -91,7 +93,7 @@ Each row has **Remove** (confirm; disabled when it is the last item).
 | Pause on hover | `pauseOnHover` |
 | Items per row: desktop / tablet / mobile | `perPage` and `breakpoints["1024"].perPage`, `breakpoints["768"].perPage` — shown only when the slider is multi-item (`perPage` > 1 or breakpoints present) and not fade |
 
-Keys the panel does not know (`arrowPath`, `gap`, `focus`, …) are preserved untouched. If `data-splide` is not valid JSON the settings block shows "These settings can't be edited here" and the rest of the panel still works.
+Keys the panel does not know (`arrowPath`, `gap`, `focus`, …) are preserved untouched. If `data-splide` is not valid JSON the settings block shows "These settings can't be edited here" and the rest of the panel still works; the server refuses `set_settings` on an invalid attribute rather than overwriting it.
 
 Out of scope: creating a new slider, styling slides (Design tab unchanged), tabs/accordion/marquee.
 
