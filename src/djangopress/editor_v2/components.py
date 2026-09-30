@@ -176,3 +176,184 @@ def min_items(root, kind):
     if kind == 'gallery' and root.get('data-media-collection') != 'lightbox':
         return 2
     return 1
+
+
+# --- operations ----------------------------------------------------------------
+# Each returns the index the panel should focus and raises ValueError on bad
+# arguments. They never look at other languages: the endpoint applies them to
+# each language copy in turn.
+
+SETTING_KEYS = frozenset({
+    'type', 'rewind', 'autoplay', 'interval', 'speed', 'arrows', 'pagination',
+    'pauseOnHover', 'perPage', 'breakpoints',
+})
+_BOOL_SETTINGS = {'rewind', 'autoplay', 'arrows', 'pagination', 'pauseOnHover'}
+_INT_RANGES = {'interval': (1000, 60000), 'speed': (100, 5000), 'perPage': (1, 8)}
+
+
+def _is_int(v):
+    return isinstance(v, int) and not isinstance(v, bool)
+
+
+def _require_index(its, index):
+    if not _is_int(index) or not 0 <= index < len(its):
+        raise ValueError('Item not found')
+
+
+def _safe_url(url):
+    if not isinstance(url, str) or not url.strip():
+        raise ValueError('Missing image URL')
+    if not url.startswith(('http://', 'https://', '/')):
+        raise ValueError('Image URL must be http(s) or site-relative')
+    return url
+
+
+def reorder(root, kind, order):
+    its = items(root, kind)
+    if not isinstance(order, list) or not all(_is_int(i) for i in order) or sorted(order) != list(range(len(its))):
+        raise ValueError('order must list every item exactly once')
+    markers = []
+    for it in its:
+        marker = _SCRATCH.new_tag('ev2-slot')
+        it.replace_with(marker)
+        markers.append(marker)
+    for marker, old in zip(markers, order):
+        marker.replace_with(its[old])
+    return 0
+
+
+def remove(root, kind, index):
+    its = items(root, kind)
+    _require_index(its, index)
+    if len(its) <= min_items(root, kind):
+        raise ValueError("This is the minimum number of items — it can't be removed")
+    its[index].decompose()
+    return min(index, len(its) - 2)
+
+
+def _validate_setting(key, value):
+    if key not in SETTING_KEYS:
+        raise ValueError(f'Unknown setting: {key}')
+    if value is None:
+        return
+    if key == 'type' and value not in ('slide', 'loop', 'fade'):
+        raise ValueError('type must be slide, loop or fade')
+    if key in _BOOL_SETTINGS and not isinstance(value, bool):
+        raise ValueError(f'{key} must be true or false')
+    if key in _INT_RANGES:
+        lo, hi = _INT_RANGES[key]
+        if not _is_int(value) or not lo <= value <= hi:
+            raise ValueError(f'{key} must be a whole number between {lo} and {hi}')
+    if key == 'breakpoints':
+        if not isinstance(value, dict) or not all(str(k).isdigit() and isinstance(v, dict) for k, v in value.items()):
+            raise ValueError('breakpoints must map pixel widths to option objects')
+
+
+def set_settings(root, changes):
+    if 'splide' not in _classes(root):
+        raise ValueError('Settings apply to sliders only')
+    if not isinstance(changes, dict) or not changes:
+        raise ValueError('No settings to change')
+    for key, value in changes.items():
+        _validate_setting(key, value)
+    raw = root.get('data-splide')
+    try:
+        opts = json.loads(raw) if raw else {}
+    except ValueError:
+        opts = None
+    if not isinstance(opts, dict):
+        raise ValueError("This slider's settings aren't valid JSON — fix them in the HTML first")
+    for key, value in changes.items():
+        if value is None:
+            opts.pop(key, None)
+        else:
+            opts[key] = value
+    root['data-splide'] = json.dumps(opts, ensure_ascii=False, separators=(',', ':'))
+    return 0
+
+
+def _set_image(item, url, alt):
+    img = image_of(item)
+    if img is None:
+        raise ValueError('This item has no image')
+    img['src'] = _safe_url(url)
+    for attr in ('srcset', 'sizes'):
+        if attr in img.attrs:
+            del img[attr]
+    if alt is not None:
+        img['alt'] = alt
+    link = lightbox_link_of(item)
+    if link is not None:
+        link['href'] = url
+        if alt is not None and link.has_attr('data-alt'):
+            link['data-alt'] = alt
+
+
+def replace_image(root, kind, index, url, alt):
+    its = items(root, kind)
+    _require_index(its, index)
+    _set_image(its[index], url, alt)
+    return index
+
+
+def add_images(root, kind, after, images):
+    its = items(root, kind)
+    _require_index(its, after)
+    if not images:
+        raise ValueError('No images to add')
+    anchor = its[after]
+    for url, alt in images:
+        clone = copy.copy(its[after])
+        strip_ids(clone)
+        _set_image(clone, url, alt)
+        anchor.insert_after(clone)
+        anchor = clone
+    return after + 1
+
+
+def _write_texts(item, texts):
+    leaves = text_leaves(item)
+    parsed = {}
+    for key, value in texts.items():
+        try:
+            i = int(key)
+        except (TypeError, ValueError):
+            raise ValueError('Unknown text field')
+        if not 0 <= i < len(leaves) or not is_editable_leaf(leaves[i]):
+            raise ValueError('This text has formatting — edit it on the page instead')
+        if not isinstance(value, str) or not value.strip():
+            raise ValueError("Text can't be empty — remove the item instead")
+        parsed[i] = value.strip()
+    for i, value in parsed.items():
+        write_text(leaves[i], value)
+
+
+def add_text_item(root, kind, after, texts):
+    its = items(root, kind)
+    _require_index(its, after)
+    if not isinstance(texts, dict) or not texts:
+        raise ValueError('Fill in the new item')
+    clone = copy.copy(its[after])
+    strip_ids(clone)
+    _write_texts(clone, texts)
+    its[after].insert_after(clone)
+    return after + 1
+
+
+def update_item(root, kind, index, alt=None, caption=None, texts=None):
+    its = items(root, kind)
+    _require_index(its, index)
+    item = its[index]
+    if alt is not None:
+        img = image_of(item)
+        if img is None:
+            raise ValueError('This item has no image')
+        img['alt'] = alt
+    if caption is not None:
+        link = lightbox_link_of(item)
+        if link is None:
+            raise ValueError('This item has no lightbox link')
+        link['data-alt'] = caption
+    if texts:
+        _write_texts(item, texts)
+    return index
