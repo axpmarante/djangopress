@@ -5,6 +5,8 @@ import { CATEGORIES, HOVER_CATEGORIES, COLOR_FAMILIES, COLOR_SHADES, COLOR_KEYWO
 import { parseClasses, buildClassString } from '../lib/class-parser.js';
 import { duplicateElement, moveElement, removeElement, canMove, moveSection, canMoveSection } from '../lib/structural.js';
 import { insertAfterSection } from './section-inserter.js';
+import { findComponent } from '../lib/components.js';
+import { prependComponentCard } from './component-panel.js';
 
 let activeTab = 'content';
 let selectedEl = null;
@@ -178,7 +180,7 @@ function renderContentTab() {
         renderLinkFields(c, selector);
         appendChildrenPanel(c);
     } else {
-        const collectionEl = findMediaCollection(selectedEl);
+        const collectionEl = findComponent(selectedEl) ? null : findMediaCollection(selectedEl);
         if (collectionEl) {
             renderMediaCollection(c, collectionEl);
         } else {
@@ -192,7 +194,7 @@ function renderContentTab() {
         }
     }
 
-    prependRepeatPanel(c);
+    if (!prependComponentCard(c, selectedEl)) prependRepeatPanel(c);
     prependContentBreadcrumb(c);
 }
 

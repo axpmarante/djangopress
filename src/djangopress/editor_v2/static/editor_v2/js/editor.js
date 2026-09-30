@@ -21,6 +21,7 @@ import * as sectionInserter  from './modules/section-inserter.js';
 import * as sectionModal     from './modules/section-modal.js';
 import * as processImages    from './modules/process-images.js';
 import * as viewport         from './modules/viewport.js';
+import * as componentPanel   from './modules/component-panel.js';
 import { restoreSelection }  from './lib/structural.js';
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -40,6 +41,7 @@ document.addEventListener('DOMContentLoaded', () => {
     sectionModal.init();
     processImages.init();
     viewport.init();
+    componentPanel.init();
 
     restoreSelection();
 

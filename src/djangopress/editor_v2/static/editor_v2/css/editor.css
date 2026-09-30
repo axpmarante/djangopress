@@ -2765,3 +2765,39 @@ body.ev2-version-preview .editor-v2-content {
 .ev2-toast.hidden { display: none; }
 .ev2-toast button { background: transparent; border: 1px solid rgba(255,255,255,.4); color: #fff; border-radius: var(--ev2-radius); padding: 4px 10px; cursor: pointer; font-size: 12px; }
 .ev2-toast button:hover { background: rgba(255,255,255,.12); }
+
+/* --- Component panel (sliders, galleries) --- */
+.ev2-comp-card { border: 1px solid var(--ev2-border); border-radius: 8px; padding: 10px; margin-bottom: 12px; background: var(--ev2-bg); }
+.ev2-comp-card.is-busy { opacity: .6; pointer-events: none; }
+.ev2-comp-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px; }
+.ev2-comp-title { font-weight: 600; font-size: 13px; color: var(--ev2-text); }
+.ev2-comp-count { font-size: 12px; color: var(--ev2-text-secondary); }
+.ev2-comp-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.ev2-comp-row { border: 1px solid var(--ev2-border-light); border-radius: 6px; background: var(--ev2-bg); }
+.ev2-comp-row.is-open { border-color: var(--ev2-primary); box-shadow: 0 0 0 2px var(--ev2-primary-alpha); }
+.ev2-comp-row.is-dragging { opacity: .4; }
+.ev2-comp-row.is-drop-target { border-color: var(--ev2-primary); background: var(--ev2-primary-light); }
+.ev2-comp-row-head { display: flex; align-items: center; gap: 8px; padding: 6px; cursor: pointer; }
+.ev2-comp-row-head:hover { background: var(--ev2-bg-hover); }
+.ev2-comp-grip { cursor: grab; color: var(--ev2-border-dark); font-size: 12px; letter-spacing: -2px; user-select: none; }
+.ev2-comp-thumb { width: 40px; height: 30px; object-fit: cover; border-radius: 4px; flex: none; background: var(--ev2-bg-subtle); }
+.ev2-comp-thumb-text { display: flex; align-items: center; justify-content: center; font-size: 11px; color: var(--ev2-text-secondary); }
+.ev2-comp-summary { font-size: 12px; color: var(--ev2-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ev2-comp-fields { padding: 4px 8px 10px; display: flex; flex-direction: column; gap: 8px; }
+.ev2-comp-image { display: flex; align-items: center; gap: 8px; }
+.ev2-comp-image img { width: 96px; height: 64px; object-fit: cover; border-radius: 4px; }
+.ev2-comp-field { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: var(--ev2-text-secondary); }
+.ev2-comp-field input, .ev2-comp-field textarea { font: inherit; font-size: 13px; color: var(--ev2-text); border: 1px solid var(--ev2-border); border-radius: 4px; padding: 5px 7px; resize: vertical; }
+.ev2-comp-readonly { margin: 0; font-size: 12px; color: var(--ev2-text); }
+.ev2-comp-hint { margin: 0; font-size: 11px; color: var(--ev2-text-secondary); }
+.ev2-comp-row-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.ev2-comp-add { margin-top: 8px; display: flex; flex-direction: column; gap: 8px; }
+.ev2-comp-addform { display: flex; flex-direction: column; gap: 8px; }
+.ev2-comp-settings { margin-top: 10px; border-top: 1px solid var(--ev2-border-light); padding-top: 8px; font-size: 12px; }
+.ev2-comp-settings summary { cursor: pointer; font-weight: 600; color: var(--ev2-text); margin-bottom: 6px; }
+.ev2-comp-check { display: flex; align-items: center; gap: 6px; margin: 4px 0; color: var(--ev2-text); }
+.ev2-comp-num { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 4px 0; color: var(--ev2-text); }
+.ev2-comp-num input { width: 64px; }
+.ev2-comp-perrow { margin-top: 6px; }
+.ev2-comp-status { font-size: 11px; color: var(--ev2-text-secondary); min-height: 14px; margin-top: 6px; }
+.ev2-comp-num input, .ev2-comp-num select { font: inherit; font-size: 12px; color: var(--ev2-text); border: 1px solid var(--ev2-border); border-radius: 4px; padding: 3px 6px; background: var(--ev2-bg); }
