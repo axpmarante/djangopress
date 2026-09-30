@@ -159,3 +159,42 @@ class ComponentApiTest(TestCase):
         self.client.force_login(User.objects.create_user('plain', 'p@example.com', 'pw'))
         res = self.post(SLIDER, 'text-slider', 2, 'remove', {'index': 0})
         self.assertEqual(res.status_code, 302)
+
+
+class ComponentApiReviewFixesTest(ComponentApiTest):
+    def test_drifted_language_same_count_is_skipped(self):
+        en = EN.replace('<p>Rui</p>', '<p><strong>Rui</strong> M.</p>')
+        self.page.html_content_i18n = {'pt': PT, 'en': en}
+        self.page.save()
+        with mock.patch(TRANSLATE, return_value=['“Great.”', 'Zé']):
+            res = self.post(SLIDER, 'text-slider', 2, 'add_text_item', {'after': 1, 'texts': {'0': '“Ótimo.”', '1': 'Zé'}})
+        self.assertEqual(res.status_code, 200, res.content)
+        self.assertEqual(res.json()['skipped_languages'], ['en'])
+        self.assertEqual(len(self.comp('pt', SLIDER, 'text-slider')), 3)
+        self.assertEqual(len(self.comp('en', SLIDER, 'text-slider')), 2)
+
+    def test_slider_kind_flip_between_languages(self):
+        def hero(caps):
+            slides = ''.join(f'<li class="splide__slide"><img src="/media/{i}.jpg" alt="{i}"/><p>{c}</p></li>' for i, c in enumerate(caps))
+            return (f'<section data-section="h" id="h"><div class="splide"><div class="splide__track">'
+                    f'<ul class="splide__list">{slides}</ul></div></div></section>')
+        self.page.html_content_i18n = {'pt': hero(['Sala', 'Bar']),
+                                       'en': hero(['A long English caption that is well over forty chars'] * 2)}
+        self.page.save()
+        root = 'section[data-section="h"] > div:nth-child(1)'
+        res = self.post(root, 'slider', 2, 'reorder', {'order': [1, 0]})
+        self.assertEqual(res.status_code, 200, res.content)
+        self.assertEqual(res.json()['skipped_languages'], [])
+        self.page.refresh_from_db()
+        self.assertLess(self.page.html_content_i18n['en'].index('/media/1.jpg'), self.page.html_content_i18n['en'].index('/media/0.jpg'))
+
+    def test_update_item_on_empty_language_copy_edits_the_shown_copy(self):
+        self.page.html_content_i18n = {'pt': PT, 'en': ''}
+        self.page.save()
+        res = self.post(SLIDER, 'text-slider', 2, 'update_item', {'index': 0, 'texts': {'1': 'Ana P.'}}, language='en')
+        self.assertEqual(res.status_code, 200, res.content)
+        self.assertEqual(self.texts('pt', 0)[1], 'Ana P.')
+
+    def test_template_syntax_is_400(self):
+        res = self.post(SLIDER, 'text-slider', 2, 'update_item', {'index': 0, 'texts': {'1': 'Ana {% now %}'}})
+        self.assertEqual(res.status_code, 400)

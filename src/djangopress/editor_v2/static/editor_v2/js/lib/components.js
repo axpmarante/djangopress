@@ -75,7 +75,8 @@ function splideSlides(root) {
     return Array.from(list.children).filter(c => tagOf(c) === 'LI' && c.classList.contains('splide__slide') && !isRuntimeInjected(c));
 }
 
-const galleryItems = (root) => realChildren(root).filter(c => lightboxLinkOf(c));
+// A lightbox link without an image (hidden "lightbox has 12" extras) is not an item.
+const galleryItems = (root) => realChildren(root).filter(c => lightboxLinkOf(c) && imageOf(c));
 const isImageSlide = (slide) => !!imageOf(slide) && readText(slide).length < TEXT_SLIDE_MIN_CHARS;
 
 export function detectKind(root) {
@@ -203,4 +204,18 @@ export function settingsChanges(s, opts) {
         c.breakpoints = bps;
     }
     return c;
+}
+
+/**
+ * Only the data-splide keys the user actually changed, so a tuned value
+ * (speed 1000, interval 2500) is not snapped to a preset by an unrelated toggle.
+ */
+export function settingsDiff(before, after, opts) {
+    const was = settingsChanges(before, opts);
+    const now = settingsChanges(after, opts);
+    const out = {};
+    for (const key of Object.keys(now)) {
+        if (JSON.stringify(was[key]) !== JSON.stringify(now[key])) out[key] = now[key];
+    }
+    return out;
 }

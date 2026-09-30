@@ -6,11 +6,11 @@
 <script type="module">
 import {
     findComponent, itemsOf, itemFields, minItems, readSliderOptions,
-    settingsFromOptions, settingsChanges, canSwapInPlace,
+    settingsFromOptions, settingsChanges, settingsDiff, canSwapInPlace,
 } from '../../static/editor_v2/js/lib/components.js';
 
 const FIXTURES = ['hero_fade', 'loop_carousel', 'testimonials', 'card_carousel', 'gallery_grid',
-                  'gallery_wrapped', 'splide_lightbox', 'gallery_hint', 'not_component'];
+                  'gallery_wrapped', 'splide_lightbox', 'gallery_hint', 'gallery_hidden', 'not_component'];
 const fails = [];
 let passed = 0;
 const eq = (name, got, want) => {
@@ -79,6 +79,16 @@ eq('perPage', settingsChanges(s, opts).perPage, 4);
 // invalid JSON
 comp.root.setAttribute('data-splide', '{type: fade');
 eq('invalid json', readSliderOptions(comp.root).ok, false);
+
+// only changed settings are sent (a tuned speed/interval must survive a Dots toggle)
+{
+    const opts = { type: 'fade', rewind: true, speed: 1000, interval: 2500, pagination: true };
+    const before = settingsFromOptions(opts);
+    const after = { ...before, dots: false };
+    eq('diff dots only', settingsDiff(before, after, opts), { pagination: false });
+    eq('diff nothing', settingsDiff(before, { ...before }, opts), {});
+    eq('diff loop off (fade)', settingsDiff(before, { ...before, loop: false }, opts), { rewind: false });
+}
 
 // in-place swap guard
 eq('swap plain', canSwapInPlace('<div class="splide"></div>'), true);

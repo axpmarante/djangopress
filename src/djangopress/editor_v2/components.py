@@ -123,7 +123,9 @@ def splide_slides(root):
 
 
 def gallery_items(root):
-    return [c for c in _children(root) if lightbox_link_of(c) is not None]
+    # A lightbox link without an image (a hidden "show 4, lightbox has 12" extra)
+    # is not an item: it stays where it is and no panel verb touches it.
+    return [c for c in _children(root) if lightbox_link_of(c) is not None and image_of(c) is not None]
 
 
 def _is_image_slide(slide):
@@ -163,9 +165,16 @@ def find_for(el):
     return None
 
 
+def _same_kind(a, b):
+    # slider vs text-slider only depends on caption length, which differs between
+    # translations; the operations are identical, so either one matches the other.
+    sliders = ('slider', 'text-slider')
+    return a == b or (a in sliders and b in sliders)
+
+
 def find_component(soup, root_selector, kind):
     root = soup.select_one(root_selector)
-    return root if root is not None and detect(root) == kind else None
+    return root if root is not None and _same_kind(detect(root), kind) else None
 
 
 def items(root, kind):
@@ -189,6 +198,21 @@ SETTING_KEYS = frozenset({
 })
 _BOOL_SETTINGS = {'rewind', 'autoplay', 'arrows', 'pagination', 'pauseOnHover'}
 _INT_RANGES = {'interval': (1000, 60000), 'speed': (100, 5000), 'perPage': (1, 8)}
+
+
+_TEMPLATE_SYNTAX_RE = re.compile(r'\{[{%#]')
+
+
+def _require_plain(value):
+    """Page HTML is rendered as a Django template: typed {{ / {% / {# would break the page."""
+    if isinstance(value, str) and _TEMPLATE_SYNTAX_RE.search(value):
+        raise ValueError("Text can't contain {{, {% or {# — they would break the page")
+    return value
+
+
+def _defuse(value):
+    """Same risk for text we didn't type (library alt text): break the sequence instead of refusing."""
+    return _TEMPLATE_SYNTAX_RE.sub(lambda m: '{ ' + m.group(0)[1], value) if isinstance(value, str) else value
 
 
 def _is_int(v):
@@ -280,6 +304,7 @@ def _set_image(item, url, alt):
     for attr in ('srcset', 'sizes'):
         if attr in img.attrs:
             del img[attr]
+    alt = _defuse(alt)
     if alt is not None:
         img['alt'] = alt
     link = lightbox_link_of(item)
@@ -323,7 +348,7 @@ def _write_texts(item, texts):
             raise ValueError('This text has formatting — edit it on the page instead')
         if not isinstance(value, str) or not value.strip():
             raise ValueError("Text can't be empty — remove the item instead")
-        parsed[i] = value.strip()
+        parsed[i] = _require_plain(value.strip())
     for i, value in parsed.items():
         write_text(leaves[i], value)
 
@@ -348,12 +373,12 @@ def update_item(root, kind, index, alt=None, caption=None, texts=None):
         img = image_of(item)
         if img is None:
             raise ValueError('This item has no image')
-        img['alt'] = alt
+        img['alt'] = _require_plain(alt)
     if caption is not None:
         link = lightbox_link_of(item)
         if link is None:
             raise ValueError('This item has no lightbox link')
-        link['data-alt'] = caption
+        link['data-alt'] = _require_plain(caption)
     if texts:
         _write_texts(item, texts)
     return index

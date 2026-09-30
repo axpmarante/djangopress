@@ -257,3 +257,37 @@ class RegistryExamplesTest(SimpleTestCase):
                     self.assertEqual(components.audit(soup), [])
                     for root in soup.select('.splide'):
                         self.assertIsNotNone(components.detect(root))
+
+
+class ReviewFixesTest(SimpleTestCase):
+    def test_hidden_imageless_lightbox_links_are_not_items(self):
+        soup, root, kind = comp('gallery_hidden')
+        self.assertEqual(len(components.items(root, kind)), 2)
+        components.add_images(root, kind, 1, [('/n.jpg', 'N')])
+        links = root.find_all('a', recursive=False)
+        self.assertEqual([a['href'].rsplit('/', 1)[-1] for a in links], ['p1.jpg', 'p2.jpg', 'n.jpg', 'p3.jpg', 'p4.jpg'])
+
+    def test_slider_kinds_are_interchangeable_for_lookup(self):
+        soup = load('hero_fade')
+        sel = 'section[data-section="foto"] > div:nth-child(1)'
+        self.assertIsNotNone(components.find_component(soup, sel, 'text-slider'))
+
+    def test_template_syntax_in_typed_text_is_refused(self):
+        _, root, kind = comp('testimonials')
+        for bad in ('Great {% now %} deal', 'Hi {{ user }}', 'a {# b'):
+            with self.assertRaises(ValueError):
+                components.update_item(root, kind, 0, texts={'1': bad})
+            with self.assertRaises(ValueError):
+                components.add_text_item(root, kind, 0, {'0': bad, '1': 'x'})
+        _, root, kind = comp('gallery_grid')
+        with self.assertRaises(ValueError):
+            components.update_item(root, kind, 0, alt='x {{ y }}')
+        with self.assertRaises(ValueError):
+            components.update_item(root, kind, 0, caption='x {% y %}')
+
+    def test_template_syntax_in_image_alt_is_defused(self):
+        _, root, kind = comp('gallery_grid')
+        components.replace_image(root, kind, 0, '/n.jpg', 'Sala {{ x }}')
+        item = components.items(root, kind)[0]
+        self.assertNotIn('{{', components.image_of(item)['alt'])
+        self.assertNotIn('{{', item['data-alt'])

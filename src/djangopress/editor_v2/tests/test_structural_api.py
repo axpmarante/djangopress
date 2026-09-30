@@ -293,3 +293,12 @@ class AttributeLanguageTest(StructuralApiTestCase):
         self.post('api_update_page_classes', {'selector': P, 'new_classes': 'x is-active is-visible splide--fade mt-4'})
         self.assertIn('class="x mt-4"', self.html('pt'))
         self.assertIn('class="x mt-4"', self.html('en'))
+
+
+class AttributeEmptyCopyTest(StructuralApiTestCase):
+    def test_alt_edit_on_empty_language_copy_edits_the_shown_copy(self):
+        self.page.html_content_i18n = {'pt': IMG_PT, 'en': ''}
+        self.page.save()
+        res = self.post('api_update_page_attribute', {'selector': IMG, 'attribute': 'alt', 'value': 'Room', 'language': 'en'})
+        self.assertEqual(res.status_code, 200, res.content)
+        self.assertIn('alt="Room"', self.html('pt'))

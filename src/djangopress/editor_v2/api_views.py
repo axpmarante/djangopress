@@ -169,6 +169,13 @@ def _apply_change_to_lang(page, lang, change_fn):
     page.html_content_i18n = html_i18n
 
 
+def _edit_lang(page, lang):
+    """The language copy an edit made while viewing `lang` lands in: `lang`, or the
+    default language when that copy is empty (the page then shows the default copy)."""
+    html_i18n = getattr(page, 'html_content_i18n', None) or {}
+    return lang if html_i18n.get(lang) else _get_default_language()
+
+
 # Attributes whose value is text in the page's language: an edit in PT must not
 # overwrite the EN copy.
 PER_LANGUAGE_ATTRIBUTES = ('alt', 'title', 'aria-label', 'data-alt', 'placeholder')
@@ -670,6 +677,7 @@ def update_page_element_attribute(request):
             return True
 
         if attribute in PER_LANGUAGE_ATTRIBUTES:
+            lang = _edit_lang(page, lang)
             values = {lang: value}
             image_id = data.get('image_id')
             if attribute == 'alt' and image_id:

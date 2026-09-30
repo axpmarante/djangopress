@@ -13,7 +13,7 @@ from djangopress.core.decorators import editor_required
 from djangopress.core.models import SiteImage
 from djangopress.editor_v2 import components
 from djangopress.editor_v2.api_views import (
-    _detect_language_from_request, _get_editable_object, _get_page_html, _run_structural_verb,
+    _detect_language_from_request, _edit_lang, _get_editable_object, _get_page_html, _run_structural_verb,
 )
 from djangopress.editor_v2.component_translate import translate_texts
 
@@ -149,16 +149,25 @@ def component_op(request):
     except ValueError as e:
         return _error(str(e))
 
+    edit_lang = _edit_lang(page, lang)
+
     def apply(soup, code):
         root = components.find_component(soup, root_sel, kind)
         if root is None or len(components.items(root, kind)) != count:
             return None
-        return op_fn(root, code)
+        try:
+            return op_fn(root, code)
+        except ValueError:
+            # Bad input is reported for the copy being edited; another language
+            # whose markup drifted (same count, different shape) is skipped.
+            if code in (lang, edit_lang):
+                raise
+            return None
 
     try:
         outcome = _run_structural_verb(
             request, data, LABELS[op], apply,
-            pass_lang=True, only_lang=lang if op == 'update_item' else None,
+            pass_lang=True, only_lang=edit_lang if op == 'update_item' else None,
         )
     except ValueError as e:
         return _error(str(e))

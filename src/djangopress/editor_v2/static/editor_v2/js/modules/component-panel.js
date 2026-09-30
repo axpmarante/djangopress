@@ -7,11 +7,11 @@
  */
 import { events } from '../lib/events.js';
 import { api } from '../lib/api.js';
-import { getCssSelector } from '../lib/dom.js';
+import { getCssSelector, resolveSelector } from '../lib/dom.js';
 import { duplicateElement } from '../lib/structural.js';
 import {
     findComponent, itemsOf, itemFields, componentLabel, minItems, readSliderOptions,
-    settingsFromOptions, settingsChanges, canSwapInPlace,
+    settingsFromOptions, settingsDiff, canSwapInPlace,
 } from '../lib/components.js';
 import { getPendingCount, saveNow } from './changes.js';
 
@@ -19,6 +19,7 @@ const AFTER_RELOAD_KEY = 'ev2-after-reload';
 const expanded = new Map();          // root selector -> open item index
 let settingsOpen = false;
 let settingsTimer = null;
+let pendingSettings = null;       // {rootSel, kind, opts, before, after} not yet sent
 let busy = false;
 
 const cfg = () => window.EDITOR_CONFIG || {};
@@ -31,6 +32,7 @@ export function prependComponentCard(container, selectedEl) {
     if (!comp) return false;
     const rootSel = getCssSelector(comp.root);
     if (!rootSel) return false;
+    comp.rootSel = rootSel;
     const items = itemsOf(comp);
     const current = items.findIndex(it => it === selectedEl || it.contains(selectedEl));
     if (current >= 0) expanded.set(rootSel, current);
@@ -110,7 +112,8 @@ function addHtml(comp) {
 function settingsHtml(comp) {
     const { ok, opts } = readSliderOptions(comp.root);
     if (!ok) return `<div class="ev2-comp-settings"><p class="ev2-comp-hint">These slider settings can't be edited here.</p></div>`;
-    const s = settingsFromOptions(opts);
+    // A change not yet sent keeps showing across a re-render.
+    const s = pendingSettings?.rootSel === comp.rootSel ? pendingSettings.after : settingsFromOptions(opts);
     const check = (k, label) => `<label class="ev2-comp-check"><input type="checkbox" data-set="${k}" ${s[k] ? 'checked' : ''}> ${label}</label>`;
     const num = (k, label, min, max) => `<label class="ev2-comp-num"><span>${label}</span><input type="number" data-set="${k}" min="${min}" max="${max}" value="${s[k]}"></label>`;
     const opt = (v, label, cur) => `<option value="${v}" ${cur === v ? 'selected' : ''}>${label}</option>`;
@@ -258,22 +261,41 @@ function submitAddForm(card, comp, rootSel) {
     runOp(comp, 'add_text_item', { after: afterIndex(rootSel, itemsOf(comp).length), texts });
 }
 
+function readSettingsForm(card, s) {
+    for (const key of Object.keys(s)) {
+        const input = card.querySelector(`[data-set="${key}"]`);
+        if (!input) continue;
+        if (input.type === 'checkbox') s[key] = input.checked;
+        else if (input.type === 'number') {
+            const v = parseInt(input.value, 10);
+            s[key] = Number.isFinite(v) ? Math.min(Number(input.max), Math.max(Number(input.min), v)) : s[key];
+        } else s[key] = input.value;
+    }
+    return s;
+}
+
+/** Record the change now (so a re-render or a running operation can't lose it); send it 600 ms later. */
 function scheduleSettings(card, comp, rootSel) {
-    clearTimeout(settingsTimer);
-    settingsTimer = setTimeout(() => {
+    if (!pendingSettings || pendingSettings.rootSel !== rootSel) {
         const { opts } = readSliderOptions(comp.root);
-        const s = settingsFromOptions(opts);
-        for (const key of Object.keys(s)) {
-            const input = card.querySelector(`[data-set="${key}"]`);
-            if (!input) continue;
-            if (input.type === 'checkbox') s[key] = input.checked;
-            else if (input.type === 'number') {
-                const v = parseInt(input.value, 10);
-                s[key] = Number.isFinite(v) ? Math.min(Number(input.max), Math.max(Number(input.min), v)) : s[key];
-            } else s[key] = input.value;
-        }
-        runOp(comp, 'set_settings', { settings: settingsChanges(s, opts) }, afterIndex(rootSel, itemsOf(comp).length));
-    }, 600);
+        pendingSettings = { rootSel, kind: comp.kind, opts, before: settingsFromOptions(opts) };
+    }
+    pendingSettings.after = readSettingsForm(card, { ...(pendingSettings.after || pendingSettings.before) });
+    clearTimeout(settingsTimer);
+    settingsTimer = setTimeout(flushSettings, 600);
+}
+
+function flushSettings() {
+    const p = pendingSettings;
+    if (!p) return;
+    if (busy) { settingsTimer = setTimeout(flushSettings, 300); return; }   // wait for the running operation
+    pendingSettings = null;
+    const root = resolveSelector(p.rootSel);
+    if (!root) return;
+    const changes = settingsDiff(p.before, p.after, p.opts);
+    if (!Object.keys(changes).length) return;
+    const comp = { root, kind: p.kind, rootSel: p.rootSel };
+    runOp(comp, 'set_settings', { settings: changes }, afterIndex(p.rootSel, itemsOf(comp).length));
 }
 
 // --- server round trip ---
@@ -310,9 +332,22 @@ function swapRoot(oldRoot, html) {
 
 async function runOp(comp, op, args, focus = null) {
     if (busy) return;
+    busy = true;   // before any await: a second click must not start a parallel operation
+    try {
+        await runOpNow(comp, op, args, focus);
+    } finally {
+        setBusy(false);
+    }
+}
+
+async function runOpNow(comp, op, args, focus) {
     if (getPendingCount() > 0 && !(await saveNow())) return;
     const c = cfg();
-    const rootSel = getCssSelector(comp.root);
+    const rootSel = comp.rootSel || getCssSelector(comp.root);
+    // The card may be older than the page: an earlier operation can have swapped the root.
+    const root = comp.root?.isConnected ? comp.root : resolveSelector(rootSel);
+    if (!rootSel || !root) { window.location.reload(); return; }
+    comp = { root, kind: comp.kind, rootSel };
     const body = {
         page_id: c.pageId, language: c.language, root: rootSel, kind: comp.kind,
         count: itemsOf(comp).length, op, args,
@@ -324,11 +359,9 @@ async function runOp(comp, op, args, focus = null) {
     try {
         res = await api.post('/component/', body);
     } catch (err) {
-        setBusy(false);
         alert(err.message || 'Could not save');
         return;
     }
-    setBusy(false);
     if (!res.success) { alert(res.error || 'Could not save'); return; }
 
     const index = focus ?? res.index ?? 0;
