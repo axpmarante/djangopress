@@ -256,3 +256,40 @@ class MoveSectionTest(StructuralApiTestCase):
     def test_bad_direction_is_400(self):
         res = self.post('api_move_section', {'section_name': 'services', 'direction': 'left'})
         self.assertEqual(res.status_code, 400)
+
+
+from djangopress.core.models import SiteImage
+
+IMG_PT = '<section data-section="s" id="s"><img src="/a.jpg" alt="Sala"/><p class="x">T</p></section>'
+IMG_EN = '<section data-section="s" id="s"><img src="/a.jpg" alt="Room"/><p class="x">T</p></section>'
+IMG = 'section[data-section="s"] > img:nth-child(1)'
+P = 'section[data-section="s"] > p:nth-child(2)'
+
+
+class AttributeLanguageTest(StructuralApiTestCase):
+    def setUp(self):
+        super().setUp()
+        self.page.html_content_i18n = {'pt': IMG_PT, 'en': IMG_EN}
+        self.page.save()
+
+    def test_typed_alt_changes_current_language_only(self):
+        res = self.post('api_update_page_attribute', {'selector': IMG, 'attribute': 'alt', 'value': 'Sala grande', 'language': 'pt'})
+        self.assertEqual(res.status_code, 200, res.content)
+        self.assertIn('alt="Sala grande"', self.html('pt'))
+        self.assertIn('alt="Room"', self.html('en'))
+
+    def test_src_still_changes_every_language(self):
+        self.post('api_update_page_attribute', {'selector': IMG, 'attribute': 'src', 'value': '/b.jpg', 'language': 'pt'})
+        self.assertIn('src="/b.jpg"', self.html('en'))
+
+    def test_library_alt_fills_other_languages(self):
+        img = SiteImage.objects.create(alt_text_i18n={'pt': 'Esplanada', 'en': 'Terrace'})
+        self.post('api_update_page_attribute', {'selector': IMG, 'attribute': 'alt', 'value': 'Esplanada',
+                                                'language': 'pt', 'image_id': img.id})
+        self.assertIn('alt="Esplanada"', self.html('pt'))
+        self.assertIn('alt="Terrace"', self.html('en'))
+
+    def test_runtime_classes_are_not_stored(self):
+        self.post('api_update_page_classes', {'selector': P, 'new_classes': 'x is-active is-visible splide--fade mt-4'})
+        self.assertIn('class="x mt-4"', self.html('pt'))
+        self.assertIn('class="x mt-4"', self.html('en'))

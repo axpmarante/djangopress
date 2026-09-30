@@ -22,6 +22,7 @@ from djangopress.ai.models import RefinementSession
 from djangopress.ai.utils.llm_config import get_ai_model
 from djangopress.ai.utils.sse import sse_event, sse_response
 from bs4 import BeautifulSoup
+from djangopress.editor_v2 import components
 from djangopress.editor_v2 import structure
 from djangopress.editor_v2 import history
 
@@ -151,6 +152,26 @@ def _apply_structural_change_to_all_langs(page, change_fn):
             html_i18n[existing_lang] = new_html
 
     page.html_content_i18n = html_i18n
+
+
+def _apply_change_to_lang(page, lang, change_fn):
+    """Apply change_fn(soup) to one language copy (no-op when that copy is empty or change_fn returns False)."""
+    html_i18n = dict(getattr(page, 'html_content_i18n', None) or {})
+    existing_html = html_i18n.get(lang)
+    if not existing_html:
+        return
+    soup = BeautifulSoup(existing_html, 'html.parser')
+    if change_fn(soup):
+        new_html = str(soup)
+        if new_html.startswith('<html><body>'):
+            new_html = new_html[12:-14]
+        html_i18n[lang] = new_html
+    page.html_content_i18n = html_i18n
+
+
+# Attributes whose value is text in the page's language: an edit in PT must not
+# overwrite the EN copy.
+PER_LANGUAGE_ATTRIBUTES = ('alt', 'title', 'aria-label', 'data-alt', 'placeholder')
 
 
 # ---------------------------------------------------------------------------
@@ -481,6 +502,8 @@ def update_page_element_classes(request):
         page_id = data.get('page_id')
         selector = data.get('selector')
         new_classes = data.get('new_classes', '').strip()
+        # Splide / editor runtime state classes must never reach the database.
+        new_classes = ' '.join(c for c in new_classes.split() if not components.RUNTIME_CLASS_RE.match(c))
 
         if not selector:
             return JsonResponse({
@@ -582,6 +605,7 @@ def update_page_element_attribute(request):
         value = data.get('value', '')
         old_value = data.get('old_value')
         tag_name = data.get('tag_name')
+        lang = _detect_language_from_request(request, data)
 
         if not attribute:
             return JsonResponse({
@@ -606,7 +630,7 @@ def update_page_element_attribute(request):
             }, status=400)
 
         # Read HTML from current language for validation
-        current_html, resolved_lang = _get_page_html(page)
+        current_html, resolved_lang = _get_page_html(page, lang)
 
         # Parse HTML
         soup = BeautifulSoup(current_html, 'html.parser')
@@ -630,7 +654,7 @@ def update_page_element_attribute(request):
         old_value = element.get(attribute, '')
 
         # Apply structural change to ALL language copies (+ legacy fallback)
-        def apply_attribute(s):
+        def apply_attribute(s, value=value):
             el = None
             if selector:
                 el = s.select_one(selector)
@@ -645,7 +669,19 @@ def update_page_element_attribute(request):
                     del el[attribute]
             return True
 
-        _apply_structural_change_to_all_langs(page, apply_attribute)
+        if attribute in PER_LANGUAGE_ATTRIBUTES:
+            values = {lang: value}
+            image_id = data.get('image_id')
+            if attribute == 'alt' and image_id:
+                site_image = SiteImage.objects.filter(pk=image_id).first()
+                i18n = (site_image.alt_text_i18n or {}) if site_image else {}
+                for code in (page.html_content_i18n or {}):
+                    if code != lang and i18n.get(code):
+                        values[code] = i18n[code]
+            for code, code_value in values.items():
+                _apply_change_to_lang(page, code, lambda s, v=code_value: apply_attribute(s, v))
+        else:
+            _apply_structural_change_to_all_langs(page, apply_attribute)
         page.save()
 
         return JsonResponse({
