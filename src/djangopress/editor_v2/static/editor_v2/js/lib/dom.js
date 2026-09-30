@@ -261,13 +261,14 @@ export function getTransVar(el) {
 export function initDynamicComponents(container) {
     if (window.Splide) {
         container.querySelectorAll('.splide').forEach(el => {
-            new window.Splide(el).mount();
+            el.__splide = new window.Splide(el).mount();
         });
     }
 
     container.querySelectorAll('[data-lightbox]').forEach(el => {
         el.addEventListener('click', (e) => {
             e.preventDefault();
+            if (window.EDITOR_CONFIG) return;
             const group = el.dataset.lightbox;
             const groupEls = Array.from(document.querySelectorAll(`[data-lightbox="${group}"]`));
             const images = groupEls.map(a => ({

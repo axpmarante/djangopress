@@ -136,6 +136,8 @@ document.addEventListener('DOMContentLoaded', () => {
     document.querySelectorAll('[data-lightbox]').forEach((element) => {
         element.addEventListener('click', (e) => {
             e.preventDefault();
+            // Editor v2: clicking selects the image, it must not open the overlay.
+            if (window.EDITOR_CONFIG) return;
 
             // Get all images in the same gallery group
             const galleryName = element.dataset.lightbox;

@@ -82,6 +82,8 @@ export async function init() {
     unsubs.push(events.on('history:undo', () => run('undo')));
     unsubs.push(events.on('history:redo', () => run('redo')));
     unsubs.push(events.on('changes:saved', refresh));
+    unsubs.push(events.on('history:refresh', refresh));
+    unsubs.push(events.on('toast:show', ({ text, withUndo }) => showToast(text, withUndo)));
     await refresh();
     toastFromReload();
 }

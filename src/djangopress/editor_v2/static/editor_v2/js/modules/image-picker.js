@@ -266,7 +266,7 @@ async function uploadAndSelect() {
 
         // Apply the uploaded image
         const img = result.image;
-        applyImage(img.url, img.alt_text || alt);
+        applyImage(img.url, img.alt_text || alt, img.id);
 
         // Invalidate cache
         cache = null;
@@ -281,11 +281,11 @@ async function uploadAndSelect() {
 
 function applySelection() {
     if (!selectedImage || !currentEl) return;
-    applyImage(selectedImage.url, selectedImage.alt);
+    applyImage(selectedImage.url, selectedImage.alt, selectedImage.id);
     close();
 }
 
-function applyImage(url, alt) {
+function applyImage(url, alt, imageId = null) {
     if (!currentEl || !currentSelector) return;
 
     if (currentMode === 'background') {
@@ -321,7 +321,7 @@ function applyImage(url, alt) {
         });
         events.emit('change:attribute', {
             type: 'attribute', selector: currentSelector,
-            attribute: 'alt', value: alt, oldValue: oldAlt, tagName: 'img',
+            attribute: 'alt', value: alt, oldValue: oldAlt, tagName: 'img', imageId,
         });
 
         // Keep <a data-lightbox> href in sync with the wrapped <img src>,

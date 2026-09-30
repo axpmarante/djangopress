@@ -7,7 +7,7 @@
  * tab is active, listens for sidebar:tab-changed.
  */
 import { events } from '../lib/events.js';
-import { $, $$, getContentWrapper, getCssSelector, getEditableImages } from '../lib/dom.js';
+import { $, $$, getContentWrapper, getCssSelector, getEditableImages, resolveSelector } from '../lib/dom.js';
 
 let activeTab = null;
 let unsubs = [];
@@ -63,7 +63,7 @@ function discoverImages() {
 
 function onThumbClick(selector) {
     if (!selector) return;
-    const img = document.querySelector(selector);
+    const img = resolveSelector(selector);
     if (!img) return;
 
     events.emit('selection:request', img);

@@ -7,6 +7,7 @@
 import { api } from './api.js';
 import { events } from './events.js';
 import { isRuntimeInjected, resolveSelector } from './dom.js';
+import { getPendingCount, saveNow } from '../modules/changes.js';
 
 const AFTER_RELOAD_KEY = 'ev2-after-reload';
 const config = () => window.EDITOR_CONFIG || {};
@@ -30,6 +31,7 @@ function reloadWith(state, label) {
 }
 
 async function run(endpoint, payload, afterState, label) {
+    if (getPendingCount() > 0 && !(await saveNow())) return null;
     try {
         const res = await api.post(endpoint, body(payload));
         if (!res.success) { alert(res.error || 'Operation failed'); return null; }

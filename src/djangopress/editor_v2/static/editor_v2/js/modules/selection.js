@@ -1,5 +1,5 @@
 import { events } from '../lib/events.js';
-import { $, getContentWrapper, getAncestors, getTagLabel, isEditable, getCssSelector } from '../lib/dom.js';
+import { $, getContentWrapper, getAncestors, getTagLabel, isEditable, getCssSelector, resolveSelector } from '../lib/dom.js';
 
 let selected = null;
 let labelEl = null;
@@ -129,7 +129,7 @@ function onBreadcrumbClick(e) {
     const sel = crumb.dataset.crumbSelector;
     if (!sel) return;
 
-    const target = document.querySelector(sel);
+    const target = resolveSelector(sel);
     if (target) select(target);
 }
 

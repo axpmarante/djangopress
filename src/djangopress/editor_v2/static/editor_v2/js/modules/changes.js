@@ -1,6 +1,7 @@
 import { events } from '../lib/events.js';
 import { api } from '../lib/api.js';
 import { shortcuts } from '../lib/shortcuts.js';
+import { resolveSelector } from '../lib/dom.js';
 
 // --- State ---
 let pending = new Map();   // key: "selector:type:attribute?" -> change
@@ -33,7 +34,7 @@ function withEditableId(body, cfg) {
 // --- DOM helpers ---
 
 function findElement(selector) {
-    return selector ? document.querySelector(selector) : null;
+    return selector ? resolveSelector(selector) : null;
 }
 
 function applyToDOM(change) {
@@ -137,7 +138,7 @@ function findLatestInStack(stack, key) {
 async function save() {
     if (pending.size === 0) {
         console.log('[ev2] save: no pending changes');
-        return;
+        return true;
     }
     const cfg = getConfig();
     const { pageId, language } = cfg;
@@ -177,6 +178,8 @@ async function save() {
                 attribute: c.attribute,
                 value: c.value,
                 old_value: c.oldValue,
+                language: language,
+                image_id: c.imageId || null,
                 tag_name: c.tagName,
             }, cfg));
         }
@@ -188,10 +191,17 @@ async function save() {
         emitUndoState();
         events.emit('changes:saved');
         console.log('[ev2] save: success');
+        return true;
     } catch (err) {
         console.error('[ev2] save error:', err);
         events.emit('changes:error', err.message || 'Save failed');
+        return false;
     }
+}
+
+/** Save pending edits now (used before structural and component operations). */
+export function saveNow() {
+    return save();
 }
 
 // --- Discard ---

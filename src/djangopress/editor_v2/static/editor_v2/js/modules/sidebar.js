@@ -1,6 +1,6 @@
 import { events } from '../lib/events.js';
 import { api } from '../lib/api.js';
-import { $, $$, getCssSelector, isTextElement, getSections, getTagLabel, getEditableTopLevelDescendants, getAncestors, findCardScope, findRepeatGroup } from '../lib/dom.js';
+import { $, $$, getCssSelector, isTextElement, getSections, getTagLabel, getEditableTopLevelDescendants, getAncestors, findCardScope, findRepeatGroup, resolveSelector, isRuntimeClass } from '../lib/dom.js';
 import { CATEGORIES, HOVER_CATEGORIES, COLOR_FAMILIES, COLOR_SHADES, COLOR_KEYWORDS } from '../lib/tailwind-classes.js';
 import { parseClasses, buildClassString } from '../lib/class-parser.js';
 import { duplicateElement, moveElement, removeElement, canMove, moveSection, canMoveSection } from '../lib/structural.js';
@@ -141,7 +141,7 @@ function renderMediaCollection(container, collectionEl) {
         thumb.addEventListener('click', () => {
             const sel = thumb.dataset.mediaSelect;
             if (!sel) return;
-            const imgEl = document.querySelector(sel);
+            const imgEl = resolveSelector(sel);
             if (imgEl) {
                 events.emit('selection:request', imgEl);
                 imgEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -328,7 +328,7 @@ function appendChildrenPanel(container) {
         }
 
         row.addEventListener('click', () => {
-            const target = document.querySelector(sel);
+            const target = resolveSelector(sel);
             if (!target) return;
             events.emit('selection:request', target);
             target.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -462,7 +462,7 @@ function renderDesignTab() {
     const selector = getCssSelector(selectedEl) || '';
     const tag = selectedEl.tagName.toLowerCase();
     const id = selectedEl.id || '';
-    const classes = selectedEl.className.split(/\s+/).filter(c => !c.startsWith('ev2-')).join(' ');
+    const classes = selectedEl.className.split(/\s+/).filter(c => !isRuntimeClass(c)).join(' ');
     const info = id ? `&lt;${tag} id="${esc(id)}"&gt;` : `&lt;${tag}&gt;`;
     const isSection = selectedEl.hasAttribute('data-section');
 
@@ -577,9 +577,9 @@ function renderDesignTab() {
     if (textarea) {
         textarea.addEventListener('input', () => {
             const newClasses = textarea.value;
-            const ev2Classes = selectedEl.className.split(/\s+/).filter(c => c.startsWith('ev2-'));
-            const oldValue = selectedEl.className.split(/\s+/).filter(c => !c.startsWith('ev2-')).join(' ');
-            selectedEl.className = [...ev2Classes, ...newClasses.split(/\s+/).filter(Boolean)].join(' ');
+            const runtimeClasses = selectedEl.className.split(/\s+/).filter(c => isRuntimeClass(c));
+            const oldValue = selectedEl.className.split(/\s+/).filter(c => !isRuntimeClass(c)).join(' ');
+            selectedEl.className = [...runtimeClasses, ...newClasses.split(/\s+/).filter(Boolean)].join(' ');
             events.emit('change:classes', {
                 type: 'classes', selector, value: newClasses, oldValue,
             });
@@ -596,7 +596,7 @@ function renderDesignTab() {
             const select = e.target.closest('.ev2-class-select');
             if (!select) return;
 
-            const currentClasses = selectedEl.className.split(/\s+/).filter(c => !c.startsWith('ev2-')).join(' ');
+            const currentClasses = selectedEl.className.split(/\s+/).filter(c => !isRuntimeClass(c)).join(' ');
             const { matched, unmatched } = parseClasses(currentClasses, { extraCategories: extraCats });
 
             const catKey = select.dataset.cat;
@@ -639,9 +639,9 @@ function renderDesignTab() {
             }
 
             const newClasses = buildClassString(matched, unmatched, { extraCategories: extraCats });
-            const ev2Classes = selectedEl.className.split(/\s+/).filter(c => c.startsWith('ev2-'));
+            const runtimeClasses = selectedEl.className.split(/\s+/).filter(c => isRuntimeClass(c));
             const oldValue = currentClasses;
-            selectedEl.className = [...ev2Classes, ...newClasses.split(/\s+/).filter(Boolean)].join(' ');
+            selectedEl.className = [...runtimeClasses, ...newClasses.split(/\s+/).filter(Boolean)].join(' ');
 
             if (textarea) textarea.value = newClasses;
 
@@ -923,7 +923,7 @@ function onTreeClick(e) {
     if (!item) return;
     const sel = item.dataset.treeSelector;
     if (!sel) return;
-    const el = document.querySelector(sel);
+    const el = resolveSelector(sel);
     if (el) {
         events.emit('selection:request', el);
         el.scrollIntoView({ behavior: 'smooth', block: 'center' });
