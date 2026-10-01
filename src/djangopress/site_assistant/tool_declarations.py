@@ -820,6 +820,16 @@ WEB_SEARCH_DECLARATION = types.FunctionDeclaration(
     ),
 )
 
+UNDO_DECLARATION = types.FunctionDeclaration(
+    name='undo_last_change',
+    description=(
+        'Undo everything your last change-making reply did (pages, header/footer, settings, menu, forms). '
+        'Use when the user says "desfaz", "volta atrás", "undo". If it reports later edits, ask the user, '
+        'then call again with force=true.'
+    ),
+    parameters=S(type=T.OBJECT, properties={'force': S(type=T.BOOLEAN, description='Overwrite later edits too.')}),
+)
+
 # ---------------------------------------------------------------------------
 # Category registry
 # ---------------------------------------------------------------------------
@@ -854,4 +864,5 @@ def build_tool_declarations(intents):
     # Always include the meta tool so the model can request more categories, and web search
     declarations.append(REQUEST_TOOLS_DECLARATION)
     declarations.append(WEB_SEARCH_DECLARATION)
+    declarations.append(UNDO_DECLARATION)
     return [types.Tool(function_declarations=declarations)]

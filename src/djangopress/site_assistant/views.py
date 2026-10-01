@@ -112,6 +112,8 @@ def chat_api(request):
         'steps': result.get('steps', []),
         'set_active_page': result.get('set_active_page'),
         'stopped': bool(result.get('stopped')),
+        'changes': result.get('changes', []),
+        'message_index': result.get('message_index'),
     })
 
 
@@ -163,3 +165,22 @@ def cancel_api(request):
     if not cancel.request_cancel(data.get('run_id')):
         return JsonResponse({'success': False, 'error': 'Invalid run_id'}, status=400)
     return JsonResponse({'success': True})
+
+
+@superuser_required
+@require_http_methods(["POST"])
+def undo_api(request, session_id):
+    """Undo one assistant reply's changes (the 'Undo this' button)."""
+    from djangopress.site_assistant import changes
+    session = get_object_or_404(AssistantSession, pk=session_id, created_by=request.user)
+    try:
+        data = json.loads(request.body)
+    except json.JSONDecodeError:
+        return JsonResponse({'success': False, 'error': 'Invalid JSON'}, status=400)
+    result = changes.undo_turn(session, data.get('message_index'), request.user, force=bool(data.get('force')))
+    if result.get('error'):
+        return JsonResponse({'success': False, 'error': result['error']}, status=400)
+    if result['conflicts']:
+        return JsonResponse({'success': False, 'conflicts': result['conflicts']}, status=409)
+    session.refresh_from_db()
+    return JsonResponse({'success': True, 'undone': result['undone'], 'messages': session.messages})

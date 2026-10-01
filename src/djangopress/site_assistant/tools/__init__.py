@@ -100,7 +100,77 @@ class ToolRegistry:
                 }
 
         try:
-            return func(params, context)
+            track_before(tool_name, params, context)
+            result = func(params, context)
+            if result.get('success'):
+                track_after(tool_name, params, result, context)
+            return result
         except Exception as e:
             logger.exception(f'Tool {tool_name} failed')
             return {'success': False, 'message': f'Tool error: {str(e)}'}
+
+
+# --- undo tracking (site_assistant.changes) ----------------------------------------
+
+# Tools that change the active page: one labelled checkpoint per page per turn.
+ACTIVE_PAGE_TOOLS = {
+    'update_element_styles', 'update_element_attribute', 'remove_section', 'reorder_sections',
+    'refine_section', 'refine_page', 'insert_section', 'set_section_background',
+    'reorder_items', 'replace_item_image', 'add_item_images', 'remove_item',
+}
+
+
+def _obj(model_label, pk):
+    from django.apps import apps
+    try:
+        return apps.get_model(model_label).objects.filter(pk=pk).first() if pk else None
+    except LookupError:
+        return None
+
+
+def track_before(tool_name, params, context):
+    from djangopress.site_assistant import changes
+    if not (context or {}).get('changes'):
+        return
+    if tool_name in ACTIVE_PAGE_TOOLS and context.get('active_page'):
+        changes.page_checkpoint(context, context['active_page'])
+    elif tool_name in ('update_page_meta', 'delete_page'):
+        changes.snapshot(context, _obj('core.page', params.get('page_id')), 'Page settings')
+    elif tool_name == 'reorder_pages':
+        for pk in params.get('order') or []:
+            changes.snapshot(context, _obj('core.page', pk), 'Page order')
+    elif tool_name in ('update_menu_item', 'delete_menu_item'):
+        changes.snapshot(context, _obj('core.menuitem', params.get('menu_item_id')), 'Menu item')
+    elif tool_name == 'update_settings':
+        from djangopress.core.models import SiteSettings
+        changes.snapshot(context, SiteSettings.load(), 'Site settings')
+    elif tool_name in ('update_form', 'delete_form'):
+        from djangopress.core.models import DynamicForm
+        form = _obj('core.dynamicform', params.get('form_id')) or \
+            DynamicForm.objects.filter(slug=params.get('slug') or '').first()
+        changes.snapshot(context, form, 'Form')
+    elif tool_name in ('refine_header', 'refine_footer'):
+        from djangopress.core.models import GlobalSection
+        key = 'main-header' if tool_name == 'refine_header' else 'main-footer'
+        section = GlobalSection.objects.filter(key=key).first()
+        if section:
+            changes.global_section_checkpoint(context, section)
+    elif tool_name == 'update_news_post':
+        changes.snapshot(context, _obj('news.newspost', params.get('post_id')), 'News post')
+    elif tool_name == 'update_property':
+        changes.snapshot(context, _obj('properties.property', params.get('property_id')), 'Property')
+
+
+def track_after(tool_name, params, result, context):
+    from djangopress.site_assistant import changes
+    if not (context or {}).get('changes'):
+        return
+    created = {
+        'create_page': ('core.page', 'page_id', 'New page'),
+        'create_menu_item': ('core.menuitem', 'menu_item_id', 'New menu item'),
+        'create_form': ('core.dynamicform', 'form_id', 'New form'),
+        'create_news_post': ('news.newspost', 'post_id', 'New news post'),
+    }.get(tool_name)
+    if created:
+        model, key, label = created
+        changes.created(context, _obj(model, result.get(key)), label)

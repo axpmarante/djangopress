@@ -33,6 +33,23 @@ class AssistantService:
         self.llm = LLMBase()
 
     def handle_message(self, message, user=None, reference_images=None, run_id=None):
+        """Run one turn and attach its change log (for Undo) to the reply."""
+        from djangopress.site_assistant.changes import TurnChanges
+        self._changes = TurnChanges(message, user)
+        result = self._handle_message(message, user=user, reference_images=reference_images, run_id=run_id)
+        items = self._changes.finish()
+        if items:
+            self.session.refresh_from_db()
+            for index in range(len(self.session.messages) - 1, -1, -1):
+                if self.session.messages[index].get('role') == 'assistant':
+                    self.session.messages[index]['changes'] = items
+                    self.session.save(update_fields=['messages', 'updated_at'])
+                    result['message_index'] = index
+                    break
+        result['changes'] = [{'label': i['label'], 'kind': i['kind']} for i in items]
+        return result
+
+    def _handle_message(self, message, user=None, reference_images=None, run_id=None):
         """Process a user message through the two-phase flow.
 
         Phase 1: Router classifies intents or returns a direct response.
@@ -154,6 +171,7 @@ class AssistantService:
 
         context = {
             'session': self.session,
+            'changes': getattr(self, '_changes', None),
             'user': user,
             'active_page': self.session.active_page,
             'model': get_ai_model('assistant_executor'),

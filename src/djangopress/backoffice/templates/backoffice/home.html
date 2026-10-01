@@ -99,6 +99,13 @@
                         <template x-if="m.role !== 'user'">
                             <div class="text-sm leading-relaxed" :class="m.stopped ? 'italic text-gray-400' : 'text-gray-800'">
                                 <div class="whitespace-pre-wrap" x-html="formatReply(m.content)"></div>
+                                <template x-if="m.changes && m.changes.length">
+                                    <div class="mt-2 flex flex-wrap items-center gap-2 text-xs text-gray-500">
+                                        <span x-text="(m.undone ? 'Undone: ' : 'Changed: ') + [...new Set(m.changes.map(c => c.label))].join(' · ')"></span>
+                                        <button type="button" x-show="!m.undone" @click="undoReply(m, i)" :disabled="thinking"
+                                                class="rounded-full border border-gray-300 px-2 py-0.5 text-gray-600 hover:border-gray-900 hover:text-gray-900">Undo this</button>
+                                    </div>
+                                </template>
                                 <template x-if="sourcesOf(m).length">
                                     <div class="mt-2 text-xs text-gray-500">Sources:
                                         <template x-for="(src, k) in sourcesOf(m)" :key="k">
@@ -169,6 +176,7 @@
 function homeAssistant() {
     const CHAT_URL = "{% url 'site_assistant:chat_api' %}";
     const CANCEL_URL = "{% url 'site_assistant:cancel_api' %}";
+    const UNDO_URL = (id) => `{% url 'site_assistant:undo_api' session_id=0 %}`.replace('/0/', `/${id}/`);
     const SESSION_URL = "{% url 'site_assistant:session_detail_api' session_id=0 %}".replace(/0\/$/, '');
     const FULL_URL = "{% url 'site_assistant:assistant' %}";
     const MAX_FILES = 5;
@@ -236,6 +244,29 @@ function homeAssistant() {
                 .replace(/`([^`\n]+)`/g, '<code class="rounded bg-gray-100 px-1 text-[12px]">$1</code>')
                 .replace(/^\s*---\s*$/gm, '<hr class="my-3 border-gray-200">')
                 .replace(/^\s*[*-]\s+/gm, '• ');
+        },
+
+        async undoReply(m, i, force = false) {
+            const index = m.serverIndex ?? i;
+            try {
+                const res = await fetch(UNDO_URL(this.sessionId), {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrf() },
+                    body: JSON.stringify({ message_index: index, force }),
+                });
+                const data = await res.json();
+                if (res.status === 409 && data.conflicts) {
+                    if (confirm(`Changed again since then: ${data.conflicts.join(', ')}.\nUndo anyway and lose those later changes?`)) {
+                        return this.undoReply(m, i, true);
+                    }
+                    return;
+                }
+                if (!data.success) throw new Error(data.error || 'Could not undo');
+                this.messages = data.messages;      // the server's copy, with this reply marked undone
+                this.scrollDown();
+            } catch (err) {
+                this.error = err.message;
+            }
         },
 
         sourcesOf(m) {
@@ -353,7 +384,8 @@ function homeAssistant() {
                 if (!data.success) throw new Error(data.error || 'The assistant could not answer');
                 this.sessionId = data.session_id;
                 this.setUrl();
-                this.messages.push({ role: 'assistant', content: data.response, actions: data.actions || [], stopped: data.stopped });
+                this.messages.push({ role: 'assistant', content: data.response, actions: data.actions || [], stopped: data.stopped,
+                                     changes: (data.changes || []).length ? data.changes : null, serverIndex: data.message_index });
             } catch (err) {
                 if (err.name === 'AbortError') {
                     this.messages.push({ role: 'assistant', content: 'Stopped.', stopped: true });

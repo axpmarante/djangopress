@@ -111,7 +111,7 @@ def _rename_section(tag, old, new):
         a['href'] = f'#{new}'
 
 
-def apply_section_html(page, html, source_lang, *, section_name=None, mode='replace', insert_after=None, user=None):
+def apply_section_html(page, html, source_lang, *, section_name=None, mode='replace', insert_after=None, user=None, checkpoint=True):
     new = _soup(html).find('section')
     if new is None:
         raise ValueError('The AI output has no <section>')
@@ -151,7 +151,8 @@ def apply_section_html(page, html, source_lang, *, section_name=None, mode='repl
         html_i18n[code] = _out(soup)
         return True
 
-    _checkpoint(page, user, f'AI {"new section" if mode == "insert" else "section"} "{name}"')
+    if checkpoint:
+        _checkpoint(page, user, f'AI {"new section" if mode == "insert" else "section"} "{name}"')
     if not put(source, new):
         raise ValueError(f'Section "{name}" not found')
 
@@ -171,7 +172,7 @@ def apply_section_html(page, html, source_lang, *, section_name=None, mode='repl
     return {'section_name': name, 'translated_languages': translated, 'untranslated_languages': untranslated}
 
 
-def apply_element_html(page, selector, html, source_lang, *, user=None):
+def apply_element_html(page, selector, html, source_lang, *, user=None, checkpoint=True):
     new = _first_tag(html)
     if new is None or new.name == 'section':
         raise ValueError('Element output must be one element, not a section')
@@ -187,7 +188,8 @@ def apply_element_html(page, selector, html, source_lang, *, user=None):
         html_i18n[code] = _out(soup)
         return True
 
-    _checkpoint(page, user, 'AI element edit')
+    if checkpoint:
+        _checkpoint(page, user, 'AI element edit')
     if not put(source, new):
         raise ValueError('Element not found for selector')
     translated, untranslated = [], []
@@ -204,12 +206,13 @@ def apply_element_html(page, selector, html, source_lang, *, user=None):
     return {'translated_languages': translated, 'untranslated_languages': untranslated}
 
 
-def apply_page_html(page, html, source_lang, *, user=None):
+def apply_page_html(page, html, source_lang, *, user=None, checkpoint=True):
     if not _soup(html).find('section'):
         raise ValueError('The AI output has no <section>')
     source, others = _languages(page, source_lang)
     html_i18n = dict(page.html_content_i18n or {})
-    _checkpoint(page, user, 'AI page refine')
+    if checkpoint:
+        _checkpoint(page, user, 'AI page refine')
     html_i18n[source] = html
     translated, untranslated = [], []
     results = _translations(html, source, others)

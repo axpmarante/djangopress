@@ -7,6 +7,7 @@ urlpatterns = [
     path('', views.AssistantPageView.as_view(), name='assistant'),
     path('api/chat/', views.chat_api, name='chat_api'),
     path('api/cancel/', views.cancel_api, name='cancel_api'),
+    path('api/sessions/<int:session_id>/undo/', views.undo_api, name='undo_api'),
     path('api/sessions/', views.sessions_api, name='sessions_api'),
     path('api/sessions/<int:session_id>/', views.session_detail_api, name='session_detail_api'),
 ]

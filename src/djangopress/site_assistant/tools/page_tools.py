@@ -22,8 +22,8 @@ def _create_version_if_needed(context):
         return
     page = _get_page(context)
     if page:
-        user = context.get('user')
-        page.create_version(user=user, change_summary='Site Assistant edit')
+        from djangopress.site_assistant import changes
+        changes.page_checkpoint(context, page)
         context['_version_created'] = True
 
 
@@ -111,10 +111,10 @@ def refine_section(params, context):
     exists = f'data-section="{section_name}"' in (page.html_content_i18n or {}).get(_default_lang(), '')
     if exists:
         applied = ai_apply.apply_section_html(page, refined_html, _default_lang(), section_name=section_name,
-                                              user=context.get('user'))
+                                              user=context.get('user'), checkpoint=False)
     else:  # a new section is added at the end of the page
         applied = ai_apply.apply_section_html(page, refined_html, _default_lang(), mode='insert',
-                                              insert_after=_last_section(page), user=context.get('user'))
+                                              insert_after=_last_section(page), user=context.get('user'), checkpoint=False)
 
     return {
         'success': True,
@@ -152,7 +152,7 @@ def refine_page(params, context):
     if not html:
         return {'success': False, 'message': 'The AI returned no page'}
     from djangopress.editor_v2 import ai_apply
-    applied = ai_apply.apply_page_html(page, html, _default_lang(), user=context.get('user'))
+    applied = ai_apply.apply_page_html(page, html, _default_lang(), user=context.get('user'), checkpoint=False)
     return {'success': True, 'message': 'Refined entire page with AI' + _languages_note(applied)}
 
 

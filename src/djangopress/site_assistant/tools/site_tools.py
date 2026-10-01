@@ -5,6 +5,22 @@ from djangopress.core.services import (
 )
 
 
+def undo_last_change(params, context):
+    """Undo the last assistant turn that changed something ("desfaz isso")."""
+    from djangopress.site_assistant import changes
+    session = context.get('session')
+    index = changes.last_turn_with_changes(session) if session else None
+    if index is None:
+        return {'success': False, 'message': 'There is no change of mine to undo.'}
+    result = changes.undo_turn(session, index, context.get('user'), force=bool(params.get('force')))
+    if result.get('conflicts'):
+        return {'success': False, 'message': 'Changed again since then: ' + ', '.join(result['conflicts'])
+                + '. Ask the user to confirm, then call undo_last_change with force=true.'}
+    if result.get('error'):
+        return {'success': False, 'message': result['error']}
+    return {'success': True, 'message': 'Undone: ' + ', '.join(result['undone'])}
+
+
 def web_search(params, context):
     """Look facts up on the web (Google Search). Returns the answer and its sources."""
     query = (params.get('query') or '').strip()
@@ -414,6 +430,7 @@ def refine_footer(params, context):
 # Registry mapping
 SITE_TOOLS = {
     'web_search': web_search,
+    'undo_last_change': undo_last_change,
     'list_pages': list_pages,
     'get_page_info': get_page_info,
     'create_page': create_page,
