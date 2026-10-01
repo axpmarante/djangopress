@@ -1014,3 +1014,23 @@ def build_tool_declarations(intents):
     declarations.append(WEB_SEARCH_DECLARATION)
     declarations.append(UNDO_DECLARATION)
     return [types.Tool(function_declarations=declarations)]
+
+
+# --- every page-scoped tool takes an optional `page` ---------------------------------
+
+PAGE_PARAM = S(type=T.STRING, description=(
+    'The page to work on: its title as in the site map (or id). Default: the active page. '
+    'Use it to change several pages in one request.'))
+
+
+def _add_page_param():
+    from djangopress.site_assistant.tools import PAGE_SCOPED_TOOLS
+    for value in list(globals().values()):
+        if isinstance(value, types.FunctionDeclaration) and value.name in PAGE_SCOPED_TOOLS:
+            if value.parameters is None:
+                value.parameters = S(type=T.OBJECT, properties={'page': PAGE_PARAM})
+            elif 'page' not in (value.parameters.properties or {}):
+                value.parameters.properties = {**(value.parameters.properties or {}), 'page': PAGE_PARAM}
+
+
+_add_page_param()

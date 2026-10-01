@@ -22,6 +22,24 @@ try:
 except ImportError:
     PROPERTIES_TOOLS = {}
 
+# Tools that work on one page: they take an optional `page` (title, slug or id).
+PAGE_SCOPED_TOOLS = set(PAGE_TOOLS) | set(COMPONENT_TOOLS) | {'set_section_background'}
+
+
+def resolve_page(ref):
+    """A Page from an id, a title or a slug in any language (case-insensitive), or None."""
+    from djangopress.core.models import Page
+    text = str(ref).strip()
+    if text.isdigit():
+        return Page.objects.filter(pk=int(text)).first()
+    wanted = text.lower()
+    for page in Page.objects.all():
+        values = [*(page.title_i18n or {}).values(), *(page.slug_i18n or {}).values()]
+        if any(str(v).strip().lower() == wanted for v in values if v):
+            return page
+    return None
+
+
 DESTRUCTIVE_TOOLS = {'delete_page', 'delete_menu_item', 'delete_form'}
 
 # Confirmation words (multi-language) — user must say one of these
@@ -83,6 +101,19 @@ class ToolRegistry:
         if not func:
             return {'success': False, 'message': f'Unknown tool: {tool_name}'}
 
+        switched = None
+        if tool_name in PAGE_SCOPED_TOOLS and params.get('page') not in (None, ''):
+            page = resolve_page(params['page'])
+            if page is None:
+                from djangopress.core.models import Page
+                titles = ', '.join(p.default_title or str(p.pk) for p in Page.objects.all())
+                return {'success': False, 'message': f'Page "{params["page"]}" not found. Pages: {titles}'}
+            context['active_page'] = page
+            session = context.get('session')
+            if session is not None and hasattr(session, 'set_active_page'):
+                session.set_active_page(page)
+            switched = page.pk
+
         if tool_name in cls.PAGE_TOOL_NAMES and not context.get('active_page'):
             return {
                 'success': False,
@@ -106,6 +137,8 @@ class ToolRegistry:
             result = func(params, context)
             if result.get('success'):
                 track_after(tool_name, params, result, context)
+            if switched:
+                result.setdefault('set_active_page', switched)
             return result
         except Exception as e:
             logger.exception(f'Tool {tool_name} failed')

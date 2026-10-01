@@ -84,6 +84,24 @@ def _discover_decoupled_apps():
     return discovered
 
 
+SITE_MAP_MAX_SECTIONS = 30
+
+
+def build_site_map(lang):
+    """'- <title>: sec1, sec2, …' for every page, from the editing-language HTML."""
+    import re
+    from djangopress.core.models import Page
+    lines = []
+    for page in Page.objects.all().order_by('sort_order', 'id'):
+        html = (page.html_content_i18n or {}).get(lang) or next(iter((page.html_content_i18n or {}).values()), '')
+        names = re.findall(r'<section\b[^>]*\bdata-section="([^"]+)"', html or '')
+        more = f' (+{len(names) - SITE_MAP_MAX_SECTIONS} more)' if len(names) > SITE_MAP_MAX_SECTIONS else ''
+        state = '' if page.is_active else ' [inactive]'
+        lines.append(f'- {page.default_title or page.pk}{state}: '
+                     f'{", ".join(names[:SITE_MAP_MAX_SECTIONS]) or "(empty)"}{more}')
+    return '\n'.join(lines)
+
+
 def build_router_snapshot(session):
     """Build the compact site state dict for the Phase 1 router.
 
@@ -183,6 +201,10 @@ def build_executor_prompt(session, snapshot, has_reference_images=False):
         f'\nPages: {page_summary}'
         f'\nMenu: {menu_summary}'
     )
+    site_map = build_site_map(snapshot.get('default_language', 'pt'))
+    if site_map:
+        parts.append('\nSite map (each page\'s sections, in order; pass page="<title>" to work on any of them):\n'
+                     + site_map)
 
     # Installed apps
     apps_detail = snapshot.get('installed_apps_detail', [])
@@ -218,6 +240,7 @@ Rules:
 - Photos: find_photos (English keywords, landscape for backgrounds), then set_section_background or replace_item_image with the ref. If the user hasn't picked one, show the candidates and let them choose; say Unsplash photos are credited in the media library.
 - "Is the form working?": test_form (it emails only the agency, never the client). "Are the contacts right?": validate_contacts. Report what was checked and what is wrong in your closing summary; don't fix contacts without the user's go-ahead.
 - "Undo that" / "desfaz isso" / "volta atrás": call undo_last_change (it reverts your last reply that changed something, on every page and setting it touched). If it reports later edits, tell the user what would be lost and only pass force=true after they confirm. Every reply that changes something can also be undone with its Undo button.
+- Several pages in one request: pass page="<title>" (as in the site map) to each page tool instead of calling set_active_page, and call the tools for all the pages in the same step when you can. One Undo covers every page.
 - To add a new section, call insert_section with the position the user asked for (before/after a section, start or end). Never use refine_page or refine_section to add a section. If the user didn't say where and it matters, ask first.
 - Be concise. End every reply with a short summary in plain language: what you changed (page and section), and what you did NOT do and why (a step failed, information missing). Never say you did something a tool did not confirm.
 - When you need data (list_pages, get_settings, etc.), call the tool first, then respond based on results.
