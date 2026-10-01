@@ -179,6 +179,7 @@ python manage.py migrate
 - **Decoupled app URLs** must register BEFORE `core.urls` (catch-all)
 - **Editor structural verbs** (duplicate / move / insert element or section) are deterministic BeautifulSoup patches in `editor_v2/structure.py`, applied to every language copy. Never add an LLM call to them.
 - **Editor operations must create a `kind='checkpoint'` PageVersion before mutating, or they are not undoable.**
+- **Backoffice is deliberately short** (2026-10-01): Home (`/backoffice/`) is a site-assistant prompt for superusers and shortcuts for staff; the menu is Pages, Media, Forms, Navigation, Translate, News, Settings. Pages open in the visual editor (`?edit=v2`, `&preview=true` for drafts); "Settings" is the page settings screen. Tools kept in code but out of the menu, reachable by URL: `/site-assistant/`, `/backoffice/overview/` (old dashboard), `/backoffice/blueprint/`, `/backoffice/ai/logs/`, `/backoffice/benchmarks/`, `/backoffice/ai/design-consistency/reports/`. Don't add them back to the menu without asking.
 - **Editor component panel** (sliders, galleries) recognises components by structure in `editor_v2/components.py` and `editor_v2/static/editor_v2/js/lib/components.js`. Change the two together and keep `editor_v2/tests/fixtures/components/` passing on both sides (`test_components` + the browser harness `editor_v2/tests/js/components_test.html`).
 
 ## Configuration

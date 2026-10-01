@@ -12,7 +12,8 @@ urlpatterns = [
     path('auto-login/', views.auto_login, name='auto_login'),
 
     # Dashboard
-    path('', views.DashboardView.as_view(), name='dashboard'),
+    path('', views.HomeView.as_view(), name='dashboard'),
+    path('overview/', views.DashboardView.as_view(), name='overview'),
 
     # API Endpoints
     path('api/update-site-settings/', api_views.update_site_settings, name='api_update_site_settings'),

@@ -48,7 +48,7 @@
     {% block chat_context %}
     <script>window.__chatContext = {};</script>
     {% endblock %}
-    {% include 'backoffice/includes/chat_widget.html' %}
+    {% if not hide_chat_widget %}{% include 'backoffice/includes/chat_widget.html' %}{% endif %}
     {% endif %}
 
     {% block extra_js %}{% endblock %}

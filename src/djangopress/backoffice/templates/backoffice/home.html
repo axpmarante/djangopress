@@ -1,0 +1,252 @@
+{% extends 'backoffice/base.html' %}
+
+{% block title %}Home{% endblock %}
+
+{% block content %}
+{% if assistant_enabled %}
+{{ suggestions|json_script:"bo-home-suggestions" }}
+<div id="bo-home-assistant" x-data="homeAssistant()" x-init="init()" class="mx-auto flex min-h-[calc(100vh-10rem)] max-w-3xl flex-col">
+
+    <!-- Start: one prompt in the middle of the page -->
+    <template x-if="!started">
+        <div class="flex flex-1 flex-col items-center justify-center pb-16">
+            <h2 class="mb-2 text-center text-3xl font-semibold tracking-tight text-gray-900">What would you like to change?</h2>
+            <p class="mb-8 text-center text-sm text-gray-500">The site assistant edits {{ SITE_NAME }} for you — pages, texts, SEO, news.</p>
+
+            <form @submit.prevent="send()" class="w-full">
+                <div class="rounded-2xl border border-gray-200 bg-white p-3 shadow-sm focus-within:border-gray-300 focus-within:shadow-md">
+                    <textarea x-ref="prompt" x-model="draft" rows="3" @keydown.enter="onEnter($event)"
+                              placeholder="e.g. Change the opening hours to 12:00–15:00 and 19:00–23:00"
+                              class="w-full resize-none border-0 bg-transparent px-1 text-base text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-0"></textarea>
+                    <div class="flex items-center justify-end">
+                        <button type="submit" :disabled="!draft.trim()"
+                                class="inline-flex h-9 w-9 items-center justify-center rounded-full bg-gray-900 text-white transition disabled:bg-gray-200 disabled:text-gray-400"
+                                title="Send (Enter)">
+                            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 12h14M13 6l6 6-6 6"/></svg>
+                        </button>
+                    </div>
+                </div>
+            </form>
+
+            <div class="mt-4 flex flex-wrap justify-center gap-2">
+                <template x-for="s in suggestions" :key="s">
+                    <button type="button" @click="draft = s; $refs.prompt.focus()"
+                            class="rounded-full border border-gray-200 bg-white px-3 py-1.5 text-xs text-gray-600 transition hover:border-gray-300 hover:text-gray-900"
+                            x-text="s"></button>
+                </template>
+            </div>
+
+            {% if recent_sessions %}
+            <div class="mt-12 w-full max-w-xl">
+                <p class="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-400">Recent</p>
+                <ul class="divide-y divide-gray-100 rounded-xl border border-gray-100 bg-white">
+                    {% for s in recent_sessions %}
+                    <li>
+                        <button type="button" @click="open({{ s.id }})"
+                                class="flex w-full items-center justify-between px-4 py-2.5 text-left text-sm text-gray-700 hover:bg-gray-50">
+                            <span class="truncate">{{ s.title|default:"Conversation" }}</span>
+                            <span class="ml-4 flex-shrink-0 text-xs text-gray-400">{{ s.updated_at|timesince }} ago</span>
+                        </button>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </div>
+            {% endif %}
+        </div>
+    </template>
+
+    <!-- Chat -->
+    <template x-if="started">
+        <div class="flex flex-1 flex-col">
+            <div class="mb-4 flex items-center justify-between text-sm">
+                <button type="button" @click="reset()" class="inline-flex items-center gap-1 text-gray-500 hover:text-gray-900">
+                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+                    New conversation
+                </button>
+                <a :href="fullAssistantUrl()" class="text-gray-400 hover:text-gray-700">Open in full assistant ↗</a>
+            </div>
+
+            <div x-ref="thread" class="flex-1 space-y-6 pb-6">
+                <template x-for="(m, i) in messages" :key="i">
+                    <div>
+                        <template x-if="m.role === 'user'">
+                            <div class="flex justify-end">
+                                <div class="max-w-[80%] whitespace-pre-wrap rounded-2xl bg-gray-100 px-4 py-2.5 text-sm text-gray-900" x-text="m.content"></div>
+                            </div>
+                        </template>
+                        <template x-if="m.role !== 'user'">
+                            <div class="text-sm leading-relaxed text-gray-800">
+                                <div class="whitespace-pre-wrap" x-text="m.content"></div>
+                                <template x-if="m.actions && m.actions.length">
+                                    <div class="mt-3 flex flex-wrap gap-1.5">
+                                        <template x-for="(a, j) in m.actions" :key="j">
+                                            <span class="inline-flex max-w-full items-center gap-1 rounded-full px-2.5 py-1 text-xs"
+                                                  :class="a.success ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'"
+                                                  :title="a.message">
+                                                <span x-text="a.success ? '✓' : '✕'"></span>
+                                                <span class="truncate" x-text="a.message || a.tool"></span>
+                                            </span>
+                                        </template>
+                                    </div>
+                                </template>
+                            </div>
+                        </template>
+                    </div>
+                </template>
+                <div x-show="thinking" class="flex items-center gap-1.5 text-sm text-gray-400">
+                    <span class="h-1.5 w-1.5 animate-pulse rounded-full bg-gray-400"></span>
+                    <span class="h-1.5 w-1.5 animate-pulse rounded-full bg-gray-400 [animation-delay:150ms]"></span>
+                    <span class="h-1.5 w-1.5 animate-pulse rounded-full bg-gray-400 [animation-delay:300ms]"></span>
+                    <span class="ml-1">Working on it…</span>
+                </div>
+                <p x-show="error" x-text="error" class="text-sm text-red-600"></p>
+            </div>
+
+            <form @submit.prevent="send()" class="sticky bottom-0 bg-gray-50 pb-4 pt-2">
+                <div class="flex items-end gap-2 rounded-2xl border border-gray-200 bg-white p-2 shadow-sm focus-within:border-gray-300">
+                    <textarea x-ref="reply" x-model="draft" rows="1" @keydown.enter="onEnter($event)" :disabled="thinking"
+                              placeholder="Reply…"
+                              class="max-h-40 flex-1 resize-none border-0 bg-transparent px-2 py-1.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-0"></textarea>
+                    <button type="submit" :disabled="thinking || !draft.trim()"
+                            class="inline-flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-gray-900 text-white transition disabled:bg-gray-200 disabled:text-gray-400">
+                        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 12h14M13 6l6 6-6 6"/></svg>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </template>
+</div>
+
+<script>
+function homeAssistant() {
+    const CHAT_URL = "{% url 'site_assistant:chat_api' %}";
+    const SESSION_URL = "{% url 'site_assistant:session_detail_api' session_id=0 %}".replace(/0\/$/, '');
+    const FULL_URL = "{% url 'site_assistant:assistant' %}";
+    const csrf = () => (document.cookie.match(/(?:^|; )csrftoken=([^;]+)/) || [])[1] || '';
+
+    return {
+        started: false,
+        thinking: false,
+        draft: '',
+        error: '',
+        sessionId: null,
+        messages: [],
+        suggestions: JSON.parse(document.getElementById('bo-home-suggestions').textContent),
+
+        init() {
+            const id = new URLSearchParams(location.search).get('session');
+            if (id) this.open(Number(id));
+            else this.$nextTick(() => this.$refs.prompt?.focus());
+        },
+
+        onEnter(e) {
+            if (e.shiftKey || e.isComposing) return;
+            e.preventDefault();
+            this.send();
+        },
+
+        setUrl() {
+            const url = new URL(location.href);
+            if (this.sessionId) url.searchParams.set('session', this.sessionId);
+            else url.searchParams.delete('session');
+            history.replaceState(null, '', url);
+        },
+
+        scrollDown() {
+            this.$nextTick(() => window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' }));
+        },
+
+        fullAssistantUrl() {
+            return this.sessionId ? `${FULL_URL}?session=${this.sessionId}` : FULL_URL;
+        },
+
+        reset() {
+            this.started = false;
+            this.messages = [];
+            this.sessionId = null;
+            this.draft = '';
+            this.error = '';
+            this.setUrl();
+            this.$nextTick(() => this.$refs.prompt?.focus());
+        },
+
+        async open(id) {
+            this.error = '';
+            try {
+                const res = await fetch(`${SESSION_URL}${id}/`, { headers: { 'Accept': 'application/json' } });
+                const data = await res.json();
+                if (!data.success) throw new Error(data.error || 'Conversation not found');
+                this.sessionId = data.session.id;
+                this.messages = data.session.messages || [];
+                this.started = true;
+                this.setUrl();
+                this.scrollDown();
+                this.$nextTick(() => this.$refs.reply?.focus());
+            } catch (err) {
+                this.error = err.message;
+            }
+        },
+
+        async send() {
+            const message = this.draft.trim();
+            if (!message || this.thinking) return;
+            this.started = true;
+            this.error = '';
+            this.messages.push({ role: 'user', content: message });
+            this.draft = '';
+            this.thinking = true;
+            this.scrollDown();
+            try {
+                const body = { message };
+                if (this.sessionId) body.session_id = this.sessionId;
+                const res = await fetch(CHAT_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrf() },
+                    body: JSON.stringify(body),
+                });
+                const data = await res.json();
+                if (!data.success) throw new Error(data.error || 'The assistant could not answer');
+                this.sessionId = data.session_id;
+                this.setUrl();
+                this.messages.push({ role: 'assistant', content: data.response, actions: data.actions || [] });
+            } catch (err) {
+                this.error = `${err.message}. Your message is back in the box — try again.`;
+                this.messages.pop();
+                this.draft = message;
+            } finally {
+                this.thinking = false;
+                this.scrollDown();
+                this.$nextTick(() => this.$refs.reply?.focus());
+            }
+        },
+    };
+}
+</script>
+
+{% else %}
+<div id="bo-home-shortcuts" class="mx-auto max-w-3xl space-y-6 pt-6">
+    <div>
+        <h2 class="text-3xl font-semibold tracking-tight text-gray-900">{{ SITE_NAME }}</h2>
+        <p class="mt-1 text-sm text-gray-500">What would you like to update?</p>
+    </div>
+    <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <a href="{% url 'backoffice:pages' %}" class="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm transition hover:border-gray-200 hover:shadow">
+            <p class="text-base font-semibold text-gray-900">Pages</p>
+            <p class="mt-1 text-sm text-gray-500">Edit texts and images on your pages · {{ page_count }} page{{ page_count|pluralize }}</p>
+        </a>
+        <a href="{% url 'backoffice:media' %}" class="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm transition hover:border-gray-200 hover:shadow">
+            <p class="text-base font-semibold text-gray-900">Media</p>
+            <p class="mt-1 text-sm text-gray-500">Upload and replace photos · {{ image_count }} image{{ image_count|pluralize }}</p>
+        </a>
+        <a href="{% url 'backoffice:forms' %}" class="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm transition hover:border-gray-200 hover:shadow">
+            <p class="text-base font-semibold text-gray-900">Forms{% if unread_form_submissions %} <span class="ml-1 rounded-full bg-red-500 px-2 py-0.5 text-xs font-bold text-white">{{ unread_form_submissions }} new</span>{% endif %}</p>
+            <p class="mt-1 text-sm text-gray-500">Read messages sent through your site</p>
+        </a>
+        <a href="/" target="_blank" class="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm transition hover:border-gray-200 hover:shadow">
+            <p class="text-base font-semibold text-gray-900">View site ↗</p>
+            <p class="mt-1 text-sm text-gray-500">Open the public site in a new tab</p>
+        </a>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
