@@ -2704,3 +2704,49 @@ def design_tokens(request):
     """Colours, fonts and size presets for the Design panel."""
     from djangopress.editor_v2.design_tokens import collect_tokens
     return JsonResponse({'success': True, **collect_tokens()})
+
+
+@editor_required
+@require_http_methods(["GET", "POST"])
+def restyle_similar(request):
+    """Apply to all similar: elements with the same tag and class list on every
+    active page (header/footer when asked). GET counts them; POST adds/removes
+    classes in every language, one checkpoint per changed page."""
+    from djangopress.core.services import restyle
+    if request.method == 'GET':
+        tag = (request.GET.get('tag') or '').lower()
+        classes = (request.GET.get('classes') or '').split()
+        include_globals = request.GET.get('include_globals') in ('1', 'true')
+    else:
+        try:
+            data = json.loads(request.body)
+        except json.JSONDecodeError:
+            return JsonResponse({'success': False, 'error': 'Invalid JSON'}, status=400)
+        tag = str(data.get('tag') or '').lower()
+        classes = [str(c) for c in data.get('classes') or []]
+        include_globals = bool(data.get('include_globals'))
+    if not tag or not restyle.real_classes(classes):
+        return JsonResponse({'success': False, 'error': 'Give the tag and the classes the elements share'}, status=400)
+    match = restyle.matcher([tag], exact_classes=classes)
+
+    if request.method == 'GET':
+        hits = restyle.find(match, include_globals=True)
+        on_pages = [h for h in hits if h['kind'] == 'page']
+        return JsonResponse({'success': True, 'count': len(on_pages),
+                             'pages': len({h['obj'].pk for h in on_pages}),
+                             'globals': len([h for h in hits if h['kind'] == 'global'])})
+
+    add = [str(c) for c in data.get('add') or []]
+    remove = [str(c) for c in data.get('remove') or []]
+    if not add and not remove:
+        return JsonResponse({'success': False, 'error': 'Nothing to change'}, status=400)
+
+    def checkpoint(kind, obj):
+        if kind == 'page':
+            obj.create_version(user=request.user, change_summary='Apply to all similar', kind='checkpoint')
+        else:
+            obj.create_version(change_summary='Apply to all similar')
+
+    done = restyle.apply(match, add=add, remove=remove, include_globals=include_globals, checkpoint=checkpoint)
+    changed = [{'label': r['label'], 'count': r['count']} for r in done]
+    return JsonResponse({'success': True, 'changed': changed, 'total': sum(r['count'] for r in done)})
