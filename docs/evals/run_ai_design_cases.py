@@ -33,8 +33,8 @@ from djangopress.core.models import Page
 from djangopress.editor_v2 import components
 
 DB = Path('db.sqlite3').resolve()
-if DB.parent.name != 'demo-ai-lab':
-    raise SystemExit(f'Evals only run on the demo-ai-lab site, not {DB.parent.name}')
+if not DB.parent.name.startswith('demo-ai-'):
+    raise SystemExit(f'Evals only run on demo-ai-* sites, not {DB.parent.name}')
 
 OUT = Path(os.environ.get('EVAL_OUT', '/tmp/ai-eval/run')).resolve()
 OUT.mkdir(parents=True, exist_ok=True)
@@ -65,7 +65,7 @@ CASES = {
     'N2': [R('home', 'testemunhos', 'Torna os testemunhos mais elegantes: aspas grandes, fundo creme e o nome do autor mais discreto.')],
     'N3': [C('home', 'carta', 'Acrescenta uma secção com o horário e o mapa (Google Maps), no estilo do resto do site.')],
     'N4': [C('proposta-2', 'chef', 'Acrescenta uma galeria de 6 fotos de pratos da biblioteca de imagens, que abram em grande ao clicar.')],
-    'N5': [E('reservas', 'reservas-hero', 'a', 'Dá mais destaque a este botão, na cor principal da marca.')],
+    'N5': [E('home', 'hero', 'a', 'Dá mais destaque a este botão, na cor principal da marca.')],
     'N6': [R('proposta-1', 'pilares', 'Simplifica: só 3 pilares lado a lado, com um ícone simples cada e menos texto.')],
     'N7': [R('home', 'fotos', 'No telemóvel esta grelha de fotos fica muito alta. Mostra 2 colunas e fotos mais baixas.')],
     'N8': [A('Na página Reservas, acrescenta uma secção de perguntas frequentes com 5 perguntas sobre reservas de grupos, antes dos contactos.')],
