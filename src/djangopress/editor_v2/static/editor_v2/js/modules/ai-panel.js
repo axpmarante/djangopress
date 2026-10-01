@@ -35,6 +35,7 @@ let sessionId = null;
 let sessionsList = [];            // [{id, title, updated_at}, ...]
 let messages = [];
 let pendingResult = null;
+let pagePreviewWrapper = null;   // element holding the page's sections during a page-scope preview
 let pendingScope = null;
 let originalHtml = null;
 let activeTab = null;
@@ -387,7 +388,9 @@ async function send() {
                 } else if (res.page || res.page_data?.page) {
                     // Single-option response (page scope)
                     // page_data wrapping comes from run_with_progress; direct complete has .page
-                    pendingResult = res.page || res.page_data?.page;
+                    const page = res.page || res.page_data?.page || {};
+                    const html = res.html || (page.html_content_i18n || {})[config().language || 'pt'];
+                    pendingResult = html ? { html } : null;
                     pendingScope = lockedScope;
                     options = [];
                     if (pendingResult) showPreview();
@@ -491,14 +494,15 @@ async function applyResult() {
                 section_name: lockedSection,
                 selector: lockedSelector,
                 html: chosen.html,
+                option_index: activeOption + 1,
+                session_id: sessionId,
             }));
         } else if (pendingResult && pendingScope) {
             // Single-option (page scope): existing flow
             if (pendingScope === 'page') {
                 await api.post('/save-ai-page/', withEditableId({
                     page_id: config().pageId,
-                    html_template: pendingResult.html_template,
-                    content: pendingResult.content,
+                    html: pendingResult.html,
                 }));
             }
         } else {
@@ -542,11 +546,13 @@ function showPreview() {
     if (!pendingResult) return;
     const lang = config().language || 'pt';
     const translations = pendingResult.content?.translations || {};
-    const previewHtml = detemplatize(pendingResult.html_template, translations, lang);
+    const previewHtml = pendingResult.html ?? detemplatize(pendingResult.html_template, translations, lang);
 
     if (pendingScope === 'page') {
-        const wrapper = document.querySelector('.editor-v2-content');
+        // Only the page's sections are replaced — header and footer stay.
+        const wrapper = pagePreviewWrapper || document.querySelector('.editor-v2-content [data-section]')?.parentElement;
         if (!wrapper) return;
+        pagePreviewWrapper = wrapper;
         if (!originalHtml) originalHtml = wrapper.innerHTML;
         wrapper.innerHTML = previewHtml;
     } else if (pendingScope === 'element' && lockedSelector) {
@@ -591,8 +597,8 @@ function showMultiPreview(index) {
 function restorePreview() {
     if (!originalHtml) return;
     if (pendingScope === 'page') {
-        const wrapper = document.querySelector('.editor-v2-content');
-        if (wrapper) wrapper.innerHTML = originalHtml;
+        if (pagePreviewWrapper) pagePreviewWrapper.innerHTML = originalHtml;
+        pagePreviewWrapper = null;
     } else if (pendingScope === 'element' && lockedSelector) {
         const el = document.querySelector(lockedSelector);
         if (el) el.outerHTML = originalHtml;
