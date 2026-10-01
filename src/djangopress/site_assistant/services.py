@@ -14,7 +14,7 @@ from .tools import ToolRegistry
 
 logger = logging.getLogger(__name__)
 
-MAX_TOOL_ITERATIONS = 8
+MAX_TOOL_ITERATIONS = 12   # read_section / list_components / web_search spend steps before the change
 
 # Tools that mutate page context — refresh system instruction after these
 PAGE_CONTEXT_MUTATIONS = {

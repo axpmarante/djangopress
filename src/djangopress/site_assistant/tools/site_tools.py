@@ -344,6 +344,9 @@ def validate_contacts(params, context):
                    f'{counts["cant_verify"]} could not be verified. ' + ' | '.join(lines))
     if result['web_answer']:
         message += f' Web search said: {result["web_answer"][:600]}'
+    elif not params.get('check_web'):
+        message += (' The details were not compared with the web (check_web was off): do not say the web or '
+                    'any official site confirms them.')
     message += ' Nothing was changed.'
     return {'success': True, 'issues': issues, 'sources': result['sources'], 'message': message}
 

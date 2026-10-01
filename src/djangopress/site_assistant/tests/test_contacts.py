@@ -111,6 +111,11 @@ class ContactsTest(TestCase):
         self.assertIn('Contactos', inconsistent[0]['what'])
         self.assertIn('Reservas', inconsistent[0]['what'])
 
+    def test_without_web_check_the_result_says_the_web_was_not_checked(self):
+        out = self.check()
+        self.assertIn('not compared with the web', out['message'])
+        self.assertEqual(out['sources'], [])
+
     def test_phone_normalisation(self):
         self.assertEqual(contacts.normalise_phone('289 000 000'), '351289000000')
         self.assertEqual(contacts.normalise_phone('+351 912-345-678'), '351912345678')

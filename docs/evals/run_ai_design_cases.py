@@ -10,7 +10,8 @@ Usage (from the demo site directory, with its dev server running):
     .venv/bin/python manage.py shell < ../djangopress/docs/evals/run_ai_design_cases.py
 
 Writes <EVAL_OUT>/results.json, <EVAL_OUT>/index.html and screenshots.
-Refuses to run on anything but the demo-ai-lab site.
+Refuses to run on anything but demo-ai-* sites. Emails go to Django's locmem
+outbox (recorded per case), never out.
 """
 import html as html_lib
 import json
@@ -23,6 +24,8 @@ from pathlib import Path
 
 from bs4 import BeautifulSoup
 from django.contrib.auth import get_user_model
+from django.conf import settings
+from django.core import mail
 from django.core.cache import cache
 from django.db import connections
 from django.test import Client
@@ -60,6 +63,14 @@ def C(page, after, text):
 def A(text):
     return {'kind': 'assistant', 'text': text}
 
+def P():
+    """Click the first photo thumbnail of the previous reply (the Home sends "Usa a foto <ref>")."""
+    return {'kind': 'pick_photo', 'text': '(clica na 1.ª foto proposta)'}
+
+def U():
+    """Click "Undo this" on the previous reply."""
+    return {'kind': 'turn_undo', 'text': '(clica em Undo this)'}
+
 CASES = {
     'N1': [R('home', 'conceito', 'Passa esta secção para duas colunas: texto à esquerda, foto à direita. No telemóvel a foto fica por cima.')],
     'N2': [R('home', 'testemunhos', 'Torna os testemunhos mais elegantes: aspas grandes, fundo creme e o nome do autor mais discreto.')],
@@ -92,6 +103,13 @@ CASES = {
            A('Já agora, qual é o título SEO dessa página?'),
            A('Volta à faixa do reconhecimento e põe os logótipos a preto e branco.')],
     'C10': [A('Tira a galeria.'), A('Não, a da página proposta-1, não a da página inicial.')],
+    # Phase 4 (assistant tools) — docs/plans/2026-10-01-assistant-tools-design.md
+    'N11': [A('Na proposta-2, no slider do foie gras, põe a foto da equipa a empratar em primeiro.')],
+    'N12': [A('Na página Reservas, procura uma foto melhor para o fundo do topo: algo com a sala do restaurante.'), P()],
+    'N13': [A('Testa o formulário de reservas.')],
+    'N14': [A('Verifica se os contactos do site estão certos.')],
+    'C11': [A('Na página Reservas, muda o fundo do topo para outra foto da biblioteca, à tua escolha.'), A('Desfaz isso.')],
+    'C12': [A('Na página Reservas, acrescenta uma secção de perguntas frequentes com 5 perguntas sobre reservas de grupos, antes dos contactos.'), U()],
 }
 
 GENERIC_CLASS_RE = re.compile(r'^(?:[a-z]+:)*(?:bg|text|border|from|to|via|ring)-(?:gray|slate|zinc|neutral|stone|blue|indigo|sky|red|green|emerald|yellow|amber|purple|pink)-\d{2,3}$')
@@ -241,7 +259,26 @@ def assistant_turn(c, turn, session_id):
         return record, session_id
     record['response'] = data.get('response', '')
     record['actions'] = [f"{a.get('tool')}:{'ok' if a.get('success') else 'FAIL'} {str(a.get('message', ''))[:120]}" for a in data.get('actions', [])]
+    record['photos'] = [p['ref'] for a in data.get('actions', []) for p in a.get('photos') or []]
+    record['changes'] = [c.get('label') for c in data.get('changes') or []]
+    record['message_index'] = data.get('message_index')
     return record, data.get('session_id')
+
+def undo_turn(c, session_id, previous):
+    t0 = time.time()
+    record = {'kind': 'turn_undo', 'text': '(Undo this)'}
+    index = (previous or {}).get('message_index')
+    if not session_id or index is None:
+        record['error'] = 'the previous reply changed nothing (no message_index)'
+        return record
+    res = post(c, f'/site-assistant/api/sessions/{session_id}/undo/', {'message_index': index}, 'http://localhost/backoffice/')
+    data = res.json()
+    record['seconds'] = round(time.time() - t0, 1)
+    if not data.get('success'):
+        record['error'] = str(data.get('error') or data.get('conflicts') or f'HTTP {res.status_code}')
+    else:
+        record['response'] = 'Undone: ' + ', '.join(data.get('undone') or [])
+    return record
 
 # --- checks ---------------------------------------------------------------------------
 
@@ -321,7 +358,17 @@ def run_case(case_id, turns, classes_before, base_failures):
     log_start = AICallLog.objects.order_by('-id').values_list('id', flat=True).first() or 0
     c = client_for()
     records, history, session_id = [], [], None
+    mail.outbox = []
     for turn in turns:
+        if turn['kind'] == 'pick_photo':
+            refs = (records[-1] if records else {}).get('photos') or []
+            if not refs:
+                records.append({'kind': 'pick_photo', 'text': turn['text'], 'error': 'the previous reply showed no photos'})
+                continue
+            turn = A(f'Usa a foto {refs[0]}')
+        if turn['kind'] == 'turn_undo':
+            records.append(undo_turn(c, session_id, records[-1] if records else None))
+            continue
         if turn['kind'] == 'assistant':
             rec, session_id = assistant_turn(c, turn, session_id)
         else:
@@ -331,6 +378,8 @@ def run_case(case_id, turns, classes_before, base_failures):
         records.append(rec)
     after = state()
     checks, touched = compare(before, after, classes_before)
+    checks['identical_to_start'] = before == after
+    checks['emails'] = [f"{', '.join(m.to)} · {m.subject}" for m in mail.outbox]
     checks['new_site_check_problems'] = [f for f in site_check_failures() if f not in base_failures][:15]
     logs = AICallLog.objects.filter(id__gt=log_start)
     usage = {'calls': logs.count(),
@@ -358,7 +407,9 @@ def write_report(results):
                   f"<br>only one language: {esc(', '.join(ck['only_one_language']) or '—')}"
                   f"<br>novel classes: {ck['novel_classes']} · generic palette: {esc(', '.join(ck['generic_palette_classes']) or '—')}"
                   f"<br>new site-check problems: {esc('; '.join(ck['new_site_check_problems']) or '—')}"
-                  f"<br>section names: {esc('; '.join(ck['section_name_problems']) or 'ok')}")
+                  f"<br>section names: {esc('; '.join(ck['section_name_problems']) or 'ok')}"
+                  f"<br>pages identical to the start: {ck.get('identical_to_start')}"
+                  f"<br>emails: {esc('; '.join(ck.get('emails') or []) or '—')}")
         imgs = ''.join(f'<img src="{s}" loading="lazy">' for s in r['shots'])
         u = r['usage']
         rows.append(f"<section><h2>{r['case']} {'✓' if r['ok'] else '✕'}</h2><ol>{turns}</ol>"
@@ -371,6 +422,7 @@ def write_report(results):
         '.shots img{max-height:420px;border:1px solid #ccc}</style>'
         f'<h1>AI design eval — {len(results)} cases</h1>' + ''.join(rows))
 
+settings.EMAIL_BACKEND = 'django.core.mail.backends.locmem.EmailBackend'
 take_snapshot()
 _snap_state = None
 restore()

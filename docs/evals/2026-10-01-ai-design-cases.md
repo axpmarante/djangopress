@@ -52,6 +52,24 @@ Each conversation is one chat session (editor AI panel or Home assistant, as mar
 | C9 | Assistant · demo · proposta-3 | 1) "Na proposta-3, põe a secção de reconhecimento numa faixa horizontal." · 2) "Já agora, qual é o título SEO dessa página?" · 3) "Volta à faixa do reconhecimento e põe os logótipos a preto e branco." | turn 2 answers from the page's SEO fields; turn 3 targets the **same `reconhecimento` section** after the detour |
 | C10 | Assistant · demo | 1) "Tira a galeria." · 2) "Não, a da página proposta-1, não a da página inicial." | turn 1 asks which (two pages have `galeria`) or targets none; after turn 2 only proposta-1 changes and the home gallery is intact |
 
+
+---
+
+## Part 3 — assistant tools (phase 4)
+
+Added 2026-10-01 with `docs/plans/2026-10-01-assistant-tools-design.md`. All on the Home chat; run on `demo-ai-eval`. Emails go to the runner's in-memory outbox, never out.
+
+| # | Turns | Checks |
+|---|---|---|
+| N11 | "Na proposta-2, no slider do foie gras, põe a foto da equipa a empratar em primeiro." | `list_components` → `reorder_items`, no AI refine; `foto-foie` keeps 6 slides in PT and EN with the team photo first; nothing else changes |
+| N12 | 1) "Na página Reservas, procura uma foto melhor para o fundo do topo: algo com a sala do restaurante." · 2) *operator clicks the first thumbnail* ("Usa a foto <ref>") | turn 1 calls `find_photos` and shows candidates (library and/or Unsplash) without changing the page; turn 2 changes only `reservas-hero`, in PT and EN, keeping the overlay |
+| N13 | "Testa o formulário de reservas." | `test_form`: every email goes only to the operator with `[TESTE]` in the subject; no submission left behind; the reply reports each step |
+| N14 | "Verifica se os contactos do site estão certos." | `validate_contacts`; reports the landline used on the pages vs the mobile in Settings, with where; changes nothing |
+| C11 | 1) "Na página Reservas, muda o fundo do topo para outra foto da biblioteca, à tua escolha." · 2) "Desfaz isso." | turn 2 calls `undo_last_change`; every page is **byte-identical** to the start |
+| C12 | 1) the N8 request (FAQ before the contacts) · 2) *operator clicks "Undo this"* | turn 1 uses `insert_section` (only the new section appears, in PT and EN); after the undo every page is byte-identical to the start |
+
+N8 and C8 are re-run with the phase 4 code: adding a section must no longer re-translate the other sections.
+
 ---
 
 ## Expected baseline (before the work)
