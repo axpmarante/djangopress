@@ -123,7 +123,8 @@ class AssistantService:
     # Tools that only read; they don't count as "done" in the summary.
     READ_ONLY_TOOLS = {'request_additional_tools', 'get_page_info', 'list_pages', 'get_settings', 'list_images',
                        'set_active_page', 'list_menu_items', 'list_forms', 'list_news', 'read_section',
-                       'web_search', 'list_components', 'find_photos', 'validate_forms', 'validate_contacts'}
+                       'web_search', 'list_components', 'find_photos', 'validate_forms', 'validate_contacts',
+                       'find_elements'}
 
     @staticmethod
     def _plain(action):

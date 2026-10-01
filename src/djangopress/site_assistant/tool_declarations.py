@@ -389,7 +389,37 @@ REMOVE_ITEM = types.FunctionDeclaration(
     }, required=['section', 'index']),
 )
 
+FIND_ELEMENTS = types.FunctionDeclaration(
+    name='find_elements',
+    description=('Find elements across the WHOLE site (every page plus header/footer), grouped by their exact '
+                 'classes, with counts, where they are and example texts. Read-only. Use it before a site-wide '
+                 'restyle ("all buttons", "every section title") instead of reading pages one by one.'),
+    parameters=S(type=T.OBJECT, properties={
+        'tags': S(type=T.STRING, description='Comma-separated tags, e.g. "a,button" (default) or "h2".'),
+        'has_classes': S(type=T.STRING, description='Only elements that have all these classes.'),
+        'text_contains': S(type=T.STRING, description='Only elements whose text contains this.'),
+        'pages': S(type=T.ARRAY, items=S(type=T.STRING), description='Page titles; default every active page.'),
+    }),
+)
+
+RESTYLE_ELEMENTS = types.FunctionDeclaration(
+    name='restyle_elements',
+    description=('Add/remove classes on every element with the given tags that has ALL has_classes, on every '
+                 'page (or the pages given), in every language, in one call; header/footer only when '
+                 'include_header_footer is true. Other classes stay. Get has_classes from find_elements.'),
+    parameters=S(type=T.OBJECT, properties={
+        'tags': S(type=T.STRING, description='Comma-separated tags, e.g. "a,button".'),
+        'has_classes': S(type=T.STRING, description='Classes that identify the elements (from find_elements).'),
+        'add_classes': S(type=T.STRING, description='Classes to add.'),
+        'remove_classes': S(type=T.STRING, description='Classes to remove.'),
+        'pages': S(type=T.ARRAY, items=S(type=T.STRING), description='Page titles; default every active page.'),
+        'include_header_footer': S(type=T.BOOLEAN, description='Also change the header and footer.'),
+    }, required=['has_classes']),
+)
+
 PAGE_EDIT_TOOLS = [
+    FIND_ELEMENTS,
+    RESTYLE_ELEMENTS,
     FIND_PHOTOS,
     SET_SECTION_BACKGROUND,
     LIST_COMPONENTS,

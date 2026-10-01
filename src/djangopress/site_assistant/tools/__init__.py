@@ -3,10 +3,11 @@ from .site_tools import SITE_TOOLS
 from .page_tools import PAGE_TOOLS
 from .component_tools import COMPONENT_TOOLS
 from .photo_tools import PHOTO_TOOLS
+from .style_tools import STYLE_TOOLS
 
 logger = logging.getLogger(__name__)
 
-ALL_TOOLS = {**SITE_TOOLS, **PAGE_TOOLS, **COMPONENT_TOOLS, **PHOTO_TOOLS}
+ALL_TOOLS = {**SITE_TOOLS, **PAGE_TOOLS, **COMPONENT_TOOLS, **PHOTO_TOOLS, **STYLE_TOOLS}
 
 # Conditionally import news tools if the news app is installed
 try:
