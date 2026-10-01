@@ -32,7 +32,7 @@ class AssistantService:
         self.session = session
         self.llm = LLMBase()
 
-    def handle_message(self, message, user=None, reference_images=None):
+    def handle_message(self, message, user=None, reference_images=None, run_id=None):
         """Process a user message through the two-phase flow.
 
         Phase 1: Router classifies intents or returns a direct response.
@@ -46,6 +46,9 @@ class AssistantService:
         """
         # Store user message
         self.session.add_message('user', message)
+        self._run_id = run_id
+        if self._stop_requested():
+            return self._stopped([], [], None)
 
         # Build snapshot for router
         snapshot = build_router_snapshot(self.session)
@@ -61,6 +64,9 @@ class AssistantService:
                 'needs_active_page': False,
                 'direct_response': None,
             }
+
+        if self._stop_requested():
+            return self._stopped([], [], None)
 
         # Direct response — no tools needed
         if router_result.get('direct_response'):
@@ -89,6 +95,43 @@ class AssistantService:
 
         return self._execute_phase2(message, intents, snapshot, user=user, reference_images=reference_images)
 
+    # Tools that only read; they don't count as "done" in the summary.
+    READ_ONLY_TOOLS = {'request_additional_tools', 'get_page_info', 'list_pages', 'get_settings', 'list_images',
+                       'set_active_page', 'list_menu_items', 'list_forms', 'list_news'}
+
+    @staticmethod
+    def _plain(action):
+        return f"{action.get('tool', '').replace('_', ' ')}: {action.get('message', '')}".strip()
+
+    def _not_done_note(self, actions):
+        """Failed steps are always reported, whatever the model wrote."""
+        failed = list(dict.fromkeys(self._plain(a) for a in actions if not a.get('success')))
+        if not failed:
+            return ''
+        return '\n\nNot done:\n' + '\n'.join(f'- {line}' for line in failed)
+
+    def _report(self, actions):
+        done = [a for a in actions if a.get('success') and a.get('tool') not in self.READ_ONLY_TOOLS]
+        text = ''
+        if done:
+            text += '\n\nDone:\n' + '\n'.join(f'- {line}' for line in dict.fromkeys(self._plain(a) for a in done))
+        text += self._not_done_note(actions)
+        return text or '\n\nNothing was changed.'
+
+    def _stop_requested(self):
+        from djangopress.site_assistant import cancel
+        return cancel.is_cancelled(getattr(self, '_run_id', None))
+
+    def _stopped(self, actions, steps, set_active_page):
+        from djangopress.site_assistant import cancel
+        cancel.clear(getattr(self, '_run_id', None))
+        changed = [a for a in actions if a.get('success') and a.get('tool') not in self.READ_ONLY_TOOLS]
+        text = ('Stopped. Changes made before you stopped are kept.' + self._report(actions)) if changed \
+            else 'Stopped. Nothing was changed.'
+        self.session.add_message('assistant', text, actions=actions or None)
+        return {'response': text, 'actions': actions, 'steps': steps,
+                'set_active_page': set_active_page, 'stopped': True}
+
     def _execute_phase2(self, message, intents, snapshot, user=None, reference_images=None):
         """Execute the native Gemini FC loop.
 
@@ -107,7 +150,7 @@ class AssistantService:
         tools = build_tool_declarations(intents)
 
         # Build contents (conversation history + current message)
-        contents = self._build_contents(message)
+        contents = self._build_contents(message, reference_images)
 
         context = {
             'session': self.session,
@@ -124,6 +167,8 @@ class AssistantService:
         current_intents = set(intents)
 
         while iteration < MAX_TOOL_ITERATIONS:
+            if self._stop_requested():
+                return self._stopped(all_executed_actions, steps, set_active_page)
             # Call LLM with native FC
             try:
                 response = self.llm.get_completion_with_tools(
@@ -170,6 +215,7 @@ class AssistantService:
                 response_text = '\n'.join(text_parts) if text_parts else ''
                 if not response_text:
                     response_text = 'Done.'
+                response_text += self._not_done_note(all_executed_actions)
 
                 self.session.add_message('assistant', response_text, actions=all_executed_actions or None)
                 self._auto_title(message)
@@ -184,6 +230,9 @@ class AssistantService:
             function_response_parts = []
             iteration_actions = []
             needs_context_refresh = False
+
+            if self._stop_requested():   # Stop clicked while the model was thinking: skip its tool calls
+                return self._stopped(all_executed_actions, steps, set_active_page)
 
             for fc in function_calls:
                 fc_name = fc.name
@@ -267,7 +316,7 @@ class AssistantService:
 
         # Max iterations reached — force a text response
         logger.warning('Max FC iterations reached (%d)', MAX_TOOL_ITERATIONS)
-        response_text = 'I completed the available operations. Let me know if you need anything else.'
+        response_text = 'I ran out of steps before finishing.' + self._report(all_executed_actions)
         self.session.add_message('assistant', response_text, actions=all_executed_actions or None)
         self._auto_title(message)
         return {
@@ -277,7 +326,7 @@ class AssistantService:
             'set_active_page': set_active_page,
         }
 
-    def _build_contents(self, message):
+    def _build_contents(self, message, reference_images=None):
         """Convert session history to Gemini contents format.
 
         Returns a list of Content objects with role user/model,
@@ -304,10 +353,12 @@ class AssistantService:
                     types.Content(role='model', parts=[types.Part.from_text(text=content)])
                 )
 
-        # Add current message
-        contents.append(
-            types.Content(role='user', parts=[types.Part.from_text(text=message)])
-        )
+        # Add current message, with any attached images/PDFs so the model can see them
+        parts = [types.Part.from_text(text=message)]
+        for ref in reference_images or []:
+            if ref.get('bytes') and ref.get('mime_type'):
+                parts.append(types.Part.from_bytes(data=ref['bytes'], mime_type=ref['mime_type']))
+        contents.append(types.Content(role='user', parts=parts))
 
         return contents
 

@@ -22,6 +22,15 @@ class AssistantSession(models.Model):
     def __str__(self):
         return self.title or f'Session #{self.pk}'
 
+    def drop_last_turn(self):
+        """Remove the last user message and everything after it (editing that message)."""
+        for i in range(len(self.messages) - 1, -1, -1):
+            if self.messages[i].get('role') == 'user':
+                self.messages = self.messages[:i]
+                self.save(update_fields=['messages', 'updated_at'])
+                return True
+        return False
+
     def add_message(self, role, content, actions=None):
         msg = {
             'role': role,

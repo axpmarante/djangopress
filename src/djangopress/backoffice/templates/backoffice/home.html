@@ -5,20 +5,38 @@
 {% block content %}
 {% if assistant_enabled %}
 {{ suggestions|json_script:"bo-home-suggestions" }}
-<div id="bo-home-assistant" x-data="homeAssistant()" x-init="init()" class="mx-auto flex min-h-[calc(100vh-10rem)] max-w-3xl flex-col">
+<div id="bo-home-assistant" x-data="homeAssistant()" x-init="init()"
+     @keydown.escape.window="if (thinking) stop()"
+     @paste.window="onPaste($event)"
+     class="mx-auto flex min-h-[calc(100vh-10rem)] max-w-3xl flex-col">
+
+    <input type="file" x-ref="files" class="hidden" multiple accept="image/*,application/pdf" @change="addFiles($event.target.files); $event.target.value = ''">
 
     <!-- Start: one prompt in the middle of the page -->
     <template x-if="!started">
         <div class="flex flex-1 flex-col items-center justify-center pb-16">
             <h2 class="mb-2 text-center text-3xl font-semibold tracking-tight text-gray-900">What would you like to change?</h2>
-            <p class="mb-8 text-center text-sm text-gray-500">The site assistant edits {{ SITE_NAME }} for you — pages, texts, SEO, news.</p>
+            <p class="mb-8 text-center text-sm text-gray-500">The site assistant edits {{ SITE_NAME }} for you — pages, texts, SEO, news. Attach images or a PDF as reference.</p>
 
-            <form @submit.prevent="send()" class="w-full">
-                <div class="rounded-2xl border border-gray-200 bg-white p-3 shadow-sm focus-within:border-gray-300 focus-within:shadow-md">
+            <form @submit.prevent="send()" class="w-full" @dragover.prevent="dragging = true" @dragleave.prevent="dragging = false" @drop.prevent="dragging = false; addFiles($event.dataTransfer.files)">
+                <div class="rounded-2xl border bg-white p-3 shadow-sm focus-within:shadow-md" :class="dragging ? 'border-gray-900 border-dashed' : 'border-gray-200 focus-within:border-gray-300'">
+                    <div x-show="files.length" class="mb-2 flex flex-wrap gap-2">
+                        <template x-for="(f, i) in files" :key="f.key">
+                            <div class="relative h-14 w-14 overflow-hidden rounded-lg border border-gray-200 bg-gray-50" :title="f.file.name">
+                                <img x-show="f.preview" :src="f.preview" class="h-full w-full object-cover" alt="">
+                                <span x-show="!f.preview" class="flex h-full w-full items-center justify-center text-[10px] font-semibold text-gray-500">PDF</span>
+                                <button type="button" @click="removeFile(i)" class="absolute right-0.5 top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-gray-900/70 text-[10px] text-white">×</button>
+                            </div>
+                        </template>
+                    </div>
                     <textarea x-ref="prompt" x-model="draft" rows="3" @keydown.enter="onEnter($event)"
-                              placeholder="e.g. Change the opening hours to 12:00–15:00 and 19:00–23:00"
+                              placeholder="e.g. Add a section about the chef's book on the Proposta 2 page, after the chef section"
                               class="w-full resize-none border-0 bg-transparent px-1 text-base text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-0"></textarea>
-                    <div class="flex items-center justify-end">
+                    <div class="flex items-center justify-between">
+                        <button type="button" @click="$refs.files.click()" title="Attach images or a PDF"
+                                class="inline-flex h-9 w-9 items-center justify-center rounded-full text-gray-500 hover:bg-gray-100 hover:text-gray-900">
+                            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/></svg>
+                        </button>
                         <button type="submit" :disabled="!draft.trim()"
                                 class="inline-flex h-9 w-9 items-center justify-center rounded-full bg-gray-900 text-white transition disabled:bg-gray-200 disabled:text-gray-400"
                                 title="Send (Enter)">
@@ -27,6 +45,7 @@
                     </div>
                 </div>
             </form>
+            <p x-show="error" x-text="error" class="mt-3 text-sm text-red-600"></p>
 
             <div class="mt-4 flex flex-wrap justify-center gap-2">
                 <template x-for="s in suggestions" :key="s">
@@ -70,13 +89,16 @@
                 <template x-for="(m, i) in messages" :key="i">
                     <div>
                         <template x-if="m.role === 'user'">
-                            <div class="flex justify-end">
+                            <div class="group flex flex-col items-end gap-1">
                                 <div class="max-w-[80%] whitespace-pre-wrap rounded-2xl bg-gray-100 px-4 py-2.5 text-sm text-gray-900" x-text="m.content"></div>
+                                <span x-show="m.attachments" class="text-xs text-gray-400" x-text="m.attachments ? `${m.attachments} attachment${m.attachments === 1 ? '' : 's'}` : ''"></span>
+                                <button type="button" x-show="i === lastUserIndex() && !thinking" @click="editLast()"
+                                        class="text-xs text-gray-400 opacity-0 transition hover:text-gray-700 group-hover:opacity-100 focus:opacity-100">Edit</button>
                             </div>
                         </template>
                         <template x-if="m.role !== 'user'">
-                            <div class="text-sm leading-relaxed text-gray-800">
-                                <div class="whitespace-pre-wrap" x-text="m.content"></div>
+                            <div class="text-sm leading-relaxed" :class="m.stopped ? 'italic text-gray-400' : 'text-gray-800'">
+                                <div class="whitespace-pre-wrap" x-html="formatReply(m.content)"></div>
                                 <template x-if="m.actions && m.actions.length">
                                     <div class="mt-3 flex flex-wrap gap-1.5">
                                         <template x-for="(a, j) in m.actions" :key="j">
@@ -97,20 +119,39 @@
                     <span class="h-1.5 w-1.5 animate-pulse rounded-full bg-gray-400"></span>
                     <span class="h-1.5 w-1.5 animate-pulse rounded-full bg-gray-400 [animation-delay:150ms]"></span>
                     <span class="h-1.5 w-1.5 animate-pulse rounded-full bg-gray-400 [animation-delay:300ms]"></span>
-                    <span class="ml-1">Working on it…</span>
+                    <span class="ml-1" x-text="stopping ? 'Stopping…' : 'Working on it… (Esc to stop)'"></span>
                 </div>
                 <p x-show="error" x-text="error" class="text-sm text-red-600"></p>
             </div>
 
-            <form @submit.prevent="send()" class="sticky bottom-0 bg-gray-50 pb-4 pt-2">
-                <div class="flex items-end gap-2 rounded-2xl border border-gray-200 bg-white p-2 shadow-sm focus-within:border-gray-300">
-                    <textarea x-ref="reply" x-model="draft" rows="1" @keydown.enter="onEnter($event)" :disabled="thinking"
-                              placeholder="Reply…"
-                              class="max-h-40 flex-1 resize-none border-0 bg-transparent px-2 py-1.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-0"></textarea>
-                    <button type="submit" :disabled="thinking || !draft.trim()"
-                            class="inline-flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-gray-900 text-white transition disabled:bg-gray-200 disabled:text-gray-400">
-                        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 12h14M13 6l6 6-6 6"/></svg>
-                    </button>
+            <form @submit.prevent="thinking ? stop() : send()" class="sticky bottom-0 bg-gray-50 pb-4 pt-2"
+                  @dragover.prevent="dragging = true" @dragleave.prevent="dragging = false" @drop.prevent="dragging = false; addFiles($event.dataTransfer.files)">
+                <p x-show="editing" class="mb-1 text-xs text-gray-500">Editing your last message —
+                    <button type="button" @click="cancelEdit()" class="underline">cancel</button></p>
+                <div class="rounded-2xl border bg-white p-2 shadow-sm" :class="dragging ? 'border-gray-900 border-dashed' : 'border-gray-200 focus-within:border-gray-300'">
+                    <div x-show="files.length" class="mb-2 flex flex-wrap gap-2 px-1">
+                        <template x-for="(f, i) in files" :key="f.key">
+                            <div class="relative h-12 w-12 overflow-hidden rounded-lg border border-gray-200 bg-gray-50" :title="f.file.name">
+                                <img x-show="f.preview" :src="f.preview" class="h-full w-full object-cover" alt="">
+                                <span x-show="!f.preview" class="flex h-full w-full items-center justify-center text-[10px] font-semibold text-gray-500">PDF</span>
+                                <button type="button" @click="removeFile(i)" class="absolute right-0.5 top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-gray-900/70 text-[10px] text-white">×</button>
+                            </div>
+                        </template>
+                    </div>
+                    <div class="flex items-end gap-2">
+                        <button type="button" @click="$refs.files.click()" :disabled="thinking" title="Attach images or a PDF"
+                                class="inline-flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full text-gray-500 hover:bg-gray-100 hover:text-gray-900 disabled:opacity-40">
+                            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/></svg>
+                        </button>
+                        <textarea x-ref="reply" x-model="draft" rows="1" @keydown.enter="onEnter($event)" :disabled="thinking"
+                                  placeholder="Reply…"
+                                  class="max-h-40 flex-1 resize-none border-0 bg-transparent px-2 py-1.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-0"></textarea>
+                        <button type="submit" :disabled="thinking ? stopping : !draft.trim()" :title="thinking ? 'Stop (Esc)' : 'Send (Enter)'"
+                                class="inline-flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-gray-900 text-white transition disabled:bg-gray-200 disabled:text-gray-400">
+                            <svg x-show="!thinking" class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 12h14M13 6l6 6-6 6"/></svg>
+                            <svg x-show="thinking" class="h-3 w-3" viewBox="0 0 12 12" fill="currentColor"><rect width="12" height="12" rx="2"/></svg>
+                        </button>
+                    </div>
                 </div>
             </form>
         </div>
@@ -120,16 +161,26 @@
 <script>
 function homeAssistant() {
     const CHAT_URL = "{% url 'site_assistant:chat_api' %}";
+    const CANCEL_URL = "{% url 'site_assistant:cancel_api' %}";
     const SESSION_URL = "{% url 'site_assistant:session_detail_api' session_id=0 %}".replace(/0\/$/, '');
     const FULL_URL = "{% url 'site_assistant:assistant' %}";
+    const MAX_FILES = 5;
+    const MAX_BYTES = 10 * 1024 * 1024;
     const csrf = () => (document.cookie.match(/(?:^|; )csrftoken=([^;]+)/) || [])[1] || '';
 
     return {
         started: false,
         thinking: false,
+        stopping: false,
+        editing: false,
+        dragging: false,
         draft: '',
         error: '',
         sessionId: null,
+        runId: null,
+        controller: null,
+        stopTimer: null,
+        files: [],
         messages: [],
         suggestions: JSON.parse(document.getElementById('bo-home-suggestions').textContent),
 
@@ -142,34 +193,83 @@ function homeAssistant() {
         onEnter(e) {
             if (e.shiftKey || e.isComposing) return;
             e.preventDefault();
-            this.send();
+            this.thinking ? this.stop() : this.send();
         },
 
+        // --- attachments ---
+        addFiles(list) {
+            this.error = '';
+            for (const file of Array.from(list || [])) {
+                if (!(file.type.startsWith('image/') || file.type === 'application/pdf')) { this.error = `${file.name}: only images or PDF.`; continue; }
+                if (file.size > MAX_BYTES) { this.error = `${file.name} is larger than 10 MB.`; continue; }
+                if (this.files.length >= MAX_FILES) { this.error = `Up to ${MAX_FILES} files per message.`; break; }
+                const entry = { file, key: `${file.name}-${file.size}-${Math.random()}`, preview: null };
+                if (file.type.startsWith('image/')) entry.preview = URL.createObjectURL(file);
+                this.files.push(entry);
+            }
+        },
+        removeFile(i) {
+            const [entry] = this.files.splice(i, 1);
+            if (entry?.preview) URL.revokeObjectURL(entry.preview);
+        },
+        clearFiles() {
+            this.files.forEach(f => f.preview && URL.revokeObjectURL(f.preview));
+            this.files = [];
+        },
+        onPaste(e) {
+            const pasted = Array.from(e.clipboardData?.files || []);
+            if (pasted.length) { e.preventDefault(); this.addFiles(pasted); }
+        },
+
+        // Assistant replies: escaped text with **bold**, `code` and --- rules (no other HTML).
+        formatReply(text) {
+            const esc = String(text || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            return esc
+                .replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>')
+                .replace(/`([^`\n]+)`/g, '<code class="rounded bg-gray-100 px-1 text-[12px]">$1</code>')
+                .replace(/^\s*---\s*$/gm, '<hr class="my-3 border-gray-200">')
+                .replace(/^\s*[*-]\s+/gm, '• ');
+        },
+
+        // --- conversation ---
         setUrl() {
             const url = new URL(location.href);
             if (this.sessionId) url.searchParams.set('session', this.sessionId);
             else url.searchParams.delete('session');
             history.replaceState(null, '', url);
         },
-
         scrollDown() {
             this.$nextTick(() => window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' }));
         },
-
         fullAssistantUrl() {
             return this.sessionId ? `${FULL_URL}?session=${this.sessionId}` : FULL_URL;
         },
-
+        lastUserIndex() {
+            for (let i = this.messages.length - 1; i >= 0; i--) if (this.messages[i].role === 'user') return i;
+            return -1;
+        },
+        editLast() {
+            const i = this.lastUserIndex();
+            if (i < 0) return;
+            this.draft = this.messages[i].content;
+            this.editing = true;
+            this.$nextTick(() => this.$refs.reply?.focus());
+        },
+        cancelEdit() {
+            this.editing = false;
+            this.draft = '';
+        },
         reset() {
             this.started = false;
             this.messages = [];
             this.sessionId = null;
             this.draft = '';
             this.error = '';
+            this.editing = false;
+            this.clearFiles();
             this.setUrl();
             this.$nextTick(() => this.$refs.prompt?.focus());
         },
-
         async open(id) {
             this.error = '';
             try {
@@ -187,34 +287,75 @@ function homeAssistant() {
             }
         },
 
+        async stop() {
+            if (!this.thinking || this.stopping) return;
+            this.stopping = true;
+            try {
+                await fetch(CANCEL_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrf() },
+                    body: JSON.stringify({ run_id: this.runId }),
+                });
+            } catch (_) { /* the abort below still frees the screen */ }
+            // The server stops before its next step and answers; don't wait forever for it.
+            // Bound to this request's controller, so it can never cancel a later message.
+            const controller = this.controller;
+            this.stopTimer = setTimeout(() => controller?.abort(), 20000);
+        },
+
         async send() {
             const message = this.draft.trim();
             if (!message || this.thinking) return;
+            const replaceLast = this.editing && this.lastUserIndex() >= 0;
+            if (replaceLast) this.messages = this.messages.slice(0, this.lastUserIndex());
+            const attached = this.files.map(f => f.file);
+            this.editing = false;
             this.started = true;
             this.error = '';
-            this.messages.push({ role: 'user', content: message });
+            this.messages.push({ role: 'user', content: message, attachments: attached.length || 0 });
             this.draft = '';
+            this.clearFiles();
             this.thinking = true;
+            this.stopping = false;
+            this.runId = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+            this.controller = new AbortController();
             this.scrollDown();
             try {
-                const body = { message };
-                if (this.sessionId) body.session_id = this.sessionId;
-                const res = await fetch(CHAT_URL, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrf() },
-                    body: JSON.stringify(body),
-                });
+                let options;
+                if (attached.length) {
+                    const form = new FormData();
+                    form.append('message', message);
+                    form.append('run_id', this.runId);
+                    if (this.sessionId) form.append('session_id', this.sessionId);
+                    if (replaceLast) form.append('replace_last', 'true');
+                    attached.forEach(f => form.append('reference_images', f));
+                    options = { method: 'POST', headers: { 'X-CSRFToken': csrf() }, body: form };
+                } else {
+                    const body = { message, run_id: this.runId };
+                    if (this.sessionId) body.session_id = this.sessionId;
+                    if (replaceLast) body.replace_last = true;
+                    options = { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrf() }, body: JSON.stringify(body) };
+                }
+                const res = await fetch(CHAT_URL, { ...options, signal: this.controller.signal });
                 const data = await res.json();
                 if (!data.success) throw new Error(data.error || 'The assistant could not answer');
                 this.sessionId = data.session_id;
                 this.setUrl();
-                this.messages.push({ role: 'assistant', content: data.response, actions: data.actions || [] });
+                this.messages.push({ role: 'assistant', content: data.response, actions: data.actions || [], stopped: data.stopped });
             } catch (err) {
-                this.error = `${err.message}. Your message is back in the box — try again.`;
-                this.messages.pop();
-                this.draft = message;
+                if (err.name === 'AbortError') {
+                    this.messages.push({ role: 'assistant', content: 'Stopped.', stopped: true });
+                } else {
+                    this.error = `${err.message}. Your message is back in the box — try again.`;
+                    this.messages.pop();
+                    this.draft = message;
+                }
             } finally {
+                clearTimeout(this.stopTimer);
+                this.stopTimer = null;
                 this.thinking = false;
+                this.stopping = false;
+                this.controller = null;
                 this.scrollDown();
                 this.$nextTick(() => this.$refs.reply?.focus());
             }

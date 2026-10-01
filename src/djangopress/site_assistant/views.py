@@ -46,6 +46,8 @@ def chat_api(request):
     reference_images = []
     if request.content_type and 'multipart' in request.content_type:
         message = request.POST.get('message', '').strip()
+        run_id = request.POST.get('run_id') or None
+        replace_last = request.POST.get('replace_last') in ('1', 'true', 'True')
         session_id = request.POST.get('session_id') or None
         model = request.POST.get('model') or get_ai_model('assistant_executor')
         active_page_id = request.POST.get('active_page_id') or None
@@ -59,6 +61,8 @@ def chat_api(request):
         except json.JSONDecodeError:
             return JsonResponse({'success': False, 'error': 'Invalid JSON'}, status=400)
         message = data.get('message', '').strip()
+        run_id = data.get('run_id') or None
+        replace_last = bool(data.get('replace_last'))
         session_id = data.get('session_id')
         model = data.get('model') or get_ai_model('assistant_executor')
         active_page_id = data.get('active_page_id')
@@ -95,7 +99,10 @@ def chat_api(request):
 
     # Process message
     service = AssistantService(session)
-    result = service.handle_message(message, user=request.user, reference_images=reference_images or None)
+    if replace_last:   # the operator edited their last message: it replaces that turn
+        session.drop_last_turn()
+    result = service.handle_message(message, user=request.user, reference_images=reference_images or None,
+                                    run_id=run_id)
 
     return JsonResponse({
         'success': True,
@@ -104,6 +111,7 @@ def chat_api(request):
         'actions': result['actions'],
         'steps': result.get('steps', []),
         'set_active_page': result.get('set_active_page'),
+        'stopped': bool(result.get('stopped')),
     })
 
 
@@ -141,3 +149,17 @@ def session_detail_api(request, session_id):
             'updated_at': session.updated_at.isoformat(),
         },
     })
+
+
+@superuser_required
+@require_http_methods(["POST"])
+def cancel_api(request):
+    """Stop a running chat turn (the Stop button). The turn checks the flag before each step."""
+    from djangopress.site_assistant import cancel
+    try:
+        data = json.loads(request.body)
+    except json.JSONDecodeError:
+        return JsonResponse({'success': False, 'error': 'Invalid JSON'}, status=400)
+    if not cancel.request_cancel(data.get('run_id')):
+        return JsonResponse({'success': False, 'error': 'Invalid run_id'}, status=400)
+    return JsonResponse({'success': True})

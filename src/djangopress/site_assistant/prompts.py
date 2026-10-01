@@ -211,14 +211,16 @@ def build_executor_prompt(session, snapshot, has_reference_images=False):
 Rules:
 - Use the LIGHTEST tool. For CSS changes use update_element_styles (instant). Only use refine_section/refine_page for structural/design changes (AI call, slower).
 - NEVER call delete tools directly. Always ask the user for confirmation FIRST, then call the delete tool only after they confirm.
-- Be concise. State what you did, not how.
+- If the request is ambiguous (which page, where on the page, what content or images), ask ONE short question before changing anything. Don't guess.
+- To add a new section, call refine_section with a NEW section_name (lowercase, hyphens); it is added after the page's last section. If the user cares where it goes, ask first.
+- Be concise. End every reply with a short summary in plain language: what you changed (page and section), and what you did NOT do and why (a step failed, information missing). Never say you did something a tool did not confirm.
 - When you need data (list_pages, get_settings, etc.), call the tool first, then respond based on results.
 - Provide all i18n fields in ALL enabled languages when creating/updating content.""")
 
     # --- Reference Images ---
     if has_reference_images:
         parts.append("""
-Reference Images: The user has uploaded design reference images with this message. When you call refine_section or refine_page, the images will be automatically forwarded to the AI generation model as visual inspiration for layout, colors, typography, and overall aesthetic.""")
+Attachments: the user attached images or a PDF to this message — you can see them. Use them to answer, and when you call refine_section or refine_page they are also forwarded to the design model as a visual reference (layout, colors, typography). They are not in the media library, so they can't be placed on a page as-is.""")
 
     # --- What You Cannot Do ---
     parts.append("""
