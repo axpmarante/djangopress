@@ -2,7 +2,7 @@
 URL configuration for the editor.
 """
 from django.urls import path
-from . import api_views, component_views
+from . import api_views, component_views, unsplash_views
 
 app_name = 'editor_v2'
 
@@ -17,6 +17,8 @@ urlpatterns = [
     # Image management endpoints
     path('api/images/', api_views.get_images, name='get_images'),
     path('api/images/upload/', api_views.upload_image, name='upload_image'),
+    path('api/images/unsplash-search/', unsplash_views.unsplash_search, name='api_unsplash_search'),
+    path('api/images/unsplash-import/', unsplash_views.unsplash_import, name='api_unsplash_import'),
 
     # AI section refinement endpoints
     path('api/refine-section/', api_views.refine_section, name='api_refine_section'),

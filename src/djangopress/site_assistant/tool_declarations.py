@@ -315,9 +315,33 @@ REORDER_SECTIONS = types.FunctionDeclaration(
     ),
 )
 
+FIND_PHOTOS = types.FunctionDeclaration(
+    name='find_photos',
+    description=('Search photos in the media library and on Unsplash (free stock photos). Returns up to 8 '
+                 'candidates with a ref (lib:<id> or unsplash:<id>) that the user sees as thumbnails. Read-only. '
+                 'Use English keywords for Unsplash.'),
+    parameters=S(type=T.OBJECT, properties={
+        'query': S(type=T.STRING, description='What the photo should show, e.g. "grilled fish terrace sunset".'),
+        'source': S(type=T.STRING, enum=['both', 'library', 'unsplash'], description='Where to search (default both).'),
+        'orientation': S(type=T.STRING, enum=['landscape', 'portrait', 'squarish'],
+                         description='Unsplash orientation; landscape for section backgrounds.'),
+    }, required=['query']),
+)
+
+SET_SECTION_BACKGROUND = types.FunctionDeclaration(
+    name='set_section_background',
+    description=('Use a photo as the background of a section of the active page, in every language. Keeps an '
+                 'existing dark overlay; also replaces a full-bleed background <img>. An unsplash:<id> ref is '
+                 'downloaded into the media library first.'),
+    parameters=S(type=T.OBJECT, properties={
+        'section_name': S(type=T.STRING, description='data-section name of the section.'),
+        'image': S(type=T.STRING, description='lib:<id> or unsplash:<id> from find_photos.'),
+    }, required=['section_name', 'image']),
+)
+
 _SECTION = S(type=T.STRING, description='data-section name of the section holding the slider/gallery.')
 _COMPONENT = S(type=T.INTEGER, description='Which slider/gallery in that section, from 1 (default 1).')
-_IMAGE_REF = 'An image reference: lib:<id> from list_images/find_photos'
+_IMAGE_REF = 'An image reference: lib:<id> or unsplash:<id> from find_photos (lib:<id> also from list_images)'
 
 LIST_COMPONENTS = types.FunctionDeclaration(
     name='list_components',
@@ -366,6 +390,8 @@ REMOVE_ITEM = types.FunctionDeclaration(
 )
 
 PAGE_EDIT_TOOLS = [
+    FIND_PHOTOS,
+    SET_SECTION_BACKGROUND,
     LIST_COMPONENTS,
     REORDER_ITEMS,
     REPLACE_ITEM_IMAGE,
@@ -690,6 +716,7 @@ LIST_IMAGES = types.FunctionDeclaration(
 
 MEDIA_TOOLS = [
     LIST_IMAGES,
+    FIND_PHOTOS,
 ]
 
 # ---------------------------------------------------------------------------
@@ -957,7 +984,7 @@ def build_tool_declarations(intents):
     declarations = []
     for intent in intents:
         if intent in TOOL_CATEGORIES:
-            declarations.extend(TOOL_CATEGORIES[intent])
+            declarations.extend(d for d in TOOL_CATEGORIES[intent] if d not in declarations)
     # Always include the meta tool so the model can request more categories, and web search
     declarations.append(REQUEST_TOOLS_DECLARATION)
     declarations.append(WEB_SEARCH_DECLARATION)

@@ -42,7 +42,12 @@ const el = {
     uploadThumb:   () => $('#ev2-image-upload-thumb'),
     uploadTitle:   () => $('#ev2-image-upload-title'),
     uploadAlt:     () => $('#ev2-image-upload-alt'),
+    unsplashTab:    () => $('#ev2-image-modal-unsplash'),
+    unsplashSearch: () => $('#ev2-unsplash-search'),
+    unsplashGrid:   () => $('#ev2-unsplash-grid'),
 };
+
+const unsplashEnabled = () => !!(window.EDITOR_CONFIG || {}).unsplashEnabled;
 
 // --- Open / Close ---
 
@@ -109,7 +114,9 @@ function switchModalTab(tab) {
 
     if (libBody) libBody.style.display = tab === 'library' ? '' : 'none';
     if (uplBody) uplBody.style.display = tab === 'upload' ? '' : 'none';
-    if (selectB) selectB.style.display = tab === 'library' ? '' : 'none';
+    const unsBody = el.unsplashTab();
+    if (unsBody) unsBody.style.display = tab === 'unsplash' ? '' : 'none';
+    if (selectB) selectB.style.display = tab === 'library' || tab === 'unsplash' ? '' : 'none';
     if (uploadB) uploadB.style.display = tab === 'upload' ? '' : 'none';
 
     // Update tab buttons
@@ -119,7 +126,8 @@ function switchModalTab(tab) {
     selectedImage = null;
     selectedFile = null;
     pickedImages = [];
-    el.grid()?.querySelectorAll('.ev2-image-modal-item.selected').forEach(i => i.classList.remove('selected'));
+    document.querySelectorAll('#ev2-image-modal .ev2-image-modal-item.selected').forEach(i => i.classList.remove('selected'));
+    if (tab === 'unsplash') el.unsplashSearch()?.focus();
     setStatus('');
     updateButtons();
 }
@@ -189,7 +197,8 @@ function renderGrid(images) {
 
 function selectLibraryImage(item) {
     if (currentMode === 'pick' && pickMultiple) {
-        const img = { id: item.dataset.imgId, url: item.dataset.url, alt: item.dataset.alt, title: item.dataset.title };
+        const img = { id: item.dataset.imgId, url: item.dataset.url, alt: item.dataset.alt, title: item.dataset.title,
+                      unsplash: item.dataset.unsplashId || null };
         const at = pickedImages.findIndex(p => p.id === img.id);
         if (at >= 0) { pickedImages.splice(at, 1); item.classList.remove('selected'); }
         else { pickedImages.push(img); item.classList.add('selected'); }
@@ -198,8 +207,7 @@ function selectLibraryImage(item) {
         return;
     }
     // Deselect all
-    const grid = el.grid();
-    if (grid) grid.querySelectorAll('.ev2-image-modal-item').forEach(i => i.classList.remove('selected'));
+    document.querySelectorAll('#ev2-image-modal .ev2-image-modal-item').forEach(i => i.classList.remove('selected'));
 
     // Select this one
     item.classList.add('selected');
@@ -208,8 +216,9 @@ function selectLibraryImage(item) {
         url: item.dataset.url,
         alt: item.dataset.alt,
         title: item.dataset.title,
+        unsplash: item.dataset.unsplashId || null,
     };
-    setStatus(`Selected: ${selectedImage.title || 'Image'}`);
+    setStatus(`Selected: ${selectedImage.title || 'Image'}` + (selectedImage.unsplash ? ` (${item.dataset.credit})` : ''));
     updateButtons();
 }
 
@@ -309,17 +318,74 @@ async function uploadAndSelect() {
 
 // --- Apply selection ---
 
-function applySelection() {
+// --- Unsplash ---
+
+async function searchUnsplash(query) {
+    const grid = el.unsplashGrid();
+    if (!grid || !query) return;
+    grid.innerHTML = '<div class="ev2-image-modal-empty">Searching…</div>';
+    try {
+        const data = await api.post('/images/unsplash-search/', { query });
+        const results = data.results || [];
+        if (!results.length) {
+            grid.innerHTML = '<div class="ev2-image-modal-empty">No photos found — try other words in English</div>';
+            return;
+        }
+        grid.innerHTML = results.map(p => {
+            const title = p.alt_description || 'Unsplash photo';
+            const credit = `Photo by ${p.photographer || 'unknown'} on Unsplash`;
+            return `<div class="ev2-image-modal-item" data-img-id="unsplash:${esc(p.id)}" data-unsplash-id="${esc(p.id)}" data-url="${esc(p.thumb_url)}" data-alt="${esc(title)}" data-title="${esc(title)}" data-credit="${esc(credit)}">
+                <img src="${esc(p.thumb_url)}" alt="${esc(title)}" loading="lazy" />
+                <div class="ev2-image-modal-check">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
+                </div>
+                <span class="ev2-image-modal-item-title">${esc(p.photographer || '')}</span>
+            </div>`;
+        }).join('');
+        grid.querySelectorAll('.ev2-image-modal-item').forEach(item => {
+            item.addEventListener('click', () => selectLibraryImage(item));
+        });
+    } catch (err) {
+        grid.innerHTML = `<div class="ev2-image-modal-empty">${esc(err.message || 'Search failed')}</div>`;
+    }
+}
+
+/** Unsplash picks are copied into the media library first; library picks pass through. */
+async function toLibrary(images) {
+    const out = [];
+    for (const img of images) {
+        if (!img.unsplash) { out.push(img); continue; }
+        const data = await api.post('/images/unsplash-import/', { id: img.unsplash });
+        cache = null;  // the library has a new image
+        out.push({ id: String(data.image.id), url: data.image.url, alt: data.image.alt_text || img.alt || '', title: data.image.title });
+    }
+    return out;
+}
+
+async function applySelection() {
+    const chosen = (currentMode === 'pick' && pickMultiple ? pickedImages : [selectedImage]).filter(Boolean);
+    if (!chosen.length) return;
+    let images = chosen;
+    if (chosen.some(i => i.unsplash)) {
+        const selectB = el.selectBtn();
+        if (selectB) selectB.disabled = true;
+        setStatus('Copying from Unsplash into the library…');
+        try {
+            images = await toLibrary(chosen);
+        } catch (err) {
+            setStatus(err.message || 'Could not import the photo');
+            updateButtons();
+            return;
+        }
+    }
     if (currentMode === 'pick') {
-        const images = (pickMultiple ? pickedImages : [selectedImage]).filter(Boolean)
-            .map(i => ({ id: i.id, url: i.url, alt: i.alt || '' }));
         const cb = pickCallback;
         close();
-        if (images.length && cb) cb(images);
+        if (cb) cb(images.map(i => ({ id: i.id, url: i.url, alt: i.alt || '' })));
         return;
     }
-    if (!selectedImage || !currentEl) return;
-    applyImage(selectedImage.url, selectedImage.alt, selectedImage.id);
+    if (!currentEl) return;
+    applyImage(images[0].url, images[0].alt, images[0].id);
     close();
 }
 
@@ -420,6 +486,13 @@ function bindModalEvents() {
     el.cancelBtn()?.addEventListener('click', close);
     el.selectBtn()?.addEventListener('click', applySelection);
     el.uploadBtn()?.addEventListener('click', uploadAndSelect);
+
+    // Unsplash tab: only when the site has a key; search on Enter
+    const unsplashButton = document.querySelector('.ev2-image-modal-tab[data-modal-tab="unsplash"]');
+    if (unsplashButton) unsplashButton.style.display = unsplashEnabled() ? '' : 'none';
+    el.unsplashSearch()?.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); searchUnsplash(e.target.value.trim()); }
+    });
 
     // Tab switching
     document.querySelectorAll('.ev2-image-modal-tab').forEach(tab => {

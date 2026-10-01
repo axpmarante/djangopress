@@ -65,6 +65,35 @@ def search_photos(query, per_page=9, orientation=None):
     return results
 
 
+def get_photo(photo_id):
+    """
+    One photo's details, in the same shape as search_photos results, or None.
+    """
+    if not is_configured() or not photo_id:
+        return None
+    url = 'https://api.unsplash.com/photos/' + urllib.parse.quote(str(photo_id), safe='')
+    req = urllib.request.Request(url, headers={
+        'Authorization': f'Client-ID {settings.UNSPLASH_ACCESS_KEY}',
+        'Accept-Version': 'v1',
+    })
+    try:
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            photo = json.loads(resp.read().decode())
+    except (urllib.error.URLError, urllib.error.HTTPError, json.JSONDecodeError) as e:
+        print(f'Unsplash photo error: {e}')
+        return None
+    urls = photo.get('urls', {})
+    user = photo.get('user', {})
+    return {
+        'id': photo.get('id', ''),
+        'thumb_url': urls.get('thumb', ''),
+        'regular_url': urls.get('regular', ''),
+        'alt_description': photo.get('alt_description') or photo.get('description') or '',
+        'photographer': user.get('name', ''),
+        'photographer_url': user.get('links', {}).get('html', ''),
+    }
+
+
 def download_photo(photo_id, regular_url):
     """
     Download a photo from Unsplash.

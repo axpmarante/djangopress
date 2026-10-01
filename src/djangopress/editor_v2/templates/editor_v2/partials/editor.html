@@ -172,12 +172,19 @@
     <div class="ev2-image-modal-tabs">
       <button class="ev2-image-modal-tab active" data-modal-tab="library">Library</button>
       <button class="ev2-image-modal-tab" data-modal-tab="upload">Upload</button>
+      <button class="ev2-image-modal-tab" data-modal-tab="unsplash" style="display:none;">Unsplash</button>
     </div>
 
     <!-- Library Tab -->
     <div id="ev2-image-modal-library" class="ev2-image-modal-body">
       <input id="ev2-image-modal-search" type="text" class="ev2-input" placeholder="Search images..." autocomplete="off" />
       <div id="ev2-image-modal-grid" class="ev2-image-modal-grid"></div>
+    </div>
+
+    <!-- Unsplash Tab (free stock photos; the picked one is copied into the library, credited) -->
+    <div id="ev2-image-modal-unsplash" class="ev2-image-modal-body" style="display:none;">
+      <input id="ev2-unsplash-search" type="text" class="ev2-input" placeholder="Search Unsplash in English, then press Enter (e.g. sea terrace sunset)" autocomplete="off" />
+      <div id="ev2-unsplash-grid" class="ev2-image-modal-grid"><div class="ev2-image-modal-empty">Search for free photos</div></div>
     </div>
 
     <!-- Upload Tab -->

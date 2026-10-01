@@ -106,6 +106,18 @@
                                                 class="rounded-full border border-gray-300 px-2 py-0.5 text-gray-600 hover:border-gray-900 hover:text-gray-900">Undo this</button>
                                     </div>
                                 </template>
+                                <template x-if="photosOf(m).length">
+                                    <div class="mt-3 grid grid-cols-4 gap-2 sm:grid-cols-8">
+                                        <template x-for="p in photosOf(m)" :key="p.ref">
+                                            <button type="button" @click="usePhoto(p)" :disabled="thinking"
+                                                    :title="(p.title || p.ref) + (p.credit ? ' — ' + p.credit : '')"
+                                                    class="group relative aspect-square overflow-hidden rounded-lg border border-gray-200 hover:border-gray-900">
+                                                <img :src="p.thumb_url" :alt="p.title" loading="lazy" class="h-full w-full object-cover">
+                                                <span x-show="p.source === 'unsplash'" class="absolute bottom-0.5 right-0.5 rounded bg-black/60 px-1 text-[10px] text-white">Unsplash</span>
+                                            </button>
+                                        </template>
+                                    </div>
+                                </template>
                                 <template x-if="sourcesOf(m).length">
                                     <div class="mt-2 text-xs text-gray-500">Sources:
                                         <template x-for="(src, k) in sourcesOf(m)" :key="k">
@@ -267,6 +279,17 @@ function homeAssistant() {
             } catch (err) {
                 this.error = err.message;
             }
+        },
+
+        photosOf(m) {
+            const seen = new Set();
+            return (m.actions || []).flatMap(a => a.photos || []).filter(p => !seen.has(p.ref) && seen.add(p.ref));
+        },
+
+        usePhoto(p) {
+            if (this.thinking) return;
+            this.draft = `Usa a foto ${p.ref}`;
+            this.send();
         },
 
         sourcesOf(m) {
