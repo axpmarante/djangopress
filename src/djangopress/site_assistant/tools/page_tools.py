@@ -123,6 +123,53 @@ def refine_section(params, context):
     }
 
 
+def insert_section(params, context):
+    """Generate ONE new section and put it where asked. Only the new section is
+    translated; the rest of the page stays byte-identical in every language."""
+    page = _get_page(context)
+    if not page:
+        return {'success': False, 'message': 'Active page not found'}
+    instructions = params.get('instructions', '')
+    if not instructions:
+        return {'success': False, 'message': 'Missing instructions'}
+
+    lang = _default_lang()
+    names = _section_names(page, lang)
+    position = params.get('position') or 'end'
+    anchor = params.get('anchor_section')
+    if position in ('before', 'after'):
+        if anchor not in names:
+            return {'success': False,
+                    'message': f'Section "{anchor}" not found. Sections on this page: {", ".join(names) or "none"}'}
+        index = names.index(anchor)
+        insert_after = anchor if position == 'after' else (names[index - 1] if index else None)
+    elif position == 'start':
+        insert_after = None
+    else:
+        insert_after = names[-1] if names else None
+
+    _create_version_if_needed(context)
+    model = get_ai_model('refinement_section')
+    from djangopress.ai.services import ContentGenerationService
+    service = ContentGenerationService(model_name=model, assistant_session=context.get('session'))
+    result = service.generate_section(
+        page_id=page.id, insert_after=insert_after, instructions=instructions,
+        model_override=model, lang=lang,
+    )
+    new_html = (result.get('options') or [{}])[0].get('html', '')
+    if not new_html:
+        return {'success': False, 'message': 'The AI returned no section'}
+
+    from djangopress.editor_v2 import ai_apply
+    page.refresh_from_db()
+    applied = ai_apply.apply_section_html(page, new_html, lang, mode='insert', insert_after=insert_after,
+                                          user=context.get('user'), checkpoint=False)
+    where = f'after "{insert_after}"' if insert_after else 'at the top of the page'
+    return {'success': True,
+            'message': f'Added section "{applied["section_name"]}" {where}' + _languages_note(applied),
+            'section_name': applied['section_name']}
+
+
 def refine_page(params, context):
     """AI-regenerate entire page. Delegates to ContentGenerationService."""
     _create_version_if_needed(context)
@@ -162,6 +209,12 @@ def _default_lang():
     return settings.get_default_language() if settings else 'pt'
 
 
+def _section_names(page, lang):
+    from bs4 import BeautifulSoup
+    soup = BeautifulSoup((page.html_content_i18n or {}).get(lang, ''), 'html.parser')
+    return [s.get('data-section') for s in soup.find_all('section', attrs={'data-section': True})]
+
+
 def _last_section(page):
     from bs4 import BeautifulSoup
     soup = BeautifulSoup((page.html_content_i18n or {}).get(_default_lang(), ''), 'html.parser')
@@ -183,6 +236,7 @@ PAGE_TOOLS = {
     'update_element_attribute': update_element_attribute,
     'remove_section': remove_section,
     'reorder_sections': reorder_sections,
+    'insert_section': insert_section,
     'refine_section': refine_section,
     'refine_page': refine_page,
 }

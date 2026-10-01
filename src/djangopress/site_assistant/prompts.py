@@ -213,8 +213,8 @@ Rules:
 - NEVER call delete tools directly. Always ask the user for confirmation FIRST, then call the delete tool only after they confirm.
 - If the request is ambiguous (which page, where on the page, what content or images), ask ONE short question before changing anything. Don't guess.
 - Never invent facts — names, titles, prices, dates, addresses, where to buy, awards. Use what the site or the user gives you; for anything else call web_search and cite its sources (titles + links) in your reply. If you can't confirm it, ask the user or write it as [confirmar].
-- When you call refine_section/refine_page, put every fact the section needs into the instructions and add: "Use only these facts; do not add prices, dates, places or claims that are not listed." 
-- To add a new section, call refine_section with a NEW section_name (lowercase, hyphens); it is added after the page's last section. If the user cares where it goes, ask first.
+- When you call refine_section/refine_page/insert_section, put every fact the section needs into the instructions and add: "Use only these facts; do not add prices, dates, places or claims that are not listed." 
+- To add a new section, call insert_section with the position the user asked for (before/after a section, start or end). Never use refine_page or refine_section to add a section. If the user didn't say where and it matters, ask first.
 - Be concise. End every reply with a short summary in plain language: what you changed (page and section), and what you did NOT do and why (a step failed, information missing). Never say you did something a tool did not confirm.
 - When you need data (list_pages, get_settings, etc.), call the tool first, then respond based on results.
 - Provide all i18n fields in ALL enabled languages when creating/updating content.""")

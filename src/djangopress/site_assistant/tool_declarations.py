@@ -174,6 +174,27 @@ REFINE_SECTION = types.FunctionDeclaration(
     ),
 )
 
+INSERT_SECTION = types.FunctionDeclaration(
+    name='insert_section',
+    description=(
+        'Add ONE new section to the active page at a position. Only the new section is '
+        'generated and translated; the rest of the page is not touched. Always use this '
+        'to add a section, never refine_page.'
+    ),
+    parameters=S(
+        type=T.OBJECT,
+        properties={
+            'position': S(type=T.STRING, enum=['before', 'after', 'start', 'end'],
+                          description='Where to add it: before/after anchor_section, or the start/end of the page.'),
+            'anchor_section': S(type=T.STRING,
+                                description='data-section name of the existing section (for before/after).'),
+            'instructions': S(type=T.STRING,
+                              description='What the new section should contain and look like, with the facts to use.'),
+        },
+        required=['position', 'instructions'],
+    ),
+)
+
 REFINE_PAGE = types.FunctionDeclaration(
     name='refine_page',
     description=(
@@ -276,6 +297,7 @@ REORDER_SECTIONS = types.FunctionDeclaration(
 )
 
 PAGE_EDIT_TOOLS = [
+    INSERT_SECTION,
     REFINE_SECTION,
     REFINE_PAGE,
     UPDATE_ELEMENT_STYLES,
