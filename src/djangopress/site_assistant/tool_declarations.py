@@ -540,7 +540,19 @@ UPDATE_SETTINGS = types.FunctionDeclaration(
     ),
 )
 
+VALIDATE_CONTACTS = types.FunctionDeclaration(
+    name='validate_contacts',
+    description=('Check that the phone, email, WhatsApp and Google Maps details are right and the same '
+                 'everywhere (Settings, every page, header and footer, every language): valid formats, '
+                 'email domains that receive mail, links that dial/write to what they show. Read-only; '
+                 'never changes anything. check_web also compares with what a web search finds, with sources.'),
+    parameters=S(type=T.OBJECT, properties={
+        'check_web': S(type=T.BOOLEAN, description='Also compare with the web (slower). Default false.'),
+    }),
+)
+
 SETTINGS_TOOLS = [
+    VALIDATE_CONTACTS,
     GET_SETTINGS,
     UPDATE_SETTINGS,
 ]

@@ -325,6 +325,29 @@ def validate_forms(params, context):
     }
 
 
+def validate_contacts(params, context):
+    """Check phones, emails, WhatsApp and the map across settings and content. Read-only."""
+    from djangopress.site_assistant import contacts
+    result = contacts.check(check_web=bool(params.get('check_web')))
+    issues = result['issues']
+    counts = {level: sum(1 for i in issues if i['level'] == level) for level in ('wrong', 'inconsistent', 'cant_verify')}
+    lines = []
+    for issue in issues[:25]:
+        w = issue['where']
+        place = ', '.join(filter(None, [w.get('source'), w.get('section') and f'section "{w["section"]}"',
+                                        w.get('lang') and w['lang'].upper()]))
+        lines.append(f'[{issue["level"]}] {issue["what"]} ({place})')
+    if not issues:
+        message = 'Contacts look right: phones, emails, WhatsApp and the map agree with Settings.'
+    else:
+        message = (f'{counts["wrong"]} wrong, {counts["inconsistent"]} inconsistent, '
+                   f'{counts["cant_verify"]} could not be verified. ' + ' | '.join(lines))
+    if result['web_answer']:
+        message += f' Web search said: {result["web_answer"][:600]}'
+    message += ' Nothing was changed.'
+    return {'success': True, 'issues': issues, 'sources': result['sources'], 'message': message}
+
+
 FORM_ACTION_RE = r'action="(?:/[a-z]{2})?/forms/([^/"]+)/submit/"'
 
 
@@ -529,6 +552,7 @@ def refine_footer(params, context):
 
 # Registry mapping
 SITE_TOOLS = {
+    'validate_contacts': validate_contacts,
     'test_form': test_form,
     'web_search': web_search,
     'undo_last_change': undo_last_change,
