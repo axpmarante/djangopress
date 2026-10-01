@@ -21,3 +21,19 @@
 **Seen, not changed**
 - On background changes the model sometimes adds readability styling (a translucent panel) nobody asked for. It's undoable and reported in the summary.
 - Replies still mention section ids and paths (`reservas-hero`, `/reservas`); acceptable for the operator, not for clients.
+
+## Several pages in one request (same day, later)
+
+The changes:
+- every page tool takes `page`;
+- the prompt carries a site map with every page's sections;
+- new tools `find_elements` and `restyle_elements` for site-wide styles;
+- when the step limit is hit, the model still writes its summary.
+
+| Case | Result |
+|---|---|
+| N15 hours strip on the three proposals | ✓ 77 s · one turn, `insert_section` with `page` on proposta-1/2/3, each right before `contactos`, PT and EN, with exactly the given hours; nothing else changed |
+| N16 contact titles in capitals on every page | ✓ 24 s · `update_element_styles` with `add_classes: uppercase` on the 5 pages that have `contactos` (one was already uppercase); first run ran out of steps after doing it, fixed by the closing summary |
+| C13 the N15 request, then "Desfaz isso" | ✓ one undo restores all three pages; byte-identical to the start |
+| C5 "muda a cor dos botões" → "em todas as páginas, dourado da marca" | ✓ asks first; then `find_elements` (5 calls) + `restyle_elements`: main buttons on 3 pages and the header, 39 s; says which ones already were gold. Before `find_elements` existed it read sections one by one and ran out of steps with nothing changed. |
+| C10 "tira a galeria" → "a da proposta-1" | ✓ asks for confirmation on the right page |

@@ -110,6 +110,11 @@ CASES = {
     'N14': [A('Verifica se os contactos do site estão certos.')],
     'C11': [A('Na página Reservas, muda o fundo do topo para outra foto da biblioteca, à tua escolha.'), A('Desfaz isso.')],
     'C12': [A('Na página Reservas, acrescenta uma secção de perguntas frequentes com 5 perguntas sobre reservas de grupos, antes dos contactos.'), U()],
+    # Several pages in one request
+    'N15': [A('Nas três propostas, acrescenta uma faixa com o horário antes dos contactos: terça a sábado, 12h30–15h e 19h–22h30; fechado ao domingo e à segunda.')],
+    'N16': [A('Em todas as páginas que têm a secção de contactos, põe o título dessa secção em maiúsculas.')],
+    'C13': [A('Nas três propostas, acrescenta uma faixa com o horário antes dos contactos: terça a sábado, 12h30–15h e 19h–22h30; fechado ao domingo e à segunda.'),
+            A('Desfaz isso.')],
 }
 
 GENERIC_CLASS_RE = re.compile(r'^(?:[a-z]+:)*(?:bg|text|border|from|to|via|ring)-(?:gray|slate|zinc|neutral|stone|blue|indigo|sky|red|green|emerald|yellow|amber|purple|pink)-\d{2,3}$')

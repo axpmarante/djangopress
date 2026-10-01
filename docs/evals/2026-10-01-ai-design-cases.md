@@ -68,6 +68,14 @@ Added 2026-10-01 with `docs/plans/2026-10-01-assistant-tools-design.md`. All on 
 | C11 | 1) "Na página Reservas, muda o fundo do topo para outra foto da biblioteca, à tua escolha." · 2) "Desfaz isso." | turn 2 calls `undo_last_change`; every page is **byte-identical** to the start |
 | C12 | 1) the N8 request (FAQ before the contacts) · 2) *operator clicks "Undo this"* | turn 1 uses `insert_section` (only the new section appears, in PT and EN); after the undo every page is byte-identical to the start |
 
+**Several pages in one request** (added after phase 4: `page` on every page tool + site map in the prompt)
+
+| # | Turns | Checks |
+|---|---|---|
+| N15 | "Nas três propostas, acrescenta uma faixa com o horário antes dos contactos: terça a sábado, 12h30–15h e 19h–22h30; fechado ao domingo e à segunda." | one turn; a new section right before `contactos` on proposta-1, -2 and -3, in PT and EN, with exactly those hours; nothing else changes |
+| N16 | "Em todas as páginas que têm a secção de contactos, põe o título dessa secção em maiúsculas." | `update_element_styles` with `add_classes` on the five pages that have `contactos`; no AI regeneration; nothing else changes |
+| C13 | the N15 request · 2) "Desfaz isso." | one undo restores all three pages; every page byte-identical to the start |
+
 N8 and C8 are re-run with the phase 4 code: adding a section must no longer re-translate the other sections.
 
 ---
