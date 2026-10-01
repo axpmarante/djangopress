@@ -2696,3 +2696,11 @@ def restore_version(request):
         return JsonResponse({'success': False, 'error': 'Invalid JSON'}, status=400)
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
+@editor_required
+@require_http_methods(["GET"])
+def design_tokens(request):
+    """Colours, fonts and size presets for the Design panel."""
+    from djangopress.editor_v2.design_tokens import collect_tokens
+    return JsonResponse({'success': True, **collect_tokens()})
