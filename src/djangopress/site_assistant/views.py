@@ -119,6 +119,7 @@ def chat_api(request):
         'stopped': bool(result.get('stopped')),
         'changes': result.get('changes', []),
         'message_index': result.get('message_index'),
+        'links': result.get('links', []),
     })
 
 

@@ -178,8 +178,14 @@ def track_before(tool_name, params, context):
 
 def track_after(tool_name, params, result, context):
     from djangopress.site_assistant import changes
-    if not (context or {}).get('changes'):
+    tracker = (context or {}).get('changes')
+    if not tracker:
         return
+    if tool_name in ACTIVE_PAGE_TOOLS and context.get('active_page'):
+        section = (result.get('section_name') or params.get('section_name') or params.get('section')
+                   or params.get('anchor_section'))
+        pk = context['active_page'].pk
+        tracker.touched[pk] = section or tracker.touched.get(pk)
     created = {
         'create_page': ('core.page', 'page_id', 'New page'),
         'create_menu_item': ('core.menuitem', 'menu_item_id', 'New menu item'),

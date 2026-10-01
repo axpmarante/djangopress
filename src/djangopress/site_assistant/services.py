@@ -38,13 +38,21 @@ class AssistantService:
         self._changes = TurnChanges(message, user)
         result = self._handle_message(message, user=user, reference_images=reference_images, run_id=run_id)
         items = self._changes.finish()
-        if items:
+        touched = dict(self._changes.touched)
+        for item in items:
+            if item['kind'] == 'page':
+                touched.setdefault(item['id'], None)
+        from djangopress.site_assistant.links import build_links
+        result['links'] = build_links(result.get('response', ''), result.get('actions') or [], touched)
+        if items or result['links']:
             self.session.refresh_from_db()
             for index in range(len(self.session.messages) - 1, -1, -1):
                 if self.session.messages[index].get('role') == 'assistant':
-                    self.session.messages[index]['changes'] = items
+                    if items:
+                        self.session.messages[index]['changes'] = items
+                        result['message_index'] = index
+                    self.session.messages[index]['links'] = result['links']
                     self.session.save(update_fields=['messages', 'updated_at'])
-                    result['message_index'] = index
                     break
         result['changes'] = [{'label': i['label'], 'kind': i['kind']} for i in items]
         return result

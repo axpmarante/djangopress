@@ -62,6 +62,7 @@ class TurnChanges:
         self.user = user
         self.items = []
         self._seen = set()
+        self.touched = {}          # page id -> last section changed (for the reply's buttons)
 
     # --- before a change -------------------------------------------------
     def page_checkpoint(self, page):

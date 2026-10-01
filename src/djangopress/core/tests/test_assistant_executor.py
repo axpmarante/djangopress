@@ -154,8 +154,9 @@ class BuildExecutorPromptTest(TestCase):
         session.active_page = None
         snapshot = build_router_snapshot(session)
         prompt = build_executor_prompt(session, snapshot)
-        self.assertIn('/backoffice/ai/', prompt)
         self.assertIn('/backoffice/media/', prompt)
+        self.assertIn('/backoffice/settings/header/', prompt)
+        self.assertNotIn('/backoffice/ai/', prompt)      # not a screen; the links can only point at real ones
 
 
 class DestructiveActionSafetyNetTest(TestCase):
