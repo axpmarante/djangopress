@@ -23,18 +23,23 @@ def _apply_to_all_langs(page, change_fn):
     Args:
         page: Model with html_content_i18n field (modified in-place, NOT saved).
         change_fn: Function(soup) that modifies soup in-place, returns True on success.
+
+    Returns the number of language copies changed.
     """
     html_i18n = dict(getattr(page, 'html_content_i18n', None) or {})
+    changed = 0
     for lang, html in html_i18n.items():
         if not html:
             continue
         soup = BeautifulSoup(html, 'html.parser')
         if change_fn(soup):
+            changed += 1
             new_html = str(soup)
             if new_html.startswith('<html><body>'):
                 new_html = new_html[12:-14]
             html_i18n[lang] = new_html
     page.html_content_i18n = html_i18n
+    return changed
 
 
 def _check_slug_uniqueness(slug_i18n, exclude_page_id=None):
@@ -313,7 +318,36 @@ class PageService:
                 del el['class']
             return True
 
-        _apply_to_all_langs(page, apply_classes)
+        if not _apply_to_all_langs(page, apply_classes):
+            return {'success': False, 'error': f'Element not found: {selector or section_name}'}
+        page.save()
+        return {'success': True, 'message': 'Updated element classes'}
+
+    @staticmethod
+    def update_element_classes(page, selector=None, section_name=None, add='', remove=''):
+        """Add and/or remove classes on an element across ALL language copies,
+        keeping every other class in place."""
+        if not selector and not section_name:
+            return {'success': False, 'error': 'Provide selector or section_name'}
+        to_add, to_remove = (add or '').split(), set((remove or '').split())
+
+        def apply_classes(soup):
+            if selector:
+                el = soup.select_one(selector)
+            else:
+                el = soup.find('section', attrs={'data-section': section_name})
+            if not el:
+                return False
+            classes = [c for c in (el.get('class') or []) if c not in to_remove]
+            classes += [c for c in to_add if c not in classes]
+            if classes:
+                el['class'] = classes
+            elif 'class' in el.attrs:
+                del el['class']
+            return True
+
+        if not _apply_to_all_langs(page, apply_classes):
+            return {'success': False, 'error': f'Element not found: {selector or section_name}'}
         page.save()
         return {'success': True, 'message': 'Updated element classes'}
 

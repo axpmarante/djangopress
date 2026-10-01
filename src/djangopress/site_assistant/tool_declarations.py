@@ -230,12 +230,31 @@ UPDATE_ELEMENT_STYLES = types.FunctionDeclaration(
                 type=T.STRING,
                 description='Target the section element itself by its data-section name.',
             ),
+            'add_classes': S(
+                type=T.STRING,
+                description='Space-separated classes to add; every other class stays.',
+            ),
+            'remove_classes': S(
+                type=T.STRING,
+                description='Space-separated classes to remove; every other class stays.',
+            ),
             'new_classes': S(
                 type=T.STRING,
-                description='Space-separated CSS/Tailwind classes to set on the element.',
+                description=('Replaces ALL classes on the element. Use only after read_section showed you '
+                             'the element; prefer add_classes/remove_classes.'),
             ),
         },
-        required=['new_classes'],
+    ),
+)
+
+READ_SECTION = types.FunctionDeclaration(
+    name='read_section',
+    description=('Read the HTML of one section of the active page (editing language), to see its real '
+                 'classes and structure before restyling. Read-only.'),
+    parameters=S(
+        type=T.OBJECT,
+        properties={'section_name': S(type=T.STRING, description='The data-section name.')},
+        required=['section_name'],
     ),
 )
 
@@ -297,6 +316,7 @@ REORDER_SECTIONS = types.FunctionDeclaration(
 )
 
 PAGE_EDIT_TOOLS = [
+    READ_SECTION,
     INSERT_SECTION,
     REFINE_SECTION,
     REFINE_PAGE,

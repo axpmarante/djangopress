@@ -32,11 +32,19 @@ def update_element_styles(params, context):
     page = _get_page(context)
     if not page:
         return {'success': False, 'message': 'Active page not found'}
-    result = PageService.update_element_styles(
-        page, selector=params.get('selector'),
-        section_name=params.get('section_name'),
-        new_classes=params.get('new_classes', ''),
-    )
+    if params.get('add_classes') or params.get('remove_classes'):
+        result = PageService.update_element_classes(
+            page, selector=params.get('selector'), section_name=params.get('section_name'),
+            add=params.get('add_classes', ''), remove=params.get('remove_classes', ''),
+        )
+    elif params.get('new_classes') is not None:
+        result = PageService.update_element_styles(
+            page, selector=params.get('selector'),
+            section_name=params.get('section_name'),
+            new_classes=params.get('new_classes', ''),
+        )
+    else:
+        return {'success': False, 'message': 'Give add_classes/remove_classes (or new_classes to replace all)'}
     if not result['success']:
         return {'success': False, 'message': result['error']}
     return {'success': True, 'message': result['message']}
@@ -55,6 +63,30 @@ def update_element_attribute(params, context):
     if not result['success']:
         return {'success': False, 'message': result['error']}
     return {'success': True, 'message': result['message']}
+
+
+READ_LIMIT = 12000
+
+
+def read_section(params, context):
+    """The section's HTML in the editing language, so restyles use real classes."""
+    page = _get_page(context)
+    if not page:
+        return {'success': False, 'message': 'Active page not found'}
+    from bs4 import BeautifulSoup
+    lang = _default_lang()
+    name = params.get('section_name')
+    soup = BeautifulSoup((page.html_content_i18n or {}).get(lang, ''), 'html.parser')
+    section = soup.find('section', attrs={'data-section': name})
+    if section is None:
+        return {'success': False,
+                'message': f'Section "{name}" not found. Sections on this page: {", ".join(_section_names(page, lang)) or "none"}'}
+    html = str(section)
+    message = f'HTML of section "{name}" ({lang})'
+    if len(html) > READ_LIMIT:
+        html = html[:READ_LIMIT]
+        message += f'; cut at {READ_LIMIT} characters, the rest of the section is not shown'
+    return {'success': True, 'message': message, 'html': html}
 
 
 def remove_section(params, context):
@@ -237,6 +269,7 @@ PAGE_TOOLS = {
     'remove_section': remove_section,
     'reorder_sections': reorder_sections,
     'insert_section': insert_section,
+    'read_section': read_section,
     'refine_section': refine_section,
     'refine_page': refine_page,
 }

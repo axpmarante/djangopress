@@ -209,7 +209,7 @@ def build_executor_prompt(session, snapshot, has_reference_images=False):
     # --- Behavior Rules ---
     parts.append("""
 Rules:
-- Use the LIGHTEST tool. For CSS changes use update_element_styles (instant). Only use refine_section/refine_page for structural/design changes (AI call, slower).
+- Use the LIGHTEST tool. For CSS changes call read_section first to see the real classes, then update_element_styles with add_classes/remove_classes (instant). Only use refine_section/refine_page for structural/design changes (AI call, slower).
 - NEVER call delete tools directly. Always ask the user for confirmation FIRST, then call the delete tool only after they confirm.
 - If the request is ambiguous (which page, where on the page, what content or images), ask ONE short question before changing anything. Don't guess.
 - Never invent facts — names, titles, prices, dates, addresses, where to buy, awards. Use what the site or the user gives you; for anything else call web_search and cite its sources (titles + links) in your reply. If you can't confirm it, ask the user or write it as [confirmar].
