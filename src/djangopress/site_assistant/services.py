@@ -269,7 +269,7 @@ class AssistantService:
                     'message': result.get('message', ''),
                 }
                 # Include query result data for the frontend
-                for key in ('pages', 'page', 'menu_items', 'settings', 'images',
+                for key in ('pages', 'page', 'menu_items', 'settings', 'images', 'sources', 'answer',
                             'stats', 'page_id', 'menu_item_id', 'form_id',
                             'forms', 'submissions', 'posts', 'post', 'categories'):
                     if key in result:

@@ -36,6 +36,7 @@ Categories:
 Rules:
 - Use direct_response (in {default_lang}) ONLY for greetings/small talk, or when the exact answer is written in the snapshot above (site name, page names, counts).
 - Anything else about the site — SEO, texts, sections, images, settings, a page's content — needs tools: set the intents and direct_response to null. Never answer from memory and never say you lack access.
+- Questions about facts outside the site (a book, an award, news about the business, people) also need tools: the executor can search the web. Set intents to ["pages"] and direct_response to null.
 - A request can need multiple categories.
 - "delete" requests need the relevant category.
 

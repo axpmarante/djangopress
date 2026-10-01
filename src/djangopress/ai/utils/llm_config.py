@@ -157,6 +157,7 @@ AI_MODEL_DEFAULTS = {
     'image_analysis': 'gemini-flash',
     'assistant_router': 'gemini-lite',
     'refinement_routing': 'gemini-flash',
+    'web_search': 'gemini-flash',
     'assistant_executor': 'gemini-flash',
     'consistency': 'gemini-flash',
     'design_guide': 'gemini-flash',
@@ -182,7 +183,7 @@ TASK_SETTINGS = {
     'generation': _DESIGN, 'refinement_page': _DESIGN, 'refinement_section': _DESIGN,
     'refinement_element': _DESIGN, 'header_footer': _DESIGN, 'design_guide': _DESIGN,
     'assistant_executor': {'temperature': 1.0, 'thinking_level': 'medium'},
-    'assistant_router': _LIGHT, 'refinement_routing': _LIGHT, 'metadata': _LIGHT, 'translation': _LIGHT,
+    'assistant_router': _LIGHT, 'refinement_routing': _LIGHT, 'web_search': _LIGHT, 'metadata': _LIGHT, 'translation': _LIGHT,
     'consistency': _LIGHT, 'image_analysis': _LIGHT,
 }
 TIER_DEFAULT_THINKING = {'gemini-pro': 'high', 'gemini-flash': 'medium', 'gemini-lite': 'low'}
@@ -665,6 +666,39 @@ class LLMBase:
             print(f"❗ Error Message: {str(e)}")
             print("=" * 80 + "\n")
             raise
+
+    def web_search(self, query, tool_name=None):
+        """Answer a question with Google Search grounding.
+
+        Returns {'text', 'sources': [{'title', 'url'}], 'queries'}; sources are the
+        pages Google used (deduplicated, in order).
+        """
+        tool_name = tool_name or get_ai_model('web_search')
+        config_entry = MODEL_CONFIG.get(tool_name)
+        if not config_entry or config_entry.provider != ModelProvider.GOOGLE:
+            raise ValueError(f'Web search needs a Google model, got: {tool_name}')
+        client = self._clients.get(ModelProvider.GOOGLE)
+        if not client:
+            raise RuntimeError('Google client not initialized')
+        config = types.GenerateContentConfig(
+            tools=[types.Tool(google_search=types.GoogleSearch())],
+            **_gemini_settings(tool_name, config_entry),
+        )
+        response = client.models.generate_content(
+            model=config_entry.model_name,
+            contents=f'{query}\n\nAnswer with the facts you found, briefly. Say clearly if you found nothing reliable.',
+            config=config,
+        )
+        meta = getattr(response.candidates[0], 'grounding_metadata', None) if getattr(response, 'candidates', None) else None
+        sources, seen = [], set()
+        for chunk in (getattr(meta, 'grounding_chunks', None) or []):
+            web = getattr(chunk, 'web', None)
+            url = getattr(web, 'uri', None)
+            if url and url not in seen:
+                seen.add(url)
+                sources.append({'title': getattr(web, 'title', '') or url, 'url': url})
+        return {'text': getattr(response, 'text', '') or '', 'sources': sources,
+                'queries': list(getattr(meta, 'web_search_queries', None) or [])}
 
     def get_completion_with_tools(self, contents, system_instruction, tools,
                                   tool_name='gemini-flash'):

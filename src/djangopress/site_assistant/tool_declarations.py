@@ -806,6 +806,20 @@ REQUEST_TOOLS_DECLARATION = types.FunctionDeclaration(
     ),
 )
 
+WEB_SEARCH_DECLARATION = types.FunctionDeclaration(
+    name='web_search',
+    description=(
+        'Search the web (Google) for facts that are not on the site and not given by the user: '
+        'e.g. a book, an award, an event, opening of a venue. Returns an answer with its sources. '
+        'Use it before writing such facts into the site; cite the sources in your reply.'
+    ),
+    parameters=S(
+        type=T.OBJECT,
+        properties={'query': S(type=T.STRING, description='What to look up, specific (names, place).')},
+        required=['query'],
+    ),
+)
+
 # ---------------------------------------------------------------------------
 # Category registry
 # ---------------------------------------------------------------------------
@@ -837,6 +851,7 @@ def build_tool_declarations(intents):
     for intent in intents:
         if intent in TOOL_CATEGORIES:
             declarations.extend(TOOL_CATEGORIES[intent])
-    # Always include the meta tool so the model can request more categories
+    # Always include the meta tool so the model can request more categories, and web search
     declarations.append(REQUEST_TOOLS_DECLARATION)
+    declarations.append(WEB_SEARCH_DECLARATION)
     return [types.Tool(function_declarations=declarations)]

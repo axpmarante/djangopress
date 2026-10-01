@@ -5,6 +5,21 @@ from djangopress.core.services import (
 )
 
 
+def web_search(params, context):
+    """Look facts up on the web (Google Search). Returns the answer and its sources."""
+    query = (params.get('query') or '').strip()
+    if not query:
+        return {'success': False, 'message': 'Missing query'}
+    from djangopress.ai.utils.llm_config import LLMBase
+    try:
+        found = LLMBase().web_search(query)
+    except Exception as e:
+        return {'success': False, 'message': f'Web search failed: {e}'}
+    if not found['sources']:
+        return {'success': True, 'message': 'Nothing reliable found on the web.', 'answer': found['text'], 'sources': []}
+    return {'success': True, 'message': f'Web search: {query}', 'answer': found['text'], 'sources': found['sources']}
+
+
 def list_pages(params, context):
     result = PageService.list()
     pages_data = [{'id': p.id, 'title': p.title_i18n, 'slug': p.slug_i18n,
@@ -398,6 +413,7 @@ def refine_footer(params, context):
 
 # Registry mapping
 SITE_TOOLS = {
+    'web_search': web_search,
     'list_pages': list_pages,
     'get_page_info': get_page_info,
     'create_page': create_page,

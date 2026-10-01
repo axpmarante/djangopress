@@ -99,6 +99,13 @@
                         <template x-if="m.role !== 'user'">
                             <div class="text-sm leading-relaxed" :class="m.stopped ? 'italic text-gray-400' : 'text-gray-800'">
                                 <div class="whitespace-pre-wrap" x-html="formatReply(m.content)"></div>
+                                <template x-if="sourcesOf(m).length">
+                                    <div class="mt-2 text-xs text-gray-500">Sources:
+                                        <template x-for="(src, k) in sourcesOf(m)" :key="k">
+                                            <a :href="src.url" target="_blank" rel="noopener" class="ml-1 underline hover:text-gray-900" x-text="src.title"></a>
+                                        </template>
+                                    </div>
+                                </template>
                                 <template x-if="m.actions && m.actions.length">
                                     <div class="mt-3 flex flex-wrap gap-1.5">
                                         <template x-for="(a, j) in m.actions" :key="j">
@@ -229,6 +236,11 @@ function homeAssistant() {
                 .replace(/`([^`\n]+)`/g, '<code class="rounded bg-gray-100 px-1 text-[12px]">$1</code>')
                 .replace(/^\s*---\s*$/gm, '<hr class="my-3 border-gray-200">')
                 .replace(/^\s*[*-]\s+/gm, '• ');
+        },
+
+        sourcesOf(m) {
+            const seen = new Set();
+            return (m.actions || []).flatMap(a => a.sources || []).filter(src => !seen.has(src.url) && seen.add(src.url));
         },
 
         // --- conversation ---
