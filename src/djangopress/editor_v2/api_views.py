@@ -1184,6 +1184,7 @@ def refine_multi(request):
     """
     try:
         data = json.loads(request.body)
+        lang = _detect_language_from_request(request, data)  # the language being edited
         page_id = data.get('page_id')
         scope = data.get('scope', 'section')
         section_name = data.get('section_name')
@@ -1263,6 +1264,7 @@ def refine_multi(request):
                     target_name=section_name if scope == 'section' else selector,
                     page=page,
                     conversation_history=conversation_history,
+                    lang=lang,
                     multi_option=multi_option,
                     mode=mode,
                     insert_after=insert_after,
@@ -1284,6 +1286,7 @@ def refine_multi(request):
                     insert_after=insert_after,
                     instructions=instructions,
                     conversation_history=conversation_history,
+                    lang=lang,
                 )
             elif scope == 'element':
                 result = service.refine_element_only(
@@ -1291,6 +1294,7 @@ def refine_multi(request):
                     selector=selector,
                     instructions=instructions,
                     conversation_history=conversation_history,
+                    lang=lang,
                     multi_option=multi_option,
                 )
             else:
@@ -1299,6 +1303,7 @@ def refine_multi(request):
                     section_name=section_name,
                     instructions=instructions,
                     conversation_history=conversation_history,
+                    lang=lang,
                     multi_option=multi_option,
                 )
 
@@ -1324,6 +1329,20 @@ def refine_multi(request):
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
 
+
+
+def _refinement_session(page, session_id):
+    """The editor's RefinementSession for this page/object, or None."""
+    if not session_id:
+        return None
+    try:
+        if isinstance(page, Page):
+            return RefinementSession.objects.get(id=session_id, page=page)
+        from django.contrib.contenttypes.models import ContentType
+        ct = ContentType.objects.get_for_model(page)
+        return RefinementSession.objects.get(id=session_id, content_type=ct, object_id=page.pk)
+    except RefinementSession.DoesNotExist:
+        return None
 
 @superuser_required
 @require_http_methods(["POST"])
@@ -1352,181 +1371,38 @@ def apply_option(request):
         if not page:
             return JsonResponse({'success': False, 'error': 'Page or editable object not found'}, status=400)
 
-        # Detect language from request context (Referer URL, not get_language())
-        lang = _detect_language_from_request(request, data)
+        lang = _detect_language_from_request(request, data)  # the language being edited
 
-        print(f"\n=== apply_option ===")
-        print(f"Page ID: {page_id}, Scope: {scope}, Section: {section_name}")
-        print(f"Language detected: {lang} (from Referer: {request.META.get('HTTP_REFERER', 'none')})")
-        print(f"get_language(): {get_language()}")
-        print(f"HTML to save: {len(html)} chars")
-        html_i18n_keys = list((getattr(page, 'html_content_i18n', None) or {}).keys())
-        print(f"html_content_i18n keys: {html_i18n_keys}")
-
-        # Read current HTML for this language
-        current_html, resolved_lang = _get_page_html(page, lang)
-        print(f"Current HTML for [{lang}]: {len(current_html)} chars (resolved from [{resolved_lang}])")
-
-        # Create version for rollback BEFORE modifying (only if model supports it)
-        if hasattr(page, 'create_version'):
-            _apply_option_summary = f'AI {"new section" if mode == "insert" else "multi-option"} applied'
-            if isinstance(page, Page):
-                page.create_version(user=request.user, change_summary=_apply_option_summary, kind='checkpoint')
+        from djangopress.editor_v2 import ai_apply
+        try:
+            if scope == 'element' and selector and mode != 'insert':
+                result = ai_apply.apply_element_html(page, selector, html, lang, user=request.user)
+                target = 'element'
             else:
-                page.create_version(change_summary=_apply_option_summary)
+                result = ai_apply.apply_section_html(
+                    page, html, lang,
+                    section_name=None if mode == 'insert' else section_name,
+                    mode='insert' if mode == 'insert' else 'replace',
+                    insert_after=insert_after, user=request.user,
+                )
+                target = result['section_name']
+        except ValueError as e:
+            return JsonResponse({'success': False, 'error': str(e)}, status=400)
 
-        if mode == 'insert':
-            # Insert new section into page
-            soup = BeautifulSoup(current_html or '', 'html.parser')
-            new_soup = BeautifulSoup(html, 'html.parser')
-            new_section = new_soup.find('section')
-            if not new_section:
-                return JsonResponse({'success': False, 'error': 'No section found in generated HTML'}, status=400)
-
-            if insert_after:
-                anchor = soup.find('section', attrs={'data-section': insert_after})
-                if anchor:
-                    anchor.insert_after(new_section)
-                else:
-                    soup.append(new_section)
-            else:
-                first_section = soup.find('section')
-                if first_section:
-                    first_section.insert_before(new_section)
-                else:
-                    soup.append(new_section)
-
-            new_html = str(soup)
-            if new_html.startswith('<html><body>'):
-                new_html = new_html[12:-14]
-            _save_page_html(page, new_html, lang)
-
-        elif scope == 'element' and selector:
-            # Surgical element replacement
-            soup = BeautifulSoup(current_html, 'html.parser')
-            old_element = soup.select_one(selector)
-            if not old_element:
-                return JsonResponse({'success': False, 'error': 'Element not found for selector'}, status=400)
-
-            new_soup = BeautifulSoup(html, 'html.parser')
-            children = list(new_soup.children)
-            new_element = children[0] if children else new_soup
-
-            old_element.replace_with(new_element)
-            new_html = str(soup)
-            if new_html.startswith('<html><body>'):
-                new_html = new_html[12:-14]
-            _save_page_html(page, new_html, lang)
-
-        else:
-            # Surgical section replacement
-            soup = BeautifulSoup(current_html, 'html.parser')
-            old_section = soup.find('section', attrs={'data-section': section_name})
-            if not old_section:
-                return JsonResponse({'success': False, 'error': f'Section "{section_name}" not found'}, status=400)
-
-            new_soup = BeautifulSoup(html, 'html.parser')
-            new_section = new_soup.find('section', attrs={'data-section': section_name})
-            if not new_section:
-                new_section = new_soup.find('section')
-            if not new_section:
-                return JsonResponse({'success': False, 'error': 'No section found in generated HTML'}, status=400)
-
-            old_section.replace_with(new_section)
-            new_html = str(soup)
-            if new_html.startswith('<html><body>'):
-                new_html = new_html[12:-14]
-            _save_page_html(page, new_html, lang)
-
-        page.save()
-
-        # Auto-translate ONLY the changed section/element to other languages
-        site_settings = SiteSettings.objects.first()
-        default_language = site_settings.get_default_language() if site_settings else 'pt'
-        all_languages = site_settings.get_language_codes() if site_settings else [default_language]
-        other_languages = [l for l in all_languages if l != lang]
-        translated_langs = []
-
-        if other_languages:
-            html_i18n = dict(page.html_content_i18n or {})
-            print(f"Auto-translating {scope} to {other_languages} ({len(html)} chars)...")
-
-            from djangopress.ai.services import ContentGenerationService
-            service = ContentGenerationService(model_name=get_ai_model('translation'))
-
-            for target_lang in other_languages:
-                try:
-                    # Translate only the changed snippet
-                    translated_snippet = service.translate_html(html, lang, target_lang)
-                    print(f"  Translated snippet [{lang}] → [{target_lang}]: {len(translated_snippet)} chars")
-
-                    # Surgically insert/replace in the target language's full page HTML
-                    target_html = html_i18n.get(target_lang) or html_i18n.get(default_language) or ''
-                    target_soup = BeautifulSoup(target_html, 'html.parser')
-                    snippet_soup = BeautifulSoup(translated_snippet, 'html.parser')
-
-                    if mode == 'insert':
-                        new_section = snippet_soup.find('section')
-                        if new_section:
-                            if insert_after:
-                                anchor = target_soup.find('section', attrs={'data-section': insert_after})
-                                if anchor:
-                                    anchor.insert_after(new_section)
-                                else:
-                                    target_soup.append(new_section)
-                            else:
-                                first_section = target_soup.find('section')
-                                if first_section:
-                                    first_section.insert_before(new_section)
-                                else:
-                                    target_soup.append(new_section)
-
-                    elif scope == 'element' and selector:
-                        old_el = target_soup.select_one(selector)
-                        if old_el:
-                            children = list(snippet_soup.children)
-                            new_el = children[0] if children else snippet_soup
-                            old_el.replace_with(new_el)
-
-                    else:
-                        # Section replacement — match by data-section
-                        new_sec = snippet_soup.find('section', attrs={'data-section': section_name})
-                        if not new_sec:
-                            new_sec = snippet_soup.find('section')
-                        old_sec = target_soup.find('section', attrs={'data-section': section_name})
-                        if old_sec and new_sec:
-                            old_sec.replace_with(new_sec)
-
-                    result_html = str(target_soup)
-                    if result_html.startswith('<html><body>'):
-                        result_html = result_html[12:-14]
-                    html_i18n[target_lang] = result_html
-                    translated_langs.append(target_lang)
-
-                except Exception as e:
-                    print(f"  Translation [{lang}] → [{target_lang}] failed: {e}")
-                    translated_langs.append(f"{target_lang}(failed)")
-
-            page.html_content_i18n = html_i18n
-            page.save(update_fields=['html_content_i18n'])
-            print(f"  Auto-translation complete")
-
-        # Debug: verify save
-        page.refresh_from_db()
-        saved_i18n = getattr(page, 'html_content_i18n', None) or {}
-        print(f"After save — html_content_i18n keys: {list(saved_i18n.keys())}")
-        for k, v in saved_i18n.items():
-            print(f"  [{k}]: {len(v)} chars")
-        print(f"=== apply_option done ===\n")
-
-        msg = f'{scope.capitalize()} saved successfully'
-        if translated_langs:
-            msg += f' (translated to {", ".join(translated_langs)})'
+        # Tell the conversation which option the operator kept, so the next turn knows.
+        option_index = data.get('option_index')
+        session = _refinement_session(page, data.get('session_id'))
+        if session and option_index:
+            session.add_assistant_message(f'Applied option {option_index} to {target}.', [target])
+            session.save()
 
         return JsonResponse({
             'success': True,
-            'message': msg,
+            'message': f'{scope.capitalize()} saved',
             'page_id': page.id,
+            'section_name': result.get('section_name'),
+            'translated_languages': result['translated_languages'],
+            'untranslated_languages': result['untranslated_languages'],
         })
 
     except Page.DoesNotExist:
@@ -1746,6 +1622,7 @@ def refine_page(request):
     """
     try:
         data = json.loads(request.body)
+        lang = _detect_language_from_request(request, data)  # the language being edited
         page_id = data.get('page_id')
         instructions = data.get('instructions', '').strip()
         conversation_history = data.get('conversation_history', [])
@@ -1801,6 +1678,7 @@ def refine_page(request):
             instructions=instructions,
             model_override=get_ai_model('refinement_page'),
             conversation_history=chat_history or None,
+            lang=lang,
         )
 
         assistant_msg = "I've refined the page based on your instructions."
@@ -1841,10 +1719,10 @@ def save_ai_page(request):
     try:
         data = json.loads(request.body)
         page_id = data.get('page_id')
-        html_template = data.get('html_template', '').strip()
+        html = (data.get('html') or data.get('html_template') or '').strip()
 
-        if not html_template:
-            return JsonResponse({'success': False, 'error': 'Missing html_template'}, status=400)
+        if not html:
+            return JsonResponse({'success': False, 'error': 'Missing html'}, status=400)
 
         try:
             page = _get_editable_object(data)
@@ -1853,24 +1731,19 @@ def save_ai_page(request):
         if not page:
             return JsonResponse({'success': False, 'error': 'Page or editable object not found'}, status=404)
 
-        if hasattr(page, 'create_version'):
-            if isinstance(page, Page):
-                page.create_version(user=request.user, change_summary='Before save-ai-page (full page replacement)',
-                                    kind='checkpoint')
-            else:
-                page.create_version(change_summary='Before save-ai-page (full page replacement)')
-
-        # Determine current language
         lang = _detect_language_from_request(request, data)
-
-        # Save to html_content_i18n for current language
-        _save_page_html(page, html_template, lang)
-        page.save()
+        from djangopress.editor_v2 import ai_apply
+        try:
+            result = ai_apply.apply_page_html(page, html, lang, user=request.user)
+        except ValueError as e:
+            return JsonResponse({'success': False, 'error': str(e)}, status=400)
 
         return JsonResponse({
             'success': True,
             'message': 'Page saved successfully',
             'page_id': page.id,
+            'translated_languages': result['translated_languages'],
+            'untranslated_languages': result['untranslated_languages'],
         })
 
     except Exception as e:
@@ -2383,6 +2256,7 @@ def refine_page_stream(request):
     """
     try:
         data = json.loads(request.body)
+        lang = _detect_language_from_request(request, data)  # the language being edited
         page_id = data.get('page_id')
         instructions = data.get('instructions', '').strip()
         conversation_history = data.get('conversation_history', [])
@@ -2451,6 +2325,7 @@ def refine_page_stream(request):
                     instructions=instructions,
                     model_override=get_ai_model('refinement_page'),
                     conversation_history=chat_history or None,
+                    lang=lang,
                     on_progress=on_progress,
                 )
 
@@ -2463,6 +2338,8 @@ def refine_page_stream(request):
                     'page': {
                         'html_content_i18n': result.get('html_content_i18n', {}),
                     },
+                    'html': (result.get('html_content_i18n') or {}).get(lang)
+                            or next(iter((result.get('html_content_i18n') or {}).values()), ''),
                     'assistant_message': assistant_msg,
                     'session_id': session.id,
                 }))
@@ -2515,6 +2392,7 @@ def refine_multi_stream(request):
     """
     try:
         data = json.loads(request.body)
+        lang = _detect_language_from_request(request, data)  # the language being edited
         page_id = data.get('page_id')
         scope = data.get('scope', 'section')
         section_name = data.get('section_name')
@@ -2596,6 +2474,7 @@ def refine_multi_stream(request):
                             target_name=section_name if scope == 'section' else selector,
                             page=page,
                             conversation_history=conversation_history,
+                            lang=lang,
                             multi_option=multi_option,
                             mode=mode,
                             insert_after=insert_after,
@@ -2616,6 +2495,7 @@ def refine_multi_stream(request):
                             insert_after=insert_after,
                             instructions=instructions,
                             conversation_history=conversation_history,
+                            lang=lang,
                         )
                     elif scope == 'element':
                         result = service.refine_element_only(
@@ -2623,6 +2503,7 @@ def refine_multi_stream(request):
                             selector=selector,
                             instructions=instructions,
                             conversation_history=conversation_history,
+                            lang=lang,
                             multi_option=multi_option,
                             on_progress=on_progress,
                         )
@@ -2632,6 +2513,7 @@ def refine_multi_stream(request):
                             section_name=section_name,
                             instructions=instructions,
                             conversation_history=conversation_history,
+                            lang=lang,
                             multi_option=multi_option,
                             on_progress=on_progress,
                         )
