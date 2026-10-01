@@ -41,7 +41,7 @@ def sanitize_html_output(html: str) -> str:
     return html
 
 
-def validate_html_structure(html: str, original_html: str = None) -> list:
+def validate_html_structure(html: str, original_html: str = None, scope: str = 'page') -> list:
     """
     Validate HTML structural integrity. Returns a list of error strings.
     Empty list = valid.
@@ -49,7 +49,8 @@ def validate_html_structure(html: str, original_html: str = None) -> list:
     Checks:
     1. Must contain at least one HTML tag
     2. Critical tags must have matching close tags
-    3. If original_html provided, new HTML must be at least 50% of original length
+    3. Page scope only: if original_html provided, new HTML must be at least 50% of original length
+       (a section or element is legitimately much smaller than the page it came from)
     4. Form actions must reference valid slugs (if DynamicForm model available)
     5. JS in inline handlers must not contain HTML-escaped operators
     """
@@ -71,7 +72,7 @@ def validate_html_structure(html: str, original_html: str = None) -> list:
             )
 
     # 3. Length check vs original (catch truncation)
-    if original_html and len(original_html) > 100:
+    if scope == 'page' and original_html and len(original_html) > 100:
         ratio = len(html) / len(original_html)
         if ratio < 0.5:
             errors.append(
@@ -108,7 +109,7 @@ def validate_html_structure(html: str, original_html: str = None) -> list:
     return errors
 
 
-def validate_and_fix_html(html: str, original_html: str = None) -> tuple:
+def validate_and_fix_html(html: str, original_html: str = None, scope: str = 'page') -> tuple:
     """
     Validate HTML and auto-fix what can be fixed.
 
@@ -119,7 +120,7 @@ def validate_and_fix_html(html: str, original_html: str = None) -> tuple:
     fixed = sanitize_html_output(html)
 
     # Validate the fixed version
-    remaining = validate_html_structure(fixed, original_html)
+    remaining = validate_html_structure(fixed, original_html, scope=scope)
 
     # Filter out the auto-fixable errors (they've been fixed)
     remaining = [
@@ -324,7 +325,8 @@ Return ONLY the corrected, complete JSON. No markdown, no explanation."""
                         pass
         return on_stream
 
-    def _extract_html_from_response(self, content: str, original_html: str = None) -> str:
+    def _extract_html_from_response(self, content: str, original_html: str = None,
+                                    scope: str = 'page', finish_reason: str = None) -> str:
         """
         Extract HTML from LLM response, handling markdown code blocks.
         Auto-fixes known issues (BS4 escaping), validates structure,
@@ -340,6 +342,9 @@ Return ONLY the corrected, complete JSON. No markdown, no explanation."""
         Raises:
             ValueError: If the extracted content has unfixable validation errors
         """
+        if finish_reason == 'MAX_TOKENS':
+            raise ValueError('The answer was cut off (output limit) — try a smaller change or fewer options')
+
         # Try to find HTML in markdown code blocks first
         html_match = re.search(r'```(?:html)?\s*(.*?)\s*```', content, re.DOTALL)
         if html_match:
@@ -348,7 +353,7 @@ Return ONLY the corrected, complete JSON. No markdown, no explanation."""
             result = content.strip()
 
         # Auto-fix and validate
-        result, errors = validate_and_fix_html(result, original_html)
+        result, errors = validate_and_fix_html(result, original_html, scope=scope)
 
         if errors:
             raise ValueError(
@@ -358,6 +363,37 @@ Return ONLY the corrected, complete JSON. No markdown, no explanation."""
             )
 
         return result
+
+    def _validate_options(self, options: list, scope: str, section_name: str = None) -> list:
+        """Each option must be complete for its scope; any malformed option fails the request.
+
+        section / new section: exactly one root <section> (refine: renamed to section_name).
+        element: the section returned by the model with one [data-target] element, which
+        becomes the option (marker removed).
+        """
+        from bs4 import BeautifulSoup
+        validated = []
+        for i, opt_html in enumerate(options, start=1):
+            opt_soup = BeautifulSoup(opt_html, 'html.parser')
+            if scope == 'element':
+                target = opt_soup.find(attrs={'data-target': 'true'})
+                if target is None:
+                    raise ValueError(f'Option {i} is incomplete: the edited element is missing')
+                del target['data-target']
+                validated.append({'html': str(target)})
+                continue
+            sections = opt_soup.find_all('section')
+            roots = [t for t in opt_soup.find_all(True, recursive=False)]
+            if not sections or not re.search(r'</section>\s*$', opt_html.strip()):
+                raise ValueError(f'Option {i} is incomplete: it is not one complete <section>')
+            section_tag = sections[0] if len(roots) != 1 else roots[0]
+            if section_tag.name != 'section':
+                section_tag = sections[0]
+            if section_name:
+                section_tag['data-section'] = section_name
+                section_tag['id'] = section_name
+            validated.append({'html': str(section_tag)})
+        return validated
 
     def _split_multi_options(self, html: str) -> list:
         """
@@ -925,6 +961,7 @@ Return ONLY the corrected, complete JSON. No markdown, no explanation."""
         handle_images: bool = False,
         on_progress=None,
         content_override: dict = None,
+        lang: str = None,
     ) -> Dict:
         """
         Refine a page's HTML content based on user instructions.
@@ -1003,7 +1040,9 @@ Return ONLY the corrected, complete JSON. No markdown, no explanation."""
             targeted_instructions = f"Focus on the <section data-section=\"{section_name}\"> section. {instructions}"
 
         # --- Read current HTML from html_content_i18n with fallback ---
-        current_lang = default_language  # get_language() unreliable in AJAX context
+        # Work on the language being edited; an empty copy falls back to the default
+        # (that is what the page shows in that language).
+        current_lang = lang if (lang and (page.html_content_i18n or {}).get(lang)) else default_language
         if content_override:
             html_i18n = override_html_i18n
             clean_html = html_i18n.get(current_lang) or html_i18n.get(default_language) or ''
@@ -1031,7 +1070,7 @@ Return ONLY the corrected, complete JSON. No markdown, no explanation."""
                 site_name=site_name,
                 site_description=site_description,
                 project_briefing=project_briefing,
-                default_language=default_language,
+                default_language=current_lang,
                 page_html=clean_html,
                 user_request=targeted_instructions,
                 page_title=page_title,
@@ -1049,7 +1088,7 @@ Return ONLY the corrected, complete JSON. No markdown, no explanation."""
                 site_name=site_name,
                 site_description=site_description,
                 project_briefing=project_briefing,
-                default_language=default_language,
+                default_language=current_lang,
                 page_html=clean_html,
                 user_request=targeted_instructions,
                 page_title=page_title,
@@ -1109,7 +1148,7 @@ Return ONLY the corrected, complete JSON. No markdown, no explanation."""
             )
             raise
 
-        refined_html = self._extract_html_from_response(response.choices[0].message.content, original_html=clean_html)
+        refined_html = self._extract_html_from_response(response.choices[0].message.content, original_html=clean_html, scope='page', finish_reason=getattr(response, 'finish_reason', None))
 
         if not refined_html or len(refined_html.strip()) < 50:
             raise ValueError("Step 1 returned empty or too-short HTML")
@@ -1144,6 +1183,7 @@ Return ONLY the corrected, complete JSON. No markdown, no explanation."""
         skip_design_guide: bool = False,
         reference_images: list = None,
         on_progress=None,
+        lang: str = None,
     ) -> Dict:
         """
         Refine a single section without saving to DB.
@@ -1200,7 +1240,9 @@ Return ONLY the corrected, complete JSON. No markdown, no explanation."""
                 pages_data.append({'title': p.title_i18n or {}, 'slug': p.slug_i18n or {}})
 
         # Read current HTML from html_content_i18n with fallback
-        current_lang = default_language  # get_language() unreliable in AJAX context
+        # Work on the language being edited; an empty copy falls back to the default
+        # (that is what the page shows in that language).
+        current_lang = lang if (lang and (page.html_content_i18n or {}).get(lang)) else default_language
         html_i18n = page.html_content_i18n or {}
         clean_html = html_i18n.get(current_lang) or html_i18n.get(default_language) or ''
         clean_html = self._strip_legacy_attrs(clean_html)
@@ -1237,7 +1279,7 @@ Return ONLY the corrected, complete JSON. No markdown, no explanation."""
             site_name=site_name,
             site_description=site_description,
             project_briefing=project_briefing,
-            default_language=default_language,
+            default_language=current_lang,
             full_page_html=clean_html,
             section_name=section_name,
             user_request=instructions,
@@ -1290,7 +1332,7 @@ Return ONLY the corrected, complete JSON. No markdown, no explanation."""
             )
             raise
 
-        refined_html = self._extract_html_from_response(response.choices[0].message.content, original_html=clean_html)
+        refined_html = self._extract_html_from_response(response.choices[0].message.content, scope='section', finish_reason=getattr(response, 'finish_reason', None))
 
         if not refined_html or len(refined_html.strip()) < 50:
             raise ValueError("Step 1 returned empty or too-short HTML")
@@ -1302,17 +1344,9 @@ Return ONLY the corrected, complete JSON. No markdown, no explanation."""
             # Multi-option: split into options, skip templatize, return raw HTML
             notify("processing_options", "running")
             options = self._split_multi_options(refined_html)
-            validated = []
-            for i, opt_html in enumerate(options):
-                opt_soup = BeautifulSoup(opt_html, 'html.parser')
-                opt_section = opt_soup.find('section', attrs={'data-section': section_name})
-                if opt_section:
-                    validated.append({'html': str(opt_section)})
-                elif opt_soup.find('section'):
-                    validated.append({'html': str(opt_soup.find('section'))})
-                else:
-                    validated.append({'html': opt_html})
-                print(f"  Option {i+1}: {len(validated[-1]['html'])} chars")
+            validated = self._validate_options(options, scope='section', section_name=section_name)
+            for i, opt in enumerate(validated):
+                print(f"  Option {i+1}: {len(opt['html'])} chars")
 
             notify("processing_options", "done")
             notify("complete", "done")
@@ -1357,7 +1391,8 @@ Return ONLY the corrected, complete JSON. No markdown, no explanation."""
         insert_after: str,
         instructions: str,
         conversation_history: list = None,
-        model_override: str = None
+        model_override: str = None,
+        lang: str = None,
     ) -> Dict:
         """
         Generate a brand new section (3 variations) to insert into a page.
@@ -1404,7 +1439,9 @@ Return ONLY the corrected, complete JSON. No markdown, no explanation."""
             pages_data.append({'title': p.title_i18n or {}, 'slug': p.slug_i18n or {}})
 
         # Read current HTML from html_content_i18n with fallback
-        current_lang = default_language  # get_language() unreliable in AJAX context
+        # Work on the language being edited; an empty copy falls back to the default
+        # (that is what the page shows in that language).
+        current_lang = lang if (lang and (page.html_content_i18n or {}).get(lang)) else default_language
         html_i18n = page.html_content_i18n or {}
         clean_html = html_i18n.get(current_lang) or html_i18n.get(default_language) or ''
         clean_html = self._strip_legacy_attrs(clean_html)
@@ -1436,7 +1473,7 @@ Return ONLY the corrected, complete JSON. No markdown, no explanation."""
             site_name=site_name,
             site_description=site_description,
             project_briefing=project_briefing,
-            default_language=default_language,
+            default_language=current_lang,
             full_page_html=clean_html,
             insert_after=insert_after,
             user_request=instructions,
@@ -1476,7 +1513,7 @@ Return ONLY the corrected, complete JSON. No markdown, no explanation."""
             )
             raise
 
-        generated_html = self._extract_html_from_response(response.choices[0].message.content)
+        generated_html = self._extract_html_from_response(response.choices[0].message.content, scope='section', finish_reason=getattr(response, 'finish_reason', None))
 
         if not generated_html or len(generated_html.strip()) < 50:
             raise ValueError("AI returned empty or too-short HTML for new section")
@@ -1485,16 +1522,9 @@ Return ONLY the corrected, complete JSON. No markdown, no explanation."""
 
         # Split into options and validate each one
         options = self._split_multi_options(generated_html)
-        validated = []
-        for i, opt_html in enumerate(options):
-            opt_soup = BeautifulSoup(opt_html, 'html.parser')
-            # Don't filter by specific data-section name — the LLM creates the name
-            section_tag = opt_soup.find('section')
-            if section_tag:
-                validated.append({'html': str(section_tag)})
-            else:
-                validated.append({'html': opt_html})
-            print(f"  Option {i+1}: {len(validated[-1]['html'])} chars")
+        validated = self._validate_options(options, scope='section')
+        for i, opt in enumerate(validated):
+            print(f"  Option {i+1}: {len(opt['html'])} chars")
 
         assistant_message = f"Here are {len(validated)} design options for the new section."
         return {
@@ -1515,6 +1545,7 @@ Return ONLY the corrected, complete JSON. No markdown, no explanation."""
         skip_pages_list: bool = False,
         skip_design_guide: bool = False,
         on_progress=None,
+        lang: str = None,
     ) -> Dict:
         """
         Refine a single element within a section without saving to DB.
@@ -1551,7 +1582,9 @@ Return ONLY the corrected, complete JSON. No markdown, no explanation."""
         model = model_override or self.model_name
 
         # Read current HTML from html_content_i18n with fallback
-        current_lang = default_language  # get_language() unreliable in AJAX context
+        # Work on the language being edited; an empty copy falls back to the default
+        # (that is what the page shows in that language).
+        current_lang = lang if (lang and (page.html_content_i18n or {}).get(lang)) else default_language
         html_i18n = page.html_content_i18n or {}
         clean_html = html_i18n.get(current_lang) or html_i18n.get(default_language) or ''
         clean_html = self._strip_legacy_attrs(clean_html)
@@ -1606,7 +1639,7 @@ Return ONLY the corrected, complete JSON. No markdown, no explanation."""
             site_name=site_name,
             site_description=site_description,
             project_briefing=project_briefing,
-            default_language=default_language,
+            default_language=current_lang,
             section_html=section_html,
             section_name=section_name,
             element_html=element_html,
@@ -1646,7 +1679,7 @@ Return ONLY the corrected, complete JSON. No markdown, no explanation."""
             )
             raise
 
-        refined_html = self._extract_html_from_response(response.choices[0].message.content, original_html=section_html)
+        refined_html = self._extract_html_from_response(response.choices[0].message.content, original_html=section_html, scope='element', finish_reason=getattr(response, 'finish_reason', None))
 
         if not refined_html or len(refined_html.strip()) < 10:
             raise ValueError("Step 1 returned empty or too-short HTML")
@@ -1658,16 +1691,9 @@ Return ONLY the corrected, complete JSON. No markdown, no explanation."""
             # Multi-option: split into options, skip templatize, return raw HTML
             notify("processing_options", "running")
             options = self._split_multi_options(refined_html)
-            validated = []
-            for i, opt_html in enumerate(options):
-                opt_soup = BeautifulSoup(opt_html, 'html.parser')
-                opt_el = opt_soup.find(attrs={'data-target': 'true'})
-                if opt_el:
-                    del opt_el['data-target']
-                    validated.append({'html': str(opt_el)})
-                else:
-                    validated.append({'html': opt_html})
-                print(f"  Option {i+1}: {len(validated[-1]['html'])} chars")
+            validated = self._validate_options(options, scope='element')
+            for i, opt in enumerate(validated):
+                print(f"  Option {i+1}: {len(opt['html'])} chars")
 
             notify("processing_options", "done")
             notify("complete", "done")
