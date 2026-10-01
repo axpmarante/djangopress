@@ -157,7 +157,7 @@ def build_executor_prompt(session, snapshot, has_reference_images=False):
         f'You are the Site Assistant for "{site_name}". '
         f'Always respond in {default_lang}. '
         f'Enabled languages: {", ".join(languages)}. '
-        f'When creating/updating multilingual content, provide values for ALL enabled languages.'
+        f'Page HTML is written in ONE language and translated automatically; only fields ending in _i18n take every enabled language.'
     )
 
     # --- Site Context ---

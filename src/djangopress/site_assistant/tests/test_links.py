@@ -107,3 +107,19 @@ class LinksTest(TestCase):
         self.assertIn('Media library', labels)
         self.session.refresh_from_db()
         self.assertEqual(self.session.messages[-1]['links'], data['links'])
+
+    def test_older_replies_get_links_when_the_conversation_is_opened(self):
+        self.session.add_message('user', 'onde carrego imagens?')
+        self.session.add_message('assistant', 'Na página **Reservas**, carregue em /backoffice/media/.')
+        self.client.force_login(self.user)
+        data = self.client.get(f'/site-assistant/api/sessions/{self.session.id}/').json()
+        labels = [l['label'] for l in data['session']['messages'][-1]['links']]
+        self.assertEqual(labels, ['View Reservas', 'Edit Reservas', 'Media library'])
+        self.session.refresh_from_db()
+        self.assertNotIn('links', self.session.messages[-1])        # computed on read, not stored
+
+    def test_prompt_says_page_html_is_one_language(self):
+        from djangopress.site_assistant import prompts
+        prompt = prompts.build_executor_prompt(self.session, prompts.build_router_snapshot(self.session))
+        self.assertNotIn('provide values for ALL enabled languages', prompt)
+        self.assertIn('ONE language', prompt)

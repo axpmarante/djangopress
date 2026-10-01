@@ -146,12 +146,18 @@ def sessions_api(request):
 def session_detail_api(request, session_id):
     """Get full session data including messages."""
     session = get_object_or_404(AssistantSession, pk=session_id, created_by=request.user)
+    from djangopress.site_assistant.links import build_links
+    messages = []
+    for msg in session.messages:      # replies from before the buttons existed get them on read
+        if msg.get('role') == 'assistant' and 'links' not in msg:
+            msg = dict(msg, links=build_links(msg.get('content', ''), msg.get('actions') or []))
+        messages.append(msg)
     return JsonResponse({
         'success': True,
         'session': {
             'id': session.id,
             'title': session.title or f'Session #{session.id}',
-            'messages': session.messages,
+            'messages': messages,
             'active_page_id': session.active_page_id,
             'model_used': session.model_used,
             'updated_at': session.updated_at.isoformat(),
