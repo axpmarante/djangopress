@@ -64,7 +64,7 @@ class FormService:
 
         updated = []
         for field in ('name', 'notification_email', 'fields_schema', 'success_message_i18n', 'is_active'):
-            if field in kwargs:
+            if kwargs.get(field) is not None:      # None = not given (the assistant passes every key)
                 setattr(form, field, kwargs[field])
                 updated.append(field)
 

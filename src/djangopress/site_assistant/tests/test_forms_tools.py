@@ -142,3 +142,13 @@ class TestFormToolTest(FormsTestCase):
         self.assertFalse(out['checks'][0]['notification_sent'])
         self.assertIn('not sent', out['message'])
         self.assertEqual(FormSubmission.objects.count(), 0)
+
+
+class UpdateFormToolTest(FormsTestCase):
+    def test_fields_not_given_are_left_alone(self):
+        form = DynamicForm.objects.create(name='Contact', slug='contact', notification_email=CLIENT,
+                                          fields_schema=LIST_SCHEMA)
+        out = ToolRegistry.execute('update_form', {'slug': 'contact', 'is_active': False}, self.context)
+        self.assertTrue(out['success'], out)
+        form.refresh_from_db()
+        self.assertEqual((form.name, form.notification_email, form.is_active), ('Contact', CLIENT, False))
