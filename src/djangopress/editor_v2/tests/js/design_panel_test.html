@@ -101,6 +101,11 @@ try {
     click('[data-act="copy-style"]');
     renderDesignPanel(panel, document.getElementById('b2'));
     ok('layout kept on copy', iconBtn.classList.contains('inline-flex') && iconBtn.classList.contains('items-center') && iconBtn.classList.contains('gap-2'), iconBtn.className);
+    // first use: tokens load (here the endpoint fails and the fallback is used), then the panel appears
+    setTokens(null);
+    renderDesignPanel(panel, document.getElementById('t'));
+    await new Promise(r => setTimeout(r, 800));
+    ok('panel appears after tokens load', !!panel.querySelector(':scope > .ev2-dp'), panel.innerHTML.slice(0, 80));
 } catch (err) {
     fails.push('crash: ' + err.message);
 }

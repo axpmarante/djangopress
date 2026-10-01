@@ -133,7 +133,7 @@ export function renderDesignPanel(container, el) {
         initialAttrs.set(selector, { id: el.getAttribute('id'), href: el.getAttribute('href'), target: el.getAttribute('target'), style: el.getAttribute('style') });
     }
     if (!tokens) {
-        container.innerHTML = '<p class="ev2-placeholder ev2-empty-state">Loading design options…</p>';
+        container.innerHTML = '<p class="ev2-placeholder ev2-empty-state ev2-dp-loading">Loading design options…</p>';
         loadTokens().then(() => { if (mount && mount.container === container && mount.el === el) rerender(); });
         return;
     }
@@ -142,7 +142,7 @@ export function renderDesignPanel(container, el) {
 
 function rerender() {
     // only while the Design tab still shows this panel (the container is shared with other tabs)
-    if (!mount || !mount.container.isConnected || !mount.container.querySelector(':scope > .ev2-dp')) return;
+    if (!mount || !mount.container.isConnected || !mount.container.querySelector(':scope > .ev2-dp, :scope > .ev2-dp-loading')) return;
     const scroller = mount.container.closest('.ev2-sidebar-body, .ev2-tab-content') || mount.container;
     const top = scroller.scrollTop;
     render();

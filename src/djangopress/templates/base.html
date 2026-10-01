@@ -27,6 +27,7 @@
     <!-- Custom site styles -->
     <link href="{% static 'css/lightbox.css' %}" rel="stylesheet">
     <link href="{% static 'css/marquee.css' %}" rel="stylesheet">
+    {% if edit_mode == 'v2' or ev2_frame %}{% load editor_assets %}{% editor_importmap %}{% endif %}
     {% if edit_mode == 'v2' %}
     <link href="{% static 'editor_v2/css/editor.css' %}?v=27" rel="stylesheet">
     {% endif %}
