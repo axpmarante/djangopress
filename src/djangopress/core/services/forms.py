@@ -108,3 +108,27 @@ class FormService:
                 'created_at': s.created_at.isoformat(),
             })
         return {'success': True, 'submissions': data, 'message': f'{len(data)} recent submissions'}
+
+
+def process_submission(form_def, data, lang, ip, user_agent, *, source_page=None, notify_to=None, subject_prefix=''):
+    """Validate → save → notify → confirm. The public form view and the assistant's
+    test_form share it. notify_to sends both emails only to that address.
+
+    Returns {'errors', 'submission', 'notification_sent', 'confirmation_sent'};
+    with errors nothing is saved or sent.
+    """
+    from djangopress.core.email import send_form_confirmation, send_form_notification
+
+    errors = form_def.validate_submission(data)
+    if errors:
+        return {'errors': errors, 'submission': None, 'notification_sent': False, 'confirmation_sent': False}
+    submission = FormSubmission.objects.create(
+        form=form_def, data=data, source_page=source_page, language=lang or '',
+        ip_address=ip, user_agent=user_agent or '',
+    )
+    notified = send_form_notification(form_def, submission, to_override=notify_to, subject_prefix=subject_prefix)
+    confirmed = False
+    if form_def.send_confirmation_email:
+        confirmed = send_form_confirmation(form_def, submission, lang=lang or 'en',
+                                           to_override=notify_to, subject_prefix=subject_prefix)
+    return {'errors': {}, 'submission': submission, 'notification_sent': notified, 'confirmation_sent': confirmed}

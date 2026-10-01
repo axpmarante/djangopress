@@ -14,9 +14,11 @@ def _notification_bcc():
     return [addr.strip() for addr in raw.split(',') if addr.strip()]
 
 
-def send_form_notification(form_def, submission):
-    """Send notification email to site owner with submission data."""
-    to_email = form_def.get_notification_email()
+def send_form_notification(form_def, submission, to_override=None, subject_prefix=''):
+    """Send notification email to site owner with submission data.
+
+    to_override sends it to that address only (no BCC) — used by test sends."""
+    to_email = to_override or form_def.get_notification_email()
     if not to_email:
         logger.warning(f"No notification email for form '{form_def.name}', skipping.")
         return False
@@ -43,11 +45,11 @@ def send_form_notification(form_def, submission):
 
     try:
         email = EmailMessage(
-            subject=f"[{form_def.name}] New submission",
+            subject=f"{subject_prefix}[{form_def.name}] New submission",
             body=body,
             from_email=settings.DEFAULT_FROM_EMAIL,
             to=[to_email],
-            bcc=_notification_bcc(),
+            bcc=[] if to_override else _notification_bcc(),
             reply_to=reply_to_list,
         )
         email.send(fail_silently=False)
@@ -59,13 +61,13 @@ def send_form_notification(form_def, submission):
         return False
 
 
-def send_form_confirmation(form_def, submission, lang='en'):
-    """Send auto-reply confirmation to the submitter."""
+def send_form_confirmation(form_def, submission, lang='en', to_override=None, subject_prefix=''):
+    """Send auto-reply confirmation to the submitter (or only to to_override)."""
     if not form_def.send_confirmation_email:
         return False
 
     reply_to_field = form_def.get_reply_to_field()
-    to_email = submission.data.get(reply_to_field, '')
+    to_email = to_override or submission.data.get(reply_to_field, '')
     if not to_email:
         logger.warning(f"No submitter email found in field '{reply_to_field}', skipping confirmation.")
         return False
@@ -78,7 +80,7 @@ def send_form_confirmation(form_def, submission, lang='en'):
 
     try:
         email = EmailMessage(
-            subject=subject,
+            subject=f'{subject_prefix}{subject}',
             body=body,
             from_email=settings.DEFAULT_FROM_EMAIL,
             to=[to_email],

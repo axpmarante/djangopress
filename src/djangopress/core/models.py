@@ -575,35 +575,78 @@ class DynamicForm(models.Model):
             return self.success_message_i18n.get(lang, self.success_message_i18n.get('en', 'Thank you!'))
         return 'Thank you!'
 
+    @staticmethod
+    def _guess_type(name):
+        lower = name.lower()
+        if 'email' in lower:
+            return 'email'
+        if any(w in lower for w in ('phone', 'telefone', 'tel', 'telemovel')):
+            return 'tel'
+        if any(w in lower for w in ('message', 'mensagem', 'notes', 'notas', 'comment')):
+            return 'textarea'
+        return 'text'
+
+    def schema_fields(self, lang=None):
+        """fields_schema as [{name, type, label, required, choices}], whatever shape it
+        was saved in: a list of dicts, a list of field names, or a dict keyed by name.
+        i18n labels are resolved to `lang` (default: the site's default language)."""
+        raw = self.fields_schema
+        if isinstance(raw, dict):
+            entries = [dict(v, name=k) if isinstance(v, dict) else {'name': k} for k, v in raw.items()]
+        elif isinstance(raw, list):
+            entries = [e if isinstance(e, dict) else {'name': str(e)} for e in raw]
+        else:
+            entries = []
+        if lang is None:
+            settings = SiteSettings.load()
+            lang = settings.get_default_language() if settings else 'pt'
+
+        def text(value, fallback):
+            if isinstance(value, dict):
+                return value.get(lang) or next((v for v in value.values() if v), '') or fallback
+            return value or fallback
+
+        fields = []
+        for entry in entries:
+            name = str(entry.get('name') or '').strip()
+            if not name:
+                continue
+            raw_choices = entry.get('choices') or entry.get('options') or []
+            choices = [str(c.get('value', '')) if isinstance(c, dict) else str(c) for c in raw_choices]
+            fields.append({
+                'name': name,
+                'type': entry.get('type') or self._guess_type(name),
+                'label': text(entry.get('label'), name.replace('_', ' ').title()),
+                'required': bool(entry.get('required', False)),
+                'choices': [c for c in choices if c],
+            })
+        return fields
+
     def get_field_label(self, name):
-        if self.fields_schema and isinstance(self.fields_schema, list):
-            for field in self.fields_schema:
-                if field.get('name') == name:
-                    return field.get('label', name)
+        for field in self.schema_fields():
+            if field['name'] == name:
+                return field['label']
         return name.replace('_', ' ').title()
 
     def get_reply_to_field(self):
-        if self.fields_schema and isinstance(self.fields_schema, list):
-            for field in self.fields_schema:
-                if field.get('type') == 'email':
-                    return field.get('name')
+        for field in self.schema_fields():
+            if field['type'] == 'email':
+                return field['name']
         return 'email'
 
     def validate_submission(self, data):
         errors = {}
-        if not self.fields_schema or not isinstance(self.fields_schema, list):
-            return errors
-        for field in self.fields_schema:
-            name = field.get('name', '')
-            required = field.get('required', False)
-            field_type = field.get('type', 'text')
+        for field in self.schema_fields():
+            name = field['name']
+            required = field['required']
+            field_type = field['type']
             value = data.get(name, '')
             if required and not value:
-                errors[name] = f'{field.get("label", name)} is required.'
+                errors[name] = f'{field["label"]} is required.'
             if value and field_type == 'email':
                 import re
-                if not re.match(r'^[^@]+@[^@]+\.[^@]+$', value):
-                    errors[name] = f'{field.get("label", name)} must be a valid email.'
+                if not re.match(r'^[^@]+@[^@]+\.[^@]+$', str(value)):
+                    errors[name] = f'{field["label"]} must be a valid email.'
         return errors
 
 

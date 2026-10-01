@@ -689,7 +689,19 @@ VALIDATE_FORMS = types.FunctionDeclaration(
     ),
 )
 
+TEST_FORM = types.FunctionDeclaration(
+    name='test_form',
+    description=('Really submit a form with test data: validation, saving, notification and confirmation '
+                 'emails. Every email goes ONLY to the operator (the agency), with [TESTE] in the subject, '
+                 'never to the client; the test submission is deleted. Without slug it tests every form '
+                 'used on the site pages. Use it only when asked, or after creating or editing a form.'),
+    parameters=S(type=T.OBJECT, properties={
+        'slug': S(type=T.STRING, description='Form slug; omit to test every form on the pages.'),
+    }),
+)
+
 FORMS_TOOLS = [
+    TEST_FORM,
     LIST_FORMS,
     CREATE_FORM,
     UPDATE_FORM,

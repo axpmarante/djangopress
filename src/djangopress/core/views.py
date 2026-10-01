@@ -121,7 +121,7 @@ class PageView(TemplateView):
 @require_POST
 def form_submit(request, slug):
     """Handle dynamic form submissions."""
-    from .email import send_form_notification, send_form_confirmation
+    from .services.forms import process_submission
 
     try:
         form_def = DynamicForm.objects.get(slug=slug, is_active=True)
@@ -186,22 +186,11 @@ def form_submit(request, slug):
             lang = get_language() or 'en'
             source_page = Page.get_by_slug(page_slug, lang)
 
-    submission = FormSubmission.objects.create(
-        form=form_def,
-        data=data,
-        source_page=source_page,
-        language=get_language() or '',
-        ip_address=ip,
-        user_agent=request.META.get('HTTP_USER_AGENT', ''),
-    )
+    process_submission(form_def, data, get_language() or '', ip, request.META.get('HTTP_USER_AGENT', ''),
+                       source_page=source_page)
 
     # Increment rate limit counter
     cache.set(rate_key, submission_count + 1, 3600)
-
-    # Send emails
-    send_form_notification(form_def, submission)
-    if form_def.send_confirmation_email:
-        send_form_confirmation(form_def, submission, lang=get_language() or 'en')
 
     if _is_ajax(request):
         lang = get_language() or 'en'

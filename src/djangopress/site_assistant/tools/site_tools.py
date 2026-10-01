@@ -285,7 +285,7 @@ def validate_forms(params, context):
     # Build registry of existing forms
     existing_forms = {}
     for form in DynamicForm.objects.filter(is_active=True):
-        schema_names = {f['name'] for f in (form.fields_schema or []) if 'name' in f}
+        schema_names = {f['name'] for f in form.schema_fields()}
         existing_forms[form.slug] = {
             'name': form.name,
             'field_names': schema_names,
@@ -323,6 +323,106 @@ def validate_forms(params, context):
         'message': f'Found {len(issues)} issue(s) across {pages_checked} pages.',
         'issues': issues,
     }
+
+
+FORM_ACTION_RE = r'action="(?:/[a-z]{2})?/forms/([^/"]+)/submit/"'
+
+
+def _test_value(field, operator_email):
+    kind, name = field['type'], field['name'].lower()
+    if field['choices']:
+        return field['choices'][0]
+    if kind == 'email':
+        return operator_email
+    if kind == 'tel':
+        return '+351 912 345 678'
+    if kind == 'date':
+        import datetime
+        return (datetime.date.today() + datetime.timedelta(days=7)).isoformat()
+    if kind == 'time':
+        return '20:00'
+    if kind == 'number':
+        return '2'
+    if kind == 'checkbox':
+        return True
+    if kind == 'url':
+        return 'https://example.com'
+    if kind == 'textarea':
+        return 'Mensagem de teste enviada pelo assistente do site. Pode ignorar.'
+    if any(w in name for w in ('name', 'nome')):
+        return 'Teste Assistente'
+    return 'Teste'
+
+
+def _operator_email(context):
+    from django.conf import settings
+    user = (context or {}).get('user')
+    return getattr(settings, 'PWD_SUPERADMIN_EMAIL', '') or getattr(user, 'email', '') or ''
+
+
+def test_form(params, context):
+    """Submit a form for real (validate, save, emails) with every email going to
+    the operator with [TESTE] in the subject; the test submission is deleted."""
+    import re
+    from djangopress.core.models import DynamicForm, GlobalSection, Page
+    from djangopress.core.services.forms import process_submission
+
+    operator = _operator_email(context)
+    if not operator:
+        return {'success': False, 'message': 'No operator email to send the test to (set PWD_SUPERADMIN_EMAIL)'}
+    slug = (params.get('slug') or '').strip()
+    if slug:
+        forms = list(DynamicForm.objects.filter(slug=slug))
+        if not forms:
+            return {'success': False, 'message': f'No form with slug "{slug}"'}
+    else:
+        used = []
+        sources = [*(p.html_content_i18n or {} for p in Page.objects.filter(is_active=True)),
+                   *(g.html_template_i18n or {} for g in GlobalSection.objects.filter(is_active=True))]
+        for copies in sources:
+            for html in copies.values():
+                used += re.findall(FORM_ACTION_RE, html or '')
+        forms = [f for f in DynamicForm.objects.filter(slug__in=set(used))]
+        if not forms:
+            return {'success': True, 'checks': [], 'message': 'No forms are used on the site pages.'}
+
+    from djangopress.core.models import SiteSettings
+    settings = SiteSettings.load()
+    lang = settings.get_default_language() if settings else 'pt'
+    checks = []
+    for form in forms:
+        data = {f['name']: _test_value(f, operator) for f in form.schema_fields(lang)}
+        check = {'form': form.slug, 'active': form.is_active, 'valid': False, 'saved': False,
+                 'notification_sent': False, 'confirmation_sent': None, 'sent_to': operator, 'errors': {}}
+        result = process_submission(form, data, lang, None, 'DjangoPress site assistant (test)',
+                                    notify_to=operator, subject_prefix='[TESTE] ')
+        check['errors'] = result['errors']
+        check['valid'] = not result['errors']
+        if result['submission'] is not None:
+            check['saved'] = True
+            check['notification_sent'] = result['notification_sent']
+            if form.send_confirmation_email:
+                check['confirmation_sent'] = result['confirmation_sent']
+            result['submission'].delete()
+        checks.append(check)
+
+    lines = []
+    for c in checks:
+        if not c['valid']:
+            lines.append(f'{c["form"]}: test data rejected ({"; ".join(c["errors"].values())})')
+            continue
+        line = f'{c["form"]}: saved, notification ' + ('sent' if c['notification_sent'] else 'NOT sent')
+        if c['confirmation_sent'] is not None:
+            line += ', confirmation ' + ('sent' if c['confirmation_sent'] else 'NOT sent')
+        if not c['active']:
+            line += ' (the form is inactive: visitors can\'t submit it)'
+        lines.append(line)
+    any_failed = any(not c['valid'] or not c['notification_sent'] for c in checks)
+    message = (f'Tested {len(checks)} form(s); emails went only to {operator} with [TESTE] in the subject; '
+               f'test submissions deleted. ' + ' | '.join(lines))
+    if any_failed:
+        message += ' — some emails were not sent or the data was rejected; check the email settings and the form.'
+    return {'success': True, 'checks': checks, 'message': message}
 
 
 def _check_html_for_form_issues(html, source_label, existing_forms, issues):
@@ -429,6 +529,7 @@ def refine_footer(params, context):
 
 # Registry mapping
 SITE_TOOLS = {
+    'test_form': test_form,
     'web_search': web_search,
     'undo_last_change': undo_last_change,
     'list_pages': list_pages,
