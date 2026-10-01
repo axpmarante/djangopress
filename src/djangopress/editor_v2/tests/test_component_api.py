@@ -10,7 +10,7 @@ from djangopress.core.models import Page, PageVersion, SiteImage, SiteSettings
 from djangopress.editor_v2 import components
 
 User = get_user_model()
-TRANSLATE = 'djangopress.editor_v2.component_views.translate_texts'
+TRANSLATE = 'djangopress.editor_v2.component_ops.translate_texts'
 
 
 def slider(texts):

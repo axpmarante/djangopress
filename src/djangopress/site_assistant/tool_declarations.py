@@ -315,7 +315,62 @@ REORDER_SECTIONS = types.FunctionDeclaration(
     ),
 )
 
+_SECTION = S(type=T.STRING, description='data-section name of the section holding the slider/gallery.')
+_COMPONENT = S(type=T.INTEGER, description='Which slider/gallery in that section, from 1 (default 1).')
+_IMAGE_REF = 'An image reference: lib:<id> from list_images/find_photos'
+
+LIST_COMPONENTS = types.FunctionDeclaration(
+    name='list_components',
+    description=('List the sliders, text sliders (testimonials) and galleries on the active page, with '
+                 'their section and a short label per item (numbered from 1). Read-only. Call it before '
+                 'changing one.'),
+)
+
+REORDER_ITEMS = types.FunctionDeclaration(
+    name='reorder_items',
+    description=('Reorder the items of a slider or gallery, in every language. No AI regeneration. '
+                 'order lists the CURRENT item numbers in the new order, e.g. [3, 1, 2] puts item 3 first.'),
+    parameters=S(type=T.OBJECT, properties={
+        'section': _SECTION, 'component': _COMPONENT,
+        'order': S(type=T.ARRAY, items=S(type=T.INTEGER), description='Every current item number exactly once.'),
+    }, required=['section', 'order']),
+)
+
+REPLACE_ITEM_IMAGE = types.FunctionDeclaration(
+    name='replace_item_image',
+    description='Replace the image of one slider/gallery item, in every language (alt text per language).',
+    parameters=S(type=T.OBJECT, properties={
+        'section': _SECTION, 'component': _COMPONENT,
+        'index': S(type=T.INTEGER, description='Item number, from 1.'),
+        'image': S(type=T.STRING, description=_IMAGE_REF + '.'),
+    }, required=['section', 'index', 'image']),
+)
+
+ADD_ITEM_IMAGES = types.FunctionDeclaration(
+    name='add_item_images',
+    description='Add images to a slider or gallery after an item, in every language.',
+    parameters=S(type=T.OBJECT, properties={
+        'section': _SECTION, 'component': _COMPONENT,
+        'after': S(type=T.INTEGER, description='Insert after this item number (default: the last).'),
+        'images': S(type=T.ARRAY, items=S(type=T.STRING), description=_IMAGE_REF + ', one per image.'),
+    }, required=['section', 'images']),
+)
+
+REMOVE_ITEM = types.FunctionDeclaration(
+    name='remove_item',
+    description='Remove one item from a slider or gallery, in every language.',
+    parameters=S(type=T.OBJECT, properties={
+        'section': _SECTION, 'component': _COMPONENT,
+        'index': S(type=T.INTEGER, description='Item number, from 1.'),
+    }, required=['section', 'index']),
+)
+
 PAGE_EDIT_TOOLS = [
+    LIST_COMPONENTS,
+    REORDER_ITEMS,
+    REPLACE_ITEM_IMAGE,
+    ADD_ITEM_IMAGES,
+    REMOVE_ITEM,
     READ_SECTION,
     INSERT_SECTION,
     REFINE_SECTION,
