@@ -1,7 +1,7 @@
 import { events } from '../lib/events.js';
 import { api } from '../lib/api.js';
 import { shortcuts } from '../lib/shortcuts.js';
-import { resolveSelector } from '../lib/dom.js';
+import { isRuntimeClass, resolveSelector } from '../lib/dom.js';
 
 // --- State ---
 let pending = new Map();   // key: "selector:type:attribute?" -> change
@@ -44,7 +44,9 @@ function applyToDOM(change) {
         if (change.format === 'html') el.innerHTML = change.value;   // toolbar formatting (cleaned on save)
         else el.textContent = change.value;
     } else if (change.type === 'classes') {
-        el.className = change.value;
+        // keep the editor/runtime state classes (ev2-selected, Splide is-active…)
+        const runtime = Array.from(el.classList).filter(isRuntimeClass);
+        el.className = [...runtime, ...String(change.value || '').split(/\s+/).filter(Boolean)].join(' ');
     } else if (change.type === 'attribute') {
         el.setAttribute(change.attribute, change.value);
     }
@@ -93,6 +95,7 @@ function undo() {
     const reversed = reverseChange(change);
     applyToDOM(reversed);
     redoStack.push(change);
+    events.emit('changes:applied', reversed);
 
     // Update pending map
     const key = changeKey(change);
@@ -116,6 +119,7 @@ function redo() {
     const change = redoStack.pop();
     applyToDOM(change);
     undoStack.push(change);
+    events.emit('changes:applied', change);
 
     // Update pending map
     const key = changeKey(change);

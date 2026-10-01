@@ -77,12 +77,14 @@ function spacingPx(token) {
     const arb = /^\[(.+)\]$/.exec(token);
     return arb ? lengthPx(arb[1]) : null;
 }
+// Tailwind's default spacing scale (no config on DjangoPress sites)
+const SPACING_STEPS = new Set(['0.5', '1', '1.5', '2', '2.5', '3', '3.5', '4', '5', '6', '7', '8', '9', '10', '11', '12', '14', '16',
+    '20', '24', '28', '32', '36', '40', '44', '48', '52', '56', '60', '64', '72', '80', '96']);
 function spacingToken(px) {
     if (px === 0) return '0';
     if (px === 1) return 'px';
-    const n = px / 4;
-    if (Number.isInteger(n) || Number.isInteger(n * 2) && n < 4) return String(n);
-    return `[${px}px]`;
+    const step = String(px / 4);
+    return SPACING_STEPS.has(step) ? step : `[${px}px]`;
 }
 function colorValue(token) {
     const m = /^\[(#[0-9a-fA-F]{3,8})\](?:\/(\d+))?$/.exec(token);
@@ -344,7 +346,11 @@ export function writeValue(list, prop, device, value, state = '', opts = {}) {
     } else {
         next.mobile = value;
     }
+    return writeValues(list, prop, next, state);
+}
 
+/** Set exact values per screen ({mobile, tablet, desktop}, null = unset) and return the new class list. */
+export function writeValues(list, prop, next, state = '') {
     // remove this property's classes (this state only); shorthands give back what they set elsewhere
     const removed = [];
     const expansions = [];

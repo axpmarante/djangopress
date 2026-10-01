@@ -5,6 +5,8 @@
  * while keeping all editing functionality intact.
  */
 
+import { events } from '../lib/events.js';
+
 const STORAGE_KEY = 'ev2-viewport';
 
 const VIEWPORTS = {
@@ -35,8 +37,20 @@ function apply(viewport) {
         btn.classList.toggle('active', btn.dataset.viewport === viewport);
     });
 
+    const changed = current !== viewport;
     current = viewport;
-    localStorage.setItem(STORAGE_KEY, viewport);
+    try { localStorage.setItem(STORAGE_KEY, viewport); } catch (_) {}
+    if (changed) events.emit('viewport:changed', viewport);
+}
+
+/** 'desktop' | 'tablet' | 'mobile' — the screen the Design panel edits. */
+export function getViewport() {
+    return current;
+}
+
+export function setViewport(viewport) {
+    if (!content || !VIEWPORTS.hasOwnProperty(viewport)) return;
+    apply(viewport);
 }
 
 export function init() {

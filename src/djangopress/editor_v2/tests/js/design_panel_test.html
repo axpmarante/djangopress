@@ -1,0 +1,67 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>running</title>
+<div class="editor-v2-content" id="host"></div>
+<div id="panel"></div>
+<pre id="out"></pre>
+<script type="module">
+import { events } from '../../static/editor_v2/js/lib/events.js';
+import { renderDesignPanel, setTokens } from '../../static/editor_v2/js/modules/design-panel.js';
+
+const fails = [];
+let passed = 0;
+const eq = (name, got, want) => {
+    if (JSON.stringify(got) === JSON.stringify(want)) passed++;
+    else fails.push(`${name}: got ${JSON.stringify(got)}, want ${JSON.stringify(want)}`);
+};
+const ok = (name, cond, detail = '') => { if (cond) passed++; else fails.push(`${name} ${detail}`); };
+
+try {
+    setTokens({
+        colors: [{ name: 'Primary', value: '#C42014' }, { name: 'Gold', value: '#E3A11C' }, { name: 'Text', value: '#14171B' }, { name: 'White', value: '#FFFFFF' }],
+        fonts: [{ role: 'Headings', family: 'Fraunces' }, { role: 'Body', family: 'Inter Tight' }],
+        spacing: { S: 40, M: 64, L: 104, XL: 152 },
+        buttonSizes: { S: [10, 18, 13], M: [14, 28, 15], L: [18, 36, 17] },
+    });
+    const host = document.getElementById('host');
+    host.innerHTML = await (await fetch('../fixtures/elements/panel.html')).text();
+    const panel = document.getElementById('panel');
+    const emitted = [];
+    events.on('change:classes', c => emitted.push(c));
+    const groups = () => Array.from(panel.querySelectorAll('.ev2-dp-group > summary')).map(s => s.firstChild.textContent.trim());
+    const click = sel => { const b = panel.querySelector(sel); if (!b) throw new Error('missing ' + sel); b.click(); };
+
+    // button: its groups, size L, hover colour, runtime class kept
+    const btn = document.getElementById('b');
+    renderDesignPanel(panel, btn);
+    eq('button groups', groups(), ['Button', 'Colours', 'Link', 'Spacing', 'Visibility & border', 'Advanced']);
+    click('[data-control="buttonSize"] [data-val="L"]');
+    const sized = emitted.at(-1)?.value || '';
+    ok('size L padding', /(^| )pt-\[18px\]( |$)/.test(sized) && /(^| )pb-\[18px\]( |$)/.test(sized) && / px-9( |$)/.test(' ' + sized + ' '), sized);
+    ok('runtime class kept', btn.classList.contains('ev2-selected'));
+    click('[data-hover="1"]');
+    click('[data-control="hoverFill"] [data-val="#E3A11C"]');
+    ok('hover colour', (emitted.at(-1)?.value || '').includes('hover:bg-[#E3A11C]'), emitted.at(-1)?.value);
+
+    // heading: More options count, size change then row reset
+    const h = document.getElementById('t');
+    const before = h.className;
+    renderDesignPanel(panel, h);
+    eq('heading more count', panel.querySelector('[data-more="typography"] .ev2-dp-count')?.textContent.trim(), '· 7');
+    const size = panel.querySelector('[data-control="fontSize"] input[type=range]');
+    size.value = 72; size.dispatchEvent(new Event('input', { bubbles: true })); size.dispatchEvent(new Event('change', { bubbles: true }));
+    ok('size written', h.className.includes('text-[72px]'), h.className);
+    click('[data-reset="fontSize"]');
+    eq('row reset', h.className, before);
+
+    // section: space top/bottom XL
+    const s = document.getElementById('hero');
+    renderDesignPanel(panel, s);
+    click('[data-control="padY"] [data-val="XL"]');
+    ok('section XL', s.className.includes('pt-[152px]') && s.className.includes('pb-[152px]') && !/(^| )py-20( |$)/.test(s.className), s.className);
+} catch (err) {
+    fails.push('crash: ' + err.message);
+}
+document.getElementById('out').textContent = fails.join('\n') || 'all good';
+document.title = fails.length ? `FAIL ${fails.length}` : `PASS ${passed}`;
+</script>

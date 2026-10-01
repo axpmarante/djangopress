@@ -3,7 +3,7 @@
 <title>running</title>
 <pre id="out"></pre>
 <script type="module">
-import { readValues, writeValue, classesOf } from '../../static/editor_v2/js/lib/class-model.js';
+import { readValues, writeValue, writeValues, classesOf } from '../../static/editor_v2/js/lib/class-model.js';
 
 const fails = [];
 let passed = 0;
@@ -45,6 +45,13 @@ try {
 
     // classesOf for Copy style
     eq('classesOf', classesOf(['py-4', 'md:pt-8', 'font-bold', 'text-[#fff]'], 'paddingTop'), ['py-4', 'md:pt-8']);
+    // only spacing steps that exist in Tailwind's scale; others arbitrary
+    eq('scale step', writeValue([], 'paddingTop', 'desktop', 152), ['pt-[152px]']);
+    eq('scale step exists', writeValue([], 'paddingTop', 'desktop', 160), ['pt-40']);
+    eq('half step', writeValue([], 'paddingTop', 'desktop', 14), ['pt-3.5']);
+    // exact per-screen values (Show on desktop/tablet/mobile)
+    eq('writeValues hide on mobile', writeValues(['flex', 'gap-4'], 'display', { mobile: 'hidden', tablet: 'flex', desktop: 'flex' }), ['hidden', 'md:flex', 'gap-4']);
+    eq('writeValues hide on tablet only', writeValues(['block'], 'display', { mobile: 'block', tablet: 'hidden', desktop: 'block' }), ['block', 'md:hidden', 'lg:block']);
 } catch (err) {
     fails.push('crash: ' + err.message);
 }
