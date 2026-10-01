@@ -126,3 +126,26 @@ class MultiPageTest(TestCase):
         for slug in self.pages:
             self.assertNotIn('horario', self.names(slug), slug)
             self.assertNotIn('horario', self.names(slug, 'en'), slug)
+
+    def test_out_of_steps_still_ends_with_the_model_s_summary(self):
+        from djangopress.site_assistant import services
+        service = AssistantService(self.session)
+        router = {'intents': ['page_edit'], 'needs_active_page': False, 'direct_response': None}
+        busy = calls(('read_section', {'section_name': 'hero', 'page': 'Início'}))
+        replies = [busy] * services.MAX_TOOL_ITERATIONS + [text('Mudei o que pedi. Resumo: nada ficou por fazer.')]
+        with mock.patch(ROUTER, return_value=router), \
+                mock.patch.object(service.llm, 'get_completion_with_tools', side_effect=replies) as llm:
+            result = service.handle_message('Lê tudo', user=self.user)
+        self.assertEqual(result['response'], 'Mudei o que pedi. Resumo: nada ficou por fazer.')
+        self.assertIsNone(llm.call_args.kwargs['tools'])          # the last call can't call tools
+
+    def test_out_of_steps_falls_back_to_the_report_when_the_summary_fails(self):
+        from djangopress.site_assistant import services
+        service = AssistantService(self.session)
+        router = {'intents': ['page_edit'], 'needs_active_page': False, 'direct_response': None}
+        busy = calls(('read_section', {'section_name': 'hero', 'page': 'Início'}))
+        replies = [busy] * services.MAX_TOOL_ITERATIONS + [RuntimeError('quota')]
+        with mock.patch(ROUTER, return_value=router), \
+                mock.patch.object(service.llm, 'get_completion_with_tools', side_effect=replies):
+            result = service.handle_message('Lê tudo', user=self.user)
+        self.assertIn('ran out of steps', result['response'])

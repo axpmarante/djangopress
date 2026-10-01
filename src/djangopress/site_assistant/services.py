@@ -343,9 +343,13 @@ class AssistantService:
 
             iteration += 1
 
-        # Max iterations reached — force a text response
+        # Max iterations reached: one last call without tools, so the reply is still a real summary.
         logger.warning('Max FC iterations reached (%d)', MAX_TOOL_ITERATIONS)
-        response_text = 'I ran out of steps before finishing.' + self._report(all_executed_actions)
+        response_text = self._final_summary(contents, system_instruction)
+        if response_text:
+            response_text += self._not_done_note(all_executed_actions)
+        else:
+            response_text = 'I ran out of steps before finishing.' + self._report(all_executed_actions)
         self.session.add_message('assistant', response_text, actions=all_executed_actions or None)
         self._auto_title(message)
         return {
@@ -354,6 +358,22 @@ class AssistantService:
             'steps': steps,
             'set_active_page': set_active_page,
         }
+
+    def _final_summary(self, contents, system_instruction):
+        """The model's closing reply when the step limit is hit; '' if it can't give one."""
+        from google.genai import types
+        note = types.Content(role='user', parts=[types.Part(text=(
+            'You have used all your steps; no more tools. Write your reply now: what you changed, what you did '
+            'NOT do (and that the user can ask you to continue), following the rules.'))])
+        try:
+            response = self.llm.get_completion_with_tools(
+                contents=contents + [note], system_instruction=system_instruction, tools=None,
+                tool_name=get_ai_model('assistant_executor'))
+            parts = response.candidates[0].content.parts or []
+        except Exception:
+            logger.exception('Closing summary failed')
+            return ''
+        return '\n'.join(p.text for p in parts if getattr(p, 'text', None) and not getattr(p, 'function_call', None)).strip()
 
     def _build_contents(self, message, reference_images=None):
         """Convert session history to Gemini contents format.
