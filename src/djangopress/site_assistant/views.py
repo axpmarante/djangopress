@@ -100,6 +100,11 @@ def chat_api(request):
     # Process message
     service = AssistantService(session)
     if replace_last:   # the operator edited their last message: it replaces that turn
+        from djangopress.site_assistant import changes
+        problem = changes.undo_for_edit(session, request.user)
+        if problem:
+            return JsonResponse({'success': False, 'error': problem}, status=409)
+        session.refresh_from_db()
         session.drop_last_turn()
     result = service.handle_message(message, user=request.user, reference_images=reference_images or None,
                                     run_id=run_id)
@@ -177,10 +182,14 @@ def undo_api(request, session_id):
         data = json.loads(request.body)
     except json.JSONDecodeError:
         return JsonResponse({'success': False, 'error': 'Invalid JSON'}, status=400)
-    result = changes.undo_turn(session, data.get('message_index'), request.user, force=bool(data.get('force')))
+    try:
+        result = changes.undo_turn(session, data.get('message_index'), request.user, force=bool(data.get('force')))
+    except Exception as e:      # e.g. a restored link points at something deleted since
+        return JsonResponse({'success': False, 'error': f'Could not undo: {e}'}, status=400)
     if result.get('error'):
         return JsonResponse({'success': False, 'error': result['error']}, status=400)
     if result['conflicts']:
         return JsonResponse({'success': False, 'conflicts': result['conflicts']}, status=409)
     session.refresh_from_db()
-    return JsonResponse({'success': True, 'undone': result['undone'], 'messages': session.messages})
+    return JsonResponse({'success': True, 'undone': result['undone'], 'notes': result.get('notes', []),
+                         'messages': session.messages})

@@ -578,7 +578,7 @@ class DynamicForm(models.Model):
     @staticmethod
     def _guess_type(name):
         lower = name.lower()
-        if 'email' in lower:
+        if lower in ('email', 'e-mail', 'e_mail', 'mail') or lower.endswith(('_email', '-email')):
             return 'email'
         if any(w in lower for w in ('phone', 'telefone', 'tel', 'telemovel')):
             return 'tel'
@@ -643,7 +643,7 @@ class DynamicForm(models.Model):
             value = data.get(name, '')
             if required and not value:
                 errors[name] = f'{field["label"]} is required.'
-            if value and field_type == 'email':
+            if value and field_type == 'email' and not isinstance(value, bool):
                 import re
                 if not re.match(r'^[^@]+@[^@]+\.[^@]+$', str(value)):
                     errors[name] = f'{field["label"]} must be a valid email.'

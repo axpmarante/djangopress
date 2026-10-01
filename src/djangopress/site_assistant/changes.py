@@ -86,13 +86,19 @@ class TurnChanges:
         self.items.append({'kind': 'global_section', 'model': _model_key(section), 'id': section.pk,
                            'label': section.name or section.key, 'version': version.version_number if version else None})
 
-    def snapshot(self, obj, label=''):
+    def snapshot(self, obj, label='', note=None):
         key = (_model_key(obj), obj.pk)
         if key in self._seen:
             return
+        fresh = type(obj).objects.filter(pk=obj.pk).first()   # not a cached copy (SiteSettings.load())
+        if fresh is None:
+            return
         self._seen.add(key)
-        self.items.append({'kind': 'object', 'model': _model_key(obj), 'id': obj.pk,
-                           'label': label or str(obj), 'before': _fields(obj)})
+        item = {'kind': 'object', 'model': _model_key(obj), 'id': obj.pk,
+                'label': label or str(obj), 'before': _fields(fresh)}
+        if note:
+            item['note'] = note
+        self.items.append(item)
 
     # --- after a change --------------------------------------------------
     def created(self, obj, label=''):
@@ -110,8 +116,18 @@ class TurnChanges:
                 item['after'] = _fingerprint(obj.html_content_i18n)
             elif item['kind'] == 'global_section' and obj is not None:
                 item['after'] = _fingerprint(obj.html_template_i18n)
-            elif item['kind'] in ('object', 'created'):
+            elif item['kind'] == 'object' and obj is not None:
+                # Keep only what the turn changed: undo then leaves later edits to other fields alone.
+                after = _fields(obj)
+                changed = [k for k, v in item['before'].items() if after.get(k) != v]
+                item['before'] = {k: item['before'][k] for k in changed}
+                item['after'] = {k: after.get(k) for k in changed}
+            elif item['kind'] == 'object':
+                item['after'] = None             # deleted during the turn: 'before' is the whole object
+            elif item['kind'] == 'created':
                 item['after'] = _fields(obj) if obj is not None else None
+        self.items = [i for i in self.items if not (i['kind'] == 'object' and i.get('after') is not None
+                                                    and not i['before'])]
         return self.items
 
 
@@ -141,10 +157,10 @@ def global_section_checkpoint(context, section):
         section.create_version(change_summary='Site Assistant edit')
 
 
-def snapshot(context, obj, label=''):
+def snapshot(context, obj, label='', note=None):
     tracker = (context or {}).get('changes')
     if tracker and obj is not None:
-        tracker.snapshot(obj, label)
+        tracker.snapshot(obj, label, note)
 
 
 def created(context, obj, label=''):
@@ -162,10 +178,27 @@ def _conflict(item):
         return obj is not None and _fingerprint(obj.html_content_i18n) != item.get('after')
     if item['kind'] == 'global_section':
         return obj is not None and _fingerprint(obj.html_template_i18n) != item.get('after')
-    if item['kind'] in ('object', 'created'):
+    if item['kind'] == 'object':
+        after = item.get('after')
         if obj is None:
-            return item['kind'] == 'object' and item.get('after') is not None
-        return _fields(obj) != item.get('after')
+            return after is not None
+        if after is None:                       # deleted by the turn, exists again now
+            return True
+        current = _fields(obj)
+        return any(current.get(k) != v for k, v in after.items())
+    if item['kind'] == 'created':
+        return obj is not None and _fields(obj) != item.get('after')
+    return False
+
+
+def _missing_history(item):
+    """A page/header whose pre-turn version was pruned can't be restored."""
+    obj = _get(item)
+    if item['kind'] == 'page' and obj is not None:
+        return not obj.versions.filter(version_number=item.get('version')).exists()
+    if item['kind'] == 'global_section' and obj is not None:
+        from djangopress.core.models import GlobalSectionVersion
+        return not GlobalSectionVersion.objects.filter(section=obj, version_number=item.get('version')).exists()
     return False
 
 
@@ -187,7 +220,7 @@ def _restore(item, user):
         model = apps.get_model(item['model'])
         if obj is None:                      # deleted during the turn: recreate with the same id
             obj = model(pk=item['id'])
-        for name, value in item['before'].items():
+        for name, value in item['before'].items():   # only the fields the turn changed
             setattr(obj, name, value)
         obj.save()
     elif kind == 'created' and obj is not None:
@@ -206,6 +239,12 @@ def undo_turn(session, message_index, user, force=False):
     if message.get('undone'):
         return {'undone': [], 'conflicts': [], 'error': 'Already undone'}
 
+    too_old = [item['label'] for item in items if _missing_history(item)]
+    if too_old:
+        return {'undone': [], 'conflicts': [],
+                'error': 'The history is too old to undo this (the saved version was cleaned up): ' + ', '.join(too_old)
+                         + '. Use the page history in the editor instead.'}
+
     conflicts = [item['label'] for item in items if _conflict(item)]
     if conflicts and not force:
         return {'undone': [], 'conflicts': conflicts}
@@ -216,8 +255,27 @@ def undo_turn(session, message_index, user, force=False):
         message['undone'] = True
         session.messages[message_index] = message
         labels = list(dict.fromkeys(item['label'] for item in items))
-        session.add_message('assistant', 'Undone: ' + ', '.join(labels))
-    return {'undone': labels, 'conflicts': []}
+        notes = [item['note'] for item in items if item.get('note')]
+        session.add_message('assistant', 'Undone: ' + ', '.join(labels) + ''.join(f' ({n})' for n in notes))
+    return {'undone': labels, 'conflicts': [], 'notes': notes}
+
+
+def undo_for_edit(session, user):
+    """Editing the last message replaces its turn: undo what that turn changed first.
+    Returns None when done (or nothing to undo), else a message for the operator."""
+    last_user = max((i for i, m in enumerate(session.messages) if m.get('role') == 'user'), default=None)
+    if last_user is None:
+        return None
+    for index in range(len(session.messages) - 1, last_user, -1):
+        msg = session.messages[index]
+        if msg.get('role') == 'assistant' and msg.get('changes') and not msg.get('undone'):
+            result = undo_turn(session, index, user)
+            if result.get('conflicts'):
+                return ('That reply\'s changes were edited since (' + ', '.join(result['conflicts'])
+                        + '), so it can\'t be replaced. Send a new message instead.')
+            if result.get('error'):
+                return result['error']
+    return None
 
 
 def last_turn_with_changes(session):

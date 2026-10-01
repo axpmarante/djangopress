@@ -12,13 +12,20 @@ def undo_last_change(params, context):
     index = changes.last_turn_with_changes(session) if session else None
     if index is None:
         return {'success': False, 'message': 'There is no change of mine to undo.'}
-    result = changes.undo_turn(session, index, context.get('user'), force=bool(params.get('force')))
+    force = bool(params.get('force'))
+    if force:
+        from djangopress.site_assistant.tools import _has_recent_confirmation
+        if not _has_recent_confirmation(context):
+            return {'success': False, 'message': ('BLOCKED: undoing over later edits needs the user to confirm. Tell them '
+                                                  'what would be lost and ask; call again with force=true only after they confirm.')}
+    result = changes.undo_turn(session, index, context.get('user'), force=force)
     if result.get('conflicts'):
         return {'success': False, 'message': 'Changed again since then: ' + ', '.join(result['conflicts'])
                 + '. Ask the user to confirm, then call undo_last_change with force=true.'}
     if result.get('error'):
         return {'success': False, 'message': result['error']}
-    return {'success': True, 'message': 'Undone: ' + ', '.join(result['undone'])}
+    notes = ''.join(f' Note: {n}.' for n in result.get('notes') or [])
+    return {'success': True, 'message': 'Undone: ' + ', '.join(result['undone']) + '.' + notes}
 
 
 def web_search(params, context):

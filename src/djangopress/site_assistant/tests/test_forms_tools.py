@@ -152,3 +152,11 @@ class UpdateFormToolTest(FormsTestCase):
         self.assertTrue(out['success'], out)
         form.refresh_from_db()
         self.assertEqual((form.name, form.notification_email, form.is_active), ('Contact', CLIENT, False))
+
+
+class EmailGuessTest(FormsTestCase):
+    def test_a_consent_checkbox_named_after_email_is_not_an_email_field(self):
+        form = DynamicForm(slug='n', fields_schema=['email', 'email_consent', 'receber_emails'])
+        types = {f['name']: f['type'] for f in form.schema_fields()}
+        self.assertEqual(types, {'email': 'email', 'email_consent': 'text', 'receber_emails': 'text'})
+        self.assertEqual(form.validate_submission({'email': 'a@b.pt', 'email_consent': True, 'receber_emails': True}), {})

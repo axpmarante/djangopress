@@ -160,3 +160,104 @@ class ChangeLogShapeTest(ChangesTestCase):
         self.assertEqual(data['changes'][0]['kind'], 'object', data)
         self.session.refresh_from_db()
         self.assertTrue(self.session.messages[data['message_index']]['changes'])
+
+
+class ReviewFixesTest(ChangesTestCase):
+    """Findings of the final branch review."""
+
+    def test_reorder_pages_works_inside_a_turn_and_undoes(self):
+        other = Page.objects.create(title_i18n={'pt': 'Outra'}, slug_i18n={'pt': 'outra'}, is_active=True, sort_order=5)
+        out = self.run_tool('reorder_pages', order=[{'page_id': other.pk, 'sort_order': 0},
+                                                   {'page_id': self.page.pk, 'sort_order': 1}])
+        self.assertTrue(out['success'], out)
+        other.refresh_from_db()
+        self.assertEqual(other.sort_order, 0)
+        changes.undo_turn(self.session, self.record_turn(), self.user)
+        other.refresh_from_db()
+        self.assertEqual(other.sort_order, 5)
+
+    def test_missing_checkpoint_is_an_error_not_a_silent_skip(self):
+        self.run_tool('update_element_styles', selector='section[data-section="hero"] > h1:nth-child(1)', new_classes='novo')
+        index = self.record_turn()
+        PageVersion.objects.filter(page=self.page, kind='checkpoint').delete()      # pruned by the version cap
+        result = changes.undo_turn(self.session, index, self.user, force=True)
+        self.assertIn('too old', result.get('error', ''))
+        self.session.refresh_from_db()
+        self.assertFalse(self.session.messages[index].get('undone'))
+
+    def test_settings_undo_only_touches_the_fields_the_turn_changed(self):
+        self.run_tool('update_settings', updates={'contact_phone': '+351 912 000 000'})
+        index = self.record_turn()
+        s = SiteSettings.load()
+        s.contact_email = 'novo@restaurante.pt'          # an unrelated edit made later
+        s.save()
+        result = changes.undo_turn(self.session, index, self.user)
+        self.assertFalse(result['conflicts'], result)
+        s = SiteSettings.objects.get()
+        self.assertEqual((s.contact_phone, s.contact_email), ('+351 289 000 000', 'novo@restaurante.pt'))
+
+    def test_settings_snapshot_reads_the_database_not_a_cached_copy(self):
+        SiteSettings.load()                                # cache it
+        SiteSettings.objects.update(contact_phone='+351 222 000 000')
+        self.run_tool('update_settings', updates={'contact_phone': '+351 912 000 000'})
+        changes.undo_turn(self.session, self.record_turn(), self.user)
+        self.assertEqual(SiteSettings.objects.get().contact_phone, '+351 222 000 000')
+
+    def test_forced_chat_undo_needs_the_user_to_confirm(self):
+        self.run_tool('update_settings', updates={'contact_phone': '+351 912 000 000'})
+        self.record_turn()
+        self.session.add_message('user', 'desfaz isso')
+        out = ToolRegistry.execute('undo_last_change', {'force': True}, {'session': self.session, 'user': self.user})
+        self.assertFalse(out['success'])
+        self.assertIn('confirm', out['message'].lower())
+        self.assertEqual(SiteSettings.objects.get().contact_phone, '+351 912 000 000')
+        self.session.add_message('user', 'sim, confirmo')
+        out = ToolRegistry.execute('undo_last_change', {'force': True}, {'session': self.session, 'user': self.user})
+        self.assertTrue(out['success'], out)
+
+    def test_editing_the_last_message_undoes_its_changes_first(self):
+        import json
+        self.run_tool('update_settings', updates={'contact_phone': '+351 912 000 000'})
+        self.record_turn()
+        self.client.force_login(self.user)
+        router = {'intents': [], 'needs_active_page': False, 'direct_response': 'Ok.'}
+        with mock.patch(ROUTER, return_value=router):
+            res = self.client.post('/site-assistant/api/chat/', data=json.dumps(
+                {'message': 'outra coisa', 'session_id': self.session.id, 'replace_last': True}),
+                content_type='application/json')
+        self.assertEqual(res.status_code, 200, res.content)
+        self.assertEqual(SiteSettings.objects.get().contact_phone, '+351 289 000 000')
+
+    def test_editing_is_refused_when_its_changes_were_edited_since(self):
+        import json
+        self.run_tool('update_settings', updates={'contact_phone': '+351 912 000 000'})
+        self.record_turn()
+        SiteSettings.objects.update(contact_phone='+351 933 000 000')
+        self.client.force_login(self.user)
+        res = self.client.post('/site-assistant/api/chat/', data=json.dumps(
+            {'message': 'outra coisa', 'session_id': self.session.id, 'replace_last': True}),
+            content_type='application/json')
+        self.assertEqual(res.status_code, 409)
+        self.assertEqual(SiteSettings.objects.get().contact_phone, '+351 933 000 000')
+
+    def test_undoing_a_page_delete_restores_its_menu_links(self):
+        item = MenuItem.objects.create(label_i18n={'pt': 'Início'}, page=self.page, sort_order=1)
+        self.session.add_message('user', 'sim')
+        out = self.run_tool('delete_page', page_id=self.page.pk)
+        self.assertTrue(out['success'], out)
+        result = changes.undo_turn(self.session, self.record_turn(), self.user)
+        self.assertTrue(Page.objects.filter(pk=self.page.pk).exists())
+        item.refresh_from_db()
+        self.assertEqual(item.page_id, self.page.pk)
+        self.assertTrue(any('history' in n for n in result['notes']), result)
+
+    def test_undoing_a_form_delete_says_submissions_are_gone(self):
+        from djangopress.core.models import DynamicForm, FormSubmission
+        DynamicForm.objects.all().delete()
+        form = DynamicForm.objects.create(name='Contacto', slug='contacto', fields_schema=[])
+        FormSubmission.objects.create(form=form, data={'a': 1})
+        self.session.add_message('user', 'sim')
+        self.run_tool('delete_form', slug='contacto')
+        result = changes.undo_turn(self.session, self.record_turn(), self.user)
+        self.assertTrue(DynamicForm.objects.filter(pk=form.pk).exists())
+        self.assertTrue(any('submission' in n for n in result['notes']), result)

@@ -413,9 +413,10 @@ function homeAssistant() {
                 if (err.name === 'AbortError') {
                     this.messages.push({ role: 'assistant', content: 'Stopped.', stopped: true });
                 } else {
-                    this.error = `${err.message}. Your message is back in the box — try again.`;
                     this.messages.pop();
                     this.draft = message;
+                    if (replaceLast && this.sessionId) await this.open(this.sessionId);  // the old turn is still there
+                    this.error = `${err.message}. Your message is back in the box — try again.`;
                 }
             } finally {
                 clearTimeout(this.stopTimer);

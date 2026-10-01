@@ -136,10 +136,20 @@ def track_before(tool_name, params, context):
         return
     if tool_name in ACTIVE_PAGE_TOOLS and context.get('active_page'):
         changes.page_checkpoint(context, context['active_page'])
-    elif tool_name in ('update_page_meta', 'delete_page'):
+    elif tool_name == 'update_page_meta':
         changes.snapshot(context, _obj('core.page', params.get('page_id')), 'Page settings')
+    elif tool_name == 'delete_page':
+        page = _obj('core.page', params.get('page_id'))
+        if page is not None:
+            from djangopress.core.models import MenuItem
+            # Menu links are SET_NULL on delete: snapshot them first so undo restores the page, then them.
+            for item in MenuItem.objects.filter(page=page):
+                changes.snapshot(context, item, 'Menu item')
+            changes.snapshot(context, page, page.default_title or 'Page',
+                             note="the page's version history can't be restored")
     elif tool_name == 'reorder_pages':
-        for pk in params.get('order') or []:
+        for entry in params.get('order') or []:
+            pk = entry.get('page_id') if isinstance(entry, dict) else entry
             changes.snapshot(context, _obj('core.page', pk), 'Page order')
     elif tool_name in ('update_menu_item', 'delete_menu_item'):
         changes.snapshot(context, _obj('core.menuitem', params.get('menu_item_id')), 'Menu item')
@@ -150,7 +160,10 @@ def track_before(tool_name, params, context):
         from djangopress.core.models import DynamicForm
         form = _obj('core.dynamicform', params.get('form_id')) or \
             DynamicForm.objects.filter(slug=params.get('slug') or '').first()
-        changes.snapshot(context, form, 'Form')
+        note = None
+        if tool_name == 'delete_form' and form is not None and form.submissions.exists():
+            note = f"its {form.submissions.count()} submission(s) were deleted with it and can't be restored"
+        changes.snapshot(context, form, 'Form', note)
     elif tool_name in ('refine_header', 'refine_footer'):
         from djangopress.core.models import GlobalSection
         key = 'main-header' if tool_name == 'refine_header' else 'main-footer'
