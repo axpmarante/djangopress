@@ -160,6 +160,7 @@ AI_MODEL_DEFAULTS = {
     'metadata': 'gemini-lite',
     'image_analysis': 'gemini-flash',
     'assistant_router': 'gemini-lite',
+    'refinement_routing': 'gemini-flash',
     'assistant_executor': 'gemini-flash',
     'consistency': 'gemini-flash',
     'design_guide': 'gemini-flash',
@@ -185,7 +186,7 @@ TASK_SETTINGS = {
     'generation': _DESIGN, 'refinement_page': _DESIGN, 'refinement_section': _DESIGN,
     'refinement_element': _DESIGN, 'header_footer': _DESIGN, 'design_guide': _DESIGN,
     'assistant_executor': {'temperature': 1.0, 'thinking_level': 'medium'},
-    'assistant_router': _LIGHT, 'metadata': _LIGHT, 'translation': _LIGHT,
+    'assistant_router': _LIGHT, 'refinement_routing': _LIGHT, 'metadata': _LIGHT, 'translation': _LIGHT,
     'consistency': _LIGHT, 'image_analysis': _LIGHT,
 }
 TIER_DEFAULT_THINKING = {'gemini-pro': 'high', 'gemini-flash': 'medium', 'gemini-lite': 'low'}

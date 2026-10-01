@@ -5,7 +5,7 @@ import re
 import time
 import logging
 
-from djangopress.ai.utils.llm_config import LLMBase
+from djangopress.ai.utils.llm_config import LLMBase, get_ai_model
 from . import tools as agent_tools
 from .prompts import build_system_prompt, build_user_prompt
 
@@ -29,7 +29,7 @@ class RefinementAgent:
 
     def handle(self, instruction, scope, target_name, page,
                conversation_history=None, multi_option=False,
-               mode='refine', insert_after=None):
+               mode='refine', insert_after=None, lang=None):
         """
         Main entry point. Analyze instruction and execute via tools.
 
@@ -55,7 +55,9 @@ class RefinementAgent:
         site_settings = SiteSettings.objects.first()
         default_language = site_settings.get_default_language() if site_settings else 'pt'
 
-        target_html = self._get_target_html(page, scope, target_name, default_language)
+        # Work on the language being edited (an empty copy shows the default).
+        edit_lang = lang if (lang and (page.html_content_i18n or {}).get(lang)) else default_language
+        target_html = self._get_target_html(page, scope, target_name, edit_lang)
 
         # Build conversation history string
         history_text = ''
@@ -79,6 +81,7 @@ class RefinementAgent:
             'conversation_history': conversation_history or [],
             'multi_option': multi_option,
             'default_language': default_language,
+            'lang': edit_lang,
         }
 
         # Build prompts
@@ -99,7 +102,7 @@ class RefinementAgent:
         iteration = 0
         while iteration < MAX_ITERATIONS:
             try:
-                response = self.llm.get_completion(messages, tool_name='gemini-flash')
+                response = self.llm.get_completion(messages, tool_name=get_ai_model('refinement_routing'))
                 raw_content = response.choices[0].message.content
             except Exception as e:
                 logger.exception('Agent LLM call failed at iteration %d', iteration)
@@ -151,8 +154,15 @@ class RefinementAgent:
             if has_response and final_result:
                 routing_ms = int((time.time() - t0) * 1000)
                 print(f"Agent: direct edit complete in {routing_ms}ms")
+                edited = context['target_html']
+                if scope == 'element':
+                    # The agent edits the parent section; the option is the element itself.
+                    from bs4 import BeautifulSoup
+                    element = BeautifulSoup(edited, 'html.parser').select_one(target_name)
+                    if element is not None:
+                        edited = str(element)
                 return {
-                    'options': [{'html': context['target_html']}],
+                    'options': [{'html': edited}],
                     'assistant_message': response_text or 'Applied the change directly.',
                     'routing_tier': 'direct_edit',
                     'routing_ms': routing_ms,
@@ -193,6 +203,7 @@ class RefinementAgent:
                 insert_after=insert_after,
                 instructions=instruction,
                 conversation_history=conversation_history,
+                lang=edit_lang,
             )
         elif scope == 'element':
             result = service.refine_element_only(
@@ -200,6 +211,7 @@ class RefinementAgent:
                 selector=target_name,
                 instructions=instruction,
                 conversation_history=conversation_history,
+                lang=edit_lang,
                 multi_option=multi_option,
             )
         else:
@@ -208,6 +220,7 @@ class RefinementAgent:
                 section_name=target_name,
                 instructions=instruction,
                 conversation_history=conversation_history,
+                lang=edit_lang,
                 multi_option=multi_option,
             )
 

@@ -1,6 +1,8 @@
 """Tool implementations for the Refinement Agent."""
 
 import re
+
+from djangopress.ai.utils.llm_config import get_ai_model
 from bs4 import BeautifulSoup
 
 
@@ -164,7 +166,8 @@ def apply_edits(params, context):
 
     llm = LLMBase()
     try:
-        response = llm.get_completion(messages, tool_name='gemini-flash')
+        task = 'refinement_element' if context.get('scope') == 'element' else 'refinement_section'
+        response = llm.get_completion(messages, tool_name=get_ai_model(task), json_output=True)
         raw = response.choices[0].message.content.strip()
     except Exception as e:
         return {'success': False, 'message': f'LLM call failed: {e}'}
@@ -203,7 +206,7 @@ def refine_with_ai(params, context):
     """Delegate to ContentGenerationService.refine_section_only() with agent-chosen params."""
     from djangopress.ai.services import ContentGenerationService
 
-    model = params.get('model', 'gemini-flash')
+    model = params.get('model') or get_ai_model('refinement_element' if context.get('scope') == 'element' else 'refinement_section')
     include_components = params.get('include_components', False)
     include_briefing = params.get('include_briefing', False)
     include_pages = params.get('include_pages', False)
@@ -225,6 +228,7 @@ def refine_with_ai(params, context):
             conversation_history=conversation_history,
             multi_option=multi_option,
             model_override=model,
+            lang=context.get('lang'),
             skip_component_selection=not include_components,
             skip_briefing=not include_briefing,
             skip_pages_list=not include_pages,
@@ -238,6 +242,7 @@ def refine_with_ai(params, context):
             conversation_history=conversation_history,
             multi_option=multi_option,
             model_override=model,
+            lang=context.get('lang'),
             skip_component_selection=not include_components,
             skip_briefing=not include_briefing,
             skip_pages_list=not include_pages,
