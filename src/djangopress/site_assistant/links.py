@@ -81,13 +81,14 @@ def build_links(text, actions, touched=None):
     text = text or ''
     pages = {p.pk: p for p in Page.objects.all()}
 
-    order = list(touched)
-    for a in actions:
-        if a.get('success'):
-            pk = (a.get('params') or {}).get('page_id') or a.get('page_id')
-            if isinstance(pk, int):
-                order.append(pk)
-    order += [p.pk for p in _mentioned_pages(text, pages.values())]
+    # Pages changed or named in the reply; pages the tools only looked at count when there are none.
+    order = list(touched) + [p.pk for p in _mentioned_pages(text, pages.values())]
+    if not order:
+        for a in actions:
+            if a.get('success'):
+                pk = (a.get('params') or {}).get('page_id') or a.get('page_id')
+                if isinstance(pk, int):
+                    order.append(pk)
 
     out = []
     for pk in dict.fromkeys(order):

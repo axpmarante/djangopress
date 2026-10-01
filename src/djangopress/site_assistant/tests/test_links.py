@@ -123,3 +123,11 @@ class LinksTest(TestCase):
         prompt = prompts.build_executor_prompt(self.session, prompts.build_router_snapshot(self.session))
         self.assertNotIn('provide values for ALL enabled languages', prompt)
         self.assertIn('ONE language', prompt)
+
+    def test_pages_only_looked_at_are_left_out_when_the_reply_has_a_main_page(self):
+        actions = [{'tool': 'get_page_info', 'success': True, 'params': {'page_id': self.book.pk}}]
+        out = self.by_label(links.build_links('Feito na **Início**.', actions))
+        self.assertIn('View Início', out)
+        self.assertNotIn('View Reservas', out)
+        out = self.by_label(links.build_links('Feito.', actions, touched={self.home.pk: 'hero'}))
+        self.assertNotIn('View Reservas', out)
