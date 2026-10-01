@@ -11,7 +11,7 @@
 import { events } from '../lib/events.js';
 import { api } from '../lib/api.js';
 import { getCssSelector, isRuntimeClass } from '../lib/dom.js';
-import { DEVICES, PROPERTIES, classesOf, readValues, writeValue, writeValues } from '../lib/class-model.js';
+import { DEVICES, classesOf, readValues, writeValue, writeValues } from '../lib/class-model.js';
 import { elementType } from '../lib/element-types.js';
 import { COMMON, PANELS, icon } from '../lib/design-controls.js';
 import { composeBgImage, extractYouTubeId, hexToRgb, parseBgImage, rgbToHex, videoDisplayUrl } from '../lib/background.js';
@@ -69,11 +69,21 @@ let picking = null;                 // { target, container } while "Copy style f
 const notices = new Map();          // selector → message shown in the actions block
 const similarCounts = new Map();    // "tag|classes" → { count, pages }
 
-// classes the panel sets that aren't class-model properties (icon, hover lift, dividers…)
-const RAW_PANEL_CLASSES = new Set(
-    Object.values(PANELS).flat().concat([COMMON]).flatMap(g => [...g.rows, ...(g.more || [])])
-        .flatMap(r => (r.kind === 'classChoice' ? r.options.flatMap(o => o[2]) : r.kind === 'classToggles' ? r.items.flatMap(i => i[2]) : [])));
-const isPanelClass = cls => RAW_PANEL_CLASSES.has(cls) || Object.keys(PROPERTIES).some(p => classesOf([cls], p).length);
+// What "Copy style" takes for each element type: the properties its panel shows (layout
+// properties such as display stay with the element) and the raw classes of its option rows.
+const KIND_PROPS = {
+    fontFamily: ['fontFamily'], buttonSize: ['paddingTop', 'paddingBottom', 'paddingX', 'fontSize'],
+    buttonStyle: ['bgColor', 'borderWidth', 'borderColor', 'textColor', 'textDecoration'], buttonColor: ['bgColor', 'textColor'],
+    padY: ['paddingTop', 'paddingBottom'], box: ['marginTop', 'marginBottom', 'marginX', 'paddingTop', 'paddingBottom', 'paddingX'],
+    focal: ['objectPosition'], textTone: ['textColor'],
+};
+function copyRules(type) {
+    const rows = [...PANELS[type], COMMON].flatMap(g => [...g.rows, ...(g.more || [])]);
+    const props = new Set(rows.flatMap(r => [...(r.prop ? [r.prop] : []), ...(KIND_PROPS[r.kind] || []), ...(r.items || []).map(i => i.prop).filter(Boolean)]));
+    props.delete('display');
+    const raw = new Set(rows.flatMap(r => (r.kind === 'classChoice' ? r.options.flatMap(o => o[2]) : r.kind === 'classToggles' ? r.items.flatMap(i => i[2]) : [])));
+    return cls => raw.has(cls) || [...props].some(p => classesOf([cls], p).length);
+}
 
 const realList = el => Array.from(el.classList).filter(c => !isRuntimeClass(c));
 
@@ -95,13 +105,22 @@ function subscribe() {
     });
 }
 
+/** The sidebar shows another tab in the shared container: stop acting on it. */
+export function unmountDesignPanel() {
+    mount = null;
+    picking = null;
+    pendingOld = null;
+    document.body.classList.remove('ev2-dp-picking');
+}
+
 export function renderDesignPanel(container, el) {
     subscribe();
     if (picking && el !== picking.target) {
         const { target } = picking;
         picking = null;
         document.body.classList.remove('ev2-dp-picking');
-        copyStyle(el, target);
+        if (elementType(el) === elementType(target)) copyStyle(el, target);
+        else notices.set(getCssSelector(target) || '', `That is a ${TYPE_NAMES[elementType(el)].toLowerCase()}; pick another ${TYPE_NAMES[elementType(target)].toLowerCase()} to copy its style.`);
         renderDesignPanel(container, target);
         events.emit('selection:request', target);
         return;
@@ -122,7 +141,8 @@ export function renderDesignPanel(container, el) {
 }
 
 function rerender() {
-    if (!mount || !mount.container.isConnected) return;
+    // only while the Design tab still shows this panel (the container is shared with other tabs)
+    if (!mount || !mount.container.isConnected || !mount.container.querySelector(':scope > .ev2-dp')) return;
     const scroller = mount.container.closest('.ev2-sidebar-body, .ev2-tab-content') || mount.container;
     const top = scroller.scrollTop;
     render();
@@ -311,8 +331,9 @@ function countSimilar() {
 
 /** Take the panel's properties (and the panel's raw classes) from `source`; other classes stay. */
 function copyStyle(source, target) {
-    const keep = realList(target).filter(c => !isPanelClass(c));
-    const take = realList(source).filter(isPanelClass);
+    const isStyle = copyRules(elementType(target));
+    const keep = realList(target).filter(c => !isStyle(c));
+    const take = realList(source).filter(isStyle);
     const selector = getCssSelector(target) || '';
     const oldValue = realList(target).join(' ');
     const runtime = Array.from(target.classList).filter(isRuntimeClass);
@@ -762,10 +783,12 @@ async function applySimilar() {
     }
     if (getPendingCount() > 0 && !(await saveNow())) return;
     try {
-        const res = await api.post('/restyle-similar/', { tag: mount.el.tagName.toLowerCase(), classes: initial, add, remove });
+        const pageId = (window.EDITOR_CONFIG || {}).pageId;
+        const res = await api.post('/restyle-similar/', { tag: mount.el.tagName.toLowerCase(), classes: initial, add, remove, page_id: pageId });
         const pages = res.changed.length;
         const label = `Applied to ${res.total} ${PLURAL[mount.type]} on ${pages} page${pages === 1 ? '' : 's'}`;
-        try { sessionStorage.setItem('ev2-toast-pending', JSON.stringify({ label })); } catch (_) {}
+        // the toast's Undo reverts this page's latest checkpoint: offer it only when this page was changed
+        try { sessionStorage.setItem('ev2-toast-pending', JSON.stringify({ label, noUndoToast: !res.current_page_changed })); } catch (_) {}
         window.location.reload();
     } catch (err) {
         alertDialog({ title: 'Could not apply it to the others', message: err.message || '', tone: 'error' });
@@ -839,9 +862,10 @@ function onChange(e) {
 function bind(container) {
     if (container.dataset.ev2DpBound) return;
     container.dataset.ev2DpBound = '1';
-    container.addEventListener('click', e => { if (mount && mount.container === container) onClick(e); });
-    container.addEventListener('input', e => { if (mount && mount.container === container) onInput(e); });
-    container.addEventListener('change', e => { if (mount && mount.container === container) onChange(e); });
+    const ours = e => mount && mount.container === container && e.target.closest('.ev2-dp');
+    container.addEventListener('click', e => { if (ours(e)) onClick(e); });
+    container.addEventListener('input', e => { if (ours(e)) onInput(e); });
+    container.addEventListener('change', e => { if (ours(e)) onChange(e); });
     container.addEventListener('toggle', e => {
         const d = e.target;
         if (d.matches?.('details.ev2-dp-more')) d.open ? moreOpen.add(d.dataset.moreKey) : moreOpen.delete(d.dataset.moreKey);

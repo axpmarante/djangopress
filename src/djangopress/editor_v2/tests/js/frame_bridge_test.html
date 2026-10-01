@@ -1,0 +1,43 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>running</title>
+<header><a href="/pt/carta/" id="nav">Carta</a></header>
+<section data-section="hero" id="hero">
+  <div class="splide"><div class="splide__track"><ul class="splide__list">
+    <li class="splide__slide splide__slide--clone" id="clone"><p>Dois</p></li>
+    <li class="splide__slide" id="one"><p>Um</p></li>
+    <li class="splide__slide" id="two"><p>Dois</p></li>
+  </ul></div></div>
+  <a href="/pt/reservas/" id="cta">Reservar</a>
+</section>
+<pre id="out"></pre>
+<script type="module">
+import { getCssSelector } from '../../static/editor_v2/js/lib/dom.js';
+const fails = [];
+let passed = 0;
+const eq = (name, got, want) => {
+    if (JSON.stringify(got) === JSON.stringify(want)) passed++;
+    else fails.push(`${name}: got ${JSON.stringify(got)}, want ${JSON.stringify(want)}`);
+};
+const wait = ms => new Promise(r => setTimeout(r, ms));
+try {
+    await import('../../static/editor_v2/js/frame-bridge.js');
+    const one = document.getElementById('one');
+    const selector = getCssSelector(one);
+    window.postMessage({ ev2: 'apply', changes: [{ selector, type: 'classes', value: 'splide__slide changed' }] }, location.origin);
+    await wait(100);
+    eq('edit lands on the real slide', one.classList.contains('changed'), true);
+    eq('not on the clone', document.getElementById('clone').classList.contains('changed'), false);
+
+    const nav = new MouseEvent('click', { bubbles: true, cancelable: true });
+    document.getElementById('nav').dispatchEvent(nav);
+    eq('header link does not navigate', nav.defaultPrevented, true);
+    const cta = new MouseEvent('click', { bubbles: true, cancelable: true });
+    document.getElementById('cta').dispatchEvent(cta);
+    eq('section link does not navigate', cta.defaultPrevented, true);
+} catch (err) {
+    fails.push('crash: ' + err.message);
+}
+document.getElementById('out').textContent = fails.join('\n') || 'all good';
+document.title = fails.length ? `FAIL ${fails.length}` : `PASS ${passed}`;
+</script>

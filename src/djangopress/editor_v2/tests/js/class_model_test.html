@@ -52,6 +52,23 @@ try {
     // exact per-screen values (Show on desktop/tablet/mobile)
     eq('writeValues hide on mobile', writeValues(['flex', 'gap-4'], 'display', { mobile: 'hidden', tablet: 'flex', desktop: 'flex' }), ['hidden', 'md:flex', 'gap-4']);
     eq('writeValues hide on tablet only', writeValues(['block'], 'display', { mobile: 'block', tablet: 'hidden', desktop: 'block' }), ['block', 'md:hidden', 'lg:block']);
+    // review fixes — shorthand expansion never duplicates a more specific class
+    eq('p-4 pb-2 keeps pb-2', writeValue(['p-4', 'pb-2'], 'paddingTop', 'desktop', 32), ['pt-8', 'px-4', 'pb-2']);
+    eq('py-4 pb-8 keeps pb-8', writeValue(['py-4', 'pb-8'], 'paddingTop', 'desktop', 32), ['pt-8', 'pb-8']);
+    // classes the model couldn't read used to stay and win
+    eq('sm: folded', writeValue(['text-base', 'sm:text-xl'], 'fontSize', 'desktop', 30), ['text-base', 'md:text-[30px]']);
+    eq('xl: folded', writeValue(['text-4xl', 'xl:text-7xl'], 'fontSize', 'desktop', 50), ['text-4xl', 'lg:text-[50px]']);
+    eq('max-w-screen', writeValue(['max-w-screen-xl', 'mx-auto'], 'maxWidth', 'desktop', 896), ['max-w-[896px]', 'mx-auto']);
+    eq('clamp size', writeValue(['text-[clamp(2rem,5vw,4rem)]'], 'fontSize', 'desktop', 40), ['text-[40px]']);
+    eq('rem radius', readValues(['rounded-[1rem]'], 'borderRadius').desktop, 16);
+    eq('leading-7', writeValue(['leading-7'], 'lineHeight', 'desktop', 'tight'), ['leading-tight']);
+    eq('arbitrary shadow', writeValue(['shadow-[0_2px_4px_rgba(0,0,0,.2)]'], 'shadow', 'desktop', 'md'), ['shadow-md']);
+    eq('important', writeValue(['!text-[20px]'], 'fontSize', 'desktop', 30), ['text-[30px]']);
+    eq('font with fallback', readValues(["font-['Fraunces',serif]"], 'fontFamily').desktop, 'Fraunces');
+    eq('w-64', readValues(['w-64'], 'width').desktop, '256px');
+    eq('max-w rem', readValues(['max-w-[80rem]'], 'maxWidth').desktop, 1280);
+    // list items keep their display
+    eq('list-item', writeValues([], 'display', { mobile: 'hidden', tablet: 'list-item', desktop: 'list-item' }), ['hidden', 'md:list-item']);
 } catch (err) {
     fails.push('crash: ' + err.message);
 }

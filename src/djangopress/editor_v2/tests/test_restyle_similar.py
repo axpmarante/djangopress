@@ -79,3 +79,11 @@ class RestyleSimilarTest(TestCase):
     def test_staff_only(self):
         self.client.logout()
         self.assertNotEqual(self.post(add=['x']).status_code, 200)
+
+    def test_says_whether_the_current_page_changed(self):
+        res = self.post(add=['rounded-full'], page_id=self.a.pk)
+        self.assertIs(res.json()['current_page_changed'], True)
+        other = Page.objects.create(title_i18n={'pt': 'Vazia'}, slug_i18n={'pt': 'vazia'}, is_active=True,
+                                    html_content_i18n={'pt': '<section data-section="x" id="x"><p>x</p></section>'})
+        res = self.post(add=['shadow-lg'], page_id=other.pk)
+        self.assertIs(res.json()['current_page_changed'], False)

@@ -6,7 +6,7 @@
 <pre id="out"></pre>
 <script type="module">
 import { events } from '../../static/editor_v2/js/lib/events.js';
-import { renderDesignPanel, setTokens } from '../../static/editor_v2/js/modules/design-panel.js';
+import { renderDesignPanel, setTokens, unmountDesignPanel } from '../../static/editor_v2/js/modules/design-panel.js';
 
 const fails = [];
 let passed = 0;
@@ -74,6 +74,33 @@ try {
     click('[data-control="textAlign"] [data-val="center"]');
     click('[data-act="reset-element"]');
     eq('reset element', p.className, original);
+    // leaving the Design tab: the panel must stop acting on the shared container
+    const linkA = document.getElementById('b2');
+    renderDesignPanel(panel, linkA);
+    const hrefBefore = linkA.getAttribute('href');
+    unmountDesignPanel();
+    panel.innerHTML = '<div class="content-tab"><input data-attr="href" value="/other/"></div>';   // what the Content tab renders
+    const input = panel.querySelector('input');
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+    eq('no write after leaving the tab', linkA.getAttribute('href'), hrefBefore);
+    events.emit('changes:applied', { selector: 'section[data-section="hero"] > div:nth-child(1) > a:nth-child(4)' });
+    events.emit('viewport:changed', 'mobile');
+    ok('content tab not replaced', !!panel.querySelector('.content-tab'));
+
+    // copy style: same type only, layout classes (display, gap) stay
+    renderDesignPanel(panel, document.getElementById('t'));
+    click('[data-act="copy-style"]');
+    const headingBefore = document.getElementById('t').className;
+    renderDesignPanel(panel, btn);                      // a button is not a heading
+    eq('copy refused across types', document.getElementById('t').className, headingBefore);
+    const iconBtn = document.createElement('a');
+    iconBtn.id = 'b3'; iconBtn.href = '/x/'; iconBtn.className = 'inline-flex items-center gap-2 px-3 py-1 bg-[#14171B] text-white';
+    iconBtn.textContent = 'Icon';
+    btn.after(iconBtn);
+    renderDesignPanel(panel, iconBtn);
+    click('[data-act="copy-style"]');
+    renderDesignPanel(panel, document.getElementById('b2'));
+    ok('layout kept on copy', iconBtn.classList.contains('inline-flex') && iconBtn.classList.contains('items-center') && iconBtn.classList.contains('gap-2'), iconBtn.className);
 } catch (err) {
     fails.push('crash: ' + err.message);
 }

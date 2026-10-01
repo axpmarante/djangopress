@@ -116,7 +116,7 @@
       .ev2-hidden-device { position: relative; opacity: .4; background-image: repeating-linear-gradient(135deg, rgba(37,99,235,.12) 0 6px, transparent 6px 12px) !important; }
       .ev2-hidden-device::after { content: attr(data-hidden-note); position: absolute; top: 4px; right: 4px; z-index: 50; background: #1e293b; color: #fff; font: 600 10.5px system-ui, sans-serif; padding: 3px 6px; border-radius: 4px; }
     </style>
-    <script type="module" src="{% static 'editor_v2/js/frame-bridge.js' %}?v=42"></script>
+    <script type="module" src="{% static 'editor_v2/js/frame-bridge.js' %}?v=43"></script>
     {% endif %}
     {% if edit_mode == 'v2' %}
     <script>
@@ -131,7 +131,7 @@
         apiBase: '/editor-v2/api',
       };
     </script>
-    <script type="module" src="{% static 'editor_v2/js/editor.js' %}?v=44"></script>
+    <script type="module" src="{% static 'editor_v2/js/editor.js' %}?v=45"></script>
     {% endif %}
     {% block extra_js %}{% endblock %}
     {% include "partials/cookie_consent.html" %}

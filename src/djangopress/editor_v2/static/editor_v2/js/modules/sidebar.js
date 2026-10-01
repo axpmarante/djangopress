@@ -5,7 +5,7 @@ import { moveSection, canMoveSection } from '../lib/structural.js';
 import { insertAfterSection } from './section-inserter.js';
 import { findComponent } from '../lib/components.js';
 import { prependComponentCard } from './component-panel.js';
-import { renderDesignPanel } from './design-panel.js';
+import { renderDesignPanel, unmountDesignPanel } from './design-panel.js';
 
 let activeTab = 'content';
 let selectedEl = null;
@@ -426,6 +426,7 @@ function onTreeClick(e) {
 }
 
 function renderActiveTab() {
+    if (activeTab !== 'design') unmountDesignPanel();
     if (activeTab === 'content') renderContentTab();
     else if (activeTab === 'design') renderDesignTab();
     else if (activeTab === 'structure') renderStructureTab();

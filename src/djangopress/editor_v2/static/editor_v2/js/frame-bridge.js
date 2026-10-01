@@ -6,7 +6,7 @@
  * Elements hidden on this screen by a visibility class are shown hatched so
  * they stay selectable.
  */
-import { getCssSelector, isRuntimeClass } from './lib/dom.js';
+import { getCssSelector, isRuntimeClass, resolveSelector } from './lib/dom.js';
 import { readValues } from './lib/class-model.js';
 
 const parent = window.parent;
@@ -15,7 +15,8 @@ const deviceLabel = () => (window.innerWidth < 768 ? 'mobile' : window.innerWidt
 let selected = null;
 
 function find(selector) {
-    try { return selector ? document.querySelector(selector) : null; } catch (_) { return null; }
+    // same resolution as the editor: nth-child steps skip runtime clones (Splide, marquee)
+    try { return selector ? resolveSelector(selector) : null; } catch (_) { return null; }
 }
 
 function apply(change) {
@@ -72,14 +73,16 @@ window.addEventListener('message', e => {
     }
 });
 
+// Nothing in the preview navigates (a page without ?ev2_frame can't be framed); clicks on
+// page content select that element in the editor.
 document.addEventListener('click', e => {
-    const el = e.target.closest('[data-section] *, [data-section]');
-    if (!el) return;
     e.preventDefault();
     e.stopPropagation();
-    const selector = getCssSelector(el);
+    const el = e.target.closest('[data-section] *, [data-section]');
+    const selector = el ? getCssSelector(el) : null;
     if (selector) send({ ev2: 'clicked', selector });
 }, true);
+document.addEventListener('submit', e => { e.preventDefault(); e.stopPropagation(); }, true);
 
 window.addEventListener('resize', markHidden);
 markHidden();

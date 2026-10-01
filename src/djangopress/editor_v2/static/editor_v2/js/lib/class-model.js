@@ -20,8 +20,11 @@ export const DEVICES = ['mobile', 'tablet', 'desktop'];
 
 const SCREEN_VARIANTS = {
     '': { screens: ['mobile', 'tablet', 'desktop'], rank: 0 },
+    'sm': { screens: ['tablet', 'desktop'], rank: 0.5 },     // ≥640: folded into tablet+desktop
     'md': { screens: ['tablet', 'desktop'], rank: 1 },
     'lg': { screens: ['desktop'], rank: 2 },
+    'xl': { screens: ['desktop'], rank: 2.5 },               // ≥1280 / ≥1536: folded into desktop
+    '2xl': { screens: ['desktop'], rank: 2.6 },
     'max-lg': { screens: ['mobile', 'tablet'], rank: 3 },
     'md:max-lg': { screens: ['tablet'], rank: 4 },
     'max-md': { screens: ['mobile'], rank: 5 },
@@ -66,7 +69,7 @@ const OBJECT_POS = { center: '50% 50%', top: '50% 0%', bottom: '50% 100%', left:
 
 /** Arbitrary value inside [ ]: "40px" → 40, "2.5rem" → 40. */
 function lengthPx(raw) {
-    const m = /^(-?\d*\.?\d+)(px|rem)?$/.exec(raw);
+    const m = /^(-?\d*\.?\d+)(px|rem)?$/.exec(String(raw));
     if (!m) return null;
     return m[2] === 'rem' ? Number(m[1]) * 16 : Number(m[1]);
 }
@@ -106,6 +109,10 @@ function colorToken(value) {
     return base + suffix;
 }
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+/** A class of a property whose value we can't read: never shown, but removed when the property is written. */
+const UNKNOWN = Object.freeze({ unknown: true });
+const SIDE_RE = /^(t|b|l|r|s|e|x|y|tl|tr|bl|br|ss|se|es|ee)-/;
+const SCREEN_W = { sm: 640, md: 768, lg: 1024, xl: 1280, '2xl': 1536 };
 
 // ---- properties ---------------------------------------------------------------
 // A family: { prefix, parse(rest) → value|null, write(value) → rest|null, spec, covers? }.
@@ -137,9 +144,11 @@ export const PROPERTIES = {
             const [size] = rest.split('/');
             if (size in FONT_SIZES) return FONT_SIZES[size];
             const arb = /^\[(?:length:)?(.+)\]$/.exec(size);
-            return arb ? lengthPx(arb[1]) : null;
+            if (!arb) return null;
+            if (/^(clamp|calc|var|min|max)\(/.test(arb[1])) return arb[1];
+            return lengthPx(arb[1]);
         },
-        write: v => `[${v}px]`,
+        write: v => (typeof v === 'number' ? `[${v}px]` : `[${v}]`),
     }] },
     textColor: { families: [{ prefix: 'text', spec: 0, parse: colorValue, write: colorToken }] },
     bgColor: { families: [{ prefix: 'bg', spec: 0, parse: colorValue, write: colorToken }] },
@@ -160,18 +169,19 @@ export const PROPERTIES = {
         prefix: 'font', spec: 0,
         parse: r => {
             if (['sans', 'serif', 'mono'].includes(r)) return r;
-            const m = /^\[(?:family-name:)?'?([^'\]]+)'?\]$/.exec(r);
+            const m = /^\[(?:family-name:)?'?([^',\]]+)'?(?:,[^\]]*)?\]$/.exec(r);
             return m && !/^\d+$/.test(m[1]) ? m[1].replace(/_/g, ' ') : null;
         },
         write: v => (['sans', 'serif', 'mono'].includes(v) ? v : `['${String(v).replace(/ /g, '_')}']`),
     }] },
     lineHeight: { families: [{
         prefix: 'leading', spec: 0,
-        parse: r => (['none', 'tight', 'snug', 'normal', 'relaxed', 'loose'].includes(r) ? r : (/^\[(.+)\]$/.exec(r) || [])[1] ?? null),
+        owns: true,
+        parse: r => (['none', 'tight', 'snug', 'normal', 'relaxed', 'loose'].includes(r) ? r : /^(3|4|5|6|7|8|9|10)$/.test(r) ? `${Number(r) * 4}px` : (/^\[(.+)\]$/.exec(r) || [])[1] ?? null),
         write: v => (['none', 'tight', 'snug', 'normal', 'relaxed', 'loose'].includes(v) ? v : `[${v}]`),
     }] },
     letterSpacing: { families: [{
-        prefix: 'tracking', spec: 0,
+        prefix: 'tracking', spec: 0, owns: true,
         parse: r => (r in TRACKING ? TRACKING[r] : (/^\[(-?\d*\.?\d+)em\]$/.exec(r) || [])[1] !== undefined ? Number(/^\[(-?\d*\.?\d+)em\]$/.exec(r)[1]) : null),
         write: v => Object.keys(TRACKING).find(k => TRACKING[k] === v) ?? `[${v}em]`,
     }] },
@@ -182,36 +192,46 @@ export const PROPERTIES = {
     textShadow: { families: [{ exact: true, parse: u => (/^\[text-shadow:(.+)\]$/.exec(u) || [])[1]?.replace(/_/g, ' ') ?? null, write: v => (v === 'none' ? null : `[text-shadow:${String(v).replace(/ /g, '_')}]`) }] },
     maxWidth: { families: [{
         prefix: 'max-w', spec: 0,
-        parse: r => (r in MAX_W ? MAX_W[r] : ['none', 'full', 'prose'].includes(r) ? r : (/^\[(\d+)px\]$/.exec(r) || [])[1] ? Number(/^\[(\d+)px\]$/.exec(r)[1]) : null),
+        owns: true,
+        parse: r => {
+            if (r in MAX_W) return MAX_W[r];
+            if (['none', 'full', 'prose'].includes(r)) return r;
+            const screen = /^screen-(sm|md|lg|xl|2xl)$/.exec(r);
+            if (screen) return SCREEN_W[screen[1]];
+            const arb = /^\[(.+)\]$/.exec(r);
+            return arb ? lengthPx(arb[1]) : null;
+        },
         write: v => (typeof v === 'number' ? `[${v}px]` : v),
     }] },
     borderRadius: { families: [
         { exact: true, parse: u => (u === 'rounded' ? 4 : null), write: v => (v === 4 ? 'rounded' : null) },
         { prefix: 'rounded', spec: 0,
-          parse: r => (r in RADIUS ? RADIUS[r] : (/^\[(\d+)px\]$/.exec(r) || [])[1] ? Number(/^\[(\d+)px\]$/.exec(r)[1]) : null),
+          owns: true,
+          parse: r => (r in RADIUS ? RADIUS[r] : /^\[(.+)\]$/.test(r) ? lengthPx(/^\[(.+)\]$/.exec(r)[1]) : null),
           write: v => (v === 'full' ? 'full' : v === 0 ? 'none' : `[${v}px]`) },
     ] },
     shadow: { families: [
         { exact: true, parse: u => (u === 'shadow' ? 'default' : null), write: v => (v === 'default' ? 'shadow' : null) },
-        { prefix: 'shadow', spec: 0, parse: r => (['sm', 'md', 'lg', 'xl', '2xl', 'inner', 'none'].includes(r) ? r : null), write: v => v },
+        { prefix: 'shadow', spec: 0, owns: true, parse: r => (['sm', 'md', 'lg', 'xl', '2xl', 'inner', 'none'].includes(r) || /^\[.+\]$/.test(r) ? r : null), write: v => v },
     ] },
     opacity: { families: [{
-        prefix: 'opacity', spec: 0,
+        prefix: 'opacity', spec: 0, owns: true,
         parse: r => (/^\d+$/.test(r) ? Number(r) : (/^\[(0?\.\d+|1)\]$/.exec(r) || [])[1] ? Math.round(Number(/^\[(0?\.\d+|1)\]$/.exec(r)[1]) * 100) : null),
         write: v => (v % 5 === 0 ? String(v) : `[${v / 100}]`),
     }] },
-    display: { families: [enumFamily({ block: 'block', 'inline-block': 'inline-block', inline: 'inline', flex: 'flex', 'inline-flex': 'inline-flex', grid: 'grid', 'inline-grid': 'inline-grid', hidden: 'hidden', contents: 'contents' })] },
-    gridCols: { families: [{ prefix: 'grid-cols', spec: 0, parse: r => (/^\d+$/.test(r) ? Number(r) : r === 'none' ? 'none' : null), write: v => String(v) }] },
+    display: { families: [enumFamily({ block: 'block', 'inline-block': 'inline-block', inline: 'inline', flex: 'flex', 'inline-flex': 'inline-flex', grid: 'grid', 'inline-grid': 'inline-grid', hidden: 'hidden', contents: 'contents',
+        'list-item': 'list-item', table: 'table', 'table-row': 'table-row', 'table-cell': 'table-cell', 'flow-root': 'flow-root' })] },
+    gridCols: { families: [{ prefix: 'grid-cols', spec: 0, owns: true, parse: r => (/^\d+$/.test(r) ? Number(r) : r === 'none' ? 'none' : null), write: v => String(v) }] },
     alignItems: { families: [enumFamily({ 'items-start': 'start', 'items-center': 'center', 'items-end': 'end', 'items-stretch': 'stretch', 'items-baseline': 'baseline' })] },
     justifyContent: { families: [enumFamily({ 'justify-start': 'start', 'justify-center': 'center', 'justify-end': 'end', 'justify-between': 'between', 'justify-around': 'around', 'justify-evenly': 'evenly' })] },
     width: { families: [{
-        prefix: 'w', spec: 0,
-        parse: r => (r === 'full' ? 'full' : r === 'auto' ? 'auto' : (/^\[(\d+(?:\.\d+)?)%\]$/.exec(r) || [])[1] ? `${/^\[(\d+(?:\.\d+)?)%\]$/.exec(r)[1]}%`
+        prefix: 'w', spec: 0, owns: true,
+        parse: r => (r === 'full' ? 'full' : r === 'auto' ? 'auto' : /^\d+(\.5)?$/.test(r) ? `${Number(r) * 4}px` : (/^\[(\d+(?:\.\d+)?)%\]$/.exec(r) || [])[1] ? `${/^\[(\d+(?:\.\d+)?)%\]$/.exec(r)[1]}%`
             : /^\d+\/\d+$/.test(r) ? `${Math.round(r.split('/')[0] / r.split('/')[1] * 1000) / 10}%` : (/^\[(\d+)px\]$/.exec(r) || [])[1] ? `${/^\[(\d+)px\]$/.exec(r)[1]}px` : null),
         write: v => (v === 'full' || v === 'auto' ? v : `[${v}]`),
     }] },
     aspectRatio: { families: [{
-        prefix: 'aspect', spec: 0,
+        prefix: 'aspect', spec: 0, owns: true,
         parse: r => ({ auto: 'auto', square: '1/1', video: '16/9' }[r] ?? (/^\[(\d+\/\d+)\]$/.exec(r) || [])[1] ?? null),
         write: v => (v === 'auto' ? 'auto' : v === '1/1' ? 'square' : v === '16/9' ? 'video' : `[${v}]`),
     }] },
@@ -222,7 +242,7 @@ export const PROPERTIES = {
         write: v => (Object.keys(OBJECT_POS).find(k => OBJECT_POS[k] === v) ?? `[${String(v).replace(' ', '_')}]`),
     }] },
     minHeight: { families: [{
-        prefix: 'min-h', spec: 0,
+        prefix: 'min-h', spec: 0, owns: true,
         parse: r => (r === 'screen' ? '100vh' : r === '0' ? 'auto' : r === 'full' ? '100%' : (/^\[(.+)\]$/.exec(r) || [])[1] ?? null),
         write: v => (v === 'auto' ? '0' : v === '100vh' ? 'screen' : v === '100%' ? 'full' : `[${v}]`),
     }] },
@@ -243,6 +263,7 @@ function match(cls, prop) {
     const variant = parseVariants(variants);
     if (!variant) return null;
     let util = utility, negative = false;
+    if (util.startsWith('!')) util = util.slice(1);            // important modifier: same property
     if (util.startsWith('-')) { negative = true; util = util.slice(1); }
     for (const family of PROPERTIES[prop].families) {
         let value = null;
@@ -255,6 +276,12 @@ function match(cls, prop) {
             if (value !== null && negative) value = -value;
         }
         if (value !== null && value !== undefined) return { value, variant, family, spec: family.spec || 0 };
+    }
+    // an owned prefix we couldn't read (max-w-[min(90vw,60rem)], leading-[1.1em]…): still this property's class
+    for (const family of PROPERTIES[prop].families) {
+        if (family.owns && !negative && util.startsWith(family.prefix + '-') && !SIDE_RE.test(util.slice(family.prefix.length + 1))) {
+            return { value: UNKNOWN, variant, family, spec: family.spec || 0 };
+        }
     }
     return null;
 }
@@ -269,7 +296,7 @@ export function readValues(list, prop, state = '') {
     const best = {};
     list.forEach((cls, index) => {
         const m = match(cls, prop);
-        if (!m || m.variant.state !== state) return;
+        if (!m || m.variant.state !== state || m.value === UNKNOWN) return;
         const { screens, rank } = SCREEN_VARIANTS[m.variant.screen];
         for (const device of screens) {
             const cur = best[device];
@@ -362,6 +389,11 @@ export function writeValues(list, prop, next, state = '') {
         if (insertAt < 0) insertAt = kept.length;
         removed.push({ cls, m });
         for (const other of m.family.covers || []) {
+            const overridden = list.some(c => {
+                const o = match(c, other);
+                return o && o.variant.screen === m.variant.screen && o.variant.state === state && o.spec > m.spec;
+            });
+            if (overridden || m.value === UNKNOWN) continue;
             const fam = writingFamily(other);
             const c = writeClass(other, fam, m.variant.screen, state, m.value);
             if (c) expansions.push(c);

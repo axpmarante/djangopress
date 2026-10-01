@@ -2749,4 +2749,7 @@ def restyle_similar(request):
 
     done = restyle.apply(match, add=add, remove=remove, include_globals=include_globals, checkpoint=checkpoint)
     changed = [{'label': r['label'], 'count': r['count']} for r in done]
-    return JsonResponse({'success': True, 'changed': changed, 'total': sum(r['count'] for r in done)})
+    page_id = data.get('page_id')
+    current = any(r['kind'] == 'page' and r['obj'].pk == page_id for r in done)
+    return JsonResponse({'success': True, 'changed': changed, 'total': sum(r['count'] for r in done),
+                         'current_page_changed': current})
