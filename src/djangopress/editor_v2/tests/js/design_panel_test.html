@@ -14,6 +14,7 @@ const eq = (name, got, want) => {
     if (JSON.stringify(got) === JSON.stringify(want)) passed++;
     else fails.push(`${name}: got ${JSON.stringify(got)}, want ${JSON.stringify(want)}`);
 };
+const realClasses = el => Array.from(el.classList).filter(c => !c.startsWith('ev2-'));
 const ok = (name, cond, detail = '') => { if (cond) passed++; else fails.push(`${name} ${detail}`); };
 
 try {
@@ -59,6 +60,20 @@ try {
     renderDesignPanel(panel, s);
     click('[data-control="padY"] [data-val="XL"]');
     ok('section XL', s.className.includes('pt-[152px]') && s.className.includes('pb-[152px]') && !/(^| )py-20( |$)/.test(s.className), s.className);
+    // Copy style: only the panel's properties; js-track stays
+    renderDesignPanel(panel, btn);
+    click('[data-act="copy-style"]');
+    renderDesignPanel(panel, document.getElementById('b2'));   // the next element clicked
+    eq('copy style', realClasses(btn).sort(), ['border', 'border-[#14171B]', 'hover:underline', 'inline-flex', 'js-track', 'px-4', 'py-2', 'rounded-full', 'text-[#14171B]'].sort());
+
+    // Reset element
+    const p = document.getElementById('p');
+    const original = p.className;
+    renderDesignPanel(panel, p);
+    click('[data-control="fontWeight"] [data-val="700"]');
+    click('[data-control="textAlign"] [data-val="center"]');
+    click('[data-act="reset-element"]');
+    eq('reset element', p.className, original);
 } catch (err) {
     fails.push('crash: ' + err.message);
 }

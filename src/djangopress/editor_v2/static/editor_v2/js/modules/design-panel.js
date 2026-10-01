@@ -11,12 +11,13 @@
 import { events } from '../lib/events.js';
 import { api } from '../lib/api.js';
 import { getCssSelector, isRuntimeClass } from '../lib/dom.js';
-import { DEVICES, classesOf, readValues, writeValue, writeValues } from '../lib/class-model.js';
+import { DEVICES, PROPERTIES, classesOf, readValues, writeValue, writeValues } from '../lib/class-model.js';
 import { elementType } from '../lib/element-types.js';
 import { COMMON, PANELS, icon } from '../lib/design-controls.js';
 import { composeBgImage, extractYouTubeId, hexToRgb, parseBgImage, rgbToHex, videoDisplayUrl } from '../lib/background.js';
 import { alertDialog } from '../lib/dialog.js';
 import { getViewport, setViewport } from './viewport.js';
+import { getPendingCount, saveNow } from './changes.js';
 
 const TYPE_NAMES = { section: 'Section', container: 'Container', button: 'Button', link: 'Link', heading: 'Heading', text: 'Text', image: 'Image', other: 'Element' };
 const TYPE_ICONS = {
@@ -64,6 +65,15 @@ const moreOpen = new Set();
 let mount = null;                   // { container, el, selector, type, hover }
 let pendingOld = null;              // class string before a slider drag started
 let subscribed = false;
+let picking = null;                 // { target, container } while "Copy style from…" waits for a click
+const notices = new Map();          // selector → message shown in the actions block
+const similarCounts = new Map();    // "tag|classes" → { count, pages }
+
+// classes the panel sets that aren't class-model properties (icon, hover lift, dividers…)
+const RAW_PANEL_CLASSES = new Set(
+    Object.values(PANELS).flat().concat([COMMON]).flatMap(g => [...g.rows, ...(g.more || [])])
+        .flatMap(r => (r.kind === 'classChoice' ? r.options.flatMap(o => o[2]) : r.kind === 'classToggles' ? r.items.flatMap(i => i[2]) : [])));
+const isPanelClass = cls => RAW_PANEL_CLASSES.has(cls) || Object.keys(PROPERTIES).some(p => classesOf([cls], p).length);
 
 const realList = el => Array.from(el.classList).filter(c => !isRuntimeClass(c));
 
@@ -71,6 +81,14 @@ function subscribe() {
     if (subscribed) return;
     subscribed = true;
     events.on('viewport:changed', () => rerender());
+    document.addEventListener('keydown', e => {
+        if (e.key === 'Escape' && picking) {
+            picking = null;
+            document.body.classList.remove('ev2-dp-picking');
+            if (mount) notices.set(mount.selector, '');
+            rerender();
+        }
+    });
     events.on('changes:applied', change => { if (mount && change.selector === mount.selector) rerender(); });
     events.on('change:attribute', change => {   // e.g. the image picker set a new background
         if (mount && !mount.emitting && change.selector === mount.selector) rerender();
@@ -79,6 +97,15 @@ function subscribe() {
 
 export function renderDesignPanel(container, el) {
     subscribe();
+    if (picking && el !== picking.target) {
+        const { target } = picking;
+        picking = null;
+        document.body.classList.remove('ev2-dp-picking');
+        copyStyle(el, target);
+        renderDesignPanel(container, target);
+        events.emit('selection:request', target);
+        return;
+    }
     const selector = getCssSelector(el) || '';
     if (!mount || mount.el !== el) pendingOld = null;
     mount = { container, el, selector, type: elementType(el), hover: mount && mount.el === el ? mount.hover : false };
@@ -238,12 +265,61 @@ function render() {
             <div class="ev2-dp-note${dev === 'desktop' ? '' : ' is-device'}">${deviceNote}</div>
           </div>
           ${groups.map(g => renderGroup(g)).join('')}
+          ${renderActions()}
           <details class="ev2-dp-group" data-group="advanced"><summary>Advanced</summary><div class="ev2-dp-body">
             <span class="ev2-dp-meta">Tailwind classes. Edit them directly for anything the controls don't cover.</span>
             <textarea class="ev2-dp-classes" spellcheck="false" aria-label="CSS classes">${esc(realList(el).join(' '))}</textarea>
           </div></details>
         </div>`;
     bind(container);
+    countSimilar();
+}
+
+const PLURAL = { section: 'sections', container: 'grids', button: 'buttons', link: 'links', heading: 'headings', text: 'texts', image: 'images', other: 'elements' };
+
+function similarKey() {
+    return `${mount.el.tagName.toLowerCase()}|${(initialClasses.get(mount.selector) || []).join(' ')}`;
+}
+
+function renderActions() {
+    const notice = notices.get(mount.selector);
+    const known = similarCounts.get(similarKey());
+    const hint = known
+        ? (known.count > 1 ? `${known.count} ${PLURAL[mount.type]} with this style on ${known.pages} page${known.pages === 1 ? '' : 's'} · one Undo per page reverts it`
+            : 'No other element has exactly this style')
+        : 'Counting similar elements…';
+    return `<div class="ev2-dp-actions">
+        <div class="ev2-dp-actions-line">
+          <button type="button" class="ev2-dp-btn" data-act="apply-similar"${known && known.count <= 1 ? ' disabled' : ''}>Apply to all similar</button>
+          <button type="button" class="ev2-dp-btn" data-act="copy-style">${picking ? 'Click an element…' : 'Copy style from…'}</button>
+          <button type="button" class="ev2-dp-btn" data-act="reset-element">Reset this element</button>
+        </div>
+        <span class="ev2-dp-meta" data-role="similar">${hint}</span>
+        ${notice ? `<p class="ev2-dp-notice">${esc(notice)}</p>` : ''}
+      </div>`;
+}
+
+function countSimilar() {
+    const key = similarKey();
+    if (similarCounts.has(key) || !(initialClasses.get(mount.selector) || []).length) return;
+    const [tag, classes] = key.split('|');
+    api.get('/restyle-similar/', { tag, classes }).then(res => {
+        similarCounts.set(key, { count: res.count || 0, pages: res.pages || 0 });
+        if (mount && similarKey() === key) rerender();
+    }).catch(() => similarCounts.set(key, { count: 0, pages: 0 }));
+}
+
+/** Take the panel's properties (and the panel's raw classes) from `source`; other classes stay. */
+function copyStyle(source, target) {
+    const keep = realList(target).filter(c => !isPanelClass(c));
+    const take = realList(source).filter(isPanelClass);
+    const selector = getCssSelector(target) || '';
+    const oldValue = realList(target).join(' ');
+    const runtime = Array.from(target.classList).filter(isRuntimeClass);
+    target.className = [...runtime, ...keep, ...take].join(' ');
+    const value = [...keep, ...take].join(' ');
+    if (value !== oldValue) events.emit('change:classes', { type: 'classes', selector, value, oldValue });
+    notices.set(selector, `Copied the style of “${(source.textContent || source.tagName).trim().slice(0, 30)}”.`);
 }
 
 function renderGroup(g) {
@@ -636,6 +712,24 @@ function onClick(e) {
 
 function runAction(act) {
     const el = mount.el;
+    if (act === 'copy-style') {
+        picking = picking ? null : { target: el };
+        document.body.classList.toggle('ev2-dp-picking', !!picking);
+        notices.set(mount.selector, picking ? `Click another ${TYPE_NAMES[mount.type].toLowerCase()} to copy its style. Esc cancels.` : '');
+        rerender();
+        return;
+    }
+    if (act === 'reset-element') {
+        setClasses(initialClasses.get(mount.selector) || []);
+        const attrs = initialAttrs.get(mount.selector) || {};
+        for (const [attr, value] of Object.entries(attrs)) {
+            if ((el.getAttribute(attr) || null) !== (value || null)) emitAttr(attr, value || '');
+        }
+        notices.set(mount.selector, 'Back to how it was when the page was opened.');
+        rerender();
+        return;
+    }
+    if (act === 'apply-similar') { applySimilar(); return; }
     if (act === 'replace-image') { events.emit('image-picker:open'); return; }
     if (act === 'bg-image') { events.emit('image-picker:open', { mode: 'background' }); return; }
     if (act === 'bg-image-remove') {
@@ -653,6 +747,28 @@ function runAction(act) {
     if (act === 'video-set') {
         const url = mount.container.querySelector('[data-video-url]')?.value.trim();
         if (url) setVideo(url);
+    }
+}
+
+async function applySimilar() {
+    const initial = initialClasses.get(mount.selector) || [];
+    const current = realList(mount.el);
+    const add = current.filter(c => !initial.includes(c));
+    const remove = initial.filter(c => !current.includes(c));
+    if (!add.length && !remove.length) {
+        notices.set(mount.selector, 'Change this element first; the same change is then applied to the others.');
+        rerender();
+        return;
+    }
+    if (getPendingCount() > 0 && !(await saveNow())) return;
+    try {
+        const res = await api.post('/restyle-similar/', { tag: mount.el.tagName.toLowerCase(), classes: initial, add, remove });
+        const pages = res.changed.length;
+        const label = `Applied to ${res.total} ${PLURAL[mount.type]} on ${pages} page${pages === 1 ? '' : 's'}`;
+        try { sessionStorage.setItem('ev2-toast-pending', JSON.stringify({ label })); } catch (_) {}
+        window.location.reload();
+    } catch (err) {
+        alertDialog({ title: 'Could not apply it to the others', message: err.message || '', tone: 'error' });
     }
 }
 
