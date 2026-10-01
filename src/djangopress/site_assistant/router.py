@@ -90,7 +90,7 @@ class Router:
         ]
 
         try:
-            response = llm.get_completion(messages, tool_name=get_ai_model('assistant_router'))
+            response = llm.get_completion(messages, tool_name=get_ai_model('assistant_router'), json_output=True)
             raw = response.choices[0].message.content.strip()
 
             # Parse JSON from response (handle markdown code blocks)

@@ -104,12 +104,21 @@ def refine_section(params, context):
     )
 
     refined_html = result.get('options', [{}])[0].get('html', '')
-    if refined_html:
-        PageService.save_section_html(page, section_name, refined_html)
+    if not refined_html:
+        return {'success': False, 'message': 'The AI returned no section'}
+
+    from djangopress.editor_v2 import ai_apply
+    exists = f'data-section="{section_name}"' in (page.html_content_i18n or {}).get(_default_lang(), '')
+    if exists:
+        applied = ai_apply.apply_section_html(page, refined_html, _default_lang(), section_name=section_name,
+                                              user=context.get('user'))
+    else:  # a new section is added at the end of the page
+        applied = ai_apply.apply_section_html(page, refined_html, _default_lang(), mode='insert',
+                                              insert_after=_last_section(page), user=context.get('user'))
 
     return {
         'success': True,
-        'message': f'Refined section "{section_name}" with AI',
+        'message': f'Refined section "{applied["section_name"]}" with AI' + _languages_note(applied),
         'assistant_message': result.get('assistant_message', ''),
     }
 
@@ -139,11 +148,33 @@ def refine_page(params, context):
     )
 
     page.refresh_from_db()
-    if 'html_content_i18n' in result:
-        page.html_content_i18n = result['html_content_i18n']
-        page.save()
+    html = (result.get('html_content_i18n') or {}).get(_default_lang())
+    if not html:
+        return {'success': False, 'message': 'The AI returned no page'}
+    from djangopress.editor_v2 import ai_apply
+    applied = ai_apply.apply_page_html(page, html, _default_lang(), user=context.get('user'))
+    return {'success': True, 'message': 'Refined entire page with AI' + _languages_note(applied)}
 
-    return {'success': True, 'message': 'Refined entire page with AI'}
+
+def _default_lang():
+    from djangopress.core.models import SiteSettings
+    settings = SiteSettings.load()
+    return settings.get_default_language() if settings else 'pt'
+
+
+def _last_section(page):
+    from bs4 import BeautifulSoup
+    sections = BeautifulSoup((page.html_content_i18n or {}).get(_default_lang(), ''), 'html.parser').find_all('section')
+    return sections[-1].get('data-section') if sections else None
+
+
+def _languages_note(applied):
+    note = ''
+    if applied.get('translated_languages'):
+        note += f" (translated to {', '.join(applied['translated_languages'])})"
+    if applied.get('untranslated_languages'):
+        note += f" (not translated: {', '.join(applied['untranslated_languages'])})"
+    return note
 
 
 PAGE_TOOLS = {
