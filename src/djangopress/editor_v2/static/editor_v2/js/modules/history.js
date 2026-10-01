@@ -7,6 +7,7 @@ import { events } from '../lib/events.js';
 import { api } from '../lib/api.js';
 import { $ } from '../lib/dom.js';
 import { getPendingCount } from './changes.js';
+import { alertDialog } from '../lib/dialog.js';
 
 const config = () => window.EDITOR_CONFIG || {};
 let state = { undo: null, redo: null };
@@ -45,15 +46,18 @@ async function run(direction) {
     const expectedVersion = state[direction]?.version_number;
     try {
         const res = await api.post(`/${direction}/`, { ...body(), expected_version: expectedVersion });
-        if (!res.success) { alert(res.error || `${direction} failed`); return; }
+        if (!res.success) { alertDialog({ title: `Couldn't ${direction}`, message: res.error || '', tone: 'error' }); return; }
         try { sessionStorage.setItem('ev2-toast-pending', JSON.stringify({ label: `${direction === 'undo' ? 'Undone' : 'Redone'}: ${res.label}`, noUndoToast: true })); } catch (_) {}
         window.location.reload();
-    } catch (err) { alert(err.message || `${direction} failed`); }
+    } catch (err) { alertDialog({ title: `Couldn't ${direction}`, message: err.message || '', tone: 'error' }); }
 }
 
 /** Entry point for the topbar buttons and the toast's Undo link: block on unsaved edits first. */
 function runFromUi(direction) {
-    if (getPendingCount() > 0) { alert('Save or discard your changes first.'); return; }
+    if (getPendingCount() > 0) {
+        alertDialog({ title: 'Unsaved changes', message: 'Save or discard your changes first.', tone: 'warning' });
+        return;
+    }
     run(direction);
 }
 

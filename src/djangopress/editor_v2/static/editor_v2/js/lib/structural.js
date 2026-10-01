@@ -7,6 +7,7 @@
 import { api } from './api.js';
 import { events } from './events.js';
 import { isRuntimeInjected, resolveSelector } from './dom.js';
+import { alertDialog, confirmDialog } from './dialog.js';
 import { getPendingCount, saveNow } from '../modules/changes.js';
 
 const AFTER_RELOAD_KEY = 'ev2-after-reload';
@@ -34,15 +35,16 @@ async function run(endpoint, payload, afterState, label) {
     if (getPendingCount() > 0 && !(await saveNow())) return null;
     try {
         const res = await api.post(endpoint, body(payload));
-        if (!res.success) { alert(res.error || 'Operation failed'); return null; }
+        if (!res.success) { alertDialog({ title: 'That didn\'t work', message: res.error || 'The operation failed.', tone: 'error' }); return null; }
         if (res.moved === false) return res; // edge no-op: nothing changed
         if (res.skipped_languages && res.skipped_languages.length) {
-            alert(`Applied, but not in: ${res.skipped_languages.join(', ')} (element not found there).`);
+            await alertDialog({ title: 'Done, with one gap', tone: 'warning',
+                message: `Not applied in ${res.skipped_languages.join(', ').toUpperCase()}: that part of the page is different there.` });
         }
         reloadWith(afterState ? afterState(res) : null, res.label || label);
         return res;
     } catch (err) {
-        alert('Operation failed: ' + (err.message || err));
+        alertDialog({ title: 'That didn\'t work', message: String(err.message || err), tone: 'error' });
         return null;
     }
 }
@@ -69,13 +71,17 @@ export function moveSection(name, direction) {
         () => ({ selector: `section[data-section="${name}"]` }), 'Moved section');
 }
 
-export function removeElement(selector) {
-    if (!confirm('Remove this element? This can be undone via version history.')) return Promise.resolve(null);
+export async function removeElement(selector) {
+    const ok = await confirmDialog({ title: 'Remove this element?', danger: true, confirmLabel: 'Remove',
+        message: 'It is removed in every language. You can bring it back with Undo or from the version history.' });
+    if (!ok) return null;
     return run('/remove-element/', { selector }, null, 'Removed element');
 }
 
-export function removeSection(name) {
-    if (!confirm(`Remove section "${name}"? This can be undone via version history.`)) return Promise.resolve(null);
+export async function removeSection(name) {
+    const ok = await confirmDialog({ title: `Remove the section "${name}"?`, danger: true, confirmLabel: 'Remove section',
+        message: 'It is removed in every language. You can bring it back with Undo or from the version history.' });
+    if (!ok) return null;
     return run('/remove-section/', { section_name: name }, null, 'Removed section');
 }
 

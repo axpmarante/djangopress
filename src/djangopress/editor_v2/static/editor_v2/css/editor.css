@@ -2777,3 +2777,139 @@ body.ev2-version-preview .editor-v2-content {
 .ev2-comp-status { font-size: 11px; color: var(--ev2-text-secondary); min-height: 14px; margin-top: 6px; }
 .ev2-comp-num input, .ev2-comp-num select { font: inherit; font-size: 12px; color: var(--ev2-text); border: 1px solid var(--ev2-border); border-radius: 4px; padding: 3px 6px; background: var(--ev2-bg); }
 .ev2-comp-row-actions .ev2-btn-sm[disabled] { opacity: .4; cursor: default; }
+
+/* --------------------------------------------------------------------------
+   Dialogs (lib/dialog.js) — confirm / alert / prompt
+   -------------------------------------------------------------------------- */
+.ev2-dialog {
+  position: fixed;
+  inset: 0;
+  z-index: 10020;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  font-family: var(--ev2-font);
+  color: var(--ev2-text);
+}
+
+.ev2-dialog-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+  backdrop-filter: blur(2px);
+  opacity: 0;
+  transition: opacity 0.16s ease;
+}
+
+.ev2-dialog-panel {
+  position: relative;
+  width: 420px;
+  max-width: 100%;
+  background: var(--ev2-bg);
+  border: 1px solid var(--ev2-border);
+  border-radius: var(--ev2-radius-xl);
+  box-shadow: var(--ev2-shadow-xl);
+  padding: 22px 22px 18px;
+  opacity: 0;
+  transform: translateY(8px) scale(0.98);
+  transition: opacity 0.16s ease, transform 0.16s ease;
+}
+
+.ev2-dialog.is-open .ev2-dialog-backdrop { opacity: 1; }
+.ev2-dialog.is-open .ev2-dialog-panel { opacity: 1; transform: none; }
+
+.ev2-dialog-head {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+}
+
+.ev2-dialog-icon {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 999px;
+  background: var(--ev2-primary-light);
+  color: var(--ev2-primary);
+}
+
+.ev2-dialog--danger .ev2-dialog-icon,
+.ev2-dialog--error .ev2-dialog-icon { background: #fef2f2; color: #dc2626; }
+.ev2-dialog--warning .ev2-dialog-icon { background: #fffbeb; color: #d97706; }
+
+.ev2-dialog-text { min-width: 0; padding-top: 2px; }
+
+.ev2-dialog-title {
+  margin: 0;
+  font-family: var(--ev2-font);
+  letter-spacing: normal;
+  text-transform: none;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--ev2-text);
+  overflow-wrap: anywhere;
+}
+
+.ev2-dialog-message {
+  margin: 6px 0 0;
+  font-family: var(--ev2-font);
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ev2-text-muted);
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+
+.ev2-dialog-input {
+  display: block;
+  width: 100%;
+  margin-top: 16px;
+  box-sizing: border-box;
+}
+
+.ev2-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 20px;
+}
+
+.ev2-dialog-btn {
+  appearance: none;
+  border-radius: var(--ev2-radius);
+  padding: 8px 16px;
+  font: 600 13px/1.2 var(--ev2-font);
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: var(--ev2-transition);
+}
+
+.ev2-dialog-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--ev2-primary-alpha);
+}
+
+.ev2-dialog-btn--ghost {
+  background: var(--ev2-bg);
+  border-color: var(--ev2-border);
+  color: var(--ev2-text-secondary);
+  font-weight: 500;
+}
+
+.ev2-dialog-btn--ghost:hover { background: var(--ev2-bg-hover); border-color: var(--ev2-border-dark); }
+
+.ev2-dialog-btn--confirm { background: var(--ev2-primary); color: #fff; }
+.ev2-dialog-btn--confirm:hover { background: var(--ev2-primary-hover); }
+
+.ev2-dialog--danger .ev2-dialog-btn--confirm { background: #dc2626; }
+.ev2-dialog--danger .ev2-dialog-btn--confirm:hover { background: #b91c1c; }
+.ev2-dialog--danger .ev2-dialog-btn--confirm:focus-visible { box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.25); }
+
+@media (prefers-reduced-motion: reduce) {
+  .ev2-dialog-backdrop, .ev2-dialog-panel { transition: none; }
+}

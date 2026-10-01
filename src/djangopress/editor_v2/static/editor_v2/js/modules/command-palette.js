@@ -3,6 +3,7 @@ import { shortcuts } from '../lib/shortcuts.js';
 import { getSelected } from './selection.js';
 import { getCssSelector } from '../lib/dom.js';
 import { duplicateElement, moveElement, removeElement } from '../lib/structural.js';
+import { alertDialog } from '../lib/dialog.js';
 
 let paletteEl, inputEl, resultsEl, backdropEl;
 let selectedIndex = 0;
@@ -11,7 +12,7 @@ let filtered = [];
 function sel() {
   const el = getSelected();
   const s = el ? getCssSelector(el) : null;
-  if (!s) alert('Select an element inside a section first.');
+  if (!s) alertDialog({ title: 'Select an element first', message: 'Click an element inside a section, then run the command again.' });
   return s;
 }
 

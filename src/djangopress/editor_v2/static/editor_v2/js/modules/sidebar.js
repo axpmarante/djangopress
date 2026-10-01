@@ -7,6 +7,7 @@ import { moveSection, canMoveSection } from '../lib/structural.js';
 import { insertAfterSection } from './section-inserter.js';
 import { findComponent } from '../lib/components.js';
 import { prependComponentCard } from './component-panel.js';
+import { alertDialog } from '../lib/dialog.js';
 
 let activeTab = 'content';
 let selectedEl = null;
@@ -707,7 +708,7 @@ function renderDesignTab() {
                 } catch (err) {
                     videoSetBtn.disabled = false;
                     videoSetBtn.textContent = 'Set Video';
-                    alert('Error: ' + err.message);
+                    alertDialog({ title: 'Could not set the video', message: err.message || '', tone: 'error' });
                 }
             });
         }

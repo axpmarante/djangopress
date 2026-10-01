@@ -1,5 +1,6 @@
 import { events } from '../lib/events.js';
 import { $, getContentWrapper, getCssSelector, isTextElement } from '../lib/dom.js';
+import { promptDialog } from '../lib/dialog.js';
 
 let handlers = {};
 let toolbar = null;
@@ -99,8 +100,16 @@ function onToolbarClick(e) {
     } else if (cmd === 'italic') {
         document.execCommand('italic');
     } else if (cmd === 'link') {
-        const url = prompt('Enter URL:');
-        if (url) document.execCommand('createLink', false, url);
+        // The dialog takes focus: keep the selected text and put it back before linking it.
+        const selection = window.getSelection();
+        const range = selection.rangeCount ? selection.getRangeAt(0).cloneRange() : null;
+        const el = activeEl;
+        promptDialog({ title: 'Link to', placeholder: 'https://… or /page/', confirmLabel: 'Add link' }).then(url => {
+            el?.focus();
+            if (range) { selection.removeAllRanges(); selection.addRange(range); }
+            if (url) document.execCommand('createLink', false, url);
+        });
+        return;
     }
     activeEl?.focus();
 }

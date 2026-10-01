@@ -10,6 +10,7 @@ import { api } from '../lib/api.js';
 import { $ } from '../lib/dom.js';
 import { shortcuts } from '../lib/shortcuts.js';
 import { getPendingCount } from './changes.js';
+import { alertDialog } from '../lib/dialog.js';
 
 const config = () => window.EDITOR_CONFIG || {};
 function withEditableId(body) {
@@ -103,7 +104,7 @@ async function loadVersions() {
 function canNavigate() {
     // Block if there are pending unsaved changes
     if (getPendingCount() > 0) {
-        alert('Save or discard your changes before browsing versions.');
+        alertDialog({ title: 'Unsaved changes', message: 'Save or discard your changes before browsing versions.', tone: 'warning' });
         return false;
     }
     return true;
@@ -185,7 +186,7 @@ async function restore() {
         window.location.reload();
     } catch (err) {
         console.error('Failed to restore version:', err);
-        alert('Failed to restore version: ' + err.message);
+        alertDialog({ title: 'Could not restore this version', message: err.message || '', tone: 'error' });
     }
 }
 

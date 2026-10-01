@@ -9,6 +9,7 @@ import { events } from '../lib/events.js';
 import { api } from '../lib/api.js';
 import { getCssSelector, resolveSelector } from '../lib/dom.js';
 import { duplicateElement } from '../lib/structural.js';
+import { alertDialog, confirmDialog } from '../lib/dialog.js';
 import {
     findComponent, itemsOf, itemFields, componentLabel, minItems, readSliderOptions,
     settingsFromOptions, settingsDiff, canSwapInPlace,
@@ -151,7 +152,9 @@ function bindCard(card, comp, rootSel) {
             case 'up': return move(comp, n, i, -1);
             case 'down': return move(comp, n, i, 1);
             case 'remove':
-                if (confirm('Remove this item? You can undo it afterwards.')) runOp(comp, 'remove', { index: i });
+                confirmDialog({ title: 'Remove this item?', danger: true, confirmLabel: 'Remove',
+                    message: 'It is removed in every language. You can undo it afterwards.' })
+                    .then(ok => { if (ok) runOp(comp, 'remove', { index: i }); });
                 return;
             case 'replace': return pickImages(false, imgs => runOp(comp, 'replace_image', { index: i, image: imgs[0] }, i));
             case 'add-images': return pickImages(true, imgs => runOp(comp, 'add_images', { after: afterIndex(rootSel, n), images: imgs }));
@@ -166,7 +169,10 @@ function bindCard(card, comp, rootSel) {
             const i = Number(input.closest('.ev2-comp-row').dataset.index);
             const key = input.dataset.field;
             if (key.startsWith('text-')) {
-                if (!input.value.trim()) { alert("Text can't be empty — remove the item instead."); return; }
+                if (!input.value.trim()) {
+                    alertDialog({ title: "Text can't be empty", message: 'To get rid of this item, remove it instead.', tone: 'warning' });
+                    return;
+                }
                 runOp(comp, 'update_item', { index: i, texts: { [key.slice(5)]: input.value } }, i);
             } else {
                 runOp(comp, 'update_item', { index: i, [key]: input.value }, i);
@@ -255,7 +261,10 @@ function showAddForm(card, comp, rootSel) {
 function submitAddForm(card, comp, rootSel) {
     const texts = {};
     for (const ta of card.querySelectorAll('[data-new]')) {
-        if (!ta.value.trim()) { alert('Fill in every field.'); ta.focus(); return; }
+        if (!ta.value.trim()) {
+            alertDialog({ title: 'Fill in every field', tone: 'warning' }).then(() => ta.focus());
+            return;
+        }
         texts[ta.dataset.new] = ta.value.trim();
     }
     runOp(comp, 'add_text_item', { after: afterIndex(rootSel, itemsOf(comp).length), texts });
@@ -359,15 +368,16 @@ async function runOpNow(comp, op, args, focus) {
     try {
         res = await api.post('/component/', body);
     } catch (err) {
-        alert(err.message || 'Could not save');
+        alertDialog({ title: 'Could not save', message: err.message || '', tone: 'error' });
         return;
     }
-    if (!res.success) { alert(res.error || 'Could not save'); return; }
+    if (!res.success) { alertDialog({ title: 'Could not save', message: res.error || '', tone: 'error' }); return; }
 
     const index = focus ?? res.index ?? 0;
     expanded.set(rootSel, index);
     if (res.skipped_languages?.length) {
-        alert(`Saved, but not in ${res.skipped_languages.join(', ').toUpperCase()}: this part of the page is different there.`);
+        await alertDialog({ title: 'Saved, with one gap', tone: 'warning',
+            message: `Not saved in ${res.skipped_languages.join(', ').toUpperCase()}: this part of the page is different there.` });
     }
     const fresh = canSwapInPlace(res.html) ? swapRoot(comp.root, res.html) : null;
     if (!fresh) {
