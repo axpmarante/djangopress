@@ -99,6 +99,33 @@ insert_section(position: "before" | "after" | "start" | "end", anchor_section?: 
 
 ---
 
+## 7. Everything the assistant changes can be undone easily
+
+Requirement (2026-10-01): every change the assistant makes must be easy to revert if it doesn't look right, using the existing version system.
+
+**Pages, one checkpoint per turn.** Before an assistant turn first changes a page, it creates a `PageVersion(kind='checkpoint')` labelled `Assistant: <first words of the request>`. One checkpoint per page per turn, not one per tool call. The editor's one-click **Undo** (which steps back to the last checkpoint) then reverts exactly that request on that page, and **Redo** brings it back.
+- This replaces today's `kind='auto'` "Site Assistant edit" versions, which Undo does not stop at.
+- `ai_apply` and the component runner already checkpoint. They receive the turn's label and skip their own checkpoint when the turn already made one, so there are no duplicates.
+
+**Header and footer:** a `GlobalSectionVersion` before the first change in the turn, so restoring works as it already does in the backoffice.
+
+**Objects without versions (SiteSettings, menu items, forms):** before the first change in a turn, the tool stores a JSON snapshot of the object's changed fields (or of the whole object for create and delete). The snapshot goes in that turn's change log.
+
+**Turn change log:**
+- Each assistant reply that changed something stores `changes` in the session message: a list of `{kind: page|global_section|settings|menu_item|form|media, id, label, version_id | snapshot}`.
+- The Home shows an **Undo this** button on that reply, plus a "Changed: Reservas (FAQ added) · Settings (contact phone)" line.
+- **`POST /site-assistant/api/sessions/<id>/undo/ {message_index}`:**
+  - restores pages and global sections to the versions taken before the turn, recorded as `kind='undo'` so the editor's Redo still works;
+  - restores settings, menu items and forms from their snapshots, and removes objects the turn created;
+  - adds an assistant message: "Undone: …".
+- **Safety:** if a page or object was changed again after that turn, by the editor or a later turn, the undo lists those changes and asks for confirmation before overwriting them.
+- **From the chat:** the assistant gets an `undo_last_change` tool, so "desfaz isso" / "volta atrás" undoes the last turn that changed something, with the same rules.
+
+**Left as is, on purpose:**
+- **Photos** downloaded from Unsplash stay in the media library (harmless; undoing a background only stops using them).
+- **`test_form`** deletes its own submission. Its email to the operator can't be unsent; by design.
+- **`validate_contacts` and `find_photos`** only read.
+
 ## Prompt changes (executor)
 
 - To add a section, use `insert_section`.
@@ -121,12 +148,19 @@ insert_section(position: "before" | "after" | "start" | "end", anchor_section?: 
   - test_form sends to the operator with "[TESTE]" and deletes its submission (email backend locmem);
   - validate_contacts: mismatched `tel:`, a different phone on one page, an invalid email, an MX lookup that is mocked;
   - Home thumbnail rendering helper.
+  - Reversibility:
+    - one checkpoint per page per turn, labelled;
+    - the editor's Undo returns to the state before the turn;
+    - turn undo restores pages, global sections, settings, menu items and forms, and removes created objects;
+    - undo asks first when there are later edits;
+    - `undo_last_change` from the chat.
 - **New eval cases on `demo-ai-eval`:**
   - N11 "põe a foto X em primeiro no slider";
   - N12 "procura uma foto melhor para o fundo da secção Y";
   - N13 "testa o formulário de contacto";
   - N14 "verifica se os contactos estão certos";
   - N8 and C8 re-run, expecting no re-translation of other sections.
+  - C11: "muda o fundo do hero" then "desfaz isso". The page must be byte-identical to before.
 
 ## Out of scope
 
