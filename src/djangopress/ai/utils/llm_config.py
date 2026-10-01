@@ -137,13 +137,13 @@ MODEL_CONFIG = {
     ),
     'gemini-flash': ModelConfig(
         provider=ModelProvider.GOOGLE,
-        model_name="gemini-3-flash-preview",
+        model_name="gemini-3.8-flash",
         max_output_tokens=32000,
         temperature=0.3,
     ),
     'gemini-lite': ModelConfig(
         provider=ModelProvider.GOOGLE,
-        model_name="gemini-3.1-flash-lite-preview",
+        model_name="gemini-3.5-flash-lite",
         max_output_tokens=32000,
         temperature=0.3,
     )

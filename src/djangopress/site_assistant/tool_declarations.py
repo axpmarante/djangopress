@@ -68,15 +68,21 @@ CREATE_PAGE = types.FunctionDeclaration(
 
 UPDATE_PAGE_META = types.FunctionDeclaration(
     name='update_page_meta',
-    description='Update page metadata (title, slug, active status, sort order).',
+    description=(
+        'Update page metadata. title_i18n is the page NAME (menus, headings); the SEO '
+        '<title> and meta description are meta_title_i18n / meta_description_i18n. '
+        'Per-language dicts are merged: send only the languages you change.'
+    ),
     parameters=S(
         type=T.OBJECT,
         properties={
             'page_id': S(type=T.INTEGER, description='ID of the page to update.'),
-            'title_i18n': S(type=T.OBJECT, description='New title per language.'),
+            'title_i18n': S(type=T.OBJECT, description='New page name per language (not the SEO title).'),
             'slug_i18n': S(type=T.OBJECT, description='New slug per language.'),
             'is_active': S(type=T.BOOLEAN, description='Whether the page is active/visible.'),
             'sort_order': S(type=T.INTEGER, description='Sort order (lower = first).'),
+            'meta_title_i18n': S(type=T.OBJECT, description='SEO title (<title>) per language.'),
+            'meta_description_i18n': S(type=T.OBJECT, description='SEO meta description per language.'),
         },
         required=['page_id'],
     ),

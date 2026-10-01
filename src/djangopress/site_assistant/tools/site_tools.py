@@ -40,6 +40,8 @@ def get_page_info(params, context):
             'slug': page.slug_i18n,
             'is_active': page.is_active,
             'sort_order': page.sort_order,
+            'meta_title': page.meta_title_i18n or {},
+            'meta_description': page.meta_description_i18n or {},
             'sections': [s['name'] for s in result['sections']],
         },
         'message': f'Page "{page.default_title}" with {len(result["sections"])} sections',
@@ -77,6 +79,8 @@ def update_page_meta(params, context):
         slug_i18n=params.get('slug_i18n'),
         is_active=params.get('is_active'),
         sort_order=params.get('sort_order'),
+        meta_title_i18n=params.get('meta_title_i18n'),
+        meta_description_i18n=params.get('meta_description_i18n'),
     )
     if not result['success']:
         return {'success': False, 'message': result['error']}

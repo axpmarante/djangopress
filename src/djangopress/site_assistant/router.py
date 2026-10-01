@@ -34,8 +34,8 @@ Categories:
 - stats: Detailed site statistics
 
 Rules:
-- If greeting or answerable from snapshot, write answer in direct_response (in {default_lang}).
-- If it needs tools, set direct_response to null.
+- Use direct_response (in {default_lang}) ONLY for greetings/small talk, or when the exact answer is written in the snapshot above (site name, page names, counts).
+- Anything else about the site — SEO, texts, sections, images, settings, a page's content — needs tools: set the intents and direct_response to null. Never answer from memory and never say you lack access.
 - A request can need multiple categories.
 - "delete" requests need the relevant category.
 

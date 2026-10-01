@@ -191,8 +191,12 @@ class PageService:
 
     @staticmethod
     def update_meta(page_id, title_i18n=None, slug_i18n=None,
-                    is_active=None, sort_order=None):
-        """Update page metadata (title, slug, active status, sort order).
+                    is_active=None, sort_order=None,
+                    meta_title_i18n=None, meta_description_i18n=None):
+        """Update page metadata (title, slug, SEO title/description, active status, sort order).
+
+        Per-language dicts are merged into the stored ones: {'pt': ...} changes
+        Portuguese and leaves the other languages as they are.
 
         Args:
             page_id: Page primary key.
@@ -209,16 +213,26 @@ class PageService:
         except Page.DoesNotExist:
             return {'success': False, 'error': f'Page {page_id} not found'}
 
+        def merged(current, change):
+            return {**(current or {}), **change}
+
         updated = []
         if title_i18n is not None:
-            page.title_i18n = title_i18n
+            page.title_i18n = merged(page.title_i18n, title_i18n)
             updated.append('title')
         if slug_i18n is not None:
+            slug_i18n = merged(page.slug_i18n, slug_i18n)
             error = _check_slug_uniqueness(slug_i18n, exclude_page_id=page_id)
             if error:
                 return {'success': False, 'error': error}
             page.slug_i18n = slug_i18n
             updated.append('slug')
+        if meta_title_i18n is not None:
+            page.meta_title_i18n = merged(page.meta_title_i18n, meta_title_i18n)
+            updated.append('SEO title')
+        if meta_description_i18n is not None:
+            page.meta_description_i18n = merged(page.meta_description_i18n, meta_description_i18n)
+            updated.append('SEO description')
         if is_active is not None:
             page.is_active = is_active
             updated.append('is_active')
