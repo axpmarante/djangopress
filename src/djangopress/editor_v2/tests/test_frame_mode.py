@@ -26,9 +26,9 @@ class FrameModeTest(TestCase):
     def test_editor_gets_the_bridge_and_no_editor_ui(self):
         self.client.force_login(self.staff)
         html = self.get('?ev2_frame=1')
-        self.assertIn('editor_v2/js/frame-bridge.js', html)
+        self.assertRegex(html, r'<script type="module" src="[^"]*editor_v2/js/frame-bridge\.js')
         self.assertNotIn('editor-v2-content', html)
-        self.assertNotIn('editor_v2/js/editor.js', html)
+        self.assertNotRegex(html, r'<script type="module" src="[^"]*editor_v2/js/editor\.js')
         self.assertIn('Olá', html)
 
     def test_anonymous_gets_the_normal_page(self):
@@ -43,7 +43,7 @@ class FrameModeTest(TestCase):
     def test_normal_editor_page_has_no_bridge(self):
         self.client.force_login(self.staff)
         html = self.get('?edit=v2')
-        self.assertNotIn('frame-bridge.js', html)
+        self.assertNotRegex(html, r'<script type="module" src="[^"]*frame-bridge\.js')
         self.assertIn('editor-v2-content', html)
 
     def test_frame_mode_may_be_framed_by_the_editor_only(self):
