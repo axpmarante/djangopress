@@ -457,7 +457,13 @@ def update_page_content(request):
             element = soup.select_one(selector)
             if element:
                 element.clear()
-                element.append(value)
+                if data.get('format') == 'html':    # toolbar formatting (links, bold, italic), cleaned
+                    from djangopress.editor_v2.inline_html import clean_inline_html
+                    fragment = BeautifulSoup(clean_inline_html(value), 'html.parser')
+                    for node in list(fragment.contents):
+                        element.append(node)
+                else:
+                    element.append(value)
 
                 new_html = str(soup)
                 if new_html.startswith('<html><body>'):

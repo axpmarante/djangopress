@@ -6,6 +6,8 @@ let handlers = {};
 let toolbar = null;
 let activeEl = null;
 let originalText = '';
+let originalHtml = '';
+let askingLink = false;   // the link dialog has focus: don't end the edit
 let editing = false;
 
 function positionToolbar(el) {
@@ -26,6 +28,7 @@ function startEdit(el) {
     if (editing) finishEdit();
     activeEl = el;
     originalText = el.textContent.trim();
+    originalHtml = el.innerHTML;
     editing = true;
     el.setAttribute('contenteditable', 'true');
     el.focus();
@@ -37,7 +40,19 @@ function finishEdit(cancel) {
     if (!activeEl) return;
     const el = activeEl;
     if (cancel) {
-        el.textContent = originalText;
+        el.innerHTML = originalHtml;
+    } else if (el.children.length || /<[a-z]/i.test(originalHtml)) {
+        // Links, bold, italic (or formatting the text already had): save the HTML; the server cleans it.
+        const newHtml = el.innerHTML.trim();
+        if (newHtml !== originalHtml.trim()) {
+            events.emit('change:content', {
+                type: 'content', format: 'html',
+                selector: getCssSelector(el),
+                fieldKey: '',
+                value: newHtml,
+                oldValue: originalHtml.trim(),
+            });
+        }
     } else {
         const newText = el.textContent.trim();
         if (newText !== originalText) {
@@ -55,6 +70,7 @@ function finishEdit(cancel) {
     editing = false;
     activeEl = null;
     originalText = '';
+    originalHtml = '';
     events.emit('inline-edit:end');
 }
 
@@ -75,7 +91,7 @@ function onKeyDown(e) {
 }
 
 function onBlur(e) {
-    if (!editing) return;
+    if (!editing || askingLink) return;
     // Delay to allow toolbar clicks to register
     setTimeout(() => {
         if (editing && activeEl && !activeEl.contains(document.activeElement)) {
@@ -104,8 +120,11 @@ function onToolbarClick(e) {
         const selection = window.getSelection();
         const range = selection.rangeCount ? selection.getRangeAt(0).cloneRange() : null;
         const el = activeEl;
+        askingLink = true;
         promptDialog({ title: 'Link to', placeholder: 'https://… or /page/', confirmLabel: 'Add link' }).then(url => {
-            el?.focus();
+            askingLink = false;
+            if (!editing || activeEl !== el) return;
+            el.focus();
             if (range) { selection.removeAllRanges(); selection.addRange(range); }
             if (url) document.execCommand('createLink', false, url);
         });

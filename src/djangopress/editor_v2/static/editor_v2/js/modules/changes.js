@@ -41,7 +41,8 @@ function applyToDOM(change) {
     const el = findElement(change.selector);
     if (!el) return;
     if (change.type === 'content') {
-        el.textContent = change.value;
+        if (change.format === 'html') el.innerHTML = change.value;   // toolbar formatting (cleaned on save)
+        else el.textContent = change.value;
     } else if (change.type === 'classes') {
         el.className = change.value;
     } else if (change.type === 'attribute') {
@@ -74,6 +75,7 @@ function record(change) {
     if (existing) {
         // Keep original oldValue, update value
         existing.value = change.value;
+        existing.format = change.format;
     } else {
         pending.set(key, { ...change });
     }
@@ -100,6 +102,7 @@ function undo() {
         const latest = findLatestInStack(undoStack, key);
         if (latest) {
             entry.value = latest.value;
+            entry.format = latest.format;
         } else {
             pending.delete(key);
         }
@@ -119,6 +122,7 @@ function redo() {
     const existing = pending.get(key);
     if (existing) {
         existing.value = change.value;
+        existing.format = change.format;
     } else {
         pending.set(key, { ...change });
     }
@@ -160,6 +164,7 @@ async function save() {
                 selector: c.selector,
                 language: language,
                 value: c.value,
+                format: c.format === 'html' ? 'html' : 'text',
             }, cfg));
         }
         for (const c of classChanges) {
