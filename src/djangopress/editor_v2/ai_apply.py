@@ -80,15 +80,28 @@ def _checkpoint(page, user, summary):
         page.create_version(change_summary=summary)
 
 
-def _translated(fragment_html, source, target):
-    """(html, ok): translated + localized, or the source text localized when translation fails."""
+def _translate_one(fragment_html, source, target):
+    """Raw translation or None; runs in a worker thread (no ORM work besides the AI call log)."""
+    from django.db import connection
     try:
         translated = translate_snippet(fragment_html, source, target)
-        if not translated or not _first_tag(translated):
-            raise ValueError('empty translation')
-        return localize_internal_links(translated, source, target), True
+        return translated if translated and _first_tag(translated) else None
     except Exception:
-        return localize_internal_links(fragment_html, source, target), False
+        return None
+    finally:
+        connection.close()
+
+
+def _translations(fragment_html, source, targets):
+    """{target: (html, ok)} — all languages translated in parallel (a whole page per language
+    can take a minute; in series several languages would outlast the request timeout), then
+    links localized here, on the request thread."""
+    from concurrent.futures import ThreadPoolExecutor
+    if not targets:
+        return {}
+    with ThreadPoolExecutor(max_workers=len(targets)) as pool:
+        raw = dict(zip(targets, pool.map(lambda t: _translate_one(fragment_html, source, t), targets)))
+    return {t: (localize_internal_links(raw[t] or fragment_html, source, t), raw[t] is not None) for t in targets}
 
 
 def _rename_section(tag, old, new):
@@ -143,8 +156,9 @@ def apply_section_html(page, html, source_lang, *, section_name=None, mode='repl
         raise ValueError(f'Section "{name}" not found')
 
     translated, untranslated = [], []
+    results = _translations(str(new), source, others)
     for code in others:
-        fragment, ok = _translated(str(new), source, code)
+        fragment, ok = results[code]
         tag = _soup(fragment).find('section') or copy.copy(new)
         _rename_section(tag, tag.get('data-section') or name, name)
         if not put(code, tag):
@@ -177,8 +191,9 @@ def apply_element_html(page, selector, html, source_lang, *, user=None):
     if not put(source, new):
         raise ValueError('Element not found for selector')
     translated, untranslated = [], []
+    results = _translations(str(new), source, others)
     for code in others:
-        fragment, ok = _translated(str(new), source, code)
+        fragment, ok = results[code]
         tag = _first_tag(fragment) or copy.copy(new)
         if not put(code, tag):
             untranslated.append(code)
@@ -197,8 +212,9 @@ def apply_page_html(page, html, source_lang, *, user=None):
     _checkpoint(page, user, 'AI page refine')
     html_i18n[source] = html
     translated, untranslated = [], []
+    results = _translations(html, source, others)
     for code in others:
-        fragment, ok = _translated(html, source, code)
+        fragment, ok = results[code]
         html_i18n[code] = fragment
         (translated if ok else untranslated).append(code)
     page.html_content_i18n = html_i18n

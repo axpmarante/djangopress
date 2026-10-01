@@ -1167,6 +1167,7 @@ Return ONLY the corrected, complete JSON. No markdown, no explanation."""
         notify("complete", "done")
         return {
             'html_content_i18n': result_html_i18n,
+            'lang': current_lang,   # the copy that was refined (an empty edited copy falls back to the default)
         }
 
     def refine_section_only(
@@ -2203,7 +2204,9 @@ Keep the translations natural and fluent — these are website UI strings.
                 user_prompt=prompt, response_text=content,
                 duration_ms=int((time.time() - t0) * 1000), **usage,
             )
-            translated_html = self._extract_html_from_response(content)
+            # A cut-off or much shorter translation must not be saved as a success.
+            translated_html = self._extract_html_from_response(
+                content, original_html=html, scope='page', finish_reason=getattr(response, 'finish_reason', None))
             return translated_html or content
         except Exception as e:
             self._log(

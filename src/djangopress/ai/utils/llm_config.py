@@ -78,11 +78,7 @@ class ModelConfig:
             if self.max_tokens is not None and self.max_output_tokens is None:
                 self.max_output_tokens = self.max_tokens
                 self.max_tokens = None
-            if "generation_config" not in self.provider_params:
-                self.provider_params["generation_config"] = {
-                    "top_p": 0.95,
-                    "top_k": 40
-                }
+            # No top_p/top_k defaults: Gemini 3 is tuned for its own sampling defaults.
         elif self.provider == ModelProvider.ANTHROPIC:
             if self.max_tokens is None and self.max_output_tokens is not None:
                 self.max_tokens = self.max_output_tokens

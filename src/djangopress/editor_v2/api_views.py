@@ -2338,8 +2338,7 @@ def refine_page_stream(request):
                     'page': {
                         'html_content_i18n': result.get('html_content_i18n', {}),
                     },
-                    'html': (result.get('html_content_i18n') or {}).get(lang)
-                            or next(iter((result.get('html_content_i18n') or {}).values()), ''),
+                    'html': (result.get('html_content_i18n') or {}).get(result.get('lang') or lang, ''),
                     'assistant_message': assistant_msg,
                     'session_id': session.id,
                 }))

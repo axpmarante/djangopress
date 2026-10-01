@@ -125,3 +125,15 @@ class LanguageTest(AIEndpointTest):
         self.assertEqual(refine.call_args.kwargs['lang'], 'en')
         payload = json.loads(complete.split('data:', 1)[1])
         self.assertEqual(payload['html'], '<section data-section="hero"><h1>EN</h1></section>')
+
+
+@mock.patch('djangopress.editor_v2.api_views.threading.Thread', InlineThread)
+class PageStreamLanguageTest(AIEndpointTest):
+    def test_preview_is_the_refined_copy_not_another_language(self):
+        result = {'html_content_i18n': {'es': '<section data-section="hero"><h1>ES viejo</h1></section>',
+                                        'pt': '<section data-section="hero"><h1>PT novo</h1></section>', 'en': ''},
+                  'lang': 'pt'}
+        with mock.patch('djangopress.ai.services.ContentGenerationService.refine_page_with_html', return_value=result):
+            res = self.post('/editor-v2/api/refine-page/stream/', {'instructions': 'Shorter'}, lang='en')
+            complete = [b for b in sse_events(res) if 'event: complete' in b][0]
+        self.assertEqual(json.loads(complete.split('data:', 1)[1])['html'], '<section data-section="hero"><h1>PT novo</h1></section>')

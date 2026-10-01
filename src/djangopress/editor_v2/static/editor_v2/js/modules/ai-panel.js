@@ -3,6 +3,7 @@
  * Uses SSE streaming for real-time progress during AI refinement.
  */
 import { events } from '../lib/events.js';
+import { noteSaveAfterReload } from '../lib/save-notes.js';
 import { $, getCssSelector, getElementLabel, initDynamicComponents } from '../lib/dom.js';
 import { api } from '../lib/api.js';
 import { SSEClient } from '../lib/sse-client.js';
@@ -488,7 +489,7 @@ async function applyResult() {
             // Multi-option: send chosen option to apply-option endpoint
             const chosen = options[activeOption];
             if (!chosen) return;
-            await api.post('/apply-option/', withEditableId({
+            const saved = await api.post('/apply-option/', withEditableId({
                 page_id: config().pageId,
                 scope: pendingScope,
                 section_name: lockedSection,
@@ -497,13 +498,15 @@ async function applyResult() {
                 option_index: activeOption + 1,
                 session_id: sessionId,
             }));
+            noteSaveAfterReload(saved, 'AI change applied');
         } else if (pendingResult && pendingScope) {
             // Single-option (page scope): existing flow
             if (pendingScope === 'page') {
-                await api.post('/save-ai-page/', withEditableId({
+                const saved = await api.post('/save-ai-page/', withEditableId({
                     page_id: config().pageId,
                     html: pendingResult.html,
                 }));
+                noteSaveAfterReload(saved, 'AI page change applied');
             }
         } else {
             setLoading(false);

@@ -148,7 +148,7 @@ def refine_page(params, context):
     )
 
     page.refresh_from_db()
-    html = (result.get('html_content_i18n') or {}).get(_default_lang())
+    html = (result.get('html_content_i18n') or {}).get(result.get('lang') or _default_lang())
     if not html:
         return {'success': False, 'message': 'The AI returned no page'}
     from djangopress.editor_v2 import ai_apply
@@ -164,8 +164,9 @@ def _default_lang():
 
 def _last_section(page):
     from bs4 import BeautifulSoup
-    sections = BeautifulSoup((page.html_content_i18n or {}).get(_default_lang(), ''), 'html.parser').find_all('section')
-    return sections[-1].get('data-section') if sections else None
+    soup = BeautifulSoup((page.html_content_i18n or {}).get(_default_lang(), ''), 'html.parser')
+    named = soup.find_all('section', attrs={'data-section': True})
+    return named[-1].get('data-section') if named else None
 
 
 def _languages_note(applied):

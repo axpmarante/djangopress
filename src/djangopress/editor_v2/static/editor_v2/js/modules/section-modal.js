@@ -6,6 +6,7 @@
  */
 
 import { events } from '../lib/events.js';
+import { noteSaveAfterReload } from '../lib/save-notes.js';
 import { api } from '../lib/api.js';
 import {
     getInsertState,
@@ -193,7 +194,7 @@ async function apply() {
     discardBtn.disabled = true;
 
     try {
-        await api.post('/apply-option/', withEditableId({
+        const saved = await api.post('/apply-option/', withEditableId({
             page_id: config().pageId,
             scope: 'new-section',
             section_name: null,
@@ -202,6 +203,7 @@ async function apply() {
             mode: 'insert',
             insert_after: insertState?.afterSection || null,
         }));
+        noteSaveAfterReload(saved, 'New section added');
 
         applyBtn.textContent = 'Saved!';
         applyBtn.style.background = '#10b981';

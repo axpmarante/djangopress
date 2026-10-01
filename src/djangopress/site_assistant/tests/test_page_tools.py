@@ -60,3 +60,11 @@ class RouterJsonTest(TestCase):
         with mock.patch('djangopress.ai.utils.llm_config.LLMBase.get_completion', return_value=answer) as call:
             Router().classify('Olá', {'pages': [], 'stats': {}}, '')
         self.assertTrue(call.call_args.kwargs.get('json_output'))
+
+
+class LastSectionTest(AssistantRefineTest):
+    def test_new_section_goes_after_the_last_named_section(self):
+        self.page.html_content_i18n = {'pt': self.page.html_content_i18n['pt'] + '<section class="decor"></section>',
+                                       'en': self.page.html_content_i18n['en'] + '<section class="decor"></section>'}
+        self.page.save()
+        self.assertEqual(page_tools._last_section(self.page), 'hero')

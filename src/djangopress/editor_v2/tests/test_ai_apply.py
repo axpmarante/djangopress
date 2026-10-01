@@ -127,3 +127,23 @@ class PageTest(AIApplyTestCase):
         self.assertEqual(self.html('pt'), new)
         self.assertIn('EN: Página', self.html('en'))
         self.assertIn('href="/en/book-a-table/"', self.html('en'))
+
+
+class ParallelTranslationTest(AIApplyTestCase):
+    def test_languages_are_translated_in_parallel(self):
+        import time
+        s = SiteSettings.load()
+        s.enabled_languages = [{'code': c, 'name': c} for c in ('pt', 'en', 'es', 'fr')]
+        s.save()
+        self.page.html_content_i18n = {c: self.page.html_content_i18n['pt'] for c in ('pt', 'en', 'es', 'fr')}
+        self.page.save()
+
+        def slow(html, source, target):
+            time.sleep(0.4)
+            return fake_translate(html, source, target)
+        t0 = time.time()
+        with mock.patch(TRANSLATE, side_effect=slow):
+            result = ai_apply.apply_page_html(self.page, '<section data-section="hero" id="hero"><h1>PT: P</h1></section>', 'pt')
+        self.assertLess(time.time() - t0, 1.0)          # 3 languages x 0.4 s would be 1.2 s in series
+        self.assertEqual(sorted(result['translated_languages']), ['en', 'es', 'fr'])
+        self.assertIn('FR: P', self.html('fr'))
