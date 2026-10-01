@@ -113,7 +113,7 @@
         <div class="page-row flex items-center justify-between px-5 py-4 hover:bg-gray-50 transition-colors cursor-pointer"
              data-title="{{ page.default_title|lower }}"
              data-slugs="{% for lang_code, slug_val in page.slug_i18n.items %}{{ slug_val }} {% endfor %}{{ page.default_slug }}"
-             onclick="window.location='{% url 'backoffice:page_edit' page_id=page.id %}'">
+             onclick="window.location='{{ page.get_absolute_url }}?{% if not page.is_active %}preview=true&amp;{% endif %}edit=v2'">
             <!-- Left: Status + Title + Meta -->
             <div class="flex items-center gap-3 min-w-0 flex-1">
                 {% if page.is_active %}
@@ -156,9 +156,15 @@
 
             <!-- Right: Actions (visible on hover) -->
             <div class="page-actions flex items-center gap-1 flex-shrink-0 ml-4" onclick="event.stopPropagation();">
-                <a href="{% url 'backoffice:page_edit' page_id=page.id %}"
+                <a href="{{ page.get_absolute_url }}?{% if not page.is_active %}preview=true&amp;{% endif %}edit=v2"
+                   title="Edit this page in the visual editor"
                    class="inline-flex items-center px-2.5 py-1.5 text-xs font-medium text-blue-700 bg-blue-50 rounded-md hover:bg-blue-100 transition-colors">
                     Edit
+                </a>
+                <a href="{% url 'backoffice:page_edit' page_id=page.id %}"
+                   title="Page settings: title, address, SEO, versions"
+                   class="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-gray-600 bg-gray-50 rounded-md hover:bg-gray-100 transition-colors">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg><span>Settings</span>
                 </a>
                 <a href="{{ page.get_absolute_url }}{% if not page.is_active %}?preview=true{% endif %}"
                    target="_blank"

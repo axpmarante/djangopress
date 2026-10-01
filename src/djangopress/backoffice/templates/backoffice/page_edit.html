@@ -2,7 +2,7 @@
 {% load static %}
 {% load section_tags %}
 
-{% block title %}Edit Page - {{ page.default_title }}{% endblock %}
+{% block title %}Page settings - {{ page.default_title }}{% endblock %}
 
 {% block chat_context %}
 <script>window.__chatContext = {pageId: {{ page.id }}, section: "page_edit", pageTitle: "{{ page.default_title|escapejs }}"};</script>
@@ -33,6 +33,7 @@
                 </svg>
             </a>
             <div>
+                <p class="text-xs font-semibold uppercase tracking-wider text-gray-400">Page settings</p>
                 <div class="flex items-center gap-2.5">
                     <h2 class="text-2xl font-bold text-gray-900">{{ page.default_title }}</h2>
                     {% if page.is_active %}
@@ -67,6 +68,10 @@
         </div>
 
         <div class="flex items-center gap-2">
+            <a href="{{ page.get_absolute_url }}?{% if not page.is_active %}preview=true&amp;{% endif %}edit=v2"
+               class="inline-flex items-center px-3 py-2 text-sm font-medium rounded-lg text-white bg-blue-600 hover:bg-blue-700 transition-colors">
+                Open in editor
+            </a>
             <!-- Version History Dropdown -->
             {% if versions %}
             <div class="relative" x-data="{ open: false }">

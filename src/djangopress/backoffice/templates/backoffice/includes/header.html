@@ -9,10 +9,9 @@
             </svg>
         </button>
 
-        <!-- Page Title -->
-        <h1 class="text-2xl font-semibold text-gray-800 hidden lg:block">
-            {% block page_title %}Dashboard{% endblock %}
-        </h1>
+        <!-- Each screen has its own heading; a block inside an include can't be
+             overridden, so a fixed title here was wrong on every page. -->
+        <div class="hidden lg:block"></div>
 
         <!-- Right side actions -->
         <div class="flex items-center space-x-4">

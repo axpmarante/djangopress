@@ -144,6 +144,41 @@ class MediaDetailView(LoginRequiredMixin, TemplateView):
         return redirect('backoffice:media_detail', pk=pk)
 
 
+class HomeView(LoginRequiredMixin, TemplateView):
+    """
+    Backoffice landing page. Superusers get a minimal site-assistant prompt that
+    turns into a chat (same API as /site-assistant/); staff get shortcuts only.
+    The old statistics dashboard lives on at /backoffice/overview/.
+    """
+    template_name = 'backoffice/home.html'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        user = self.request.user
+        context['assistant_enabled'] = user.is_superuser
+        context['hide_chat_widget'] = True   # the Home is the assistant; no second bubble
+        if user.is_superuser:
+            from djangopress.site_assistant.models import AssistantSession
+            context['recent_sessions'] = AssistantSession.objects.filter(created_by=user)[:5]
+            settings = SiteSettings.load()
+            other_langs = [l for l in settings.get_language_codes() if l != settings.get_default_language()]
+            suggestions = [
+                'Change a text on the home page',
+                'Update the SEO title and description of the home page',
+            ]
+            if other_langs:
+                suggestions.append(f'Translate the latest page into {other_langs[0].upper()}')
+            if NewsPost.objects.exists():
+                suggestions.append('Write a short news post about our latest update')
+            else:
+                suggestions.append('Update the contact details in the footer')
+            context['suggestions'] = suggestions
+        else:
+            context['page_count'] = Page.objects.count()
+            context['image_count'] = SiteImage.objects.filter(is_active=True).count()
+        return context
+
+
 class DashboardView(LoginRequiredMixin, TemplateView):
     """Main dashboard view"""
     template_name = 'backoffice/dashboard.html'
