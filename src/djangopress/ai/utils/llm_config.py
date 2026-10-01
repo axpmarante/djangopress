@@ -166,6 +166,74 @@ AI_MODEL_DEFAULTS = {
 }
 
 
+
+class ModelKey(str):
+    """A MODEL_CONFIG key that remembers which task asked for it (see get_ai_model),
+    so the call can use that task's generation settings."""
+
+    def __new__(cls, value, task=None):
+        obj = super().__new__(cls, value)
+        obj.task = task
+        return obj
+
+
+# Gemini 3 generation settings per task. Google tunes Gemini 3 for temperature
+# 1.0; thinking is where tasks differ (design work thinks hard, routing barely).
+_DESIGN = {'temperature': 1.0, 'thinking_level': 'high'}
+_LIGHT = {'temperature': 1.0, 'thinking_level': 'low'}
+TASK_SETTINGS = {
+    'generation': _DESIGN, 'refinement_page': _DESIGN, 'refinement_section': _DESIGN,
+    'refinement_element': _DESIGN, 'header_footer': _DESIGN, 'design_guide': _DESIGN,
+    'assistant_executor': {'temperature': 1.0, 'thinking_level': 'medium'},
+    'assistant_router': _LIGHT, 'metadata': _LIGHT, 'translation': _LIGHT,
+    'consistency': _LIGHT, 'image_analysis': _LIGHT,
+}
+TIER_DEFAULT_THINKING = {'gemini-pro': 'high', 'gemini-flash': 'medium', 'gemini-lite': 'low'}
+TRANSIENT_ERROR_MARKERS = ('429', '500', '502', '503', '504', 'UNAVAILABLE', 'RESOURCE_EXHAUSTED', 'DEADLINE_EXCEEDED')
+
+
+def settings_for(tool_name):
+    """Generation settings for a model key, using its task when it carries one."""
+    task = getattr(tool_name, 'task', None)
+    if task in TASK_SETTINGS:
+        return dict(TASK_SETTINGS[task])
+    return {'temperature': 1.0, 'thinking_level': TIER_DEFAULT_THINKING.get(str(tool_name), 'medium')}
+
+
+def _gemini_settings(tool_name, config):
+    """GenerateContentConfig kwargs (temperature, thinking, max tokens) for a Gemini call."""
+    s = settings_for(tool_name)
+    params = {'temperature': s['temperature']}
+    if s.get('thinking_level'):
+        params['thinking_config'] = types.ThinkingConfig(thinking_level=s['thinking_level'].upper())
+    if config.max_output_tokens:
+        params['max_output_tokens'] = config.max_output_tokens
+    if config.provider_params and 'generation_config' in config.provider_params:
+        params.update(config.provider_params['generation_config'])
+    return params
+
+
+def _is_transient(error):
+    text = str(error)
+    return any(marker in text for marker in TRANSIENT_ERROR_MARKERS)
+
+
+def _finish_reason(response):
+    try:
+        reason = response.candidates[0].finish_reason
+    except (AttributeError, IndexError, TypeError):
+        return None
+    return getattr(reason, 'name', None) or (str(reason) if reason else None)
+
+
+def _gemini_usage(response):
+    meta = getattr(response, 'usage_metadata', None)
+    if not meta:
+        return None
+    prompt = getattr(meta, 'prompt_token_count', 0) or 0
+    completion = (getattr(meta, 'candidates_token_count', 0) or 0) + (getattr(meta, 'thoughts_token_count', 0) or 0)
+    return {'prompt_tokens': prompt, 'completion_tokens': completion, 'total_tokens': prompt + completion}
+
 def get_ai_model(task):
     """Get the configured model for a given AI task.
 
@@ -188,16 +256,17 @@ def get_ai_model(task):
         if model == default and task.startswith('refinement_') and 'refinement' in config:
             model = config['refinement']
         if model not in MODEL_CONFIG:
-            return default
-        return model
+            return ModelKey(default, task)
+        return ModelKey(model, task)
     except Exception:
-        return default
+        return ModelKey(default, task)
 
 
 class StandardizedLLMResponse:
     """Standardized response format across all providers"""
 
-    def __init__(self, content: str, usage: Dict[str, int] = None):
+    def __init__(self, content: str, usage: Dict[str, int] = None, finish_reason: str = None):
+        self.finish_reason = finish_reason
         self.choices = [type('Choice', (), {
             'message': type('Message', (), {
                 'content': content
@@ -305,9 +374,12 @@ class LLMBase:
             messages: List[Dict[str, str]],
             tool_name: str = None,
             on_stream=None,
+            json_output: bool = False,
             **kwargs
     ) -> StandardizedLLMResponse:
-        """Get chat completion with model-specific configs"""
+        """Get chat completion with model-specific configs.
+
+        json_output: ask Gemini for a JSON response (response_mime_type)."""
         import time
         start_time = time.time()
 
@@ -467,135 +539,101 @@ class LLMBase:
                 )
 
             elif config.provider == ModelProvider.GOOGLE:
-                # Google Gemini implementation (using google-genai SDK)
+                # Google Gemini (google-genai SDK). System messages go to
+                # system_instruction; settings come from the task (settings_for).
                 client = self._clients[ModelProvider.GOOGLE]
                 resolved_model = config.model_name
 
-                gemini_messages = self._format_messages_for_gemini(messages)
-
-                # Build contents for the new SDK format
+                system_text = "\n\n".join(m.get('content', '') for m in messages if m.get('role') == 'system').strip()
                 contents = []
-                for msg in gemini_messages:
-                    role = msg.get("role", "user")
-                    parts = msg.get("parts", [])
-                    content_text = parts[0] if parts else ""
-                    contents.append(
-                        types.Content(
-                            role=role,
-                            parts=[types.Part.from_text(text=content_text)]
-                        )
-                    )
+                for msg in messages:
+                    role = msg.get('role', 'user')
+                    if role == 'system':
+                        continue
+                    contents.append(types.Content(
+                        role='model' if role == 'assistant' else 'user',
+                        parts=[types.Part.from_text(text=str(msg.get('content', '')))],
+                    ))
+                if not contents:
+                    contents.append(types.Content(role='user', parts=[types.Part.from_text(text=system_text or 'Hello')]))
+                    system_text = ''
 
-                # Configure generation parameters
-                gen_config_params = {
-                    "temperature": config.temperature,
-                    "top_p": 0.95,
-                    "top_k": 40,
-                }
-
-                if config.max_output_tokens:
-                    gen_config_params["max_output_tokens"] = config.max_output_tokens
-
-                if config.provider_params and 'generation_config' in config.provider_params:
-                    gen_config_params.update(config.provider_params['generation_config'])
-
+                gen_config_params = _gemini_settings(tool_name, config)
+                if system_text:
+                    gen_config_params['system_instruction'] = system_text
+                if json_output:
+                    gen_config_params['response_mime_type'] = 'application/json'
                 generation_config = types.GenerateContentConfig(**gen_config_params)
 
-                try:
-                    backend = "Vertex AI" if self._using_vertex_ai else "google-genai SDK"
-                    print(f"\n⏳ Calling Google Gemini API ({backend})...")
-                    print(f"   Model: {resolved_model}")
-                    print(f"   Contents: {len(contents)} message(s)")
-
-                    if on_stream:
-                        # Streaming path: yield chunks as they arrive
-                        response_content = ""
-                        for chunk in client.models.generate_content_stream(
-                            model=resolved_model,
-                            contents=contents,
-                            config=generation_config
-                        ):
-                            chunk_text = ""
-                            try:
-                                if hasattr(chunk, 'text') and chunk.text:
-                                    chunk_text = chunk.text
-                                elif hasattr(chunk, 'candidates') and chunk.candidates:
-                                    for part in chunk.candidates[0].content.parts:
-                                        if hasattr(part, 'text') and part.text:
-                                            chunk_text += part.text
-                            except Exception:
-                                pass
-                            if chunk_text:
-                                response_content += chunk_text
+                finish_reason = None
+                real_usage = None
+                backend = "Vertex AI" if self._using_vertex_ai else "google-genai SDK"
+                for attempt in (1, 2):
+                    try:
+                        print(f"\n⏳ Calling Google Gemini API ({backend}), attempt {attempt}...")
+                        print(f"   Model: {resolved_model} · settings: {settings_for(tool_name)}")
+                        if on_stream:
+                            response_content = ""
+                            for chunk in client.models.generate_content_stream(
+                                model=resolved_model, contents=contents, config=generation_config
+                            ):
+                                chunk_text = ""
                                 try:
-                                    on_stream(response_content, len(response_content))
+                                    if getattr(chunk, 'text', None):
+                                        chunk_text = chunk.text
+                                    elif getattr(chunk, 'candidates', None):
+                                        for part in chunk.candidates[0].content.parts:
+                                            if getattr(part, 'text', None):
+                                                chunk_text += part.text
                                 except Exception:
-                                    pass  # Never let callback errors break generation
-                    else:
-                        # Non-streaming path (unchanged)
-                        response = client.models.generate_content(
-                            model=resolved_model,
-                            contents=contents,
-                            config=generation_config
-                        )
-
-                        response_content = ""
-                        try:
-                            if hasattr(response, 'text') and response.text:
+                                    pass
+                                finish_reason = _finish_reason(chunk) or finish_reason
+                                real_usage = _gemini_usage(chunk) or real_usage
+                                if chunk_text:
+                                    response_content += chunk_text
+                                    try:
+                                        on_stream(response_content, len(response_content))
+                                    except Exception:
+                                        pass  # Never let callback errors break generation
+                        else:
+                            response = client.models.generate_content(
+                                model=resolved_model, contents=contents, config=generation_config
+                            )
+                            response_content = ""
+                            if getattr(response, 'text', None):
                                 response_content = response.text
-                            elif hasattr(response, 'candidates') and response.candidates:
+                            elif getattr(response, 'candidates', None):
                                 candidate = response.candidates[0]
-                                if hasattr(candidate, 'content') and hasattr(candidate.content, 'parts'):
-                                    for part in candidate.content.parts:
-                                        if hasattr(part, 'text') and part.text:
-                                            response_content += part.text
+                                for part in getattr(getattr(candidate, 'content', None), 'parts', None) or []:
+                                    if getattr(part, 'text', None):
+                                        response_content += part.text
+                            finish_reason = _finish_reason(response)
+                            real_usage = _gemini_usage(response)
+                        break
+                    except Exception as gemini_error:
+                        # No switch to another provider: retry a transient error once, then fail loudly.
+                        print(f"❌ Gemini error ({type(gemini_error).__name__}): {gemini_error}")
+                        if attempt == 1 and _is_transient(gemini_error):
+                            time.sleep(2)
+                            continue
+                        raise
 
-                        except Exception as content_error:
-                            print(f"  ⚠️ Error extracting content: {content_error}")
-                            response_content = "I apologize, but I'm having trouble processing your request."
-
-                except Exception as gemini_error:
-                    print("\n" + "=" * 80)
-                    print("❌ GEMINI API ERROR")
-                    print("=" * 80)
-                    print(f"⚠️  Error Type: {type(gemini_error).__name__}")
-                    print(f"⚠️  Error Message: {str(gemini_error)}")
-                    print("🔄 Attempting fallback to OpenAI...")
-                    print("=" * 80)
-
-                    if ModelProvider.OPENAI in self._clients:
-                        fallback_client = self._clients[ModelProvider.OPENAI]
-                        fallback_params = {
-                            "model": "gpt-5-mini-2025-08-07",
-                            "temperature": 1.0,
-                            "max_completion_tokens": 10000,
-                            "messages": messages
-                        }
-
-                        print("⏳ Calling OpenAI as fallback...")
-                        fallback_response = fallback_client.chat.completions.create(**fallback_params)
-
-                        response_content = fallback_response.choices[0].message.content
-                        print("✅ Successfully used OpenAI fallback.")
-                    else:
-                        print("❌ OpenAI fallback not available. Re-raising error.")
-                        raise gemini_error
-
-                char_count = sum(len(msg.get('content', '')) for msg in messages) + len(response_content)
-                estimated_tokens = char_count // 4
-
-                usage = {
-                    "total_tokens": estimated_tokens,
-                    "completion_tokens": len(response_content) // 4,
-                    "prompt_tokens": estimated_tokens - (len(response_content) // 4)
-                }
+                if real_usage:
+                    usage = real_usage
+                else:
+                    char_count = sum(len(str(msg.get('content', ''))) for msg in messages) + len(response_content)
+                    usage = {
+                        "total_tokens": char_count // 4,
+                        "completion_tokens": len(response_content) // 4,
+                        "prompt_tokens": char_count // 4 - len(response_content) // 4,
+                    }
 
                 elapsed_time = time.time() - start_time
                 print("\n" + "=" * 80)
                 print("✅ LLM API CALL SUCCESSFUL")
                 print("=" * 80)
                 print(f"⏱️  Time Elapsed: {elapsed_time:.2f}s")
-                print(f"📊 Token Usage (estimated):")
+                print(f"📊 Token Usage:")
                 print(f"   - Prompt: ~{usage['prompt_tokens']}")
                 print(f"   - Completion: ~{usage['completion_tokens']}")
                 print(f"   - Total: ~{usage['total_tokens']}")
@@ -608,9 +646,11 @@ class LLMBase:
                         response_content) > 150 else f"📄 Response: {response_content}")
                 print("=" * 80 + "\n")
 
+                print(f"🏁 Finish reason: {finish_reason}")
                 return StandardizedLLMResponse(
                     content=response_content,
-                    usage=usage
+                    usage=usage,
+                    finish_reason=finish_reason,
                 )
 
             else:
@@ -655,19 +695,22 @@ class LLMBase:
         config = types.GenerateContentConfig(
             system_instruction=system_instruction,
             tools=tools,
-            temperature=config_entry.temperature,
-            max_output_tokens=config_entry.max_output_tokens,
-            top_p=config_entry.provider_params.get('generation_config', {}).get('top_p', 0.95),
-            top_k=config_entry.provider_params.get('generation_config', {}).get('top_k', 40),
+            **_gemini_settings(tool_name, config_entry),
         )
 
-        response = client.models.generate_content(
-            model=config_entry.model_name,
-            contents=contents,
-            config=config,
-        )
-
-        return response
+        for attempt in (1, 2):
+            try:
+                return client.models.generate_content(
+                    model=config_entry.model_name,
+                    contents=contents,
+                    config=config,
+                )
+            except Exception as error:
+                if attempt == 1 and _is_transient(error):
+                    import time
+                    time.sleep(2)
+                    continue
+                raise
 
     def get_vision_completion(
             self,
@@ -734,7 +777,7 @@ class LLMBase:
 
             if config.provider == ModelProvider.GOOGLE and GOOGLE_AVAILABLE:
                 try:
-                    response_content = self._gemini_vision_call(images_data, prompt, config)
+                    response_content = self._gemini_vision_call(images_data, prompt, config, tool_name=tool_name)
                 except Exception as gemini_error:
                     print(f"⚠️ Gemini vision failed: {gemini_error}")
                     print("🔄 Falling back to OpenAI...")
@@ -784,7 +827,8 @@ class LLMBase:
             self,
             images_data: List[Dict[str, Any]],
             prompt: str,
-            config: ModelConfig
+            config: ModelConfig,
+            tool_name=None,
     ) -> str:
         """Make a vision API call using Gemini with native PDF/image support."""
         client = self._clients[ModelProvider.GOOGLE]
@@ -840,16 +884,7 @@ class LLMBase:
                 )
             ]
 
-        gen_config_params = {
-            "temperature": config.temperature,
-            "top_p": 0.95,
-            "top_k": 40,
-        }
-
-        if config.max_output_tokens:
-            gen_config_params["max_output_tokens"] = config.max_output_tokens
-
-        generation_config = types.GenerateContentConfig(**gen_config_params)
+        generation_config = types.GenerateContentConfig(**_gemini_settings(tool_name, config))
 
         resolved_model = config.model_name
         response = client.models.generate_content(
