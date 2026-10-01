@@ -1,0 +1,54 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>running</title>
+<pre id="out"></pre>
+<script type="module">
+import { readValues, writeValue, classesOf } from '../../static/editor_v2/js/lib/class-model.js';
+
+const fails = [];
+let passed = 0;
+const eq = (name, got, want) => {
+    if (JSON.stringify(got) === JSON.stringify(want)) passed++;
+    else fails.push(`${name}: got ${JSON.stringify(got)}, want ${JSON.stringify(want)}`);
+};
+
+try {
+    // reading: mobile-first, desktop-first and arbitrary values
+    eq('read mobile-first', readValues(['text-4xl', 'md:text-6xl'], 'fontSize'), { mobile: 36, tablet: 60, desktop: 60 });
+    eq('read lg arbitrary', readValues(['text-[40px]', 'lg:text-[64px]'], 'fontSize'), { mobile: 40, tablet: 40, desktop: 64 });
+    eq('read max-md', readValues(['max-md:text-[40px]', 'text-[64px]'], 'fontSize'), { mobile: 40, tablet: 64, desktop: 64 });
+
+    // writing with Elementor-style cascading, emitted mobile-first
+    eq('desktop edit, tablet follows, mobile keeps', writeValue(['text-4xl', 'md:text-6xl'], 'fontSize', 'desktop', 72), ['text-4xl', 'md:text-[72px]']);
+    eq('desktop edit without overrides', writeValue(['text-[40px]'], 'fontSize', 'desktop', 48), ['text-[48px]']);
+    eq('mobile only', writeValue(['text-[64px]'], 'fontSize', 'mobile', 40), ['text-[40px]', 'md:text-[64px]']);
+
+    // axis kept, order kept
+    eq('py split keeps bottom', writeValue(['py-4', 'font-bold'], 'paddingTop', 'desktop', 24), ['pt-6', 'pb-4', 'font-bold']);
+
+    // colours: one class per colour property, hex or palette
+    eq('hex replaced', writeValue(['text-[#C42014]', 'uppercase'], 'textColor', 'desktop', '#E3A11C'), ['text-[#E3A11C]', 'uppercase']);
+    eq('palette replaced', writeValue(['text-white'], 'textColor', 'desktop', '#E3A11C'), ['text-[#E3A11C]']);
+    eq('size vs colour share text-', readValues(['text-xl', 'text-[#14171B]'], 'fontSize'), { mobile: 20, tablet: 20, desktop: 20 });
+
+    // hover state
+    eq('read hover', readValues(['bg-[#C42014]', 'hover:bg-[#6B1712]'], 'bgColor', 'hover'), { mobile: '#6B1712', tablet: '#6B1712', desktop: '#6B1712' });
+    eq('write hover', writeValue(['bg-[#C42014]'], 'bgColor', 'desktop', '#14171B', 'hover'), ['bg-[#C42014]', 'hover:bg-[#14171B]']);
+
+    // spacing scale vs arbitrary, grid, display
+    eq('arbitrary spacing', writeValue(['pt-0'], 'paddingTop', 'desktop', 22), ['pt-[22px]']);
+    eq('grid tablet', writeValue(['grid', 'grid-cols-3'], 'gridCols', 'tablet', 2), ['grid', 'grid-cols-2', 'lg:grid-cols-3']);
+    eq('display collapses', writeValue(['hidden', 'md:block'], 'display', 'mobile', 'block'), ['block']);
+
+    // runtime classes are never touched
+    eq('runtime kept', writeValue(['ev2-selected', 'text-[40px]'], 'fontSize', 'desktop', 50), ['ev2-selected', 'text-[50px]']);
+
+    // classesOf for Copy style
+    eq('classesOf', classesOf(['py-4', 'md:pt-8', 'font-bold', 'text-[#fff]'], 'paddingTop'), ['py-4', 'md:pt-8']);
+} catch (err) {
+    fails.push('crash: ' + err.message);
+}
+
+document.getElementById('out').textContent = fails.join('\n') || 'all good';
+document.title = fails.length ? `FAIL ${fails.length}` : `PASS ${passed}`;
+</script>
