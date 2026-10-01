@@ -126,6 +126,12 @@ class NewsListView(TemplateView):
 class NewsDetailView(TemplateView):
     template_name = 'news/base_news.html'
 
+    def render_to_response(self, context, **response_kwargs):
+        response = super().render_to_response(context, **response_kwargs)
+        if context.get('ev2_frame'):
+            response['X-Frame-Options'] = 'SAMEORIGIN'   # the editor's device preview iframe
+        return response
+
     def get_context_data(self, **kwargs):
         from djangopress.news.models import NewsPost
 
@@ -171,6 +177,8 @@ class NewsDetailView(TemplateView):
             context['editable_object_id'] = post.pk
         else:
             context['edit_mode'] = False
+        context['ev2_frame'] = (self.request.user.is_staff and self.request.GET.get('ev2_frame') == '1'
+                                and not context['edit_mode'])
 
         return context
 

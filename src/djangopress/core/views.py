@@ -25,6 +25,12 @@ class PageView(TemplateView):
             response['Cache-Control'] = 'no-store'
         return response
 
+    def render_to_response(self, context, **response_kwargs):
+        response = super().render_to_response(context, **response_kwargs)
+        if context.get('ev2_frame'):
+            response['X-Frame-Options'] = 'SAMEORIGIN'   # the editor shows it in its device preview iframe
+        return response
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
 
@@ -108,6 +114,9 @@ class PageView(TemplateView):
             context['edit_mode'] = 'v2'
         else:
             context['edit_mode'] = False
+        # The editor's tablet/mobile preview loads the page in an iframe at the real width
+        context['ev2_frame'] = (self.request.user.is_authenticated and self.request.user.is_staff
+                                and self.request.GET.get('ev2_frame') == '1' and not context['edit_mode'])
 
         # SEO context
         context['seo_title'] = page_obj.get_meta_title(language)

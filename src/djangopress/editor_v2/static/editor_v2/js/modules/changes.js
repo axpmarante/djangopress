@@ -255,6 +255,11 @@ export function init() {
     emitUndoState();
 }
 
+/** Unsaved changes, oldest first (the device preview replays them). */
+export function getPendingChanges() {
+    return Array.from(pending.values()).map(c => ({ ...c }));
+}
+
 export function getPendingCount() {
     return pending.size;
 }

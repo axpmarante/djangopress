@@ -28,7 +28,7 @@
     <link href="{% static 'css/lightbox.css' %}" rel="stylesheet">
     <link href="{% static 'css/marquee.css' %}" rel="stylesheet">
     {% if edit_mode == 'v2' %}
-    <link href="{% static 'editor_v2/css/editor.css' %}?v=25" rel="stylesheet">
+    <link href="{% static 'editor_v2/css/editor.css' %}?v=26" rel="stylesheet">
     {% endif %}
     <style>[x-cloak] { display: none !important; }</style>
     <script defer src="https://cdn.jsdelivr.net/npm/@alpinejs/intersect@3.x.x/dist/cdn.min.js"></script>
@@ -92,7 +92,7 @@
 
     {# Load footer from database (GlobalSection) with fallback to file template #}
     {% load_global_section 'main-footer' fallback_template='partials/footer.html' %}
-    {% include 'partials/admin_toolbar.html' %}
+    {% if not ev2_frame %}{% include 'partials/admin_toolbar.html' %}{% endif %}
 
     {% if edit_mode == 'v2' %}
     </div> <!-- Close editor-v2-content -->
@@ -110,6 +110,14 @@
 
     <script src="{% static 'js/lightbox.js' %}"></script>
     <script src="{% static 'js/marquee.js' %}"></script>
+    {% if ev2_frame %}
+    <style>
+      .ev2-frame-selected { outline: 2px solid #2563eb !important; outline-offset: 2px; }
+      .ev2-hidden-device { position: relative; opacity: .4; background-image: repeating-linear-gradient(135deg, rgba(37,99,235,.12) 0 6px, transparent 6px 12px) !important; }
+      .ev2-hidden-device::after { content: attr(data-hidden-note); position: absolute; top: 4px; right: 4px; z-index: 50; background: #1e293b; color: #fff; font: 600 10.5px system-ui, sans-serif; padding: 3px 6px; border-radius: 4px; }
+    </style>
+    <script type="module" src="{% static 'editor_v2/js/frame-bridge.js' %}?v=42"></script>
+    {% endif %}
     {% if edit_mode == 'v2' %}
     <script>
       window.EDITOR_CONFIG = {
@@ -123,7 +131,7 @@
         apiBase: '/editor-v2/api',
       };
     </script>
-    <script type="module" src="{% static 'editor_v2/js/editor.js' %}?v=42"></script>
+    <script type="module" src="{% static 'editor_v2/js/editor.js' %}?v=43"></script>
     {% endif %}
     {% block extra_js %}{% endblock %}
     {% include "partials/cookie_consent.html" %}
