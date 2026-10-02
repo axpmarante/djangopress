@@ -1,0 +1,39 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>running</title>
+<div class="editor-v2-content"><section data-section="hero"><h1>Olá</h1></section></div>
+<pre id="out"></pre>
+<script type="module">
+// Leaving the editor with unsaved changes asks first (the browser's "Leave site?" dialog).
+import { events } from '../../static/editor_v2/js/lib/events.js';
+import * as changes from '../../static/editor_v2/js/modules/changes.js';
+
+const fails = [];
+let passed = 0;
+const eq = (name, got, want) => {
+    if (JSON.stringify(got) === JSON.stringify(want)) passed++;
+    else fails.push(`${name}: got ${JSON.stringify(got)}, want ${JSON.stringify(want)}`);
+};
+const leave = () => {
+    const e = new Event('beforeunload', { cancelable: true });
+    window.dispatchEvent(e);
+    return e.defaultPrevented;
+};
+try {
+    window.EDITOR_CONFIG = { pageId: 3, apiBase: '/api', csrfToken: 'x', language: 'pt' };
+    changes.init();
+    eq('nothing to save: leaves freely', leave(), false);
+    events.emit('change:content', { type: 'content', selector: 'section[data-section="hero"] > h1:nth-child(1)', fieldKey: '', value: 'Novo', oldValue: 'Olá' });
+    eq('one change pending', changes.getPendingCount(), 1);
+    eq('unsaved changes: asks before leaving', leave(), true);
+    events.emit('changes:discard');
+    eq('after discard: leaves freely', leave(), false);
+    events.emit('change:classes', { type: 'classes', selector: 'section[data-section="hero"]', value: 'py-10', oldValue: '' });
+    changes.destroy();
+    eq('after destroy: no listener left', leave(), false);
+} catch (err) {
+    fails.push('crash: ' + err.message);
+}
+document.getElementById('out').textContent = fails.join('\n') || 'all good';
+document.title = fails.length ? `FAIL ${fails.length}` : `PASS ${passed}`;
+</script>

@@ -236,6 +236,12 @@ const handlers = {
     attribute: (c) => record(c),
     save: () => save(),
     discard: () => discard(),
+    // Leaving (Exit Edit, another language, closing the tab) with unsaved edits: the browser asks first.
+    beforeUnload: (e) => {
+        if (pending.size === 0) return;
+        e.preventDefault();
+        e.returnValue = '';
+    },
 };
 
 // --- Public API ---
@@ -246,6 +252,7 @@ export function init() {
     events.on('change:attribute', handlers.attribute);
     events.on('changes:save', handlers.save);
     events.on('changes:discard', handlers.discard);
+    window.addEventListener('beforeunload', handlers.beforeUnload);
 
     shortcuts.register('ctrl+z', undo, 'Undo');
     shortcuts.register('ctrl+shift+z', redo, 'Redo');
@@ -270,6 +277,7 @@ export function destroy() {
     events.off('change:attribute', handlers.attribute);
     events.off('changes:save', handlers.save);
     events.off('changes:discard', handlers.discard);
+    window.removeEventListener('beforeunload', handlers.beforeUnload);
 
     shortcuts.unregister('ctrl+z');
     shortcuts.unregister('ctrl+shift+z');
