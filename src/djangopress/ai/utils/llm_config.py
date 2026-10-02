@@ -147,8 +147,8 @@ MODEL_CONFIG = {
 
 # Default model assignments per task category
 AI_MODEL_DEFAULTS = {
-    'generation': 'gemini-pro',
-    'refinement_page': 'gemini-pro',
+    'generation': 'gemini-flash',
+    'refinement_page': 'gemini-flash',
     'refinement_section': 'gemini-flash',
     'refinement_element': 'gemini-flash',
     'header_footer': 'gemini-flash',

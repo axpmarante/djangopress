@@ -1149,7 +1149,7 @@ def run_benchmark(request):
     """
     Start a benchmark as a subprocess.
 
-    POST data: {"model": "gemini-pro", "briefing": "briefings/benchmark.md", "skip_images": true}
+    POST data: {"model": "gemini-flash", "briefing": "briefings/benchmark.md", "skip_images": true}
     Returns: {"success": true, "pid": 12345}
     """
     global _benchmark_process, _benchmark_output_file
@@ -1166,7 +1166,8 @@ def run_benchmark(request):
     except (json.JSONDecodeError, ValueError):
         data = {}
 
-    model = data.get('model', 'gemini-pro')
+    from djangopress.ai.utils.llm_config import get_ai_model
+    model = data.get('model') or get_ai_model('generation')
     briefing = data.get('briefing', 'benchmark.md')
     skip_images = data.get('skip_images', True)
 
