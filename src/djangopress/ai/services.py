@@ -1418,6 +1418,7 @@ Return ONLY the corrected, complete JSON. No markdown, no explanation."""
         page=None,
         direction: dict = None,
         design_context: str = '',
+        base_html: str = None,
     ) -> Dict:
         """
         Generate a brand new section (3 variations) to insert into a page.
@@ -1513,6 +1514,7 @@ Return ONLY the corrected, complete JSON. No markdown, no explanation."""
             component_references=component_references,
             direction=direction,
             design_context=design_context,
+            base_html=base_html,
         )
 
         messages = [

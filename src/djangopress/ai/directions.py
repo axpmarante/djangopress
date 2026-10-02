@@ -40,6 +40,11 @@ NEW_SECTION_DIRECTIONS = [
 ]
 REFINED = {'key': 'next', 'name': 'Refined',
            'brief': 'Apply the request to this version and keep everything else about it.'}
+# A section pasted from another site, restyled for this one.
+FIT = {'key': 'fit', 'name': 'Fitted to this site',
+       'brief': "This section was copied from another website. Restyle it so it belongs to this site: this site's "
+                "palette, fonts, type scale, spacing rhythm, corner radius and details (eyebrows, dividers, buttons). "
+                "Keep its text, images, links, form fields and layout structure; change the styling classes only."}
 
 
 def _generate(page, scope, target, instructions, direction, *, lang, history, base_html, images, block, model,
@@ -53,8 +58,7 @@ def _generate(page, scope, target, instructions, direction, *, lang, history, ba
         page_id = getattr(page, 'pk', None)
         if scope == 'new':
             new = dict(common)
-            for key in ('base_html', 'skip_component_selection'):
-                new.pop(key)
+            new.pop('skip_component_selection')
             result = service.generate_section(page_id=page_id, insert_after=target, **new)
         elif scope == 'element':
             result = service.refine_element_only(page_id=page_id, selector=target, **common)

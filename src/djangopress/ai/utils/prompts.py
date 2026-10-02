@@ -998,6 +998,7 @@ Return ONLY the updated `<section data-section="{section_name}">...</section>` b
         component_references: str = '',
         direction: dict = None,
         design_context: str = '',
+        base_html: str = None,
     ) -> tuple:
         """
         Generate prompt for creating a brand new section on a page.
@@ -1129,6 +1130,22 @@ Return ONLY 3 variations of the new section, separated by <!-- OPTION_1 -->, <!-
             user_prompt = user_prompt.replace(
                 'Return ONLY 3 variations of the new section, separated by <!-- OPTION_1 -->, <!-- OPTION_2 -->, <!-- OPTION_3 --> markers. Each must be a complete `<section>` block.',
                 'Return ONLY the new `<section>` block.')
+        if base_html:
+            # A version already exists (an option being refined, or a section pasted from another site).
+            system_prompt += ("\n\n## Starting version\nThe request works on a given version of the new section. "
+                              "Keep every image `src` and background image URL in it exactly as it is; never swap them "
+                              "for placeholders.")
+            user_prompt = user_prompt.replace('# USER REQUEST', f"""# THE VERSION TO WORK ON
+
+Start from this version of the new section. Apply the request to it and keep everything the request does not change.
+
+```html
+{base_html}
+```
+
+---
+
+# USER REQUEST""", 1)
         if design_context:
             user_prompt = user_prompt.replace('# USER REQUEST', PromptTemplates._design_context_block(design_context) + '\n# USER REQUEST', 1)
 
