@@ -1880,99 +1880,103 @@ body.ev2-version-preview .editor-v2-content {
 }
 
 /* --------------------------------------------------------------------------
-   Section Modal
+   Add a section: popover (Describe | Paste) + result dock
+   The page stays visible: no backdrop, the dock sits at the bottom of the canvas.
    -------------------------------------------------------------------------- */
-.ev2-section-modal {
+.ev2-add-pop, .ev2-add-dock {
   position: fixed;
-  inset: 0;
   z-index: 10003;
-  display: flex;
-  align-items: flex-start;
-  justify-content: center;
-  padding-top: 15vh;
-  font-family: var(--ev2-font);
-}
-
-.ev2-section-modal.hidden {
-  display: none;
-}
-
-.ev2-section-modal-backdrop {
-  position: absolute;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.3);
-}
-
-.ev2-section-modal-dialog {
-  position: relative;
   background: var(--ev2-bg);
+  border: 1px solid var(--ev2-border);
   border-radius: var(--ev2-radius-xl);
-  width: 520px;
-  max-width: 90vw;
   box-shadow: var(--ev2-shadow-xl);
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
-.ev2-section-modal-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 16px 20px;
-  border-bottom: 1px solid var(--ev2-border);
-}
-
-.ev2-section-modal-header h3 {
-  margin: 0;
-  font-size: 16px;
-  font-weight: 700;
   color: var(--ev2-text);
-}
-
-.ev2-section-modal-body {
-  padding: 16px 20px;
-}
-
-.ev2-section-modal-body .ev2-textarea {
-  min-height: 70px;
-}
-
-.ev2-section-modal-status {
-  margin-top: 10px;
-  padding: 8px 12px;
-  border-radius: var(--ev2-radius);
   font-size: 13px;
+  line-height: 1.45;
 }
+.ev2-add-pop[hidden], .ev2-add-dock[hidden] { display: none; }
+/* The site's own CSS styles h3, button, label…: the editor keeps its own look. */
+.ev2-add-pop, .ev2-add-pop *, .ev2-add-dock, .ev2-add-dock * {
+  box-sizing: border-box;
+  font-family: var(--ev2-font);
+  letter-spacing: normal;
+  text-transform: none;
+}
+.ev2-add-pop { width: 440px; max-width: calc(100vw - 32px); }
+.ev2-add-head { display: flex; align-items: center; gap: 8px; padding: 12px 14px 0; }
+.ev2-add-head h3 { margin: 0; flex: 1; font-size: 14px; font-weight: 600; line-height: 1.3; color: var(--ev2-text); }
+.ev2-add-x { border: 0; background: none; color: var(--ev2-text-muted); font-size: 18px; line-height: 1; cursor: pointer; padding: 2px 4px; border-radius: var(--ev2-radius); }
+.ev2-add-x:hover { background: var(--ev2-bg-subtle); color: var(--ev2-text); }
+.ev2-add-tabs { display: flex; gap: 2px; margin: 10px 14px 0; padding: 2px; border-radius: 7px; background: var(--ev2-bg-subtle); }
+.ev2-add-tab { flex: 1; border: 0; background: none; padding: 6px 0; border-radius: 5px; font-size: 12.5px; color: var(--ev2-text-muted); cursor: pointer; }
+.ev2-add-tab.is-on { background: var(--ev2-bg); color: var(--ev2-text); font-weight: 600; box-shadow: var(--ev2-shadow-sm); }
+.ev2-add-body { display: grid; gap: 10px; padding: 12px 14px 14px; }
+.ev2-add-matches { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-height: 20px; font-size: 11.5px; color: var(--ev2-text-muted); }
+.ev2-add-chip { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border: 1px solid var(--ev2-border); border-radius: 999px; font-size: 11.5px; color: var(--ev2-text); }
+.ev2-add-sw { width: 9px; height: 9px; border-radius: 50%; display: inline-block; box-shadow: inset 0 0 0 1px rgba(0,0,0,.08); }
+.ev2-add-ta { width: 100%; min-height: 64px; resize: vertical; padding: 9px 10px; border: 1px solid var(--ev2-border-dark); border-radius: var(--ev2-radius-lg); font-size: 13px; line-height: 1.45; color: var(--ev2-text); background: var(--ev2-bg); }
+.ev2-add-ta:focus { outline: none; border-color: var(--ev2-primary); box-shadow: 0 0 0 3px var(--ev2-primary-alpha); }
+.ev2-add-starters { display: flex; flex-wrap: wrap; gap: 6px; }
+.ev2-add-starter { padding: 3px 10px; border: 1px solid var(--ev2-border); border-radius: 999px; background: var(--ev2-bg); font-size: 12px; color: var(--ev2-text-secondary); cursor: pointer; }
+.ev2-add-starter:hover { border-color: var(--ev2-primary); color: var(--ev2-primary); }
+.ev2-add-foot { display: flex; align-items: center; gap: 8px; }
+.ev2-add-foot small { flex: 1; font-size: 11.5px; color: var(--ev2-text-faint); }
+.ev2-add-note { margin: 0; font-size: 12.5px; color: var(--ev2-text-muted); }
+.ev2-add-msg { margin: 0; padding: 7px 10px; border-radius: var(--ev2-radius); background: #fef2f2; color: #b91c1c; font-size: 12.5px; }
+.ev2-add-msg[hidden] { display: none; }
+.ev2-add-btn { padding: 7px 14px; border: 1px solid var(--ev2-border-dark); border-radius: var(--ev2-radius); background: var(--ev2-bg); color: var(--ev2-text); font-size: 12.5px; font-weight: 600; white-space: nowrap; cursor: pointer; }
+.ev2-add-btn:hover:not(:disabled) { background: var(--ev2-bg-hover); }
+.ev2-add-btn.is-primary { background: var(--ev2-primary); border-color: var(--ev2-primary); color: #fff; }
+.ev2-add-btn.is-primary:hover:not(:disabled) { background: var(--ev2-primary-hover); }
+.ev2-add-btn.is-ghost { border-color: transparent; background: none; color: var(--ev2-text-muted); }
+.ev2-add-btn.is-ghost:hover:not(:disabled) { background: var(--ev2-bg-subtle); color: var(--ev2-text); }
+.ev2-add-btn:disabled { opacity: .5; cursor: default; }
+.ev2-add-btn:focus-visible, .ev2-add-tab:focus-visible, .ev2-add-card:focus-visible, .ev2-add-starter:focus-visible { outline: 2px solid var(--ev2-primary); outline-offset: 2px; }
+.ev2-add-link { border: 0; background: none; color: var(--ev2-primary); font-size: 12px; cursor: pointer; padding: 0; }
+.ev2-add-clip { display: flex; align-items: center; gap: 10px; padding: 8px; border: 1px solid var(--ev2-border); border-radius: var(--ev2-radius-lg); }
+.ev2-add-clip-thumb { position: relative; flex: none; width: 92px; height: 54px; overflow: hidden; border-radius: 5px; background: var(--ev2-bg-subtle); }
+.ev2-add-clip-text { flex: 1; min-width: 0; display: grid; }
+.ev2-add-clip-text b { font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ev2-add-clip-text small { font-size: 11.5px; color: var(--ev2-text-muted); }
+.ev2-add-choice { display: flex; gap: 9px; align-items: flex-start; padding: 9px 11px; border: 1px solid var(--ev2-border); border-radius: var(--ev2-radius-lg); cursor: pointer; }
+.ev2-add-choice.is-on { border-color: var(--ev2-primary); background: var(--ev2-primary-light); }
+.ev2-add-choice.is-disabled { opacity: .5; cursor: default; }
+.ev2-add-choice input { margin: 2px 0 0; accent-color: var(--ev2-primary); }
+.ev2-add-choice span { display: grid; gap: 2px; }
+.ev2-add-choice b { font-size: 12.5px; }
+.ev2-add-choice small { font-size: 11.5px; color: var(--ev2-text-muted); }
+.ev2-add-checks { margin: 0; padding: 0; list-style: none; display: grid; gap: 4px; font-size: 12px; color: var(--ev2-text-secondary); }
+.ev2-add-checks li { display: flex; gap: 7px; }
+.ev2-add-checks li::before { flex: none; width: 12px; font-weight: 700; }
+.ev2-add-checks li.ok::before { content: '✓'; color: #059669; }
+.ev2-add-checks li.warn::before { content: '!'; color: #b45309; text-align: center; }
 
-.ev2-section-modal-status.loading {
-  background: var(--ev2-primary-light);
-  color: var(--ev2-primary);
-}
-
-.ev2-section-modal-status.error {
-  background: #fef2f2;
-  color: #dc2626;
-}
-
-.ev2-section-modal-status.success {
-  background: #f0fdf4;
-  color: #16a34a;
-}
-
-.ev2-section-modal-footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 12px 20px;
-  border-top: 1px solid var(--ev2-border);
-}
-
-.ev2-section-modal-actions {
-  display: flex;
-  gap: 8px;
-  margin-left: auto;
-}
+.ev2-add-dock { bottom: 16px; width: 660px; max-width: calc(100vw - 32px); transform: translateX(-50%); }
+.ev2-add-dock-head { display: flex; align-items: center; gap: 8px; padding: 9px 12px 9px 14px; border-bottom: 1px solid var(--ev2-border); }
+.ev2-add-dock-title { font-size: 13px; white-space: nowrap; }
+.ev2-add-dock-sub { flex: 1; min-width: 0; font-size: 12px; color: var(--ev2-text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ev2-add-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; padding: 10px 14px 0; max-height: 220px; overflow-y: auto; }
+.ev2-add-cards.is-two { grid-template-columns: repeat(2, 1fr); }
+.ev2-add-card { display: grid; padding: 0; border: 1px solid var(--ev2-border); border-radius: var(--ev2-radius-lg); background: var(--ev2-bg); text-align: left; overflow: hidden; cursor: pointer; color: var(--ev2-text); }
+.ev2-add-card:hover:not([aria-disabled]) { border-color: var(--ev2-border-dark); }
+.ev2-add-card.is-on { border-color: var(--ev2-primary); box-shadow: 0 0 0 2px var(--ev2-primary-alpha); }
+.ev2-add-card[aria-disabled] { cursor: default; }
+.ev2-add-card-thumb { position: relative; height: 72px; overflow: hidden; display: grid; place-items: center; background: var(--ev2-bg-subtle); }
+.ev2-add-card-meta { display: grid; gap: 1px; padding: 6px 8px 7px; }
+.ev2-add-card-name { font-size: 12px; font-weight: 600; }
+.ev2-add-card-meta small { font-size: 11px; color: var(--ev2-text-muted); }
+.ev2-add-card.is-failed .ev2-add-card-meta small { color: #b91c1c; }
+.ev2-add-failed { color: var(--ev2-text-faint); font-size: 16px; }
+.ev2-add-spin { width: 16px; height: 16px; border: 2px solid var(--ev2-border-dark); border-top-color: var(--ev2-primary); border-radius: 50%; animation: ev2-add-rot .8s linear infinite; }
+@keyframes ev2-add-rot { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .ev2-add-spin { animation: none; } }
+.ev2-add-why { padding: 9px 14px 0; font-size: 12px; color: var(--ev2-text-muted); }
+.ev2-add-why b { color: var(--ev2-text); }
+.ev2-add-why.is-error { color: #b91c1c; }
+.ev2-add-refine { display: flex; gap: 8px; align-items: flex-start; padding: 10px 14px 0; }
+.ev2-add-refine .ev2-add-ta { min-height: 36px; }
+.ev2-add-dock-foot { display: flex; align-items: center; gap: 6px; padding: 10px 14px 12px; }
+.ev2-add-spacer { flex: 1; }
 
 /* --------------------------------------------------------------------------
    Process Images Modal
