@@ -23,7 +23,7 @@ const esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').
 const label = (name) => { const s = String(name || '').replace(/[-_]+/g, ' ').trim(); return s.charAt(0).toUpperCase() + s.slice(1); };
 const letter = (i) => String.fromCharCode(65 + i);
 const uid = () => Math.random().toString(36).slice(2, 10);
-const THUMB = 180;
+const THUMB = 190;
 
 const DESCRIBE_CARDS = [
     { key: 'refined', name: "In the page's style" },
@@ -304,8 +304,12 @@ function refineSend() {
 
 function show(card) {
     if (!card || card.state !== 'ready') return;
+    const first = !flow.cards.some(c => c.shown);
     flow.active = card.id;
+    card.shown = true;
     previewInPlaceholder(card.html);
+    // The dock covers the bottom of the canvas: bring the preview's top just under the toolbar.
+    if (first) document.querySelector('.ev2-section-placeholder')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 // ── Dock ──
@@ -346,8 +350,9 @@ function renderDock() {
             : `<button type="button" class="ev2-add-btn" data-act="refine"${canRefine ? '' : ' disabled'}>Refine this one…</button>`}
           <button type="button" class="ev2-add-btn is-primary" data-act="add"${ready && !flow.adding ? '' : ' disabled'}>${flow.adding ? 'Adding…' : 'Add this section'}</button>
         </div>`;
+    const width = flow.cards.length === 2 ? THUMB * 2 - 40 : THUMB;   // two cards are wider
     flow.cards.forEach(c => {
-        if (c.state === 'ready') dock.querySelector(`[data-card="${c.id}"] .ev2-add-card-thumb`)?.appendChild(thumbnail(c.html, THUMB));
+        if (c.state === 'ready') dock.querySelector(`[data-card="${c.id}"] .ev2-add-card-thumb`)?.appendChild(thumbnail(c.html, width));
     });
     if (flow.refining) dock.querySelector('#ev2-add-refine')?.focus();
 }

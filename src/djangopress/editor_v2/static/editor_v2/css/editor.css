@@ -1951,12 +1951,13 @@ body.ev2-version-preview .editor-v2-content {
 .ev2-add-checks li.ok::before { content: '✓'; color: #059669; }
 .ev2-add-checks li.warn::before { content: '!'; color: #b45309; text-align: center; }
 
-.ev2-add-dock { bottom: 16px; width: 660px; max-width: calc(100vw - 32px); transform: translateX(-50%); }
+.ev2-add-dock { bottom: 64px;   /* above the site's admin toolbar */
+  width: 660px; max-width: calc(100vw - 32px); transform: translateX(-50%); }
 .ev2-add-dock-head { display: flex; align-items: center; gap: 8px; padding: 9px 12px 9px 14px; border-bottom: 1px solid var(--ev2-border); }
 .ev2-add-dock-title { font-size: 13px; white-space: nowrap; }
 .ev2-add-dock-sub { flex: 1; min-width: 0; font-size: 12px; color: var(--ev2-text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ev2-add-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; padding: 10px 14px 0; max-height: 220px; overflow-y: auto; }
-.ev2-add-cards.is-two { grid-template-columns: repeat(2, 1fr); }
+.ev2-add-cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; padding: 10px 14px 0; max-height: 220px; overflow-y: auto; }
+.ev2-add-cards.is-two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .ev2-add-card { display: grid; padding: 0; border: 1px solid var(--ev2-border); border-radius: var(--ev2-radius-lg); background: var(--ev2-bg); text-align: left; overflow: hidden; cursor: pointer; color: var(--ev2-text); }
 .ev2-add-card:hover:not([aria-disabled]) { border-color: var(--ev2-border-dark); }
 .ev2-add-card.is-on { border-color: var(--ev2-primary); box-shadow: 0 0 0 2px var(--ev2-primary-alpha); }
