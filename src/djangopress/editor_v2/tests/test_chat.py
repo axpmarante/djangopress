@@ -268,3 +268,23 @@ class OldEndpointsTest(ChatBase):
             text = b''.join(res.streaming_content).decode()
         self.assertIn('event: complete', text)
         self.assertNotIn('not found', text)
+
+
+class ContextEndpointTest(ChatBase):
+    def test_matches_for_a_section_before_any_request(self):
+        self.client.force_login(self.user)
+        with mock.patch('djangopress.editor_v2.chat_views.build_design_context',
+                        return_value={'colors': [{'name': 'P', 'value': '#C42014'}], 'fonts': [{'role': 'Body', 'family': 'Inter'}],
+                                      'references': [{'label': 'Hero'}]}) as build:
+            res = self.client.get('/editor-v2/api/chat/context/', {'page_id': self.page.id, 'scope': 'section',
+                                                                   'section_name': 'hero'})
+        self.assertEqual(res.json()['matches'], {'colors': ['#C42014'], 'fonts': ['Inter'], 'references': ['Hero']})
+        self.assertEqual(build.call_args.args[1], 'hero')
+
+    def test_element_uses_its_section(self):
+        self.client.force_login(self.user)
+        with mock.patch('djangopress.editor_v2.chat_views.build_design_context',
+                        return_value={'colors': [], 'fonts': [], 'references': []}) as build:
+            self.client.get('/editor-v2/api/chat/context/', {'page_id': self.page.id, 'scope': 'element',
+                                                             'selector': 'section[data-section="hero"] > h1'})
+        self.assertEqual(build.call_args.args[1], 'hero')

@@ -36,6 +36,7 @@ urlpatterns = [
     path('api/apply-option/', api_views.apply_option, name='api_apply_option'),
     path('api/chat/stream/', chat_views.chat_stream, name='api_chat_stream'),
     path('api/chat/cancel/', chat_views.chat_cancel, name='api_chat_cancel'),
+    path('api/chat/context/', chat_views.chat_context, name='api_chat_context'),
 
     # Remove section/element endpoints
     path('api/remove-section/', api_views.remove_section, name='api_remove_section'),

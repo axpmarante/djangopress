@@ -25,6 +25,7 @@ export class SSEClient {
      * @param {function} [options.onProgress] - Called for each progress event.
      * @param {function} [options.onComplete] - Called when the stream signals completion.
      * @param {function} [options.onError] - Called on errors.
+     * @param {function} [options.onEvent] - Called with (name, data) for every event instead of the three above (network errors still go to onError).
      */
     constructor(url, options = {}) {
         this.url = url;
@@ -32,27 +33,27 @@ export class SSEClient {
         this.onProgress = options.onProgress || function () {};
         this.onComplete = options.onComplete || function () {};
         this.onError = options.onError || function () {};
+        this.onEvent = options.onEvent || null;
         this._abortController = null;
     }
 
     /**
      * Start the streaming request.
-     * @param {Object} body - Request payload (will be JSON-stringified).
+     * @param {Object|FormData} body - Request payload (JSON-stringified; a FormData goes as multipart).
      */
     async start(body) {
         this._abortController = new AbortController();
 
-        const headers = {
-            'X-CSRFToken': this.csrfToken,
-            'Content-Type': 'application/json',
-        };
+        const isForm = typeof FormData !== 'undefined' && body instanceof FormData;
+        const headers = { 'X-CSRFToken': this.csrfToken };
+        if (!isForm) headers['Content-Type'] = 'application/json';
 
         let response;
         try {
             response = await fetch(this.url, {
                 method: 'POST',
                 headers: headers,
-                body: JSON.stringify(body),
+                body: isForm ? body : JSON.stringify(body),
                 signal: this._abortController.signal,
             });
         } catch (err) {
@@ -161,6 +162,10 @@ export class SSEClient {
      * @param {{ event: string, data: * }} event
      */
     _dispatch(event) {
+        if (this.onEvent) {
+            this.onEvent(event.event, event.data);
+            return;
+        }
         switch (event.event) {
             case 'progress':
                 this.onProgress(event.data);

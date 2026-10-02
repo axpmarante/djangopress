@@ -6,6 +6,7 @@ import threading
 from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
 
+from djangopress.ai.design_context import build_design_context, matches_summary
 from djangopress.ai.utils.sse import sse_event, sse_response
 from djangopress.core.decorators import superuser_required
 from djangopress.editor_v2 import chat
@@ -128,3 +129,21 @@ def chat_cancel(request):
     if not cancel.request_cancel(data.get('run_id')):
         return JsonResponse({'success': False, 'error': 'Invalid run_id'}, status=400)
     return JsonResponse({'success': True})
+
+
+@superuser_required
+@require_http_methods(["GET"])
+def chat_context(request):
+    """The "Matches" line before any request: palette, fonts and reference sections for this target."""
+    data = request.GET
+    try:
+        page = _get_editable_object(data)
+    except Exception:
+        page = None
+    if page is None:
+        return JsonResponse({'success': False, 'error': 'Page or editable object not found'}, status=400)
+    lang = _detect_language_from_request(request, data)
+    scope = 'element' if data.get('scope') == 'element' else 'section'
+    target = data.get('selector') if scope == 'element' else data.get('section_name')
+    section = chat._section_name(page, scope, target, lang) if target else None
+    return JsonResponse({'success': True, 'matches': matches_summary(build_design_context(page, section, lang=lang))})

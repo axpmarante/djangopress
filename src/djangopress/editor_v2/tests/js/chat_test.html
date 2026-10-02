@@ -1,0 +1,81 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>running</title>
+<div class="editor-v2-content" id="host"><section data-section="hero" id="hero" class="py-10"><h1 onclick="alert(1)">Olá</h1></section><section data-section="sobre" id="sobre"><p>x</p></section></div>
+<div id="side"></div>
+<pre id="out"></pre>
+<script type="module">
+import { classifyIntent, intentLabel } from '../../static/editor_v2/js/lib/chat-intent.js';
+import { cleanClone, thumbnail, compareView, swapNode, staticHtml } from '../../static/editor_v2/js/lib/chat-preview.js';
+
+const fails = [];
+let passed = 0;
+const eq = (name, got, want) => {
+    if (JSON.stringify(got) === JSON.stringify(want)) passed++;
+    else fails.push(`${name}: got ${JSON.stringify(got)}, want ${JSON.stringify(want)}`);
+};
+try {
+    // same table as editor_v2/tests/test_chat.py IntentTest
+    const cases = {
+        'Torna esta secção mais elegante': 'explore', 'Redesenha isto': 'explore',
+        'quero ver 3 propostas': 'explore', 'Give me some ideas for this': 'explore',
+        'make it more modern': 'explore', 'muda o layout': 'explore',
+        'Título a dourado': 'quick', 'Make the title bigger': 'quick', 'menos espaço em cima': 'quick',
+        'centra o texto': 'quick', 'button colour red': 'quick',
+        'Título dourado e mais elegante': 'explore',
+        'Olá': null,
+    };
+    for (const [text, want] of Object.entries(cases)) eq(`intent "${text}"`, classifyIntent(text), want);
+
+    eq('label auto explore', intentLabel('auto', 'explore'), 'Auto · 3 directions');
+    eq('label auto quick', intentLabel('auto', 'quick'), 'Auto · quick edit');
+    eq('label auto none', intentLabel('auto', null), 'Auto');
+    eq('label quick', intentLabel('quick', 'explore'), 'Quick edit');
+    eq('label explore', intentLabel('explore', null), '3 directions');
+
+    const hero = document.querySelector('[data-section="hero"]').outerHTML;
+    const clone = cleanClone(hero.replace('</section>', '<script>window.ran = 1<\/script></section>'));
+    eq('clone tag', clone.tagName, 'SECTION');
+    eq('clone has no data-section', clone.hasAttribute('data-section'), false);
+    eq('clone has no id', clone.hasAttribute('id'), false);
+    eq('clone has no onclick', clone.querySelector('h1').hasAttribute('onclick'), false);
+    eq('clone has no script', clone.querySelector('script'), null);
+    eq('clone is inert', clone.inert, true);
+    eq('clone keeps classes', clone.className, 'py-10');
+
+    const side = document.getElementById('side');
+    side.appendChild(thumbnail(hero.replace('</section>', '<script>window.ran = 1<\/script></section>'), 88));
+    eq('one hero in the document after a thumbnail', document.querySelectorAll('[data-section="hero"]').length, 1);
+    eq('one #hero', document.querySelectorAll('#hero').length, 1);
+    eq('thumbnail scaled', side.querySelector('.ev2-chat-thumb-inner').style.transform, `scale(${88 / 1280})`);
+    eq('script did not run', window.ran, undefined);
+
+    const cmp = compareView(hero, '<section data-section="hero"><h1>Nova</h1></section>', ['Original', 'B · Bolder']);
+    eq('compare panes', cmp.querySelectorAll('.ev2-chat-compare-pane').length, 2);
+    eq('compare labels', [...cmp.querySelectorAll('.ev2-chat-compare-cap')].map(c => c.textContent), ['Original', 'B · Bolder']);
+    eq('compare carries no data-section', cmp.querySelectorAll('[data-section]').length, 0);
+
+    const sobre = document.querySelector('[data-section="sobre"]');
+    sobre.classList.add('ev2-selected', 'is-active');
+    const injected = document.createElement('button');
+    injected.className = 'splide__arrows';
+    sobre.appendChild(injected);
+    const still = staticHtml(sobre);
+    eq('static html drops editor/runtime classes', still.includes('ev2-selected') || still.includes('is-active'), false);
+    eq('static html drops injected nodes', still.includes('splide__arrows'), false);
+    eq('static html keeps data-section', still.includes('data-section="sobre"'), true);
+    eq('the live node is untouched', sobre.classList.contains('ev2-selected') && !!sobre.querySelector('.splide__arrows'), true);
+    eq('clone drops ev2 classes', cleanClone('<div class="a ev2-selected b"></div>').className, 'a b');
+
+    const live = document.querySelector('[data-section="hero"]');
+    const next = swapNode(live, '<section data-section="hero" id="hero" class="py-24"><h1>Novo</h1></section>');
+    eq('swap returns the new node', next.className, 'py-24');
+    eq('swap keeps the place', document.getElementById('host').firstElementChild, next);
+    eq('swap: old node gone', document.body.contains(live), false);
+    eq('swap: one hero', document.querySelectorAll('[data-section="hero"]').length, 1);
+} catch (err) {
+    fails.push('crash: ' + err.message);
+}
+document.getElementById('out').textContent = fails.join('\n') || 'all good';
+document.title = fails.length ? `FAIL ${fails.length}` : `PASS ${passed}`;
+</script>
