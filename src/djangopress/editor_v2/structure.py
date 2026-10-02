@@ -283,6 +283,40 @@ def duplicate_section(soup, name, new_name):
     return True
 
 
+RETAG_TAGS = ('h1', 'h2', 'h3', 'h4', 'p')
+RETAGGABLE = ('h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p')
+
+
+def retag_element(soup, selector, tag):
+    """Change a heading/paragraph's tag (h2 → h3, h3 → p…), keeping attributes and children."""
+    el = soup.select_one(selector) if selector else None
+    if el is None or el.name not in RETAGGABLE or tag not in RETAG_TAGS:
+        return False
+    el.name = tag
+    return True
+
+
+def place_section(soup, name, before):
+    """Move section `name` in front of section `before` (None = last). False when missing or already there."""
+    section = _find_section(soup, name)
+    if section is None or before == name:
+        return False
+    following = section.find_next_sibling('section')
+    if (before is None and following is None) or (following is not None and following.get('data-section') == before):
+        return False
+    if before is None:
+        last = soup.find_all('section', attrs={'data-section': True})[-1]
+        section = section.extract()
+        last.insert_after(section)
+        return True
+    target = _find_section(soup, before)
+    if target is None:
+        return False
+    section = section.extract()
+    target.insert_before(section)
+    return True
+
+
 def move_section(soup, name, direction):
     """Swap section `name` with the adjacent <section>. False when missing or at the edge."""
     section = _find_section(soup, name)

@@ -694,6 +694,15 @@ def update_page_element_attribute(request):
                         values[code] = i18n[code]
             for code, code_value in values.items():
                 _apply_change_to_lang(page, code, lambda s, v=code_value: apply_attribute(s, v))
+        elif attribute == 'href' and value.startswith('/'):
+            # Internal links point at each language's own URL (/pt/reservas/ ↔ /en/book-a-table/).
+            from djangopress.editor_v2.ai_apply import _localized_href
+            m = re.match(r'^/([a-z]{2})(?=/|$)', value)
+            codes = [c for c, h in (page.html_content_i18n or {}).items() if h]
+            source = m.group(1) if m and m.group(1) in codes else _edit_lang(page, lang)
+            for code in codes:
+                localized = _localized_href(value, source, code)
+                _apply_change_to_lang(page, code, lambda s, v=localized: apply_attribute(s, v))
         else:
             _apply_structural_change_to_all_langs(page, apply_attribute)
         page.save()
@@ -2229,13 +2238,31 @@ def duplicate_section(request):
 @editor_required
 @require_http_methods(["POST"])
 def move_section(request):
-    """Swap a section with the previous ('up') or next ('down') section in every language copy."""
+    """Swap a section with the previous ('up') or next ('down') section in every language copy,
+    or, with `before` (a section name, or null for the end), place it there (drag in the Structure tab)."""
     try:
         data = json.loads(request.body)
         section_name = data.get('section_name')
         direction = data.get('direction')
         if not section_name:
             return JsonResponse({'success': False, 'error': 'Missing section_name'}, status=400)
+        if 'before' in data and direction is None:
+            before = data.get('before') or None
+            page = _get_editable_object(data)
+            lang = _detect_language_from_request(request, data)
+            current_html, _lang = _get_page_html(page, lang)
+            if not structure.place_section(BeautifulSoup(current_html or '', 'html.parser'), section_name, before):
+                return JsonResponse({'success': True, 'moved': False, 'skipped_languages': [], 'page_id': page.id})
+            where = f'before "{before}"' if before else 'to the end'
+            outcome = _run_structural_verb(
+                request, data, f'Moved section "{section_name}" {where}',
+                lambda soup: True if structure.place_section(soup, section_name, before) else None,
+            )
+            if isinstance(outcome, JsonResponse):
+                return outcome
+            page, _ok, skipped = outcome
+            return JsonResponse({'success': True, 'moved': True, 'skipped_languages': skipped, 'page_id': page.id,
+                                 'label': f'Moved section "{section_name}"'})
         if direction not in ('up', 'down'):
             return JsonResponse({'success': False, 'error': 'direction must be "up" or "down"'}, status=400)
 
@@ -2760,3 +2787,69 @@ def restyle_similar(request):
     current = any(r['kind'] == 'page' and r['obj'].pk == page_id for r in done)
     return JsonResponse({'success': True, 'changed': changed, 'total': sum(r['count'] for r in done),
                          'current_page_changed': current})
+
+
+# ---------------------------------------------------------------------------
+# Refreshed sidebar tabs: heading level, link targets, other-language copies
+# ---------------------------------------------------------------------------
+
+@editor_required
+@require_http_methods(["POST"])
+def retag_element(request):
+    """Heading level: h1–h4 or a paragraph, in every language (Content tab)."""
+    try:
+        data = json.loads(request.body)
+        selector = data.get('selector')
+        tag = (data.get('tag') or '').lower()
+        if not selector:
+            return JsonResponse({'success': False, 'error': 'Missing selector'}, status=400)
+        if tag not in structure.RETAG_TAGS:
+            return JsonResponse({'success': False, 'error': 'Pick H1, H2, H3, H4 or Text'}, status=400)
+        outcome = _run_structural_verb(
+            request, data, f'Changed a heading to {tag.upper() if tag != "p" else "text"}',
+            lambda soup: True if structure.retag_element(soup, selector, tag) else None,
+        )
+        if isinstance(outcome, JsonResponse):
+            return outcome
+        page, ok, skipped = outcome
+        if ok is None:
+            return JsonResponse({'success': False, 'error': 'Only headings and paragraphs can change level'}, status=400)
+        new_selector = re.sub(r'[a-z0-9]+(:nth-child\(\d+\))$', lambda m: tag + m.group(1), selector)
+        return JsonResponse({'success': True, 'selector': new_selector, 'skipped_languages': skipped, 'page_id': page.id,
+                             'label': f'Changed to {tag.upper() if tag != "p" else "text"}'})
+    except json.JSONDecodeError:
+        return JsonResponse({'success': False, 'error': 'Invalid JSON'}, status=400)
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
+def _section_label(name):
+    return re.sub(r'[-_]+', ' ', name or '').strip().capitalize()
+
+
+@editor_required
+@require_http_methods(["GET"])
+def link_targets(request):
+    """Pages (URL in the editing language) and their sections, for the Content tab's link picker."""
+    lang = _detect_language_from_request(request, request.GET)
+    pages = []
+    for page in Page.objects.filter(is_active=True).order_by('sort_order', 'pk'):
+        html, _lang = _get_page_html(page, lang)
+        sections = [{'name': s.get('data-section'), 'label': _section_label(s.get('data-section'))}
+                    for s in BeautifulSoup(html or '', 'html.parser').find_all('section', attrs={'data-section': True})]
+        title = (page.title_i18n or {}).get(lang) or page.default_title
+        pages.append({'id': page.id, 'title': title, 'url': page.get_absolute_url(lang), 'sections': sections})
+    return JsonResponse({'success': True, 'pages': pages})
+
+
+@editor_required
+@require_http_methods(["GET"])
+def page_copies(request):
+    """Every language copy of the page (or news post), so the Content tab can show the other language's text."""
+    try:
+        page = _get_editable_object(request.GET)
+    except Exception:
+        page = None
+    if page is None:
+        return JsonResponse({'success': False, 'error': 'Page or editable object not found'}, status=400)
+    return JsonResponse({'success': True, 'copies': dict(getattr(page, 'html_content_i18n', None) or {})})
