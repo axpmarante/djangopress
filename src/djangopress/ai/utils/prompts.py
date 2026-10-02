@@ -796,6 +796,8 @@ Do NOT undo any of these previous changes unless specifically asked to.
 {direction.get('brief', '')}
 
 Satisfy the user's request in this direction. Make it look crafted, not generic: real hierarchy, the site's own details, generous rhythm.
+This is ONE version: the other directions are generated separately. Return ONE version of the section — never stack several alternatives or add labels like "Alternative 1" or "Option A", even when the user asks for several options.
+Keep the page's type scale: headings and body text use the same font, weight, size, leading and tracking classes as the design vocabulary and the type scale of this page.
 Put `<!-- WHY: one short sentence on how this version fits the rest of the site -->` as the first child of {root}."""
 
     @staticmethod

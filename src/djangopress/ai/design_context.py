@@ -58,6 +58,8 @@ def _cap(html):
 
 
 def _references(page, target_name, lang):
+    """The page's own most crafted sections first; the home hero only fills in when the page
+    has little of its own (a page can have its own style, e.g. alternative proposals)."""
     picked, names = [], set()
 
     def add(section, page_title):
@@ -67,20 +69,18 @@ def _references(page, target_name, lang):
         names.add(name)
         picked.append({'name': name, 'label': _label(name), 'page': page_title, 'html': _cap(str(section))})
 
-    home = _homepage()
-    same_page = isinstance(page, Page) and home is not None and page.pk == home.pk
-    if home is not None:
-        home_sections = _sections(_html(home, lang))
-        if home_sections and not (same_page and home_sections[0].get('data-section') == target_name):
-            add(home_sections[0], home.default_title)
-
     own = [s for s in _sections(_html(page, lang)) if s.get('data-section') != target_name]
     own.sort(key=_richness, reverse=True)
     title = getattr(page, 'default_title', '') or ''
-    for section in own:
-        if len(picked) >= REFERENCE_COUNT:
-            break
+    for section in own[:REFERENCE_COUNT]:
         add(section, title)
+    if len(picked) < 2:
+        home = _homepage()
+        same_page = isinstance(page, Page) and home is not None and page.pk == home.pk
+        if home is not None and not same_page:
+            home_sections = _sections(_html(home, lang))
+            if home_sections:
+                add(home_sections[0], home.default_title)
     return picked
 
 
@@ -110,9 +110,9 @@ ROLES = [
 ]
 
 
-def _vocabulary():
+def _count_roles(chunks):
     counts = {role: Counter() for role, _test in ROLES}
-    for chunk in _site_html():
+    for chunk in chunks:
         for el in BeautifulSoup(chunk or '', 'html.parser').find_all(True):
             classes = el.get('class') or []
             if not classes:
@@ -120,12 +120,55 @@ def _vocabulary():
             for role, test in ROLES:
                 if test(el, classes):
                     counts[role][_classes(el)] += 1
+    return counts
+
+
+def _vocabulary(page_html=''):
+    """Per role, the page's own class combination; the rest of the site fills the roles the page lacks."""
+    page_counts = _count_roles([page_html]) if page_html else {role: Counter() for role, _t in ROLES}
+    site_counts = _count_roles(_site_html())
     vocab = []
     for role, _test in ROLES:
-        if counts[role]:
-            classes, count = counts[role].most_common(1)[0]
+        counts = page_counts[role] or site_counts[role]
+        if counts:
+            classes, count = counts.most_common(1)[0]
             vocab.append({'role': role, 'classes': classes, 'count': count})
     return vocab
+
+
+WEIGHT_RE = re.compile(r'^font-(thin|extralight|light|normal|medium|semibold|bold|extrabold|black)$')
+SIZE_RE = re.compile(r'^((?:sm|md|lg|xl|2xl):)?text-(?:\[(\d+(?:\.\d+)?)px\]|(xs|sm|base|lg|xl|[2-9]xl))$')
+NAMED_SIZES = {'xs': 12, 'sm': 14, 'base': 16, 'lg': 18, 'xl': 20, '2xl': 24, '3xl': 30, '4xl': 36, '5xl': 48,
+               '6xl': 60, '7xl': 72, '8xl': 96, '9xl': 128}
+TYPE_TAGS = ('h1', 'h2', 'h3', 'h4', 'p')
+
+
+def size_of(cls):
+    """('md:', 44) for md:text-[44px] / ('', 18) for text-lg; None for anything else."""
+    m = SIZE_RE.match(cls)
+    if not m:
+        return None
+    px = float(m.group(2)) if m.group(2) else NAMED_SIZES[m.group(3)]
+    return m.group(1) or '', int(px) if px == int(px) else px
+
+
+def _typography(page_html):
+    """Per tag on this page: the usual weight and the font sizes used, per breakpoint."""
+    soup = BeautifulSoup(page_html or '', 'html.parser')
+    out = {}
+    for tag in TYPE_TAGS:
+        weights, sizes = Counter(), {}
+        for el in soup.find_all(tag):
+            for cls in el.get('class') or []:
+                if WEIGHT_RE.match(cls):
+                    weights[cls] += 1
+                found = size_of(cls)
+                if found:
+                    sizes.setdefault(found[0], set()).add(found[1])
+        if weights or sizes:
+            out[tag] = {'weight': weights.most_common(1)[0][0] if weights else None,
+                        'sizes': {bp: sorted(v) for bp, v in sizes.items()}}
+    return out
 
 
 def _words(text):
@@ -157,7 +200,8 @@ def build_design_context(page, target_name=None, *, lang=None, query=''):
         'fonts': tokens['fonts'],
         'design_guide': (settings.design_guide if settings else '') or '',
         'references': _references(page, target_name, lang),
-        'vocabulary': _vocabulary(),
+        'vocabulary': _vocabulary(_html(page, lang)),
+        'typography': _typography(_html(page, lang)),
         'images': _images(query, lang),
     }
 
@@ -175,6 +219,11 @@ def render_design_context(ctx):
     if ctx.get('vocabulary'):
         parts.append('\n### Design vocabulary (reuse these exact class combinations for these roles)')
         parts += [f"- {v['role']}: `{v['classes']}` (used {v['count']}×)" for v in ctx['vocabulary']]
+    if ctx.get('typography'):
+        parts.append("\n### Type scale on this page (keep these weights and sizes)")
+        for tag, t in ctx['typography'].items():
+            sizes = '; '.join(f"{bp or 'base'} {'/'.join(str(x) for x in v)}px" for bp, v in t['sizes'].items())
+            parts.append(f"- {tag}: {t['weight'] or 'regular'}{' · ' + sizes if sizes else ''}")
     if ctx.get('references'):
         parts.append('\n### Reference sections (the site\'s most crafted sections: match their craft, spacing and '
                      'details; do not copy their content)')

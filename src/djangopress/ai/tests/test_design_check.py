@@ -70,6 +70,26 @@ class DesignCheckTest(SimpleTestCase):
         out = run('<div><img src="https://placehold.co/600x400?text=A"><img src="https://placehold.co/1x1"></div>')
         self.assertIn('2 placeholder image(s)', out['notes'])
 
+    def test_headings_take_the_page_weight_and_sizes(self):
+        typo = {'h2': {'weight': 'font-light', 'sizes': {'': [34, 44], 'lg:': [40, 60]}},
+                'p': {'weight': None, 'sizes': {'': [14, 16]}}}
+        out = check_and_fix('<section><h2 class="text-[40px] font-semibold md:text-[54px] lg:text-[76px]">T</h2>'
+                            '<p class="text-[17px] font-medium">b</p><p class="text-lg">c</p></section>', COLORS, FONTS, typo)
+        self.assertIn('<h2 class="text-[44px] font-light md:text-[54px] lg:text-[60px]">', out['html'])
+        self.assertIn('<p class="text-[16px] font-medium">b</p>', out['html'])     # body weight left alone
+        self.assertIn('<p class="text-[16px]">c</p>', out['html'])                  # text-lg = 18px → nearest 16
+        self.assertTrue(any('type scale' in n for n in out['notes']))
+
+    def test_a_heading_without_weight_gets_the_page_weight(self):
+        typo = {'h2': {'weight': 'font-light', 'sizes': {}}}
+        out = check_and_fix('<h2 class="text-[44px]">T</h2>', COLORS, FONTS, typo)
+        self.assertIn('class="text-[44px] font-light"', out['html'])
+
+    def test_several_versions_in_one_are_flagged(self):
+        out = check_and_fix('<section><p>Alternativa 1 · Split</p><p>Alternativa 2 · Grelha</p></section>', COLORS, FONTS)
+        self.assertIn('several versions in one', out['notes'])
+        self.assertNotIn('several versions in one', check_and_fix('<p>Opção vegetariana</p>', COLORS, FONTS)['notes'])
+
     def test_untouched_markup_is_kept(self):
         html = '<section data-section="x" class="py-24"><p class="text-[#C42014]">Olá &amp; adeus</p></section>'
         self.assertEqual(run(html)['html'], html)

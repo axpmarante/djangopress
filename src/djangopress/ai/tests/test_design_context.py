@@ -41,13 +41,18 @@ class DesignContextTest(TestCase):
         self.page = Page.objects.create(title_i18n={'pt': 'Casa'}, slug_i18n={'pt': 'casa'}, is_active=True,
                                         html_content_i18n={'pt': SOBRE + EVENTOS + CONTACTOS})
 
-    def test_references_put_the_home_hero_first_and_skip_the_target(self):
+    def test_references_come_from_the_page_being_edited(self):
         ctx = dc.build_design_context(self.page, 'contactos', lang='pt')
         names = [r['name'] for r in ctx['references']]
-        self.assertEqual(names[0], 'hero')
+        self.assertEqual(names, ['eventos', 'sobre'])          # richest first; no home hero when the page has its own
         self.assertNotIn('contactos', names)
-        self.assertEqual(set(names), {'hero', 'sobre', 'eventos'})
-        self.assertEqual([r['label'] for r in ctx['references']][0], 'Hero')
+
+    def test_the_home_hero_fills_in_when_the_page_has_little_of_its_own(self):
+        self.page.html_content_i18n = {'pt': SOBRE + CONTACTOS}
+        self.page.save()
+        names = [r['name'] for r in dc.build_design_context(self.page, 'contactos', lang='pt')['references']]
+        self.assertEqual(names, ['sobre', 'hero'])
+        self.assertEqual(dc.build_design_context(self.page, 'contactos', lang='pt')['references'][1]['label'], 'Hero')
 
     def test_references_on_the_homepage_do_not_repeat_the_hero(self):
         self.home.html_content_i18n = {'pt': HERO + SOBRE + CONTACTOS}
@@ -71,7 +76,7 @@ class DesignContextTest(TestCase):
     def test_vocabulary_finds_the_recurring_roles(self):
         vocab = {v['role']: v for v in dc.build_design_context(self.page, 'contactos', lang='pt')['vocabulary']}
         self.assertEqual(vocab['eyebrow']['classes'], EYEBROW)
-        self.assertEqual(vocab['eyebrow']['count'], 3)
+        self.assertEqual(vocab['eyebrow']['count'], 2)       # counted on the page being edited
         self.assertEqual(vocab['section title']['classes'], TITLE)
         self.assertEqual(vocab['primary button']['classes'], BUTTON)
         self.assertEqual(vocab['body text']['classes'], BODY)
@@ -84,6 +89,20 @@ class DesignContextTest(TestCase):
         self.page.save()
         vocab = {v['role']: v for v in dc.build_design_context(self.page, 'contactos', lang='pt')['vocabulary']}
         self.assertEqual(vocab['text link']['classes'], 'underline text-[#C42014]')
+
+    def test_the_page_style_wins_over_the_rest_of_the_site(self):
+        light = "font-['Fraunces'] text-[44px] font-light"
+        self.home.html_content_i18n = {'pt': HERO + SOBRE + EVENTOS + EVENTOS.replace('eventos', 'outra')}
+        self.home.save()
+        self.page.html_content_i18n = {'pt': f'<section data-section="a"><h2 class="{light}">A</h2><p class="{BODY}">{LONG}</p></section>'
+                                             f'<section data-section="b"><h2 class="{light}">B</h2></section>' + CONTACTOS}
+        self.page.save()
+        ctx = dc.build_design_context(self.page, 'contactos', lang='pt')
+        vocab = {v['role']: v for v in ctx['vocabulary']}
+        self.assertEqual(vocab['section title']['classes'], light)
+        self.assertEqual(vocab['eyebrow']['classes'], EYEBROW)        # the page has none: the site's fills in
+        self.assertEqual(ctx['typography']['h2']['weight'], 'font-light')
+        self.assertEqual(ctx['typography']['h2']['sizes'][''], [44])
 
     def test_tokens_and_guide(self):
         ctx = dc.build_design_context(self.page, 'contactos', lang='pt')
@@ -121,7 +140,7 @@ class DesignContextTest(TestCase):
         self.assertLessEqual(len(m['colors']), 5)
         self.assertIn('#C42014', m['colors'])
         self.assertEqual(m['fonts'], ['Fraunces', 'Inter'])
-        self.assertEqual(m['references'][0], 'Hero')
+        self.assertEqual(m['references'][0], 'Eventos')     # the page's own sections first
         self.assertLessEqual(len(m['references']), 3)
 
     def test_object_without_sections_still_works(self):

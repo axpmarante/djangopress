@@ -15,11 +15,12 @@ from djangopress.ai.utils.llm_config import get_ai_model
 
 DIRECTIONS = [
     {'key': 'refined', 'name': 'Close to current',
-     'brief': 'Keep the structure and the order of the content. Raise the craft: a clearer type scale, a better '
-              'spacing rhythm, and the details this site uses elsewhere (eyebrows, dividers, accents).'},
+     'brief': 'Keep the structure and the order of the content. Raise the craft with a better spacing rhythm and '
+              'the details this page uses elsewhere (eyebrows, dividers, accents). Keep its type scale.'},
     {'key': 'bold', 'name': 'Bolder',
-     'brief': 'More presence: stronger contrast or a colour band from the site palette, larger display type, '
-              'real imagery from the library where it helps. Still unmistakably this site.'},
+     'brief': 'More presence: stronger contrast or a colour band from the site palette, real imagery from the '
+              'library where it helps. A title may use the largest size this page already uses; same weights. '
+              'Still unmistakably this page.'},
     {'key': 'layout', 'name': 'New layout',
      'brief': 'A different layout pattern that this site already uses elsewhere (split, cards, editorial list, '
               'feature grid), keeping all the content and its meaning.'},
@@ -81,7 +82,10 @@ def generate_directions(page, scope, target, instructions, *, lang=None, history
             for future in done:
                 d = futures[future]
                 try:
-                    checked = check_and_fix(future.result(), context.get('colors'), context.get('fonts'))
+                    checked = check_and_fix(future.result(), context.get('colors'), context.get('fonts'),
+                                            context.get('typography'))
+                    if 'several versions in one' in checked['notes']:
+                        raise ValueError('The AI put several versions in one: regenerate this direction')
                     item = {'key': d['key'], 'name': d['name'], 'html': checked['html'], 'why': checked['why'],
                             'notes': checked['notes']}
                 except Exception as exc:

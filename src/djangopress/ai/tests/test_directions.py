@@ -41,6 +41,8 @@ class PromptTest(TestCase):
         self.assertIn('<!-- WHY:', both)
         self.assertIn('PALETTE-MARK', user)
         self.assertNotIn('Keep output concise', both)
+        self.assertIn('ONE version', both)
+        self.assertIn("page's type scale", both)
         self.assertNotIn('OPTION_1', both)
 
     def test_without_direction_the_three_option_prompt_is_unchanged(self):
@@ -176,6 +178,12 @@ class DirectionsTest(TestCase):
             cls.return_value.refine_section_only.return_value = {'options': [{'html': '<section><p>x</p></section>'}]}
             directions.generate_directions(self.page, 'section', 'sala', 'x', lang='pt', context=CTX)
         self.assertEqual({c.kwargs['model_name'] for c in cls.call_args_list}, {'gemini-flash'})
+
+    def test_a_direction_with_several_versions_inside_fails(self):
+        html = '<section data-section="sala"><p>Alternativa 1 · A</p><p>Alternativa 2 · B</p></section>'
+        result, _got, _call = self.run_directions(lambda **kw: {'options': [{'html': html}]})
+        self.assertTrue(all('error' in r for r in result))
+        self.assertIn('several versions', result[0]['error'])
 
     def test_only_some_keys(self):
         _r, _g, call = self.run_directions(lambda **kw: {'options': [{'html': '<section><p>x</p></section>'}]},

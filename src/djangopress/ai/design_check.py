@@ -9,6 +9,8 @@ import re
 
 from bs4 import BeautifulSoup, Comment
 
+from djangopress.ai.design_context import WEIGHT_RE, size_of
+
 NEUTRAL_SNAP = 60
 HEX_SNAP = 40
 CHROMA_MIN = 40      # 0–255: below this a colour counts as a neutral
@@ -44,6 +46,7 @@ UTILITIES = r'bg|text|border(?:-[trblxy])?|from|via|to|ring|fill|stroke|divide|o
 PALETTE_RE = re.compile(rf'^({UTILITIES})-({"|".join(PALETTE)})-(\d{{2,3}})(/\d{{1,3}})?$')
 HEX_RE = re.compile(r'^(.+?)-\[(#[0-9A-Fa-f]{6})\](/\d{1,3})?$')
 FONT_RE = re.compile(r"^font-\[(?:'([^']+)'|([A-Za-z][\w ]*))\]$")
+SEVERAL_RE = re.compile(r'\b(?:alternativ[ae]|op[çc][ãa]o|option|proposta|vers[ãa]o|version|varia[çc][ãa]o|variation)\s*(\d)', re.I)
 WHY_RE = re.compile(r'\s*<!--\s*WHY:\s*(.*?)\s*-->\s*', re.DOTALL)
 HEADINGS = ('h1', 'h2', 'h3', 'h4', 'h5', 'h6')
 
@@ -143,7 +146,39 @@ class _Fixer:
         return cls
 
 
-def check_and_fix(html, colors, fonts):
+def _fix_type(el, rule, fixer):
+    """Heading weight and font sizes onto the page's own (nearest size used at that breakpoint)."""
+    classes = list(el.get('class') or [])
+    changed = False
+    for i, cls in enumerate(classes):
+        found = size_of(cls)
+        if not found:
+            continue
+        bp, px = found
+        options = rule.get('sizes', {}).get(bp)
+        if not options or px in options:
+            continue
+        near = min(options, key=lambda o: (abs(o - px), o))
+        classes[i] = f'{bp}text-[{near}px]'
+        changed = True
+    weight = rule.get('weight')
+    if weight and el.name != 'p':
+        current = [c for c in classes if WEIGHT_RE.match(c)]
+        if current != [weight]:
+            if current:
+                first = classes.index(current[0])
+                classes = [c for c in classes if not WEIGHT_RE.match(c)]
+                classes.insert(first, weight)
+            else:
+                classes.append(weight)
+            changed = True
+    if changed:
+        el['class'] = classes
+        fixer.note("Matched the page's type scale")
+    return changed
+
+
+def check_and_fix(html, colors, fonts, typography=None):
     why_match = WHY_RE.search(html or '')
     why = why_match.group(1).strip() if why_match else ''
     stripped = WHY_RE.sub('', html or '')
@@ -158,6 +193,11 @@ def check_and_fix(html, colors, fonts):
         if new != old:
             el['class'] = new
             changed = True
+    for el in soup.find_all(list((typography or {}).keys())):
+        if _fix_type(el, typography[el.name], fixer):
+            changed = True
+    if len(set(SEVERAL_RE.findall(soup.get_text(' ')))) >= 2:
+        fixer.note('several versions in one')
     for comment in soup.find_all(string=lambda s: isinstance(s, Comment) and s.strip().startswith('WHY:')):
         comment.extract()
         changed = True
