@@ -191,6 +191,11 @@ def _images(query, lang):
             for _s, _o, img in ranked[:IMAGE_LIMIT]]
 
 
+def _forms():
+    from djangopress.core.models import DynamicForm
+    return [{'slug': f.slug, 'name': f.name} for f in DynamicForm.objects.filter(is_active=True).order_by('name')]
+
+
 def build_design_context(page, target_name=None, *, lang=None, query=''):
     settings = SiteSettings.load()
     lang = lang or (settings.get_default_language() if settings else 'pt')
@@ -203,6 +208,7 @@ def build_design_context(page, target_name=None, *, lang=None, query=''):
         'vocabulary': _vocabulary(_html(page, lang)),
         'typography': _typography(_html(page, lang)),
         'images': _images(query, lang),
+        'forms': _forms(),
     }
 
 
@@ -234,6 +240,12 @@ def render_design_context(ctx):
         parts.append('\n### Library images (for any new image use one of these real URLs, with a fitting alt text; '
                      'use a placeholder only when none fits)')
         parts += [f"- {i['url']} — {i['alt']}" for i in ctx['images']]
+    if 'forms' in ctx:
+        if ctx['forms']:
+            parts.append('\n### Forms on this site (a form posts only to one of these; never invent another slug)')
+            parts += [f"- {f['name']}: `action=\"/forms/{f['slug']}/submit/\"`" for f in ctx['forms']]
+        else:
+            parts.append('\n### Forms\nThis site has no forms: link to the contact details instead of adding a form.')
     if ctx.get('design_guide'):
         parts.append(f"\n### Design guide\n{ctx['design_guide']}")
     return '\n'.join(parts)
