@@ -1185,6 +1185,10 @@ Return ONLY the corrected, complete JSON. No markdown, no explanation."""
         reference_images: list = None,
         on_progress=None,
         lang: str = None,
+        page=None,
+        base_html: str = None,
+        direction: dict = None,
+        design_context: str = '',
     ) -> Dict:
         """
         Refine a single section without saving to DB.
@@ -1217,10 +1221,12 @@ Return ONLY the corrected, complete JSON. No markdown, no explanation."""
         print(f"Instructions: {instructions}")
 
         notify("prepare", "running")
-        try:
-            page = Page.objects.get(id=page_id)
-        except Page.DoesNotExist:
-            raise ValueError(f"Page with ID {page_id} not found")
+        if page is None:
+            try:
+                page = Page.objects.get(id=page_id)
+            except Page.DoesNotExist:
+                raise ValueError(f"Page with ID {page_id} not found")
+        log_page = page if isinstance(page, Page) else None   # AICallLog.page is a Page FK; news posts log without it
 
         site_settings = SiteSettings.objects.first()
         default_language = site_settings.get_default_language() if site_settings else 'pt'
@@ -1231,8 +1237,8 @@ Return ONLY the corrected, complete JSON. No markdown, no explanation."""
         design_guide = '' if skip_design_guide else (site_settings.design_guide if site_settings else '')
         model = model_override or self.model_name
 
-        page_title = page.default_title
-        page_slug = page.default_slug
+        page_title = getattr(page, 'default_title', '') or ''
+        page_slug = getattr(page, 'default_slug', '') or ''
 
         # Build pages list for inter-page linking context
         pages_data = []
@@ -1247,6 +1253,14 @@ Return ONLY the corrected, complete JSON. No markdown, no explanation."""
         html_i18n = page.html_content_i18n or {}
         clean_html = html_i18n.get(current_lang) or html_i18n.get(default_language) or ''
         clean_html = self._strip_legacy_attrs(clean_html)
+        if base_html:
+            # A follow-up on an option that was never applied: the model edits that option.
+            page_soup = BeautifulSoup(clean_html, 'html.parser')
+            stored = page_soup.find('section', attrs={'data-section': section_name})
+            new_section = BeautifulSoup(base_html, 'html.parser').find('section')
+            if stored is not None and new_section is not None:
+                stored.replace_with(new_section)
+                clean_html = str(page_soup)
         print(f"Reading HTML from html_content_i18n[{current_lang}] ({len(clean_html)} chars)")
         notify("prepare", "done")
 
@@ -1294,6 +1308,8 @@ Return ONLY the corrected, complete JSON. No markdown, no explanation."""
             component_references=component_references,
             include_component_index=not skip_component_selection,
             has_reference_images=bool(reference_images),
+            direction=direction,
+            design_context=design_context,
         )
 
         notify("refine_html", "running", model=model)
@@ -1321,14 +1337,14 @@ Return ONLY the corrected, complete JSON. No markdown, no explanation."""
                 system_prompt=system_prompt, user_prompt=user_prompt,
                 response_text=response.choices[0].message.content,
                 duration_ms=int((time.time() - t0) * 1000),
-                page=page, section_name=section_name, **usage,
+                page=log_page, section_name=section_name, **usage,
             )
         except Exception as e:
             self._log(
                 action='refine_section', model_name=actual_model, provider=provider_str,
                 system_prompt=system_prompt, user_prompt=user_prompt,
                 duration_ms=int((time.time() - t0) * 1000),
-                page=page, section_name=section_name,
+                page=log_page, section_name=section_name,
                 success=False, error_message=str(e),
             )
             raise
@@ -1547,6 +1563,10 @@ Return ONLY the corrected, complete JSON. No markdown, no explanation."""
         skip_design_guide: bool = False,
         on_progress=None,
         lang: str = None,
+        page=None,
+        base_html: str = None,
+        direction: dict = None,
+        design_context: str = '',
     ) -> Dict:
         """
         Refine a single element within a section without saving to DB.
@@ -1568,10 +1588,12 @@ Return ONLY the corrected, complete JSON. No markdown, no explanation."""
         print(f"Instructions: {instructions}")
 
         notify("prepare", "running")
-        try:
-            page = Page.objects.get(id=page_id)
-        except Page.DoesNotExist:
-            raise ValueError(f"Page with ID {page_id} not found")
+        if page is None:
+            try:
+                page = Page.objects.get(id=page_id)
+            except Page.DoesNotExist:
+                raise ValueError(f"Page with ID {page_id} not found")
+        log_page = page if isinstance(page, Page) else None   # AICallLog.page is a Page FK; news posts log without it
 
         site_settings = SiteSettings.objects.first()
         default_language = site_settings.get_default_language() if site_settings else 'pt'
@@ -1597,6 +1619,12 @@ Return ONLY the corrected, complete JSON. No markdown, no explanation."""
         element_el = soup.select_one(selector)
         if not element_el:
             raise ValueError(f"Element not found for selector: {selector}")
+        if base_html:
+            # A follow-up on an option that was never applied: the model edits that option.
+            new_el = next((t for t in BeautifulSoup(base_html, 'html.parser').contents if getattr(t, 'name', None)), None)
+            if new_el is not None:
+                element_el.replace_with(new_el)
+                element_el = new_el
 
         # Extract parent section for context
         section_el = element_el.find_parent('section', attrs={'data-section': True})
@@ -1650,6 +1678,8 @@ Return ONLY the corrected, complete JSON. No markdown, no explanation."""
             multi_option=multi_option,
             component_references=component_references,
             include_component_index=not skip_component_selection,
+            direction=direction,
+            design_context=design_context,
         )
 
         messages = [
@@ -1668,14 +1698,14 @@ Return ONLY the corrected, complete JSON. No markdown, no explanation."""
                 system_prompt=system_prompt, user_prompt=user_prompt,
                 response_text=response.choices[0].message.content,
                 duration_ms=int((time.time() - t0) * 1000),
-                page=page, section_name=section_name, **usage,
+                page=log_page, section_name=section_name, **usage,
             )
         except Exception as e:
             self._log(
                 action='refine_element', model_name=actual_model, provider=provider_str,
                 system_prompt=system_prompt, user_prompt=user_prompt,
                 duration_ms=int((time.time() - t0) * 1000),
-                page=page, section_name=section_name,
+                page=log_page, section_name=section_name,
                 success=False, error_message=str(e),
             )
             raise

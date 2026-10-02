@@ -788,6 +788,24 @@ Do NOT undo any of these previous changes unless specifically asked to.
         return (system_prompt, user_prompt)
 
     @staticmethod
+    def _direction_block(direction, root):
+        """One design direction for this call (the editor asks for three, in parallel)."""
+        return f"""
+
+## Direction: {direction.get('name', '')}
+{direction.get('brief', '')}
+
+Satisfy the user's request in this direction. Make it look crafted, not generic: real hierarchy, the site's own details, generous rhythm.
+Put `<!-- WHY: one short sentence on how this version fits the rest of the site -->` as the first child of {root}."""
+
+    @staticmethod
+    def _design_context_block(design_context):
+        if not design_context:
+            return ''
+        return (f"{design_context}\n\nReuse the site's design vocabulary and the craft of its reference sections; "
+                "prefer the listed library images over placeholders.\n\n---\n")
+
+    @staticmethod
     def get_section_refinement_prompt(
         site_name: str,
         site_description: str,
@@ -806,6 +824,8 @@ Do NOT undo any of these previous changes unless specifically asked to.
         component_references: str = '',
         include_component_index: bool = True,
         has_reference_images: bool = False,
+        direction: dict = None,
+        design_context: str = '',
     ) -> tuple:
         """
         Generate prompt for section-only refinement.
@@ -843,6 +863,8 @@ Return exactly 3 distinct variations of the section. Separate them with HTML com
 Make each variation meaningfully different: vary layout structure, visual emphasis, spacing, or content arrangement. All 3 must satisfy the user request and include the complete <section data-section="{section_name}"> wrapper.
 
 IMPORTANT: Keep output concise to fit all 3 options. For SVG icons, use simple paths (< 3 lines each) or Heroicons-style minimal SVGs. Never use complex multi-path SVGs — they waste tokens and prevent generating all 3 options."""
+        if direction:
+            multi_option_block = PromptTemplates._direction_block(direction, 'the `<section>`')
 
         system_prompt = f"""You are a senior frontend designer specializing in Tailwind CSS. Your goal is to edit ONE specific section of a webpage.
 
@@ -928,7 +950,7 @@ The full page HTML is provided below so you can see the overall design, colors, 
 ```
 
 ---
-{history_block}
+{PromptTemplates._design_context_block(design_context)}{history_block}
 # USER REQUEST
 
 Edit the `<section data-section="{section_name}">` section:
@@ -1092,6 +1114,8 @@ Return ONLY 3 variations of the new section, separated by <!-- OPTION_1 -->, <!-
         multi_option: bool = False,
         component_references: str = '',
         include_component_index: bool = True,
+        direction: dict = None,
+        design_context: str = '',
     ) -> tuple:
         """
         Generate prompt for element-level refinement.
@@ -1130,6 +1154,8 @@ Return exactly 3 distinct variations of the element. Separate them with HTML com
 Make each variation meaningfully different: vary styling, layout, or visual approach. All 3 must satisfy the user request and keep the data-target="true" attribute.
 
 IMPORTANT: Keep output concise to fit all 3 options. For SVG icons, use simple paths (< 3 lines each) or Heroicons-style minimal SVGs. Never use complex multi-path SVGs."""
+        if direction:
+            multi_option_block = PromptTemplates._direction_block(direction, 'the element marked with `data-target="true"`')
 
         system_prompt = f"""You are a senior frontend designer specializing in Tailwind CSS. Your goal is to edit ONE specific element within a webpage section.
 
@@ -1197,7 +1223,7 @@ The element marked with `data-target="true"`:
 ```
 
 ---
-{history_block}
+{PromptTemplates._design_context_block(design_context)}{history_block}
 # USER REQUEST
 
 Edit the element marked with `data-target="true"`:
