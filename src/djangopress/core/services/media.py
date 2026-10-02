@@ -26,6 +26,7 @@ class MediaService:
                 'id': img.id,
                 'title': img.title_i18n,
                 'url': img.url,
+                'file_type': img.file_type,
                 'tags': img.tags or '',
             })
         return {'success': True, 'images': data, 'message': f'{len(data)} images found'}

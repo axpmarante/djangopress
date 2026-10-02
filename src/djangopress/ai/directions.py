@@ -59,7 +59,7 @@ def _generate(page, scope, target, instructions, direction, *, lang, history, ba
         if scope == 'new':
             new = dict(common)
             new.pop('skip_component_selection')
-            result = service.generate_section(page_id=page_id, insert_after=target, **new)
+            result = service.generate_section(page_id=page_id, insert_after=target, reference_images=images, **new)
         elif scope == 'element':
             result = service.refine_element_only(page_id=page_id, selector=target, **common)
         else:

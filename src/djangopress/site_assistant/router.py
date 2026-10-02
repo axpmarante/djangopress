@@ -28,7 +28,7 @@ Categories:
 - settings: Site config, contact info, design system colors/fonts, briefing
 - header_footer: Regenerate or edit header/footer with AI
 - forms: Dynamic forms and submissions
-- media: Browse/search image library
+- media: Browse/search the media library (images and documents such as PDF menus)
 - news: Blog/news posts and categories
 - properties: Rental properties — list, search, update, embed property cards in pages
 - stats: Detailed site statistics

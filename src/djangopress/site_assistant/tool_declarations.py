@@ -780,12 +780,30 @@ FORMS_TOOLS = [
 
 LIST_IMAGES = types.FunctionDeclaration(
     name='list_images',
-    description='Browse the media library. Search by title or tags.',
+    description=('Browse the media library: images and documents (file_type "document", e.g. PDF menus). '
+                 'Search by title or tags.'),
     parameters=S(
         type=T.OBJECT,
         properties={
             'search': S(type=T.STRING, description='Search query to filter images by title or tags.'),
             'limit': S(type=T.INTEGER, description='Maximum number of images to return. Defaults to 20.'),
+        },
+    ),
+)
+
+READ_DOCUMENT_DECLARATION = types.FunctionDeclaration(
+    name='read_document',
+    description=(
+        'Read a PDF or image that is on this site (media library, or linked on a page): a menu, price list, '
+        'brochure, schedule. You see its full content after the call, and it is passed to the design model on '
+        'refine_section / refine_page / insert_section for the rest of this reply. Only files of this site; '
+        'for an outside link, ask the user to attach the file.'
+    ),
+    parameters=S(
+        type=T.OBJECT,
+        properties={
+            'file_id': S(type=T.INTEGER, description='The id from list_images.'),
+            'url': S(type=T.STRING, description='Or the file\'s URL, as the user gave it or as a page links it.'),
         },
     ),
 )
@@ -1061,9 +1079,10 @@ def build_tool_declarations(intents):
     for intent in intents:
         if intent in TOOL_CATEGORIES:
             declarations.extend(d for d in TOOL_CATEGORIES[intent] if d not in declarations)
-    # Always include the meta tool so the model can request more categories, and web search
+    # Always include the meta tool so the model can request more categories, web search and documents
     declarations.append(REQUEST_TOOLS_DECLARATION)
     declarations.append(WEB_SEARCH_DECLARATION)
+    declarations.append(READ_DOCUMENT_DECLARATION)
     declarations.append(UNDO_DECLARATION)
     return [types.Tool(function_declarations=declarations)]
 
