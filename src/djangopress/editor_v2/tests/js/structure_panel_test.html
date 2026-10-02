@@ -1,0 +1,108 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>running</title>
+<header id="site-header">Header</header>
+<div class="editor-v2-content" id="host">
+<section data-section="hero" id="hero" style="height:40px"><h1>Bem-vindo</h1><img src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==" alt="Mesa"></section>
+<section data-section="eventos" id="eventos" style="height:40px"><h2>Celebrações</h2><p>Grupos grandes.</p><a class="bg-red-600 px-6" href="tel:1">Ligar</a></section>
+<section data-section="contactos" id="contactos" class="py-10" style="height:40px"><h2>Contactos</h2></section>
+</div>
+<footer>Footer</footer>
+<div id="ev2-tab-content" style="height:600px;overflow:auto"></div>
+<pre id="out"></pre>
+<script type="module">
+import { events } from '../../static/editor_v2/js/lib/events.js';
+import { renderStructurePanel } from '../../static/editor_v2/js/modules/structure-panel.js';
+
+const fails = [];
+let passed = 0;
+const eq = (name, got, want) => {
+    if (JSON.stringify(got) === JSON.stringify(want)) passed++;
+    else fails.push(`${name}: got ${JSON.stringify(got)}, want ${JSON.stringify(want)}`);
+};
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+async function until(fn, ms = 2000) { const end = Date.now() + ms; while (Date.now() < end) { if (fn()) return true; await sleep(20); } return false; }
+
+const requests = [];
+window.fetch = async (url, init = {}) => {
+    requests.push({ url: String(url), body: init.body ? JSON.parse(init.body) : null });
+    return new Response(JSON.stringify({ success: false, error: 'stubbed' }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+};
+window.EDITOR_CONFIG = { pageId: 3, pageTitle: 'Início', apiBase: '/api', csrfToken: 'x', language: 'pt', languages: ['pt', 'en'] };
+const emitted = [];
+for (const n of ['change:classes', 'selection:request']) events.on(n, d => emitted.push([n, d]));
+const last = (n) => [...emitted].reverse().find(([x]) => x === n)?.[1];
+
+const box = document.getElementById('ev2-tab-content');
+const q = (s) => box.querySelector(s);
+const qa = (s) => [...box.querySelectorAll(s)];
+const eventos = document.querySelector('[data-section="eventos"]');
+
+try {
+    renderStructurePanel(box, eventos.querySelector('p'));
+    eq('title and count', [q('.ev2-sp-head h2')?.textContent, q('.ev2-sp-count')?.textContent], ['Início', '3 sections']);
+    eq('rows by name', qa('.ev2-sp-row .ev2-sp-name').map(n => n.childNodes[0].textContent), ['Hero', 'Eventos', 'Contactos']);
+    eq('descriptions', qa('.ev2-sp-row .ev2-sp-desc').map(n => n.textContent), ['Title + photo', 'Title + text + button', 'Title']);
+    eq('global rows', qa('.ev2-sp-global').map(g => g.dataset.global), ['header', 'footer']);
+    eq('the selection\'s section is open', qa('.ev2-sp-kid .ev2-sp-role').map(r => r.textContent), ['Heading', 'Text', 'Button']);
+    eq('the selected item is marked', q('.ev2-sp-kid.is-sel .ev2-sp-val')?.textContent, 'Grupos grandes.');
+
+    q('.ev2-sp-kid').click();
+    eq('clicking an item selects it', last('selection:request'), eventos.querySelector('h2'));
+
+    // search
+    const find = q('.ev2-sp-find');
+    find.value = 'grandes';
+    find.dispatchEvent(new Event('input'));
+    eq('search by text inside', qa('.ev2-sp-row .ev2-sp-name').map(n => n.childNodes[0].textContent), ['Eventos']);
+    find.value = 'cont';
+    find.dispatchEvent(new Event('input'));
+    eq('search by name', qa('.ev2-sp-row .ev2-sp-name').map(n => n.childNodes[0].textContent), ['Contactos']);
+    find.value = '';
+    find.dispatchEvent(new Event('input'));
+
+    // hide on mobile
+    const contactosRow = qa('.ev2-sp-row').find(r => r.dataset.section === 'contactos');
+    contactosRow.querySelector('[data-tool="hide"]').click();
+    const contactos = document.querySelector('[data-section="contactos"]');
+    eq('hidden on mobile', contactos.classList.contains('max-md:hidden'), true);
+    eq('class change emitted', last('change:classes')?.value, 'py-10 max-md:hidden');
+    eq('the row shows it', !!qa('.ev2-sp-row').find(r => r.dataset.section === 'contactos').querySelector('.ev2-sp-hidden'), true);
+    qa('.ev2-sp-row').find(r => r.dataset.section === 'contactos').querySelector('[data-tool="hide"]').click();
+    eq('shown again', contactos.className, 'py-10');
+
+    // drag contactos onto the top half of hero → before hero
+    const rowOf = (name) => qa('.ev2-sp-row').find(r => r.dataset.section === name);
+    const dt = new DataTransfer();
+    rowOf('contactos').dispatchEvent(new DragEvent('dragstart', { dataTransfer: dt, bubbles: true }));
+    const heroRect = rowOf('hero').getBoundingClientRect();
+    rowOf('hero').dispatchEvent(new DragEvent('dragover', { dataTransfer: dt, bubbles: true, cancelable: true, clientY: heroRect.top + 2 }));
+    eq('drop line shown', rowOf('hero').classList.contains('is-drop-before'), true);
+    rowOf('hero').dispatchEvent(new DragEvent('drop', { dataTransfer: dt, bubbles: true, cancelable: true, clientY: heroRect.top + 2 }));
+    await until(() => requests.some(r => r.url.includes('/move-section/')));
+    eq('placed before hero', requests.find(r => r.url.includes('/move-section/'))?.body?.before, 'hero');
+
+    // drag hero onto the bottom half of contactos → to the end
+    requests.length = 0;
+    const dt2 = new DataTransfer();
+    rowOf('hero').dispatchEvent(new DragEvent('dragstart', { dataTransfer: dt2, bubbles: true }));
+    const cRect = rowOf('contactos').getBoundingClientRect();
+    rowOf('contactos').dispatchEvent(new DragEvent('drop', { dataTransfer: dt2, bubbles: true, cancelable: true, clientY: cRect.bottom - 2 }));
+    await until(() => requests.some(r => r.url.includes('/move-section/')));
+    eq('placed at the end', requests.find(r => r.url.includes('/move-section/'))?.body?.before, null);
+
+    // drop where it already is: no request
+    requests.length = 0;
+    const dt3 = new DataTransfer();
+    rowOf('eventos').dispatchEvent(new DragEvent('dragstart', { dataTransfer: dt3, bubbles: true }));
+    const eRect = rowOf('contactos').getBoundingClientRect();
+    rowOf('contactos').dispatchEvent(new DragEvent('drop', { dataTransfer: dt3, bubbles: true, cancelable: true, clientY: eRect.top + 2 }));
+    await sleep(150);
+    eq('same place: nothing sent', requests.length, 0);
+    eq('insert slots after each section', qa('.ev2-sp-insert').length, 3);
+} catch (err) {
+    fails.push('crash: ' + err.message + ' ' + (err.stack || '').split('\n')[1]);
+}
+document.getElementById('out').textContent = fails.join('\n') || 'all good';
+document.title = fails.length ? `FAIL ${fails.length}` : `PASS ${passed}`;
+</script>

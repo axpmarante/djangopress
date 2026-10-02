@@ -123,6 +123,7 @@
     <script>
       window.EDITOR_CONFIG = {
         pageId: {{ page_obj.id|default:"0" }},
+        pageTitle: '{{ page_obj.default_title|default:""|escapejs }}',
         language: '{{ LANGUAGE_CODE }}',
         languages: [{% for code, name in SITE_LANGUAGES %}'{{ code }}'{% if not forloop.last %}, {% endif %}{% endfor %}],
         languageNames: { {% for code, name in SITE_LANGUAGES %}'{{ code }}': '{{ name }}'{% if not forloop.last %}, {% endif %}{% endfor %} },

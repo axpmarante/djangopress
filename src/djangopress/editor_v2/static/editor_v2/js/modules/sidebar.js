@@ -1,12 +1,10 @@
 import { events } from '../lib/events.js';
-import { api } from '../lib/api.js';
-import { $, $$, getCssSelector, isTextElement, getSections, getTagLabel, getEditableTopLevelDescendants, getAncestors, findCardScope, resolveSelector, isRuntimeClass } from '../lib/dom.js';
-import { moveSection, canMoveSection } from '../lib/structural.js';
-import { insertAfterSection } from './section-inserter.js';
+import { $, $$, getCssSelector, isTextElement, resolveSelector } from '../lib/dom.js';
 import { findComponent } from '../lib/components.js';
 import { prependComponentCard } from './component-panel.js';
 import { renderDesignPanel, unmountDesignPanel } from './design-panel.js';
 import { renderContentPanel } from './content-panel.js';
+import { renderStructurePanel } from './structure-panel.js';
 
 let activeTab = 'content';
 let selectedEl = null;
@@ -121,85 +119,7 @@ function renderDesignTab() {
 
 function renderStructureTab() {
     const container = $('#ev2-tab-content');
-    if (!container) return;
-
-    const sections = getSections();
-    if (sections.length === 0) {
-        container.innerHTML = '<p class="ev2-placeholder ev2-empty-state">No sections found</p>';
-        return;
-    }
-
-    const selectedSel = selectedEl ? getCssSelector(selectedEl) : null;
-    let html = '<div class="ev2-tree">';
-
-    for (const section of sections) {
-        const sectionSel = getCssSelector(section) || '';
-        const isCurrent = sectionSel === selectedSel;
-        html += `<div class="ev2-tree-item${isCurrent ? ' current' : ''}" data-tree-selector="${esc(sectionSel)}">`;
-        const name = section.getAttribute('data-section') || '';
-        html += `<strong style="flex:1">${esc(getTagLabel(section))}</strong>`;
-        html += `<span class="ev2-tree-actions">`;
-        html += `<button type="button" data-tree-action="up" data-name="${esc(name)}" title="Move section up" ${canMoveSection(section, 'up') ? '' : 'disabled'}>▲</button>`;
-        html += `<button type="button" data-tree-action="down" data-name="${esc(name)}" title="Move section down" ${canMoveSection(section, 'down') ? '' : 'disabled'}>▼</button>`;
-        html += `<button type="button" data-tree-action="insert" data-name="${esc(name)}" title="Insert section after">+</button>`;
-        html += `</span></div>`;
-
-        // Show direct children with editable content
-        for (const child of section.children) {
-            const childSel = getCssSelector(child) || '';
-            const isChildCurrent = childSel === selectedSel;
-            const label = getTagLabel(child);
-            html += `<div class="ev2-tree-item${isChildCurrent ? ' current' : ''}" data-tree-selector="${esc(childSel)}">`;
-            html += `<span class="ev2-tree-indent"></span>${esc(label)}`;
-
-            // Show text preview for text elements
-            if (isTextElement(child)) {
-                const preview = child.textContent.trim().slice(0, 30);
-                if (preview) html += ` <span style="color:var(--ev2-text-faint)">${esc(preview)}${child.textContent.trim().length > 30 ? '...' : ''}</span>`;
-            }
-            html += '</div>';
-
-            // One more level deep for key elements
-            for (const grandchild of child.children) {
-                if (!isTextElement(grandchild) && grandchild.tagName !== 'IMG' && grandchild.tagName !== 'A') continue;
-                const gcSel = getCssSelector(grandchild) || '';
-                const isGcCurrent = gcSel === selectedSel;
-                html += `<div class="ev2-tree-item${isGcCurrent ? ' current' : ''}" data-tree-selector="${esc(gcSel)}">`;
-                html += `<span class="ev2-tree-indent"></span><span class="ev2-tree-indent"></span>${esc(getTagLabel(grandchild))}`;
-                if (isTextElement(grandchild)) {
-                    const preview = grandchild.textContent.trim().slice(0, 25);
-                    if (preview) html += ` <span style="color:var(--ev2-text-faint)">${esc(preview)}${grandchild.textContent.trim().length > 25 ? '...' : ''}</span>`;
-                }
-                html += '</div>';
-            }
-        }
-    }
-    html += '</div>';
-    container.innerHTML = html;
-}
-
-function onTreeClick(e) {
-    if (activeTab !== 'structure') return;
-    const actionBtn = e.target.closest('[data-tree-action]');
-    if (actionBtn) {
-        e.stopPropagation();
-        if (actionBtn.disabled) return;
-        const name = actionBtn.dataset.name;
-        const action = actionBtn.dataset.treeAction;
-        if (action === 'up') moveSection(name, 'up');
-        else if (action === 'down') moveSection(name, 'down');
-        else if (action === 'insert') insertAfterSection(name);
-        return;
-    }
-    const item = e.target.closest('.ev2-tree-item');
-    if (!item) return;
-    const sel = item.dataset.treeSelector;
-    if (!sel) return;
-    const el = resolveSelector(sel);
-    if (el) {
-        events.emit('selection:request', el);
-        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    }
+    if (container) renderStructurePanel(container, selectedEl);
 }
 
 function renderActiveTab() {
@@ -328,7 +248,6 @@ export function init() {
     handlers.changesError = onChangesError;
     handlers.undoState = onUndoState;
     handlers.switchTab = onSwitchTab;
-    handlers.treeClick = onTreeClick;
 
     // DOM event listeners
     bindEl('.ev2-tabs', 'click', handlers.tabClick);
@@ -338,7 +257,6 @@ export function init() {
     bindEl('#ev2-undo-btn', 'click', handlers.undoClick);
     bindEl('#ev2-redo-btn', 'click', handlers.redoClick);
     bindEl('#ev2-save-topbar-btn', 'click', handlers.topbarSave);
-    bindEl('#ev2-tab-content', 'click', handlers.treeClick);
 
     // Event bus listeners
     events.on('selection:changed', handlers.selectionChanged);
@@ -359,7 +277,6 @@ export function destroy() {
     unbindEl('#ev2-undo-btn', 'click', handlers.undoClick);
     unbindEl('#ev2-redo-btn', 'click', handlers.redoClick);
     unbindEl('#ev2-save-topbar-btn', 'click', handlers.topbarSave);
-    unbindEl('#ev2-tab-content', 'click', handlers.treeClick);
 
     events.off('selection:changed', handlers.selectionChanged);
     events.off('changes:count', handlers.changesCount);
