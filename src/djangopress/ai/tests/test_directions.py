@@ -183,3 +183,29 @@ class DirectionsTest(TestCase):
         self.assertEqual(cls.return_value.refine_element_only.call_count, 3)
         self.assertEqual(cls.return_value.refine_element_only.call_args.kwargs['selector'], 'section > a')
         self.assertEqual(result[0]['html'], '<a>x</a>')
+
+
+class DeadlineTest(TestCase):
+    def setUp(self):
+        self.page = Page.objects.create(title_i18n={'pt': 'Casa'}, slug_i18n={'pt': 'casa'}, is_active=True,
+                                        html_content_i18n={'pt': STORED})
+
+    def test_directions_still_running_at_the_deadline_are_reported_and_the_rest_kept(self):
+        release = threading.Event()
+
+        def gen(**kw):
+            if kw['direction']['name'] == 'Bolder':
+                release.wait(5)
+            return {'options': [{'html': '<section data-section="sala"><p>ok</p></section>'}]}
+
+        got = []
+        with mock.patch.object(directions, 'ContentGenerationService') as cls, \
+                mock.patch.object(directions, 'DEADLINE_SECONDS', 0.6):
+            cls.return_value.refine_section_only.side_effect = gen
+            result = directions.generate_directions(self.page, 'section', 'sala', 'x', lang='pt', context=CTX,
+                                                    on_option=got.append)
+        release.set()
+        self.assertEqual([r['key'] for r in result], ['refined', 'bold', 'layout'])
+        self.assertIn('too long', result[1]['error'])
+        self.assertIn('html', result[0])
+        self.assertEqual(len(got), 3)

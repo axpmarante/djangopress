@@ -5,6 +5,7 @@ whole when one is malformed. Here each direction is a separate generation with
 the site's design context, run in parallel; each is design-checked and sent to
 the caller as soon as it is ready, and a failed one does not cost the others.
 """
+import time
 from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 
 from djangopress.ai.design_check import check_and_fix
@@ -23,6 +24,8 @@ DIRECTIONS = [
      'brief': 'A different layout pattern that this site already uses elsewhere (split, cards, editorial list, '
               'feature grid), keeping all the content and its meaning.'},
 ]
+# Production gunicorn kills a request after 120 s; what is not ready by then is reported, not waited for.
+DEADLINE_SECONDS = 100
 REFINED = {'key': 'next', 'name': 'Refined',
            'brief': 'Apply the request to this version and keep everything else about it.'}
 
@@ -64,7 +67,16 @@ def generate_directions(page, scope, target, instructions, *, lang=None, history
         futures = {pool.submit(_generate, page, scope, target, instructions, d, lang=lang, history=history,
                                base_html=base_html, images=images, block=block, model=model): d for d in chosen}
         pending = set(futures)
+        deadline = time.monotonic() + DEADLINE_SECONDS
         while pending and not cancelled():
+            if time.monotonic() >= deadline:
+                for future in pending:
+                    d = futures[future]
+                    item = {'key': d['key'], 'name': d['name'], 'error': 'This direction took too long'}
+                    results[d['key']] = item
+                    if on_option:
+                        on_option(item)
+                break
             done, pending = wait(pending, timeout=0.5, return_when=FIRST_COMPLETED)
             for future in done:
                 d = futures[future]
