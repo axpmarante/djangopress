@@ -132,3 +132,25 @@ class EndpointsTest(Base):
             self.client.post('/ai/api/analyze-bulk-pages/', json.dumps({'description': 'Três notícias'}),
                              content_type='application/json')
         self.assertEqual(call.call_args.kwargs['tool_name'], 'gemini-flash')
+
+
+class FormsInContextTest(TestCase):
+    """The component index suggests generic slugs (quote-request, booking); a form posting to one the site lacks
+    fails validation and costs the whole generation. The context names the site's real forms."""
+
+    def render(self):
+        from djangopress.ai.design_context import build_design_context, render_design_context
+        return render_design_context(build_design_context(None, lang='pt'))
+
+    def test_the_context_lists_the_site_forms(self):
+        from djangopress.core.models import DynamicForm
+        DynamicForm.objects.create(name='Reserva', slug='reserva')
+        DynamicForm.objects.create(name='Antigo', slug='antigo', is_active=False)
+        text = self.render()
+        self.assertIn('/forms/reserva/submit/', text)
+        self.assertNotIn('antigo', text)
+
+    def test_a_site_without_forms_says_so(self):
+        from djangopress.core.models import DynamicForm
+        DynamicForm.objects.all().delete()   # a migration seeds a contact form
+        self.assertIn('This site has no forms', self.render())
