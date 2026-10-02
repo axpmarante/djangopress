@@ -111,7 +111,7 @@ function sectionMenu(el, ai) {
     return { title: `Section · ${label(name)}`, items: [
         ai && { label: 'Ask AI about this section…', icon: '✦', cls: 'ai', action: () => events.emit('context:ai-refine', { section: name }) },
         { label: 'Copy section', icon: '⎘', hint: 'Paste it on any DjangoPress site',
-          action: () => copy(makeClip(el), 'Section copied. Paste it with Add a section → Paste, on this site or another.') },
+          action: async () => copy(await makeClip(el), 'Section copied. Paste it with Add a section → Paste, on this site or another.') },
         { label: 'Add section above', icon: '↥', action: () => insertBefore(name) },
         { label: 'Add section below', icon: '↧', action: () => insertAfterSection(name) },
         { row: [

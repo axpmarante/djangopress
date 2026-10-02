@@ -29,7 +29,8 @@ def paste_inspect(request):
     if page is None:
         return JsonResponse({'success': False, 'error': 'Page or editable object not found'}, status=400)
     try:
-        result = paste.inspect(page, data.get('html') or '', _detect_language_from_request(request, data))
+        result = paste.inspect(page, data.get('html') or '', _detect_language_from_request(request, data),
+                               own_origin=request.build_absolute_uri('/'))
     except ValueError as e:
         return JsonResponse({'success': False, 'error': str(e)}, status=400)
     return JsonResponse({'success': True, **result})
@@ -49,12 +50,17 @@ def paste_apply(request):
     if not html:
         return JsonResponse({'success': False, 'error': 'Missing html'}, status=400)
     lang = _detect_language_from_request(request, data)
+    copied = {'created': []}
     try:
-        copied = paste.copy_images(html)
+        copied = paste.copy_images(html, own_origin=request.build_absolute_uri('/'))
         result = ai_apply.apply_section_html(page, copied['html'], lang, mode='insert',
                                              insert_after=data.get('insert_after') or None, user=request.user)
-    except ValueError as e:
-        return JsonResponse({'success': False, 'error': str(e)}, status=400)
+    except Exception as e:
+        for image in copied['created']:      # nothing was added: don't leave its images in the library
+            image.image.delete(save=False)
+            image.delete()
+        status = 400 if isinstance(e, ValueError) else 500
+        return JsonResponse({'success': False, 'error': str(e) or "Couldn't add the section"}, status=status)
     return JsonResponse({
         'success': True,
         'section_name': result.get('section_name'),

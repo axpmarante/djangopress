@@ -28,6 +28,7 @@ async function until(fn, ms = 3000) {
 const requests = [];
 let streamText = '';
 let clipboardText = '';
+let applyDelay = 0;
 const sse = (list) => list.map(([name, data]) => `event: ${name}\ndata: ${JSON.stringify(data)}\n\n`).join('');
 const sec = (name, text) => `<section data-section="${name}" id="${name}"><h2>${text}</h2></section>`;
 const opt = (key, text, why = 'fits') => ['option', { key, name: key, html: sec('livro', text), why, notes: [] }];
@@ -42,6 +43,7 @@ window.fetch = async (url, init = {}) => {
     if (url.includes('/paste-section/inspect/')) return json({ success: true, name: 'visitas', html: sec('visitas', 'Visitas'),
         source: { site: 'Adega Serra', section: 'visitas', lang: 'pt' }, images: 2,
         checks: [{ level: 'ok', text: "2 images will be copied to this site's library" }, { level: 'warn', text: 'Form "marcacoes" doesn\'t exist here: it will post to Reserva' }] });
+    if (url.includes('/paste-section/apply/') && applyDelay) await sleep(applyDelay);
     if (url.includes('/paste-section/apply/')) return json({ success: true, section_name: 'visitas', html: body.html.replace('Visitas', 'Visitas ✓'),
         translated_languages: ['en'], untranslated_languages: [], copied_images: 2, kept_images: 0 });
     return json({ success: true });
@@ -125,10 +127,17 @@ try {
     eq('the pasted section is previewed as copied', placeholder()?.textContent, 'Visitas');
     pop().querySelector('input[name="ev2-paste-mode"][value="copied"]').click();
     eq('the button says what it does', pop().querySelector('[data-act="paste"]').textContent, 'Paste');
+    applyDelay = 300;
     click('#ev2-add-pop [data-act="paste"]');
+    click('#ev2-add-pop [data-act="paste"]');
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    eq('while adding, Esc does not close it', visible(pop()), true);
+    eq('while adding, the button is disabled', pop().querySelector('[data-act="paste"]').disabled, true);
     await until(() => sections().includes('visitas'));
     eq('pasted after livro with its images copied', [requests.find(r => r.url.includes('/paste-section/apply/'))?.body?.insert_after, sections()],
        ['livro', ['hero', 'livro', 'visitas', 'carta']]);
+    eq('a double click adds it once', requests.filter(r => r.url.includes('/paste-section/apply/')).length, 1);
+    applyDelay = 0;
     eq('no AI was asked', streams().length, 2);
     eq('the toast counts the images', toasts.at(-1), 'Section added · 2 images copied to the library');
 
@@ -148,10 +157,16 @@ try {
     cards()[0].click();
     eq('as copied can be previewed too', placeholder()?.textContent, 'Visitas');
     cards()[1].click();
+    applyDelay = 200;
     click('#ev2-add-dock [data-act="add"]');
+    eq('Discard is off while adding', dock().querySelector('[data-act="discard"]').disabled, true);
+    click('#ev2-add-dock [data-act="discard"]');
+    eq('and clicking it does nothing', visible(dock()), true);
     await until(() => requests.filter(r => r.url.includes('/paste-section/apply/')).length === 2);
     eq('the fitted version is added', requests.filter(r => r.url.includes('/paste-section/apply/')).at(-1).body.html, sec('visitas', 'Fitted'));
     await until(() => !visible(dock()));
+    applyDelay = 0;
+    eq('the fitted section is in the page', sections(), ['hero', 'livro', 'visitas', 'carta', 'visitas']);
 
     // ── Discard ──
     inserter.insertAfterSection('hero');

@@ -145,3 +145,52 @@ class EndpointsTest(Base):
         self.page.refresh_from_db()
         names = [s for s in ('visitas', 'visitas-2') if f'data-section="{s}"' in self.page.html_content_i18n['pt']]
         self.assertEqual(names, ['visitas', 'visitas-2'])
+
+
+class ReviewFixesTest(Base):
+    def test_a_rendered_csrf_token_goes_back_to_the_tag(self):
+        clip = ('<section data-section="c"><form action="/forms/reserva/submit/" method="post">'
+                '<input type="hidden" name="csrfmiddlewaretoken" value="SECRET123"></form></section>')
+        html = paste.inspect(self.page, clip, 'pt')['html']
+        self.assertNotIn('SECRET123', html)
+        self.assertIn('{% csrf_token %}', html)
+
+    def test_markup_that_runs_code_is_removed(self):
+        clip = ('<section data-section="x"><iframe srcdoc="<script>alert(1)</script>"></iframe>'
+                '<object data="x.swf"></object><embed src="x"><link rel="stylesheet" href="x.css">'
+                '<meta http-equiv="refresh" content="0"><base href="https://evil.example/">'
+                '<a id="j" href="javascript:alert(1)">x</a><button formaction="javascript:alert(1)">b</button>'
+                '<iframe data-bg-video="youtube" src="https://www.youtube.com/embed/abc"></iframe>'
+                '<img src="data:image/png;base64,AAAA" alt=""><img src="data:text/html,<b>x</b>" alt="">'
+                '<a href="/pt/sobre/">ok</a></section>')
+        html = paste.inspect(self.page, clip, 'pt')['html']
+        for gone in ('srcdoc', '<object', '<embed', '<link', '<meta', '<base', 'javascript:', 'data:text/html'):
+            self.assertNotIn(gone, html)
+        for kept in ('youtube.com/embed/abc', 'data:image/png;base64,AAAA', 'href="/pt/sobre/"'):
+            self.assertIn(kept, html)
+
+    def test_an_image_on_another_sites_folder_with_the_same_name_is_not_ours(self):
+        clip = ('<section data-section="x"><img src="https://cdn.example/media/outro/site_images/hero.jpg" alt="">'
+                '<img src="https://cdn.example/media/este/site_images/hero.jpg" alt=""></section>')
+        with mock.patch('djangopress.editor_v2.paste._media_base', return_value='https://cdn.example/media/este/'):
+            self.assertEqual(paste.inspect(self.page, clip, 'pt')['images'], 1)
+
+    def test_local_media_on_this_host_is_ours(self):
+        clip = '<section data-section="x"><img src="http://testserver/media/site_images/a.jpg" alt=""></section>'
+        with mock.patch('djangopress.editor_v2.paste._media_base', return_value='/media/'):
+            self.assertEqual(paste.inspect(self.page, clip, 'pt', own_origin='http://testserver')['images'], 0)
+            self.assertEqual(paste.inspect(self.page, clip, 'pt', own_origin='http://other')['images'], 1)
+
+
+class ApplyFailureTest(EndpointsTest):
+    PNG = (b'\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15\xc4'
+           b'\x89\x00\x00\x00\rIDATx\x9cc\xf8\x0f\x00\x00\x01\x01\x00\x05\x18\xd8N\x00\x00\x00\x00IEND\xaeB`\x82')
+
+    def test_a_failed_insert_leaves_no_copied_images(self):
+        html = paste.inspect(self.page, CLIP, 'pt')['html']
+        with mock.patch('djangopress.editor_v2.paste.fetch_image', side_effect=lambda u: (self.PNG, 'image/png')), \
+                mock.patch('djangopress.editor_v2.ai_apply.apply_section_html', side_effect=RuntimeError('boom')):
+            res = self.post('/editor-v2/api/paste-section/apply/', html=html, insert_after='visitas')
+        self.assertEqual(res.status_code, 500)
+        self.assertFalse(res.json()['success'])
+        self.assertEqual(SiteImage.objects.count(), 0)

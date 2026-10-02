@@ -126,12 +126,14 @@ export function resetPlaceholder() {
 /** Put the saved section where the placeholder is (no reload) and return its node. */
 export function commitPlaceholder(html) {
     if (!placeholder) return null;
-    const node = swapNode(placeholder, html);
+    const slot = placeholder;
+    const node = swapNode(slot, html);
+    if (node === slot) return null;              // nothing to put there: keep the placeholder as it was
     placeholder = null;
     insertAfter = null;
     setInserting(false);
     renderBars();
-    return node === placeholder ? null : node;
+    return node;
 }
 
 /** Remove the placeholder from the DOM and reset state. */

@@ -55,13 +55,36 @@ def read_clip(text):
     return str(section), meta
 
 
+DROP_TAGS = ['script', 'object', 'embed', 'link', 'meta', 'base', 'applet', 'frame', 'frameset']
+URL_ATTRS = ('href', 'src', 'action', 'formaction', 'xlink:href', 'data', 'poster')
+SAFE_DATA_RE = re.compile(r'^data:image/(png|jpe?g|gif|webp|avif);', re.I)
+
+
+def _unsafe_url(attr, value):
+    v = re.sub(r'[\s\x00-\x1f]+', '', value or '').lower()
+    if v.startswith(('javascript:', 'vbscript:')):
+        return True
+    return v.startswith('data:') and not (attr == 'src' and SAFE_DATA_RE.match(v))
+
+
 def _clean(section):
-    for tag in section.find_all(['script']):
+    """Drop what could run code (in the editor's preview, or for visitors once added) and the editor's own state.
+    A form's rendered CSRF input (copied from a live page) goes back to {% csrf_token %}: the copied value is the
+    copier's own secret and would fail every visitor's submission."""
+    for tag in section.find_all(DROP_TAGS):
         tag.decompose()
+    for iframe in section.find_all('iframe'):
+        src = (iframe.get('src') or '').strip().lower()
+        if iframe.has_attr('srcdoc') or not src.startswith(('https://', 'http://')):
+            iframe.decompose()
+    for token in section.find_all('input', attrs={'name': 'csrfmiddlewaretoken'}):
+        token.replace_with('{% csrf_token %}')
     for el in [section, *section.find_all(True)]:
         for attr in list(el.attrs):
             low = attr.lower()
             if low.startswith('on') or low.startswith('data-ev2') or low == 'contenteditable':
+                del el[attr]
+            elif low in URL_ATTRS and _unsafe_url(low, el.get(attr)):
                 del el[attr]
         classes = [c for c in (el.get('class') or []) if not c.startswith('ev2-')]
         if classes:
@@ -107,21 +130,26 @@ def _absolute(section, origin):
             el[attr] = full if attr == 'src' else el[attr].replace(url, full)
 
 
-def _external(url):
+def _media_base():
+    """Where this site's files live: its own bucket folder, or /media/ for local storage."""
+    from django.core.files.storage import default_storage
+    return default_storage.url('')
+
+
+def _external(url, own_origin=''):
     parsed = urlparse(url)
     if parsed.scheme not in ('http', 'https') or not parsed.hostname:
         return False
-    return not any(parsed.hostname.endswith(h) for h in PLACEHOLDER_HOSTS) and not _own(url)
+    return not any(parsed.hostname.endswith(h) for h in PLACEHOLDER_HOSTS) and not _own(url, own_origin)
 
 
-def _own(url):
-    return SiteImage.objects.filter(image=_library_name(url)).exists() if _library_name(url) else False
-
-
-def _library_name(url):
-    path = unquote(urlparse(url).path)
-    marker = '/site_images/'
-    return 'site_images/' + path.split(marker, 1)[1] if marker in path else ''
+def _own(url, own_origin=''):
+    """By address, not by file name: every site keeps its images under site_images/."""
+    base = _media_base()
+    if base.startswith(('http://', 'https://')):
+        return url.startswith(base)
+    origin = (own_origin or '').rstrip('/')
+    return bool(origin) and url.startswith(origin + base)
 
 
 def _forms(section):
@@ -174,7 +202,7 @@ def _links(section):
     return [{'level': 'warn', 'text': f"{len(missing)} {noun} this site doesn't have ({shown})"}]
 
 
-def inspect(page, clip, lang):
+def inspect(page, clip, lang, own_origin=''):
     """{html, name, source, checks, images} for the paste preview. Nothing is saved."""
     html, meta = read_clip(clip)
     section = _soup(html).find('section')
@@ -182,7 +210,7 @@ def inspect(page, clip, lang):
     _absolute(section, meta.get('origin'))
     name = _free_name(page, section)
     checks = []
-    images = len({url for _el, _attr, url in _image_urls(section) if _external(url)})
+    images = len({url for _el, _attr, url in _image_urls(section) if _external(url, own_origin)})
     if images:
         noun = 'image' if images == 1 else 'images'
         checks.append({'level': 'ok', 'text': f"{images} {noun} will be copied to this site's library"})
@@ -217,12 +245,13 @@ def _save_image(url, data, mime, alt):
     image = SiteImage(key=key, title_i18n={'pt': title, 'en': title},
                       alt_text_i18n={'pt': alt, 'en': alt} if alt else {}, is_active=True)
     image.image.save(f'{slugify(stem) or "image"}{ext.lower()}', ContentFile(data), save=True)
-    return image.image.url
+    return image
 
 
-def copy_images(html):
+def copy_images(html, own_origin=''):
     """Copy the section's outside images into this site's library and point the HTML at them.
-    {html, copied, kept}: an image that can't be read stays linked where it is."""
+    {html, copied, kept, created}: an image that can't be read stays linked where it is; `created`
+    holds the new library rows, so a failed insert can remove them."""
     section = _soup(html).find('section')
     if section is None:
         raise ValueError('That is not a section')
@@ -231,14 +260,16 @@ def copy_images(html):
     for el, attr, url in found:
         if attr == 'src' and el.get('alt'):
             alts.setdefault(url, el['alt'])
-    new_urls, kept = {}, 0
-    for url in dict.fromkeys(u for _el, _attr, u in found if _external(u)):
+    new_urls, kept, created = {}, 0, []
+    for url in dict.fromkeys(u for _el, _attr, u in found if _external(u, own_origin)):
         try:
             data, mime = fetch_image(url)
-            new_urls[url] = _save_image(url, data, mime, alts.get(url, ''))
+            image = _save_image(url, data, mime, alts.get(url, ''))
+            created.append(image)
+            new_urls[url] = image.image.url
         except Exception:
             kept += 1
     for el, attr, url in found:
         if url in new_urls:
             el[attr] = new_urls[url] if attr == 'src' else el[attr].replace(url, new_urls[url])
-    return {'html': str(section), 'copied': len(new_urls), 'kept': kept}
+    return {'html': str(section), 'copied': len(new_urls), 'kept': kept, 'created': created}

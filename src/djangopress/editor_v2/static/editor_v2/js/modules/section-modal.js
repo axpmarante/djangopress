@@ -44,7 +44,9 @@ let unsubs = [];
 let tab = 'describe';
 let describeText = '';
 let pasteState = null;   // {clip, html, name, source, checks, images, mode} | {error}
-let flow = null;         // {kind, text, insertAfter, cards, active, source, running, stream, runId, expect, refining, adding, error}
+let flow = null;         // {kind, text, insertAfter, cards, active, source, running, stream, runId, expect, refining, error}
+let adding = false;      // a section is being saved: nothing may close or re-add until it lands
+let inspectSeq = 0;      // a paste inspect that comes back after a newer one (or a close) is ignored
 
 // ── DOM ──
 
@@ -143,7 +145,7 @@ function pasteBody(ai) {
         ${p.checks?.length ? `<ul class="ev2-add-checks">${p.checks.map(c => `<li class="${c.level === 'warn' ? 'warn' : 'ok'}">${esc(c.text)}</li>`).join('')}</ul>` : ''}
         <p class="ev2-add-msg" hidden></p>
         <div class="ev2-add-foot"><small></small>
-          <button type="button" class="ev2-add-btn is-primary" data-act="paste">${fit ? 'Fit and paste' : 'Paste'}</button></div>
+          <button type="button" class="ev2-add-btn is-primary" data-act="paste"${adding ? ' disabled' : ''}>${adding ? 'Adding…' : fit ? 'Fit and paste' : 'Paste'}</button></div>
       </div>`;
 }
 
@@ -186,13 +188,16 @@ async function readClipboard() {
 }
 
 async function inspect(text) {
+    const mine = ++inspectSeq;
     try {
         const res = await api.post('/paste-section/inspect/', withEditableId({ page_id: config().pageId, html: text, language: config().language }));
+        if (mine !== inspectSeq) return;
         if (!res.success) throw new Error(res.error || "Couldn't read that section");
         pasteState = { clip: text, html: res.html, name: res.name, source: { ...(clipMeta(text) || {}), ...(res.source || {}) },
                        checks: res.checks || [], images: res.images || 0, mode: config().aiEnabled ? 'fit' : 'copied' };
         if (getInsertState()) previewInPlaceholder(res.html);
     } catch (err) {
+        if (mine !== inspectSeq) return;
         pasteState = { error: err.message || String(err) };
     }
     if (!pop.hidden && tab === 'paste') renderPopover();
@@ -204,7 +209,7 @@ function newFlow(kind, extra) {
     stopRun(false);
     const insert = getInsertState();
     flow = { kind, insertAfter: insert ? insert.afterSection : null, cards: [], active: null, running: false,
-             stream: null, runId: null, expect: {}, refining: false, adding: false, error: '', ...extra };
+             stream: null, runId: null, expect: {}, refining: false, error: '', ...extra };
 }
 
 function addCard(card) {
@@ -329,7 +334,7 @@ function renderDock() {
         : flow.running ? "in this page's style · about a minute" : `“${esc(short)}”`;
     const headAct = flow.running ? '<button type="button" class="ev2-add-btn is-ghost" data-act="stop">Stop</button>'
         : flow.kind === 'describe' ? '<button type="button" class="ev2-add-btn is-ghost" data-act="edit">Edit description</button>' : '';
-    const canRefine = ready && !flow.running && config().aiEnabled;
+    const canRefine = ready && !flow.running && !adding && config().aiEnabled;
     dock.innerHTML = `
         <div class="ev2-add-dock-head"><b class="ev2-add-dock-title">${title}</b><span class="ev2-add-dock-sub">${sub}</span>${headAct}</div>
         <div class="ev2-add-cards${flow.cards.length === 2 ? ' is-two' : ''}">${flow.cards.map(c => `
@@ -343,12 +348,12 @@ function renderDock() {
         ${flow.refining ? `<div class="ev2-add-refine"><textarea id="ev2-add-refine" class="ev2-add-ta" rows="1" placeholder="What should change in this version?"></textarea>
             <button type="button" class="ev2-add-btn is-primary" data-act="refine-send">Refine</button></div>` : ''}
         <div class="ev2-add-dock-foot">
-          <button type="button" class="ev2-add-btn is-ghost" data-act="discard">Discard</button>
-          ${flow.kind === 'describe' ? `<button type="button" class="ev2-add-btn is-ghost" data-act="regenerate"${flow.running ? ' disabled' : ''}>Regenerate</button>` : ''}
+          <button type="button" class="ev2-add-btn is-ghost" data-act="discard"${adding ? ' disabled' : ''}>Discard</button>
+          ${flow.kind === 'describe' ? `<button type="button" class="ev2-add-btn is-ghost" data-act="regenerate"${flow.running || adding ? ' disabled' : ''}>Regenerate</button>` : ''}
           <span class="ev2-add-spacer"></span>
           ${flow.refining ? '<button type="button" class="ev2-add-btn" data-act="refine-cancel">Back</button>'
             : `<button type="button" class="ev2-add-btn" data-act="refine"${canRefine ? '' : ' disabled'}>Refine this one…</button>`}
-          <button type="button" class="ev2-add-btn is-primary" data-act="add"${ready && !flow.adding ? '' : ' disabled'}>${flow.adding ? 'Adding…' : 'Add this section'}</button>
+          <button type="button" class="ev2-add-btn is-primary" data-act="add"${ready && !adding ? '' : ' disabled'}>${adding ? 'Adding…' : 'Add this section'}</button>
         </div>`;
     const width = flow.cards.length === 2 ? THUMB * 2 - 40 : THUMB;   // two cards are wider
     flow.cards.forEach(c => {
@@ -359,9 +364,11 @@ function renderDock() {
 
 async function addSection(card, kind) {
     const insert = getInsertState();
-    if (!insert || !card?.html) return;
-    if (getPendingCount() > 0 && !(await saveNow())) return;
-    if (flow) { flow.adding = true; renderDock(); }
+    if (adding || !insert || !card?.html) return;
+    adding = true;                               // before the first await: a double click must not add it twice
+    const slot = document.querySelector('.ev2-section-placeholder');
+    if (flow) renderDock(); else if (!pop.hidden) renderPopover();
+    if (getPendingCount() > 0 && !(await saveNow())) { adding = false; if (flow) renderDock(); else if (!pop.hidden) renderPopover(); return; }
     const body = withEditableId({ page_id: config().pageId, html: card.html, insert_after: insert.afterSection || null,
                                   language: config().language });
     try {
@@ -369,14 +376,22 @@ async function addSection(card, kind) {
             ? await api.post('/paste-section/apply/', body)
             : await api.post('/apply-option/', { ...body, scope: 'new-section', section_name: null, selector: null, mode: 'insert' });
         if (!res.success) throw new Error(res.error || "Couldn't add the section");
+        adding = false;
+        if (slot !== document.querySelector('.ev2-section-placeholder')) {
+            // Another insert point was opened meanwhile: the server put it where it was asked; show the page as saved.
+            events.emit('toast:show', { text: 'Section added. Reloading to show it…' });
+            setTimeout(() => window.location.reload(), 600);
+            return;
+        }
         const node = commitPlaceholder(res.html || card.html);
         closeAll(false);
         if (node) events.emit('selection:request', node);
         events.emit('history:refresh');
         events.emit('toast:show', { text: addedText(res, kind), withUndo: true });
     } catch (err) {
+        adding = false;
         const text = `Couldn't add it: ${err.message || err}`;
-        if (flow) { flow.adding = false; flow.error = text; renderDock(); } else showMessage(text);
+        if (flow) { flow.error = text; renderDock(); } else { if (!pop.hidden) renderPopover(); showMessage(text); }
     }
 }
 
@@ -391,6 +406,8 @@ function addedText(res, kind) {
 // ── Open / close ──
 
 function closeAll(removeSlot = true) {
+    if (adding) return;                          // let the save land first
+    inspectSeq += 1;
     stopRun(false);
     flow = null;
     pasteState = null;
