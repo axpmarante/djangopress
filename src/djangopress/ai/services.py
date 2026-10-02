@@ -2493,6 +2493,32 @@ Keep the translations natural and fluent — these are website UI strings.
         print(f"Generated {len(suggestions)} image suggestions")
         return suggestions
 
+    def describe_image_alt(self, image_bytes: bytes, mime_type: str, languages: List[str]) -> Dict[str, str]:
+        """One accessible alt text per language for an image on a page (editor "Describe the photo")."""
+        from djangopress.core.models import SiteSettings
+        settings_obj = SiteSettings.objects.first()
+        default_language = settings_obj.get_default_language() if settings_obj else 'pt'
+        site_name = settings_obj.get_site_name(default_language) if settings_obj else ''
+        example = '{' + ', '.join(f'"{code}": "..."' for code in languages) + '}'
+        prompt = (
+            "Write the alt text for this website photo: one sentence (under 125 characters) that says what the photo "
+            "shows, concretely, for someone who cannot see it. No \"image of\" / \"photo of\".\n"
+            f"Site: {site_name}.\nOne alt text per language: {', '.join(languages)}.\n"
+            f"Respond in valid JSON only: {example}"
+        )
+        model = get_ai_model('image_analysis')
+        actual_model, provider_str = self._get_model_info(model)
+        t0 = time.time()
+        response = self.llm.get_vision_completion(prompt=prompt, file_bytes=image_bytes, file_mime_type=mime_type,
+                                                  tool_name=model)
+        content = response.content if hasattr(response, 'content') else response.choices[0].message.content
+        self._log(action='analyze_images', model_name=actual_model, provider=provider_str, user_prompt=prompt,
+                  response_text=content, duration_ms=int((time.time() - t0) * 1000), **self._extract_usage(response))
+        data = self._extract_json_from_response(content)
+        if not isinstance(data, dict):
+            raise ValueError('The AI did not return alt texts')
+        return {code: str(data[code]).strip() for code in languages if data.get(code)}
+
     def describe_images(self, image_ids: List[int], languages: List[str] = None) -> List[Dict]:
         """
         Use Gemini Flash vision to generate descriptions for media library images.

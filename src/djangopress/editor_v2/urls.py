@@ -51,6 +51,7 @@ urlpatterns = [
     path('api/retag-element/', api_views.retag_element, name='api_retag_element'),
     path('api/link-targets/', api_views.link_targets, name='api_link_targets'),
     path('api/page-copies/', api_views.page_copies, name='api_page_copies'),
+    path('api/describe-image/', api_views.describe_image, name='api_describe_image'),
     path('api/component/', component_views.component_op, name='api_component_op'),
 
     # AI full-page refinement endpoints

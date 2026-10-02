@@ -2853,3 +2853,82 @@ def page_copies(request):
     if page is None:
         return JsonResponse({'success': False, 'error': 'Page or editable object not found'}, status=400)
     return JsonResponse({'success': True, 'copies': dict(getattr(page, 'html_content_i18n', None) or {})})
+
+
+MAX_DESCRIBE_BYTES = 10 * 1024 * 1024
+
+
+def _fetch_image_bytes(url):
+    """(bytes, mime) of an image the page already shows (outside the media library)."""
+    import urllib.request
+    req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0 (DjangoPress editor)'})
+    with urllib.request.urlopen(req, timeout=10) as res:
+        data = res.read(MAX_DESCRIBE_BYTES + 1)
+        if len(data) > MAX_DESCRIBE_BYTES:
+            raise ValueError('The image is larger than 10 MB')
+        return data, (res.headers.get_content_type() or 'image/jpeg')
+
+
+def _library_image_bytes(src):
+    """(bytes, mime) when `src` is a media-library file, else None."""
+    import mimetypes
+    from urllib.parse import unquote, urlparse
+    path = unquote(urlparse(src).path)
+    for img in SiteImage.objects.exclude(image=''):
+        name = img.image.name or ''
+        if name and path.endswith('/' + name):
+            with img.image.open('rb') as fh:
+                return fh.read(), mimetypes.guess_type(name)[0] or 'image/jpeg'
+    return None
+
+
+@superuser_required
+@require_http_methods(["POST"])
+def describe_image(request):
+    """"Describe the photo": alt text per language from the image. The other languages are saved
+    now; the editing language comes back for the field (saved with the operator's other changes)."""
+    try:
+        data = json.loads(request.body)
+    except json.JSONDecodeError:
+        return JsonResponse({'success': False, 'error': 'Invalid JSON'}, status=400)
+    selector = data.get('selector')
+    try:
+        page = _get_editable_object(data)
+    except Exception:
+        page = None
+    if page is None or not selector:
+        return JsonResponse({'success': False, 'error': 'Page or image not found'}, status=400)
+    lang = _edit_lang(page, _detect_language_from_request(request, data))
+    html, _lang = _get_page_html(page, lang)
+    img = BeautifulSoup(html or '', 'html.parser').select_one(selector)
+    if img is None or img.name != 'img' or not img.get('src'):
+        return JsonResponse({'success': False, 'error': 'Image not found on the page'}, status=400)
+    src = img['src']
+    try:
+        found = _library_image_bytes(src)
+        if found is None:
+            if not src.startswith(('http://', 'https://')):
+                return JsonResponse({'success': False, 'error': 'This image cannot be read'}, status=400)
+            found = _fetch_image_bytes(src)
+        image_bytes, mime = found
+        settings_obj = SiteSettings.load()
+        languages = [c for c in (settings_obj.get_language_codes() if settings_obj else [lang])
+                     if c == lang or (page.html_content_i18n or {}).get(c)]
+        from djangopress.ai.services import ContentGenerationService
+        alts = ContentGenerationService(model_name=get_ai_model('image_analysis')).describe_image_alt(image_bytes, mime, languages)
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': f'Could not describe the photo: {e}'}, status=500)
+
+    def set_alt(soup, value):
+        el = soup.select_one(selector)
+        if el is None or el.name != 'img':
+            return False
+        el['alt'] = value
+        return True
+
+    others = {c: v for c, v in alts.items() if c != lang}
+    for code, value in others.items():
+        _apply_change_to_lang(page, code, lambda s, v=value: set_alt(s, v))
+    if others:
+        page.save()
+    return JsonResponse({'success': True, 'alts': alts, 'current': alts.get(lang, ''), 'saved_languages': sorted(others)})
