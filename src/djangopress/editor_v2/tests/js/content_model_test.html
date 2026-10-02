@@ -1,0 +1,77 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>running</title>
+<style>.uppercase{text-transform:uppercase}.tracking-wide{letter-spacing:.14em}</style>
+<div class="editor-v2-content" id="host">
+<section data-section="eventos" id="eventos">
+  <div class="grid">
+    <div>
+      <p class="uppercase tracking-wide text-xs">Grupos e eventos</p>
+      <h2 class="text-4xl">Celebrações e grupos</h2>
+      <p>Uma sala <b>pequena</b> para grupos.</p>
+      <p>Diga-nos o dia.</p>
+      <div class="flex"><a class="bg-red-600 px-6 py-3" href="tel:+351968070776">968 070 776</a><a class="underline" href="https://wa.me/351968070776?text=Ol%C3%A1%21">WhatsApp</a></div>
+    </div>
+    <img id="photo" src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==" alt="Sala" style="width:400px">
+  </div>
+  <div class="splide"><div class="splide__track"><ul class="splide__list">
+    <li class="splide__slide splide__slide--clone"><p>clone</p></li>
+    <li class="splide__slide"><p>Slide um</p></li><li class="splide__slide"><p>Slide dois</p></li>
+  </ul></div></div>
+  <img id="ph" src="https://placehold.co/600x400?text=Mesa" alt="">
+</section>
+</div>
+<pre id="out"></pre>
+<script type="module">
+import * as cm from '../../static/editor_v2/js/lib/content-model.js';
+
+const fails = [];
+let passed = 0;
+const eq = (name, got, want) => {
+    if (JSON.stringify(got) === JSON.stringify(want)) passed++;
+    else fails.push(`${name}: got ${JSON.stringify(got)}, want ${JSON.stringify(want)}`);
+};
+try {
+    const section = document.querySelector('[data-section="eventos"]');
+    const items = cm.sectionItems(section);
+    eq('roles in page order, slider and clones left out',
+        items.map(i => i.role), ['eyebrow', 'heading', 'text', 'text', 'button', 'link', 'image', 'image']);
+    eq('the formatted paragraph is one item', items[2].el.textContent, 'Uma sala pequena para grupos.');
+    eq('description', cm.describeSection(section), 'Slider (2 slides) + title + 2 texts + button + link + 2 photos');
+    eq('role of a plain div with short uppercase text',
+        cm.itemRole(Object.assign(document.createElement('div'), { className: 'uppercase tracking-wide', textContent: 'Novo' })), 'eyebrow');
+    eq('formatting', [cm.hasFormatting(items[2].el), cm.hasFormatting(items[3].el)], [true, false]);
+
+    eq('parse phone', cm.parseHref('tel:+351968070776'), { kind: 'phone', value: '+351968070776' });
+    eq('parse email', cm.parseHref('mailto:geral@x.pt'), { kind: 'email', value: 'geral@x.pt' });
+    eq('parse whatsapp', cm.parseHref('https://wa.me/351968070776?text=Ol%C3%A1%21'), { kind: 'whatsapp', value: '+351968070776', message: 'Olá!' });
+    eq('parse page', cm.parseHref('/pt/reservas/'), { kind: 'page', value: '/pt/reservas/' });
+    eq('parse page + section', cm.parseHref('/pt/reservas/#grupos'), { kind: 'section', value: '/pt/reservas/#grupos' });
+    eq('parse same-page section', cm.parseHref('#contactos'), { kind: 'section', value: '#contactos' });
+    eq('parse web', cm.parseHref('https://instagram.com/x'), { kind: 'url', value: 'https://instagram.com/x' });
+    eq('parse empty', cm.parseHref(''), { kind: 'url', value: '' });
+    eq('build phone', cm.buildHref('phone', '+351 968 070 776'), 'tel:+351968070776');
+    eq('build email', cm.buildHref('email', ' geral@x.pt '), 'mailto:geral@x.pt');
+    eq('build whatsapp', cm.buildHref('whatsapp', '+351 968 070 776', 'Olá!'), 'https://wa.me/351968070776?text=Ol%C3%A1!');
+    eq('build whatsapp without message', cm.buildHref('whatsapp', '968 070 776'), 'https://wa.me/968070776');
+    eq('build web adds https', cm.buildHref('url', 'instagram.com/x'), 'https://instagram.com/x');
+    eq('build page', cm.buildHref('page', '/pt/reservas/'), '/pt/reservas/');
+
+    const photo = document.getElementById('photo');
+    await (photo.decode ? photo.decode().catch(() => {}) : Promise.resolve());
+    eq('a 1 px image shown at 400 px is soft', cm.imageQuality(photo).state, 'soft');
+    const unloaded = document.createElement('img');
+    eq('an unloaded image is unknown', cm.imageQuality(unloaded).state, 'unknown');
+    eq('placeholder', [cm.isPlaceholder(document.getElementById('ph')), cm.isPlaceholder(photo)], [true, false]);
+
+    const copy = section.outerHTML.replace('Celebrações e grupos', 'Celebrations and groups');
+    const sel = 'section[data-section="eventos"] > div:nth-child(1) > div:nth-child(1) > h2:nth-child(2)';
+    eq('other language text', cm.otherLanguageText(copy, sel), 'Celebrations and groups');
+    eq('missing in the other language', cm.otherLanguageText('<section data-section="eventos"></section>', sel), null);
+    eq('eyebrow label', cm.ROLE_LABELS.eyebrow, 'Eyebrow');
+} catch (err) {
+    fails.push('crash: ' + err.message);
+}
+document.getElementById('out').textContent = fails.join('\n') || 'all good';
+document.title = fails.length ? `FAIL ${fails.length}` : `PASS ${passed}`;
+</script>
