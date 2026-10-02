@@ -962,6 +962,7 @@ Return ONLY the corrected, complete JSON. No markdown, no explanation."""
         on_progress=None,
         content_override: dict = None,
         lang: str = None,
+        design_context: str = '',
     ) -> Dict:
         """
         Refine a page's HTML content based on user instructions.
@@ -1082,6 +1083,7 @@ Return ONLY the corrected, complete JSON. No markdown, no explanation."""
                 pages=pages_data,
                 languages=languages,
                 component_references=component_references,
+                design_context=design_context,
             )
         else:
             system_prompt, user_prompt = PromptTemplates.get_page_refinement_html_prompt(
@@ -1099,6 +1101,7 @@ Return ONLY the corrected, complete JSON. No markdown, no explanation."""
                 pages=pages_data,
                 languages=languages,
                 component_references=component_references,
+                design_context=design_context,
             )
 
         # Debug output

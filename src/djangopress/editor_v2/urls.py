@@ -23,16 +23,10 @@ urlpatterns = [
     path('api/images/unsplash-import/', unsplash_views.unsplash_import, name='api_unsplash_import'),
 
     # AI section refinement endpoints
-    path('api/refine-section/', api_views.refine_section, name='api_refine_section'),
-    path('api/save-ai-section/', api_views.save_ai_section, name='api_save_ai_section'),
 
     # AI element refinement endpoints
-    path('api/refine-element/', api_views.refine_element, name='api_refine_element'),
-    path('api/save-ai-element/', api_views.save_ai_element, name='api_save_ai_element'),
 
     # AI multi-option refinement endpoints
-    path('api/refine-multi/', api_views.refine_multi, name='api_refine_multi'),
-    path('api/refine-multi/stream/', api_views.refine_multi_stream, name='api_refine_multi_stream'),
     path('api/apply-option/', api_views.apply_option, name='api_apply_option'),
     path('api/chat/stream/', chat_views.chat_stream, name='api_chat_stream'),
     path('api/chat/cancel/', chat_views.chat_cancel, name='api_chat_cancel'),

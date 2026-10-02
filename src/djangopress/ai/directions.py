@@ -42,10 +42,11 @@ REFINED = {'key': 'next', 'name': 'Refined',
            'brief': 'Apply the request to this version and keep everything else about it.'}
 
 
-def _generate(page, scope, target, instructions, direction, *, lang, history, base_html, images, block, model):
+def _generate(page, scope, target, instructions, direction, *, lang, history, base_html, images, block, model,
+              assistant_session=None):
     from django.db import connection
     try:
-        service = ContentGenerationService(model_name=model)
+        service = ContentGenerationService(model_name=model, assistant_session=assistant_session)
         common = dict(instructions=instructions, conversation_history=history or [], lang=lang, page=page,
                       model_override=model, skip_component_selection=True, base_html=base_html,
                       direction={'name': direction['name'], 'brief': direction['brief']}, design_context=block)
@@ -69,7 +70,8 @@ def _generate(page, scope, target, instructions, direction, *, lang, history, ba
 
 
 def generate_directions(page, scope, target, instructions, *, lang=None, history=None, base_html=None, images=None,
-                        context=None, on_option=None, is_cancelled=None, keys=None, directions=None, model=None):
+                        context=None, on_option=None, is_cancelled=None, keys=None, directions=None, model=None,
+                        assistant_session=None):
     """[{key, name, html, why, notes} | {key, name, error}] in direction order; on_option(item) as each finishes."""
     pool_of = NEW_SECTION_DIRECTIONS if scope == 'new' else DIRECTIONS
     chosen = directions or [d for d in pool_of if keys is None or d['key'] in keys]
@@ -83,7 +85,8 @@ def generate_directions(page, scope, target, instructions, *, lang=None, history
     pool = ThreadPoolExecutor(max_workers=len(chosen) or 1)
     try:
         futures = {pool.submit(_generate, page, scope, target, instructions, d, lang=lang, history=history,
-                               base_html=base_html, images=images, block=block, model=model): d for d in chosen}
+                               base_html=base_html, images=images, block=block, model=model,
+                               assistant_session=assistant_session): d for d in chosen}
         pending = set(futures)
         deadline = time.monotonic() + DEADLINE_SECONDS
         while pending and not cancelled():
@@ -115,3 +118,26 @@ def generate_directions(page, scope, target, instructions, *, lang=None, history
     finally:
         pool.shutdown(wait=False, cancel_futures=True)
     return [results[d['key']] for d in chosen if d['key'] in results]
+
+
+ONE_EDIT = {'key': 'edit', 'name': 'Edit', 'brief': 'Do exactly what was asked, in the style of this page.'}
+
+
+def refine_page_in_style(page, instructions, *, lang=None, history=None, images=None, assistant_session=None,
+                         on_progress=None, handle_images=False):
+    """A whole-page refine with the page's design context and the design check (section refinement model)."""
+    context = build_design_context(page, None, lang=lang, query=instructions)
+    model = get_ai_model('refinement_section')
+    service = ContentGenerationService(model_name=model, assistant_session=assistant_session)
+    result = service.refine_page_with_html(page_id=page.pk, instructions=instructions, model_override=model,
+                                           conversation_history=history, lang=lang, on_progress=on_progress,
+                                           reference_images=images or None, handle_images=handle_images,
+                                           design_context=render_design_context(context))
+    used = result.get('lang') or lang
+    copies = dict(result.get('html_content_i18n') or {})
+    if copies.get(used):
+        checked = check_and_fix(copies[used], context.get('colors'), context.get('fonts'), context.get('typography'))
+        copies[used] = checked['html']
+        result['notes'] = checked['notes']
+    result['html_content_i18n'] = copies
+    return result

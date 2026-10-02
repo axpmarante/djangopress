@@ -626,6 +626,7 @@ Return ONLY the raw HTML for this page. All text must be real content in {lang_n
         pages: list = None,
         languages: list = None,
         component_references: str = '',
+        design_context: str = '',
     ) -> tuple:
         """
         Generate prompt for Step 1 of refinement: edit clean HTML with real text.
@@ -723,6 +724,10 @@ Match the design style shown in the images while following all other technical r
 
 Return ONLY the complete updated HTML. All text in {lang_name}. No template variables, no JSON, no code blocks."""
 
+        if design_context:
+            block = PromptTemplates._design_context_block(design_context)
+            user_prompt = (user_prompt.replace('# USER REQUEST', block + '\n# USER REQUEST', 1)
+                           if '# USER REQUEST' in user_prompt else user_prompt + '\n\n' + block)
         return (system_prompt, user_prompt)
 
     @staticmethod
@@ -742,6 +747,7 @@ Return ONLY the complete updated HTML. All text in {lang_name}. No template vari
         pages: list = None,
         languages: list = None,
         component_references: str = '',
+        design_context: str = '',
     ) -> tuple:
         """
         Wraps get_page_refinement_html_prompt and injects conversation history
@@ -765,6 +771,7 @@ Return ONLY the complete updated HTML. All text in {lang_name}. No template vari
             pages=pages,
             languages=languages,
             component_references=component_references,
+            design_context=design_context,
         )
 
         if conversation_history:

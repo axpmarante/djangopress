@@ -104,19 +104,11 @@ def sse_events(response):
 
 @mock.patch('djangopress.editor_v2.api_views.threading.Thread', InlineThread)
 class LanguageTest(AIEndpointTest):
-    def test_refine_multi_stream_passes_the_editing_language(self):
-        options = {'options': [{'html': '<section data-section="hero" id="hero"><h1>x</h1></section>'}],
-                   'assistant_message': 'ok'}
-        with mock.patch('djangopress.ai.refinement_agent.agent.RefinementAgent.handle', return_value=options) as handle:
-            res = self.post('/editor-v2/api/refine-multi/stream/', {
-                'scope': 'section', 'section_name': 'hero', 'instructions': 'Bigger', 'multi_option': True}, lang='en')
-            sse_events(res)
-        self.assertEqual(handle.call_args.kwargs['lang'], 'en')
-
     def test_refine_page_stream_returns_html_of_the_editing_language(self):
         result = {'html_content_i18n': {'pt': '<section data-section="hero"><h1>PT</h1></section>',
                                         'en': '<section data-section="hero"><h1>EN</h1></section>'}}
-        with mock.patch('djangopress.ai.services.ContentGenerationService.refine_page_with_html', return_value=result) as refine:
+        with mock.patch('djangopress.ai.services.ContentGenerationService.refine_page_with_html', return_value=result) as refine, \
+                mock.patch('djangopress.ai.design_context.build_design_context', return_value={}):
             res = self.post('/editor-v2/api/refine-page/stream/', {'instructions': 'Shorter'}, lang='en')
             events = sse_events(res)
             complete = [b for b in events if 'event: complete' in b]
@@ -137,3 +129,12 @@ class PageStreamLanguageTest(AIEndpointTest):
             res = self.post('/editor-v2/api/refine-page/stream/', {'instructions': 'Shorter'}, lang='en')
             complete = [b for b in sse_events(res) if 'event: complete' in b][0]
         self.assertEqual(json.loads(complete.split('data:', 1)[1])['html'], '<section data-section="hero"><h1>PT novo</h1></section>')
+
+
+
+class LegacyEndpointsGoneTest(AIEndpointTest):
+    """Only the latest AI pipeline is reachable from the editor."""
+    def test_the_old_refine_endpoints_are_gone(self):
+        for url in ('/editor-v2/api/refine-section/', '/editor-v2/api/save-ai-section/', '/editor-v2/api/refine-element/',
+                    '/editor-v2/api/save-ai-element/', '/editor-v2/api/refine-multi/', '/editor-v2/api/refine-multi/stream/'):
+            self.assertEqual(self.post(url, {'instructions': 'x'}).status_code, 404, url)

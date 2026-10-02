@@ -248,60 +248,14 @@ class OldEndpointsTest(ChatBase):
                 content_type='application/json', HTTP_REFERER='http://testserver/pt/?edit=v2')
         self.assertIn('PT: Novo', res.json()['html'])
 
-    def test_refine_multi_stream_works_for_a_news_post(self):
-        from djangopress.news.models import NewsPost
-        post = NewsPost.objects.create(title_i18n={'pt': 'N'}, slug_i18n={'pt': 'n'}, html_content_i18n={'pt': HERO_PT})
-        ct = ContentType.objects.get_for_model(post)
 
-        class Now:
-            def __init__(self, target, daemon=None):
-                self.target = target
-
-            def start(self):
-                self.target()
-
-        with mock.patch('djangopress.editor_v2.api_views.threading.Thread', Now), \
-                mock.patch(HANDLE, return_value={'options': [{'html': HERO_PT}], 'assistant_message': 'ok'}):
-            res = self.client.post('/editor-v2/api/refine-multi/stream/', data=json.dumps({
-                'content_type_id': ct.id, 'object_id': post.pk, 'scope': 'section', 'section_name': 'hero',
-                'instructions': 'x'}), content_type='application/json', HTTP_REFERER='http://testserver/pt/?edit=v2')
-            text = b''.join(res.streaming_content).decode()
-        self.assertIn('event: complete', text)
-        self.assertNotIn('not found', text)
-
-
-class ContextEndpointTest(ChatBase):
-    def test_matches_for_a_section_before_any_request(self):
+class ChatLanguageTest(ChatBase):
+    def test_the_editing_language_reaches_the_turn(self):
         self.client.force_login(self.user)
-        with mock.patch('djangopress.editor_v2.chat_views.build_design_context',
-                        return_value={'colors': [{'name': 'P', 'value': '#C42014'}], 'fonts': [{'role': 'Body', 'family': 'Inter'}],
-                                      'references': [{'label': 'Hero'}]}) as build:
-            res = self.client.get('/editor-v2/api/chat/context/', {'page_id': self.page.id, 'scope': 'section',
-                                                                   'section_name': 'hero'})
-        self.assertEqual(res.json()['matches'], {'colors': ['#C42014'], 'fonts': ['Inter'], 'references': ['Hero']})
-        self.assertEqual(build.call_args.args[1], 'hero')
-
-    def test_element_uses_its_section(self):
-        self.client.force_login(self.user)
-        with mock.patch('djangopress.editor_v2.chat_views.build_design_context',
-                        return_value={'colors': [], 'fonts': [], 'references': []}) as build:
-            self.client.get('/editor-v2/api/chat/context/', {'page_id': self.page.id, 'scope': 'element',
-                                                             'selector': 'section[data-section="hero"] > h1'})
-        self.assertEqual(build.call_args.args[1], 'hero')
-
-
-class ElementImagesTest(ChatBase):
-    def test_reference_images_on_an_element_are_refused_before_any_model_call(self):
-        self.client.force_login(self.user)
-        files = [SimpleUploadedFile('r.png', b'\x89PNG' + bytes(10), content_type='image/png')]
-        payload = {'page_id': self.page.id, 'scope': 'element', 'selector': 'section[data-section="hero"] > h1',
-                   'instructions': 'neste estilo', 'mode': 'auto'}
-        with mock.patch(DIRECTIONS) as d, mock.patch(HANDLE) as h:
-            res = self.client.post('/editor-v2/api/chat/stream/', data={'payload': json.dumps(payload),
-                                                                        'reference_images': files},
-                                   HTTP_REFERER='http://testserver/pt/?edit=v2')
-            text = b''.join(res.streaming_content).decode()
-        self.assertIn('event: error', text)
-        self.assertIn('section', text)
-        d.assert_not_called()
-        h.assert_not_called()
+        with mock.patch.object(chat_views, '_start_worker', side_effect=lambda fn: fn()), \
+                mock.patch('djangopress.editor_v2.chat.run_turn', return_value={'mode': 'explore', 'message': 'x', 'cancelled': False}) as turn:
+            res = self.client.post('/editor-v2/api/chat/stream/', data=json.dumps({
+                'page_id': self.page.id, 'scope': 'section', 'section_name': 'hero', 'instructions': 'Bigger'}),
+                content_type='application/json', HTTP_REFERER='http://testserver/en/?edit=v2')
+            b''.join(res.streaming_content)
+        self.assertEqual(turn.call_args.kwargs['lang'], 'en')

@@ -1,6 +1,5 @@
 """Page-level tools — require an active page in the session."""
 
-from djangopress.ai.utils.llm_config import get_ai_model
 from djangopress.core.models import Page
 from djangopress.core.services import PageService
 
@@ -123,24 +122,19 @@ def refine_section(params, context):
     if not section_name or not instructions:
         return {'success': False, 'message': 'Missing section_name or instructions'}
 
-    model = get_ai_model('refinement_section')
-    ref_images = context.get('reference_images')
-    from djangopress.ai.services import ContentGenerationService
-    service = ContentGenerationService(
-        model_name=model, assistant_session=context.get('session'),
-    )
-    result = service.refine_section_only(
-        page_id=page.id, section_name=section_name,
-        instructions=instructions, model_override=model,
-        reference_images=ref_images or None,
-    )
-
-    refined_html = result.get('options', [{}])[0].get('html', '')
+    from djangopress.ai import directions
+    lang = _default_lang()
+    exists = f'data-section="{section_name}"' in (page.html_content_i18n or {}).get(lang, '')
+    items = directions.generate_directions(
+        page, 'section' if exists else 'new', section_name if exists else _last_section(page), instructions,
+        lang=lang, images=context.get('reference_images') or None, directions=[directions.ONE_EDIT],
+        assistant_session=context.get('session'))
+    refined_html = (items[0].get('html') if items else '') or ''
     if not refined_html:
-        return {'success': False, 'message': 'The AI returned no section'}
+        return {'success': False, 'message': (items[0].get('error') if items else '') or 'The AI returned no section'}
+    result = {'assistant_message': items[0].get('why', '')}
 
     from djangopress.editor_v2 import ai_apply
-    exists = f'data-section="{section_name}"' in (page.html_content_i18n or {}).get(_default_lang(), '')
     if exists:
         applied = ai_apply.apply_section_html(page, refined_html, _default_lang(), section_name=section_name,
                                               user=context.get('user'), checkpoint=False)
@@ -181,16 +175,13 @@ def insert_section(params, context):
         insert_after = names[-1] if names else None
 
     _create_version_if_needed(context)
-    model = get_ai_model('refinement_section')
-    from djangopress.ai.services import ContentGenerationService
-    service = ContentGenerationService(model_name=model, assistant_session=context.get('session'))
-    result = service.generate_section(
-        page_id=page.id, insert_after=insert_after, instructions=instructions,
-        model_override=model, lang=lang,
-    )
-    new_html = (result.get('options') or [{}])[0].get('html', '')
+    from djangopress.ai import directions
+    items = directions.generate_directions(page, 'new', insert_after, instructions, lang=lang,
+                                           directions=[directions.NEW_SECTION_DIRECTIONS[0]],
+                                           assistant_session=context.get('session'))
+    new_html = (items[0].get('html') if items else '') or ''
     if not new_html:
-        return {'success': False, 'message': 'The AI returned no section'}
+        return {'success': False, 'message': (items[0].get('error') if items else '') or 'The AI returned no section'}
 
     from djangopress.editor_v2 import ai_apply
     page.refresh_from_db()
@@ -213,18 +204,11 @@ def refine_page(params, context):
     if not instructions:
         return {'success': False, 'message': 'Missing instructions'}
 
-    model = get_ai_model('refinement_page')
-    ref_images = context.get('reference_images')
-    from djangopress.ai.services import ContentGenerationService
-    service = ContentGenerationService(
-        model_name=model, assistant_session=context.get('session'),
-    )
-    result = service.refine_page_with_html(
-        page_id=page.id, instructions=instructions,
-        model_override=model,
-        reference_images=ref_images or None,
-        handle_images=params.get('handle_images', False),
-    )
+    from djangopress.ai import directions
+    result = directions.refine_page_in_style(page, instructions, lang=_default_lang(),
+                                             images=context.get('reference_images') or None,
+                                             assistant_session=context.get('session'),
+                                             handle_images=params.get('handle_images', False))
 
     page.refresh_from_db()
     html = (result.get('html_content_i18n') or {}).get(result.get('lang') or _default_lang())
