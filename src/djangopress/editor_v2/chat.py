@@ -16,7 +16,7 @@ import unicodedata
 from bs4 import BeautifulSoup
 
 from djangopress.ai.design_context import build_design_context, matches_summary
-from djangopress.ai.directions import DIRECTIONS, REFINED, generate_directions
+from djangopress.ai.directions import DIRECTIONS, NEW_SECTION_DIRECTIONS, REFINED, generate_directions
 from djangopress.editor_v2 import ai_apply
 from djangopress.site_assistant import cancel
 
@@ -89,7 +89,9 @@ def run_turn(page, *, scope, target, instructions, mode='auto', lang=None, histo
 
     requested = mode if mode in ('quick', 'explore') else 'auto'
     resolved = requested if requested != 'auto' else (classify_intent(instructions) or ('explore' if images else 'quick'))
-    section = _section_name(page, scope, target, lang)
+    if scope == 'new':
+        resolved = 'explore'                 # a new section is always designed, never a quick edit
+    section = None if scope == 'new' else _section_name(page, scope, target, lang)
     if cancelled():
         return stopped(resolved)
 
@@ -156,8 +158,9 @@ def run_turn(page, *, scope, target, instructions, mode='auto', lang=None, histo
     if cancelled():
         return stopped('explore')
     step('check', 'done')
-    names = {d['key']: d['name'] for d in DIRECTIONS}
+    names = {d['key']: d['name'] for d in (NEW_SECTION_DIRECTIONS if scope == 'new' else DIRECTIONS)}
     made = [f"{chr(65 + n)} {names.get(i['key'], i['key'])}" for n, i in enumerate(items) if 'html' in i]
-    message = (f"Three directions for {section or 'this element'}: " + ', '.join(made) + '.') if made \
+    subject = 'a new section' if scope == 'new' else (section or 'this element')
+    message = (f"Three directions for {subject}: " + ', '.join(made) + '.') if made \
         else "Couldn't make any direction this time."
     return {'mode': 'explore', 'message': message, 'cancelled': False}

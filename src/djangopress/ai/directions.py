@@ -27,6 +27,17 @@ DIRECTIONS = [
 ]
 # Production gunicorn kills a request after 120 s; what is not ready by then is reported, not waited for.
 DEADLINE_SECONDS = 100
+NEW_SECTION_DIRECTIONS = [
+    {'key': 'refined', 'name': "In the page's style",
+     'brief': "Build it the way this page builds its sections: the same structure patterns, type scale, spacing "
+              "rhythm and details (eyebrows, dividers, accents). It should look like it was always there."},
+    {'key': 'bold', 'name': 'Bolder',
+     'brief': 'More presence: a colour band from the site palette or strong contrast, real imagery from the library '
+              'where it helps. Titles may use the largest size this page already uses; same weights.'},
+    {'key': 'layout', 'name': 'Another layout',
+     'brief': 'A different layout pattern this page or site already uses (split, cards, editorial list, feature '
+              'grid), for the same content.'},
+]
 REFINED = {'key': 'next', 'name': 'Refined',
            'brief': 'Apply the request to this version and keep everything else about it.'}
 
@@ -39,7 +50,12 @@ def _generate(page, scope, target, instructions, direction, *, lang, history, ba
                       model_override=model, skip_component_selection=True, base_html=base_html,
                       direction={'name': direction['name'], 'brief': direction['brief']}, design_context=block)
         page_id = getattr(page, 'pk', None)
-        if scope == 'element':
+        if scope == 'new':
+            new = dict(common)
+            for key in ('base_html', 'skip_component_selection'):
+                new.pop(key)
+            result = service.generate_section(page_id=page_id, insert_after=target, **new)
+        elif scope == 'element':
             result = service.refine_element_only(page_id=page_id, selector=target, **common)
         else:
             result = service.refine_section_only(page_id=page_id, section_name=target, reference_images=images,
@@ -55,7 +71,8 @@ def _generate(page, scope, target, instructions, direction, *, lang, history, ba
 def generate_directions(page, scope, target, instructions, *, lang=None, history=None, base_html=None, images=None,
                         context=None, on_option=None, is_cancelled=None, keys=None, directions=None, model=None):
     """[{key, name, html, why, notes} | {key, name, error}] in direction order; on_option(item) as each finishes."""
-    chosen = directions or [d for d in DIRECTIONS if keys is None or d['key'] in keys]
+    pool_of = NEW_SECTION_DIRECTIONS if scope == 'new' else DIRECTIONS
+    chosen = directions or [d for d in pool_of if keys is None or d['key'] in keys]
     if context is None:
         context = build_design_context(page, target if scope == 'section' else None, lang=lang, query=instructions)
     block = render_design_context(context)

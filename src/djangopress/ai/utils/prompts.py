@@ -981,6 +981,8 @@ Return ONLY the updated `<section data-section="{section_name}">...</section>` b
         pages: list = None,
         languages: list = None,
         component_references: str = '',
+        direction: dict = None,
+        design_context: str = '',
     ) -> tuple:
         """
         Generate prompt for creating a brand new section on a page.
@@ -1098,6 +1100,22 @@ Create a new section to be inserted {position_context}:
 ---
 
 Return ONLY 3 variations of the new section, separated by <!-- OPTION_1 -->, <!-- OPTION_2 -->, <!-- OPTION_3 --> markers. Each must be a complete `<section>` block. All text in {lang_name}. No template variables, no JSON, no code blocks."""
+
+        if direction:
+            # One new section per call (the editor asks for three directions in parallel).
+            start = system_prompt.index('## Multiple Options')
+            end = system_prompt.index('## CRITICAL: Return ONLY the New Section Variations')
+            system_prompt = (system_prompt[:start] + PromptTemplates._direction_block(direction, 'the `<section>`').strip()
+                             + '\n\n' + system_prompt[end:])
+            system_prompt = (system_prompt
+                             .replace('## CRITICAL: Return ONLY the New Section Variations', '## CRITICAL: Return ONLY the New Section')
+                             .replace('- Output ONLY the 3 `<section>` variations with their option markers', '- Output ONLY the one new `<section>`')
+                             .replace('- Return ONLY the new section HTML (3 variations)', '- Return ONLY the new section HTML'))
+            user_prompt = user_prompt.replace(
+                'Return ONLY 3 variations of the new section, separated by <!-- OPTION_1 -->, <!-- OPTION_2 -->, <!-- OPTION_3 --> markers. Each must be a complete `<section>` block.',
+                'Return ONLY the new `<section>` block.')
+        if design_context:
+            user_prompt = user_prompt.replace('# USER REQUEST', PromptTemplates._design_context_block(design_context) + '\n# USER REQUEST', 1)
 
         return (system_prompt, user_prompt)
 

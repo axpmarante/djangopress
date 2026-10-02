@@ -1410,6 +1410,9 @@ Return ONLY the corrected, complete JSON. No markdown, no explanation."""
         conversation_history: list = None,
         model_override: str = None,
         lang: str = None,
+        page=None,
+        direction: dict = None,
+        design_context: str = '',
     ) -> Dict:
         """
         Generate a brand new section (3 variations) to insert into a page.
@@ -1433,10 +1436,12 @@ Return ONLY the corrected, complete JSON. No markdown, no explanation."""
         print(f"Page ID: {page_id}, Insert after: {insert_after or '(top of page)'}")
         print(f"Instructions: {instructions}")
 
-        try:
-            page = Page.objects.get(id=page_id)
-        except Page.DoesNotExist:
-            raise ValueError(f"Page with ID {page_id} not found")
+        if page is None:
+            try:
+                page = Page.objects.get(id=page_id)
+            except Page.DoesNotExist:
+                raise ValueError(f"Page with ID {page_id} not found")
+        log_page = page if isinstance(page, Page) else None
 
         site_settings = SiteSettings.objects.first()
         default_language = site_settings.get_default_language() if site_settings else 'pt'
@@ -1447,8 +1452,8 @@ Return ONLY the corrected, complete JSON. No markdown, no explanation."""
         design_guide = site_settings.design_guide if site_settings else ''
         model = model_override or self.model_name
 
-        page_title = page.default_title
-        page_slug = page.default_slug
+        page_title = getattr(page, 'default_title', '') or ''
+        page_slug = getattr(page, 'default_slug', '') or ''
 
         # Build pages list for inter-page linking context
         pages_data = []
@@ -1501,6 +1506,8 @@ Return ONLY the corrected, complete JSON. No markdown, no explanation."""
             pages=pages_data,
             languages=languages,
             component_references=component_references,
+            direction=direction,
+            design_context=design_context,
         )
 
         messages = [
@@ -1518,14 +1525,14 @@ Return ONLY the corrected, complete JSON. No markdown, no explanation."""
                 system_prompt=system_prompt, user_prompt=user_prompt,
                 response_text=response.choices[0].message.content,
                 duration_ms=int((time.time() - t0) * 1000),
-                page=page, section_name=f'new_after_{insert_after or "top"}', **usage,
+                page=log_page, section_name=f'new_after_{insert_after or "top"}', **usage,
             )
         except Exception as e:
             self._log(
                 action='generate_section', model_name=actual_model, provider=provider_str,
                 system_prompt=system_prompt, user_prompt=user_prompt,
                 duration_ms=int((time.time() - t0) * 1000),
-                page=page, section_name=f'new_after_{insert_after or "top"}',
+                page=log_page, section_name=f'new_after_{insert_after or "top"}',
                 success=False, error_message=str(e),
             )
             raise
@@ -1536,6 +1543,12 @@ Return ONLY the corrected, complete JSON. No markdown, no explanation."""
             raise ValueError("AI returned empty or too-short HTML for new section")
 
         print(f"AI produced {len(generated_html)} chars of new section HTML")
+
+        if direction:
+            section = BeautifulSoup(generated_html, 'html.parser').find('section')
+            if section is None:
+                raise ValueError("AI returned no <section> for the new section")
+            return {'options': [{'html': str(section)}], 'assistant_message': 'Here is a new section.'}
 
         # Split into options and validate each one
         options = self._split_multi_options(generated_html)

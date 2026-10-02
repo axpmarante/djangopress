@@ -62,13 +62,13 @@ def chat_stream(request):
         return _error(str(e))
 
     instructions = (data.get('instructions') or '').strip()
-    scope = data.get('scope') if data.get('scope') in ('section', 'element') else 'section'
-    target = data.get('selector') if scope == 'element' else data.get('section_name')
+    scope = data.get('scope') if data.get('scope') in ('section', 'element', 'new') else 'section'
+    target = {'element': data.get('selector'), 'new': data.get('insert_after') or None}.get(scope, data.get('section_name'))
     if not instructions:
         return _error('Missing instructions')
-    if not target:
+    if not target and scope != 'new':
         return _error('Pick a section or an element first')
-    if images and scope == 'element':
+    if images and scope != 'section':
         return _error('Reference images work on a whole section: select the section and send again')
     try:
         page = _get_editable_object(data)
@@ -78,7 +78,7 @@ def chat_stream(request):
         return _error('Page or editable object not found')
 
     lang = _detect_language_from_request(request, data)
-    label = 'element' if scope == 'element' else target
+    label = {'element': 'element', 'new': f'new_after_{target or "top"}'}.get(scope, target)
     session = _get_or_create_session(page, data.get('session_id'), f'[{label}] {instructions[:60]}', request.user)
     session.add_user_message(instructions, reference_images_count=len(images))
     session.save()
