@@ -141,3 +141,36 @@ def refine_page_in_style(page, instructions, *, lang=None, history=None, images=
         result['notes'] = checked['notes']
     result['html_content_i18n'] = copies
     return result
+
+
+def _style_source(kind, lang):
+    """What a new page or post should look like: the latest post with sections for news, else the home page."""
+    from djangopress.ai.design_context import _homepage, _html, _sections
+    if kind == 'news':
+        from djangopress.news.models import NewsPost
+        for post in NewsPost.objects.order_by('-created_at', '-pk')[:20]:
+            if _sections(_html(post, lang)):
+                return post
+    return _homepage()
+
+
+def generate_page_in_style(brief, *, kind='page', language=None, reference_images=None, outline=None,
+                           on_progress=None):
+    """A new page or news post with the site's design context and the design check (section model, Flash)."""
+    source = _style_source(kind, language)
+    context = build_design_context(source, None, lang=language, query=brief)
+    model = get_ai_model('refinement_section')
+    service = ContentGenerationService(model_name=model)
+    result = service.generate_page(brief=brief, language=language or 'pt', model_override=model,
+                                   reference_images=reference_images or None, outline=outline,
+                                   on_progress=on_progress, design_context=render_design_context(context))
+    copies = dict(result.get('html_content_i18n') or {})
+    notes = []
+    for code, html in copies.items():
+        if html:
+            checked = check_and_fix(html, context.get('colors'), context.get('fonts'), context.get('typography'))
+            copies[code] = checked['html']
+            notes += [n for n in checked['notes'] if n not in notes]
+    result['html_content_i18n'] = copies
+    result['notes'] = notes
+    return result

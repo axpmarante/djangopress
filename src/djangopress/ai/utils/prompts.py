@@ -507,6 +507,7 @@ Return a JSON object:
         languages: list = None,
         outline: list = None,
         component_references: str = '',
+        design_context: str = '',
     ) -> tuple:
         """
         Generate prompt for Step 1: create clean HTML with real text in the default language.
@@ -557,12 +558,19 @@ Generate a complete, professional web page as clean HTML with real text content 
 - Do NOT wrap the output in JSON
 - Return ONLY the HTML, no markdown code blocks, no explanations"""
 
-        if design_guide:
+        if design_guide and not design_context:   # the design context already carries the guide
             system_prompt += f"""
 
 ## Design Guide
 Follow these design patterns and conventions:
 {design_guide}"""
+
+        if design_context:
+            system_prompt += """
+
+## Fit the site
+This page joins an existing site. Build its sections the way the site builds its own: the same palette, fonts, structure patterns, spacing rhythm and details (eyebrows, dividers, accents) as the reference sections.
+Keep the site's type scale: headings and body text use the same font, weight, size, leading and tracking classes as the design vocabulary and the type scale listed in the request."""
 
         if has_reference_images:
             system_prompt += """
@@ -600,7 +608,7 @@ Match the design style shown in the images while following all other technical r
 {pages_info}
 ---
 
-# PAGE REQUEST
+{PromptTemplates._design_context_block(design_context)}# PAGE REQUEST
 
 **Brief:** {brief}
 {outline_block}

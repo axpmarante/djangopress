@@ -548,7 +548,8 @@ Return ONLY the corrected, complete JSON. No markdown, no explanation."""
         model_override: str = None,
         reference_images: list = None,
         outline: list = None,
-        on_progress=None
+        on_progress=None,
+        design_context: str = '',
     ) -> Dict:
         """
         Generate a page as HTML in the default language.
@@ -622,6 +623,7 @@ Return ONLY the corrected, complete JSON. No markdown, no explanation."""
             languages=languages,
             outline=outline,
             component_references=component_references,
+            design_context=design_context,
         )
 
         # Debug output

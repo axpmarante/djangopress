@@ -45,7 +45,8 @@ def generate_page_stream(request):
     SSE streaming endpoint for page generation.
 
     POST /ai/api/generate-page/stream/
-    Same inputs as generate_page_api (multipart or JSON).
+    Multipart (with reference images) or JSON. Runs on the latest pipeline: the site's design
+    context (home page), the design check and the section model.
     Returns Server-Sent Events with progress updates followed by the final result.
     """
     try:
@@ -53,7 +54,6 @@ def generate_page_stream(request):
         if request.content_type and 'multipart' in request.content_type:
             brief = request.POST.get('brief')
             language = request.POST.get('language', 'pt')
-            model = request.POST.get('model') or get_ai_model('generation')
             blueprint_page_id = request.POST.get('blueprint_page_id')
             reference_images = []
             for f in request.FILES.getlist('reference_images'):
@@ -62,7 +62,6 @@ def generate_page_stream(request):
             data = json.loads(request.body)
             brief = data.get('brief')
             language = data.get('language', 'pt')
-            model = data.get('model') or get_ai_model('generation')
             blueprint_page_id = data.get('blueprint_page_id')
             reference_images = []
 
@@ -82,15 +81,10 @@ def generate_page_stream(request):
             except (BlueprintPage.DoesNotExist, ValueError):
                 pass
 
-        service = ContentGenerationService()
-        kwargs = dict(
-            brief=brief,
-            language=language,
-            model_override=model,
-            reference_images=reference_images or None,
-            outline=outline,
-        )
-        return sse_response(run_with_progress(service.generate_page, kwargs))
+        from djangopress.ai import directions
+        kwargs = dict(brief=brief, kind='page', language=language, reference_images=reference_images or None,
+                      outline=outline)
+        return sse_response(run_with_progress(directions.generate_page_in_style, kwargs))
 
     except Exception as e:
         return sse_response(iter([
@@ -218,8 +212,7 @@ def analyze_bulk_pages_api(request):
     POST /ai/api/analyze-bulk-pages/
     Body: {
         "description": "User's natural language description of website",
-        "language": "pt",  # optional
-        "model": "gemini-pro"  # optional
+        "language": "pt"  # optional
     }
 
     Returns: {
@@ -231,7 +224,7 @@ def analyze_bulk_pages_api(request):
         data = json.loads(request.body)
         description = data.get('description')
         language = data.get('language', 'pt')
-        model = data.get('model') or get_ai_model('generation')
+        model = get_ai_model('refinement_section')   # the latest pipeline's model (Flash)
 
         if not description:
             return JsonResponse({
@@ -1650,14 +1643,14 @@ def generate_news_post_stream(request):
     SSE streaming endpoint for news post generation.
 
     POST /ai/api/generate-news-post/stream/
-    Same inputs as generate_news_post_api (multipart or JSON).
+    Multipart (with reference images) or JSON. Runs on the latest pipeline: the design context of
+    the latest post (or the home page), the design check and the section model.
     Returns Server-Sent Events with progress updates followed by the final result.
     """
     try:
         if request.content_type and 'multipart' in request.content_type:
             brief = request.POST.get('brief')
             language = request.POST.get('language', 'pt')
-            model = request.POST.get('model') or get_ai_model('generation')
             reference_images = []
             for f in request.FILES.getlist('reference_images'):
                 reference_images.append({'bytes': f.read(), 'mime_type': f.content_type})
@@ -1665,7 +1658,6 @@ def generate_news_post_stream(request):
             data = json.loads(request.body)
             brief = data.get('brief')
             language = data.get('language', 'pt')
-            model = data.get('model') or get_ai_model('generation')
             reference_images = []
 
         if not brief:
@@ -1673,14 +1665,9 @@ def generate_news_post_stream(request):
                 sse_event({'error': 'Brief is required'}, event='error')
             ]))
 
-        service = ContentGenerationService()
-        kwargs = dict(
-            brief=brief,
-            language=language,
-            model_override=model,
-            reference_images=reference_images or None,
-        )
-        return sse_response(run_with_progress(service.generate_page, kwargs))
+        from djangopress.ai import directions
+        kwargs = dict(brief=brief, kind='news', language=language, reference_images=reference_images or None)
+        return sse_response(run_with_progress(directions.generate_page_in_style, kwargs))
     except Exception as e:
         return sse_response(iter([
             sse_event({'error': str(e)}, event='error')
