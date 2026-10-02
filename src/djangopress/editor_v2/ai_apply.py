@@ -8,9 +8,10 @@ internal links for that language, and report what could not be translated.
 Pages keep the same structure in every language.
 """
 import copy
+import html as html_lib
 import re
 
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, Comment
 
 from djangopress.core.models import Page, SiteSettings
 from djangopress.editor_v2 import structure
@@ -104,6 +105,46 @@ def _translations(fragment_html, source, targets):
     return {t: (localize_internal_links(raw[t] or fragment_html, source, t), raw[t] is not None) for t in targets}
 
 
+TEXT_ATTRS = ('alt', 'title', 'aria-label', 'placeholder')
+
+
+def _tags(tag):
+    return [tag, *tag.find_all(True)]
+
+
+def _signature(tag):
+    """What a translation would change: visible text and text-bearing attributes, in order."""
+    texts = [' '.join(t.split()) for t in tag.find_all(string=True) if not isinstance(t, Comment) and t.strip()]
+    attrs = [(el.name, a, el.get(a)) for el in _tags(tag) for a in TEXT_ATTRS if el.get(a)]
+    return texts, attrs
+
+
+def _shape(tag):
+    return [el.name for el in _tags(tag)]
+
+
+def _localized_href(href, source, target):
+    return _soup(localize_internal_links(f'<a href="{html_lib.escape(href)}"></a>', source, target)).a['href']
+
+
+def _copy_attributes(old_source, new_source, target_tag, source, target):
+    """The other language's copy with every attribute the source edit changed, or None when
+    its structure differs (then it is translated instead)."""
+    if target_tag is None or not (_shape(old_source) == _shape(new_source) == _shape(target_tag)):
+        return None
+    result = copy.copy(target_tag)
+    for old, new, el in zip(_tags(old_source), _tags(new_source), _tags(result)):
+        for key in set(old.attrs) | set(new.attrs):
+            before, after = old.get(key), new.get(key)
+            if before == after:
+                continue
+            if after is None:
+                del el[key]
+            else:
+                el[key] = _localized_href(after, source, target) if key == 'href' else copy.copy(after)
+    return result
+
+
 def _rename_section(tag, old, new):
     tag['data-section'] = new
     tag['id'] = new
@@ -151,12 +192,21 @@ def apply_section_html(page, html, source_lang, *, section_name=None, mode='repl
         html_i18n[code] = _out(soup)
         return True
 
+    old_source = None if mode == 'insert' else _soup(html_i18n.get(source)).find('section', attrs={'data-section': name})
     if checkpoint:
         _checkpoint(page, user, f'AI {"new section" if mode == "insert" else "section"} "{name}"')
     if not put(source, new):
         raise ValueError(f'Section "{name}" not found')
 
     translated, untranslated = [], []
+    if old_source is not None and _signature(old_source) == _signature(new):
+        # Same text: copy the attribute changes, no translation needed.
+        for code in list(others):
+            copied = _copy_attributes(old_source, new, _soup(html_i18n.get(code)).find('section', attrs={'data-section': name}),
+                                      source, code)
+            if copied is not None and put(code, copied):
+                translated.append(code)
+                others.remove(code)
     results = _translations(str(new), source, others)
     for code in others:
         fragment, ok = results[code]
@@ -169,7 +219,8 @@ def apply_section_html(page, html, source_lang, *, section_name=None, mode='repl
 
     page.html_content_i18n = html_i18n
     page.save()
-    return {'section_name': name, 'translated_languages': translated, 'untranslated_languages': untranslated}
+    return {'section_name': name, 'translated_languages': translated, 'untranslated_languages': untranslated,
+            'html': str(new)}
 
 
 def apply_element_html(page, selector, html, source_lang, *, user=None, checkpoint=True):
@@ -188,11 +239,18 @@ def apply_element_html(page, selector, html, source_lang, *, user=None, checkpoi
         html_i18n[code] = _out(soup)
         return True
 
+    old_source = _soup(html_i18n.get(source)).select_one(selector)
     if checkpoint:
         _checkpoint(page, user, 'AI element edit')
     if not put(source, new):
         raise ValueError('Element not found for selector')
     translated, untranslated = [], []
+    if old_source is not None and _signature(old_source) == _signature(new):
+        for code in list(others):
+            copied = _copy_attributes(old_source, new, _soup(html_i18n.get(code)).select_one(selector), source, code)
+            if copied is not None and put(code, copied):
+                translated.append(code)
+                others.remove(code)
     results = _translations(str(new), source, others)
     for code in others:
         fragment, ok = results[code]
@@ -203,7 +261,7 @@ def apply_element_html(page, selector, html, source_lang, *, user=None, checkpoi
         (translated if ok else untranslated).append(code)
     page.html_content_i18n = html_i18n
     page.save()
-    return {'translated_languages': translated, 'untranslated_languages': untranslated}
+    return {'translated_languages': translated, 'untranslated_languages': untranslated, 'html': str(new)}
 
 
 def apply_page_html(page, html, source_lang, *, user=None, checkpoint=True):

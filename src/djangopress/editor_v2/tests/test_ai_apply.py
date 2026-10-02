@@ -147,3 +147,76 @@ class ParallelTranslationTest(AIApplyTestCase):
         self.assertLess(time.time() - t0, 1.0)          # 3 languages x 0.4 s would be 1.2 s in series
         self.assertEqual(sorted(result['translated_languages']), ['en', 'es', 'fr'])
         self.assertIn('FR: P', self.html('fr'))
+
+
+class ClassOnlyTest(AIApplyTestCase):
+    """A change that keeps the visible text reaches the other languages without a translation call."""
+
+    def setUp(self):
+        super().setUp()
+        self.page.html_content_i18n = {
+            'pt': '<section data-section="hero" id="hero" class="py-10"><h1 class="text-4xl">PT: Olá</h1>'
+                  '<img src="/m/a.jpg" alt="PT: sala"><a class="btn" href="/pt/">PT: Início</a></section>',
+            'en': '<section data-section="hero" id="hero" class="py-10"><h1 class="text-4xl">EN: Hello</h1>'
+                  '<img src="/m/a.jpg" alt="EN: room"><a class="btn" href="/en/">EN: Home</a></section>',
+        }
+        self.page.save()
+
+    def apply(self, new):
+        with mock.patch(TRANSLATE, side_effect=fake_translate) as tr:
+            result = ai_apply.apply_section_html(self.page, new, 'pt', section_name='hero', user=self.user)
+        return result, tr
+
+    def test_classes_are_copied_and_nothing_is_translated(self):
+        new = ('<section data-section="hero" id="hero" class="py-24 bg-[#111]"><h1 class="text-6xl text-white">PT: Olá</h1>'
+               '<img src="/m/a.jpg" alt="PT: sala"><a class="btn" href="/pt/">PT: Início</a></section>')
+        result, tr = self.apply(new)
+        tr.assert_not_called()
+        en = self.html('en')
+        self.assertIn('class="py-24 bg-[#111]"', en)
+        self.assertIn('<h1 class="text-6xl text-white">EN: Hello</h1>', en)
+        self.assertIn('alt="EN: room"', en)
+        self.assertIn('href="/en/"', en)
+        self.assertEqual(result['translated_languages'], ['en'])
+        self.assertIn('text-6xl', result['html'])
+        self.assertIn('PT: Olá', result['html'])
+
+    def test_a_changed_link_is_localised(self):
+        new = ('<section data-section="hero" id="hero" class="py-10"><h1 class="text-4xl">PT: Olá</h1>'
+               '<img src="/m/a.jpg" alt="PT: sala"><a class="btn" href="/pt/reservas/">PT: Início</a></section>')
+        _result, tr = self.apply(new)
+        tr.assert_not_called()
+        self.assertIn('href="/en/book-a-table/"', self.html('en'))
+
+    def test_a_removed_attribute_is_removed(self):
+        new = ('<section data-section="hero" id="hero"><h1 class="text-4xl">PT: Olá</h1>'
+               '<img src="/m/a.jpg" alt="PT: sala"><a class="btn" href="/pt/">PT: Início</a></section>')
+        self.apply(new)
+        self.assertIn('<section data-section="hero" id="hero"><h1', self.html('en'))
+
+    def test_a_text_change_is_translated(self):
+        new = ('<section data-section="hero" id="hero" class="py-10"><h1 class="text-4xl">PT: Adeus</h1>'
+               '<img src="/m/a.jpg" alt="PT: sala"><a class="btn" href="/pt/">PT: Início</a></section>')
+        _result, tr = self.apply(new)
+        self.assertEqual(tr.call_count, 1)
+        self.assertIn('EN: Adeus', self.html('en'))
+
+    def test_an_alt_change_is_translated(self):
+        new = ('<section data-section="hero" id="hero" class="py-10"><h1 class="text-4xl">PT: Olá</h1>'
+               '<img src="/m/a.jpg" alt="PT: mesa"><a class="btn" href="/pt/">PT: Início</a></section>')
+        _result, tr = self.apply(new)
+        self.assertEqual(tr.call_count, 1)
+
+    def test_a_new_structure_is_translated(self):
+        new = ('<section data-section="hero" id="hero" class="py-10"><div><h1 class="text-4xl">PT: Olá</h1></div>'
+               '<img src="/m/a.jpg" alt="PT: sala"><a class="btn" href="/pt/">PT: Início</a></section>')
+        _result, tr = self.apply(new)
+        self.assertEqual(tr.call_count, 1)
+
+    def test_element_classes_only(self):
+        with mock.patch(TRANSLATE, side_effect=fake_translate) as tr:
+            result = ai_apply.apply_element_html(self.page, 'section[data-section="hero"] > h1',
+                                                 '<h1 class="text-7xl">PT: Olá</h1>', 'pt', user=self.user)
+        tr.assert_not_called()
+        self.assertIn('<h1 class="text-7xl">EN: Hello</h1>', self.html('en'))
+        self.assertEqual(result['html'], '<h1 class="text-7xl">PT: Olá</h1>')

@@ -222,7 +222,7 @@ def refine_with_ai(params, context):
 
     if scope == 'element':
         result = service.refine_element_only(
-            page_id=page.id,
+            page_id=page.id, page=page,
             selector=context['target_name'],
             instructions=instructions,
             conversation_history=conversation_history,
@@ -236,7 +236,7 @@ def refine_with_ai(params, context):
         )
     else:
         result = service.refine_section_only(
-            page_id=page.id,
+            page_id=page.id, page=page,
             section_name=context['target_name'],
             instructions=instructions,
             conversation_history=conversation_history,

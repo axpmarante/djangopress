@@ -29,7 +29,8 @@ class RefinementAgent:
 
     def handle(self, instruction, scope, target_name, page,
                conversation_history=None, multi_option=False,
-               mode='refine', insert_after=None, lang=None):
+               mode='refine', insert_after=None, lang=None,
+               delegate=True, base_html=None):
         """
         Main entry point. Analyze instruction and execute via tools.
 
@@ -42,6 +43,10 @@ class RefinementAgent:
             multi_option: Whether to return 3 variations
             mode: 'refine' or 'create'
             insert_after: For mode='create', section to insert after
+            delegate: False = stop when the request needs a new design and return
+                {'delegate': True, ...} without generating (the editor Chat then
+                builds its own directions)
+            base_html: edit this HTML (an option not applied yet) instead of the stored target
 
         Returns:
             Dict with 'options' (list of {'html': str}) and 'assistant_message'
@@ -58,6 +63,8 @@ class RefinementAgent:
         # Work on the language being edited (an empty copy shows the default).
         edit_lang = lang if (lang and (page.html_content_i18n or {}).get(lang)) else default_language
         target_html = self._get_target_html(page, scope, target_name, edit_lang)
+        if base_html:
+            target_html = self._with_base(target_html, scope, target_name, base_html)
 
         # Build conversation history string
         history_text = ''
@@ -101,13 +108,17 @@ class RefinementAgent:
         # Agent loop
         iteration = 0
         while iteration < MAX_ITERATIONS:
+            routing_model = get_ai_model('refinement_routing')
+            t_call = time.time()
             try:
-                response = self.llm.get_completion(messages, tool_name=get_ai_model('refinement_routing'))
+                response = self.llm.get_completion(messages, tool_name=routing_model)
                 raw_content = response.choices[0].message.content
             except Exception as e:
                 logger.exception('Agent LLM call failed at iteration %d', iteration)
                 print(f"Agent: LLM error at iteration {iteration}: {e}")
+                self._log_routing(routing_model, messages, '', t_call, page, scope, target_name, error=str(e))
                 break  # Fall through to fallback
+            self._log_routing(routing_model, messages, raw_content, t_call, page, scope, target_name, response=response)
 
             parsed = self._parse_response(raw_content)
             has_response = parsed['has_response']
@@ -130,6 +141,10 @@ class RefinementAgent:
                 params = action.get('params', {})
 
                 print(f"Agent: executing {tool_name}({json.dumps(params, default=str)[:200]})")
+
+                if not delegate and tool_name in agent_tools.DELEGATION_TOOLS:
+                    return {'delegate': True, 'assistant_message': response_text,
+                            'routing_ms': int((time.time() - t0) * 1000)}
 
                 result = agent_tools.execute(tool_name, params, context)
                 results.append({'tool': tool_name, 'result': result})
@@ -193,6 +208,8 @@ class RefinementAgent:
 
         # Fallback: delegate to full AI pipeline with all context
         routing_ms = int((time.time() - t0) * 1000)
+        if not delegate:
+            return {'delegate': True, 'assistant_message': '', 'routing_ms': routing_ms}
         print(f"Agent: fallback to full AI pipeline after {routing_ms}ms ({iteration} iterations)")
 
         service = ContentGenerationService(model_name='gemini-pro')
@@ -207,7 +224,7 @@ class RefinementAgent:
             )
         elif scope == 'element':
             result = service.refine_element_only(
-                page_id=page.id,
+                page_id=page.id, page=page,
                 selector=target_name,
                 instructions=instruction,
                 conversation_history=conversation_history,
@@ -216,7 +233,7 @@ class RefinementAgent:
             )
         else:
             result = service.refine_section_only(
-                page_id=page.id,
+                page_id=page.id, page=page,
                 section_name=target_name,
                 instructions=instruction,
                 conversation_history=conversation_history,
@@ -227,6 +244,37 @@ class RefinementAgent:
         result['routing_tier'] = 'fallback'
         result['routing_ms'] = routing_ms
         return result
+
+    @staticmethod
+    def _with_base(target_html, scope, target_name, base_html):
+        """The target HTML with the unapplied option in place of the stored section/element."""
+        from bs4 import BeautifulSoup
+        new = next((t for t in BeautifulSoup(base_html, 'html.parser').contents if getattr(t, 'name', None)), None)
+        if new is None:
+            return target_html
+        if scope != 'element':
+            return str(new)
+        soup = BeautifulSoup(target_html, 'html.parser')
+        old = soup.select_one(target_name)
+        if old is None:
+            return target_html
+        old.replace_with(new)
+        return str(soup)
+
+    @staticmethod
+    def _log_routing(model, messages, raw, t_call, page, scope, target_name, response=None, error=''):
+        from djangopress.ai.models import log_ai_call
+        from djangopress.ai.services import ContentGenerationService
+        from djangopress.core.models import Page
+        actual_model, provider = ContentGenerationService._get_model_info(model)
+        usage = ContentGenerationService._extract_usage(response) if response is not None else {}
+        log_ai_call(
+            action='refine_routing', model_name=actual_model, provider=provider,
+            system_prompt=messages[0]['content'], user_prompt=messages[-1]['content'], response_text=raw or '',
+            duration_ms=int((time.time() - t_call) * 1000), success=not error, error_message=error,
+            page=page if isinstance(page, Page) else None,
+            section_name=target_name if scope == 'section' else 'element', routing_tier='routing', **usage,
+        )
 
     def _get_target_html(self, page, scope, target_name, default_language):
         """Extract clean HTML for the target section/element from html_content_i18n."""

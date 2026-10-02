@@ -25,6 +25,7 @@ ACTION_CHOICES = [
     ('select_components', 'Select Components'),
     ('refine_element', 'Refine Element'),
     ('templatize_v2', 'Templatize V2'),
+    ('refine_routing', 'Refine Routing'),
 ]
 
 
