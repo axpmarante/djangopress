@@ -266,6 +266,11 @@ LOGOUT_REDIRECT_URL = '/backoffice/login/'
 
 # Extra backoffice nav items contributed by site-local apps.
 # Each item: {'label': str, 'url_name': str, 'url_prefix': str, 'icon_svg': str (optional)}
+# An item with 'children' (a list of items of the same shape) renders as a
+# collapsible group like News instead of a link; it needs no url_name, and of
+# the children whose url_prefix the path starts with, only the longest is
+# highlighted — so the first child can own the group root ('/x/') while
+# '/x/products/' highlights its own child.
 # Sites append to this in their own config/settings.py.
 # url_name must reverse in EVERY environment the site runs in: the sidebar is
 # on every backoffice page, so a name that cannot be reversed raises
