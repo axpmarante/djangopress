@@ -66,4 +66,4 @@ Lista de pedidos para testar a tab **Chat** do editor visual à mão, com o resu
 | ✓ | Onde | Resultado esperado |
 |---|---|---|
 | [ ] | `/backoffice/ai/logs/` depois de um pedido rápido | Uma chamada `refine_routing` (flash). Nenhuma `translate_html` se só mudaram classes. |
-| [ ] | Depois de **More elegant** | Uma `refine_routing` só se o pedido não for claramente aberto, e três `refine_section` (gemini-pro), uma por direção. |
+| [ ] | Depois de **More elegant** | Uma `refine_routing` só se o pedido não for claramente aberto, e três `refine_section` (Gemini 3.8 Flash), uma por direção. |

@@ -58,7 +58,7 @@ def generate_directions(page, scope, target, instructions, *, lang=None, history
     if context is None:
         context = build_design_context(page, target if scope == 'section' else None, lang=lang, query=instructions)
     block = render_design_context(context)
-    model = model or get_ai_model('refinement_element' if scope == 'element' else 'generation')
+    model = model or get_ai_model('refinement_element' if scope == 'element' else 'refinement_section')
     cancelled = is_cancelled or (lambda: False)
 
     results = {}

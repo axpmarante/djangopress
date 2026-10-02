@@ -171,6 +171,12 @@ class DirectionsTest(TestCase):
         self.assertEqual(len(got), 1)
         self.assertEqual(len([r for r in result if 'html' in r]), 1)
 
+    def test_sections_use_the_section_refinement_model_flash(self):
+        with mock.patch.object(directions, 'ContentGenerationService') as cls:
+            cls.return_value.refine_section_only.return_value = {'options': [{'html': '<section><p>x</p></section>'}]}
+            directions.generate_directions(self.page, 'section', 'sala', 'x', lang='pt', context=CTX)
+        self.assertEqual({c.kwargs['model_name'] for c in cls.call_args_list}, {'gemini-flash'})
+
     def test_only_some_keys(self):
         _r, _g, call = self.run_directions(lambda **kw: {'options': [{'html': '<section><p>x</p></section>'}]},
                                            keys=['bold'])
