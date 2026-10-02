@@ -141,7 +141,7 @@ class ContentGenerationService:
         Args:
             model_name: Name of the LLM model to use (from MODEL_CONFIG)
                        Options: 'gpt-5', 'gpt-5-mini', 'claude', 'gemini-pro', 'gemini-flash', 'gemini-lite'
-                       Default: 'gemini-pro' (high quality, balanced speed)
+                       Default: the section refinement model (Gemini Flash)
             assistant_session: Optional AssistantSession to link AI calls to
         """
         self.llm = LLMBase()
