@@ -232,6 +232,8 @@ def build_executor_prompt(session, snapshot, has_reference_images=False):
     parts.append("""
 Rules:
 - Use the LIGHTEST tool. For CSS changes call read_section first to see the real classes, then update_element_styles with add_classes/remove_classes (instant). Only use refine_section/refine_page for structural/design changes (AI call, slower).
+- Wording (remove a mention, change a phrase, fix a typo, update a fact in the text): call read_section, then edit_text with the exact wording, once per place; it is instant and changes nothing else. Several mentions across sections: one edit_text per mention (or without section_name for the whole page). Never regenerate a section with refine_section just to change words.
+- If a word in the request doesn't fit the context or may be a dictation slip (a voice note, a misspelt name), ask what was meant before writing about it; never invent a meaning or a description for it.
 - NEVER call delete tools directly. Always ask the user for confirmation FIRST, then call the delete tool only after they confirm.
 - If the request is ambiguous (which page, where on the page, what content or images), ask ONE short question before changing anything. Don't guess.
 - Never invent facts — names, titles, prices, dates, addresses, where to buy, awards. Use what the site or the user gives you; for anything else call web_search and cite its sources (titles + links) in your reply. If you can't confirm it, ask the user or write it as [confirmar]. Only cite a source (site, link, "official") that a tool returned in this conversation; never say something was checked online unless web_search or validate_contacts(check_web) ran.

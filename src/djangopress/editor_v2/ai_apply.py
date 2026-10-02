@@ -282,3 +282,142 @@ def apply_page_html(page, html, source_lang, *, user=None, checkpoint=True):
     page.html_content_i18n = html_i18n
     page.save()
     return {'translated_languages': translated, 'untranslated_languages': untranslated}
+
+
+# --- exact wording edits (no regeneration) ------------------------------------------------
+
+TEXT_BLOCKS = ('p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'li', 'blockquote', 'figcaption', 'button', 'a', 'td', 'th',
+               'dt', 'dd', 'label')
+KEEP_EMPTY = ('img', 'svg', 'video', 'iframe', 'picture', 'input', 'select', 'textarea', 'form')
+_SPACE_BEFORE_PUNCT = re.compile(r'\s+([.,;:!?…)»”])')
+
+
+def _norm(text):
+    return ' '.join((text or '').split())
+
+
+def _tidy(text):
+    text = _SPACE_BEFORE_PUNCT.sub(r'\1', _norm(text))
+    text = re.sub(r'([.,;:])\1+', r'\1', text)                 # ".." left behind by a removal
+    text = re.sub(r'([—–-])\s*([.,;:!?])', r'\2', text)        # "cozinha —." -> "cozinha."
+    text = re.sub(r'([(«“])\s+', r'\1', text)
+    return text.strip(' ,;:—–-') if text.strip(' ,;:—–-.') else ''
+
+
+def _replace_in(text, find, replace):
+    """(new_text, count): every case- and spacing-insensitive occurrence of `find` replaced."""
+    norm, needle = _norm(text), _norm(find)
+    if not needle:
+        return text, 0
+    low, count, out, start = norm.lower(), 0, [], 0
+    i = low.find(needle.lower())
+    while i != -1:
+        out.append(norm[start:i] + replace)
+        start, count = i + len(needle), count + 1
+        i = low.find(needle.lower(), start)
+    if not count:
+        return text, 0
+    out.append(norm[start:])
+    lead = text[:len(text) - len(text.lstrip())]
+    trail = text[len(text.rstrip()):]
+    new = _tidy(''.join(out))
+    return (lead + new + trail) if new else '', count
+
+
+def _block_of(node, root):
+    el = node.parent
+    while el is not None and el is not root and el.name not in TEXT_BLOCKS:
+        el = el.parent
+    return node.parent if el is None or el is root else el
+
+
+def _path(el, root):
+    path = []
+    while el is not root:
+        siblings = [c for c in el.parent.children if getattr(c, 'name', None)]
+        path.append(siblings.index(el))
+        el = el.parent
+    return path[::-1]
+
+
+def _at(root, path):
+    el = root
+    for i in path:
+        kids = [c for c in el.children if getattr(c, 'name', None)]
+        if i >= len(kids):
+            return None
+        el = kids[i]
+    return el
+
+
+def edit_text(page, find, replace, source_lang, *, section_name=None, user=None, checkpoint=True):
+    """Change or remove exact wording in one section (or the whole page) without regenerating it.
+    The other languages get a translation of the changed elements only, in parallel; an element
+    left empty is removed everywhere. Returns {changed, sections, removed, translated_languages,
+    untranslated_languages}; changed == 0 when the text isn't there (nothing is saved)."""
+    from concurrent.futures import ThreadPoolExecutor
+    source, others = _languages(page, source_lang)
+    html_i18n = dict(page.html_content_i18n or {})
+    soup = _soup(html_i18n.get(source))
+    sections = soup.find_all('section', attrs={'data-section': True})
+    if section_name:
+        sections = [s for s in sections if s.get('data-section') == section_name]
+        if not sections:
+            raise ValueError(f'Section "{section_name}" not found')
+    changed, touched = 0, []          # touched: (section name, block element)
+    for section in sections:
+        for node in list(section.find_all(string=True)):
+            if isinstance(node, Comment) or node.parent.name in ('script', 'style'):
+                continue
+            new, count = _replace_in(str(node), find, replace)
+            if not count:
+                continue
+            changed += count
+            block = _block_of(node, section)
+            node.replace_with(new)
+            if not any(b is block for _n, b in touched):
+                touched.append((section.get('data-section'), block))
+    if not changed:
+        return {'changed': 0, 'sections': [], 'removed': 0, 'translated_languages': [], 'untranslated_languages': []}
+
+    edits = []                        # (section name, path, new html or None when removed)
+    for name, block in touched:
+        section = soup.find('section', attrs={'data-section': name})
+        empty = not _norm(block.get_text()) and block.find(KEEP_EMPTY) is None and block.name not in KEEP_EMPTY
+        edits.append((name, _path(block, section), None if empty else str(block), block, block.name))
+    if checkpoint:
+        _checkpoint(page, user, f'Text edit "{_norm(find)[:40]}"')
+    for _name, _path_, new, block, _tag in sorted(edits, key=lambda e: e[1], reverse=True):
+        if new is None:
+            block.decompose()
+    html_i18n[source] = _out(soup)
+
+    jobs = [(code, i) for code in others for i, e in enumerate(edits) if e[2] is not None]
+    with ThreadPoolExecutor(max_workers=max(1, min(8, len(jobs)))) as pool:
+        done = dict(zip(jobs, pool.map(lambda j: _translate_one(edits[j[1]][2], source, j[0]), jobs)))
+    translated, untranslated = [], []
+    for code in others:
+        target = _soup(html_i18n.get(code))
+        ok = True
+        for i, (name, path, new, _block, tag_name) in sorted(enumerate(edits), key=lambda e: e[1][1], reverse=True):
+            section = target.find('section', attrs={'data-section': name})
+            el = _at(section, path) if section is not None else None
+            if el is None or el.name != tag_name:   # the source block may be gone (decomposed)
+                ok = False
+                continue
+            if new is None:
+                el.decompose()
+                continue
+            fragment = done.get((code, i))
+            tag = _first_tag(localize_internal_links(fragment, source, code)) if fragment else None
+            if tag is None:
+                ok = False
+                continue
+            el.replace_with(tag)
+        html_i18n[code] = _out(target)
+        (translated if ok else untranslated).append(code)
+    page.html_content_i18n = html_i18n
+    page.save()
+    return {'changed': changed, 'sections': list(dict.fromkeys(n for n, _b in touched)),
+            'removed': sum(1 for e in edits if e[2] is None),
+            'translated_languages': translated, 'untranslated_languages': untranslated}

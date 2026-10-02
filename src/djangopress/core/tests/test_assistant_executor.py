@@ -505,7 +505,7 @@ class PageContextMutationsTest(TestCase):
     def test_expected_mutations(self):
         expected = {
             'set_active_page', 'create_page',
-            'refine_section', 'refine_page',
+            'refine_section', 'refine_page', 'edit_text',
             'remove_section', 'reorder_sections',
             'update_element_styles', 'update_element_attribute',
             'refine_header', 'refine_footer',
