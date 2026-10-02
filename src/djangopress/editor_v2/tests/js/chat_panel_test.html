@@ -59,6 +59,22 @@ try {
     eq('first option previewed', await until(() => hero()?.textContent === 'A'), true);
     await until(() => !document.querySelector('.ev2-chat-send.is-stop'));
 
+    // Like the editor's selection module: a selection request becomes a selection change.
+    const echo = events.on('selection:request', (el) => {
+        document.querySelectorAll('.ev2-selected').forEach(n => n.classList.remove('ev2-selected'));
+        el.classList.add('ev2-selected');
+        events.emit('selection:changed', el);
+    });
+    hero().classList.add('ev2-selected');
+    [...document.querySelectorAll('.ev2-chat-tile')][2].click();
+    eq('clicking a tile previews it', hero()?.textContent, 'B');
+    eq('the card follows the tile', document.querySelector('.ev2-chat-tile.is-on .ev2-chat-tile-lbl')?.firstChild?.textContent, 'B');
+    eq('Apply is enabled for it', [...document.querySelectorAll('.ev2-chat-btn')].find(b => b.textContent === 'Apply')?.disabled, false);
+    [...document.querySelectorAll('.ev2-chat-tile')][1].click();
+    eq('back to A', hero()?.textContent, 'A');
+    echo();
+    hero().classList.remove('ev2-selected');
+
     // A click inside the previewed option does not retarget the Chat at the option's DOM.
     events.emit('selection:changed', hero().querySelector('h1'));
     eq('chip still names the section', document.querySelector('.ev2-chat-chip')?.textContent, 'Section · hero');

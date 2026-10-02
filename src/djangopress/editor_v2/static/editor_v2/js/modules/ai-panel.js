@@ -78,6 +78,7 @@ let preview = null;                // {resultId, key, node (in the page), origin
 let run = null;                    // the running turn
 let matches = null;
 let matchesKey = null;
+let placing = false;               // the Chat is swapping a node itself: its re-selection is not the user's
 
 // ── Lifecycle ──
 
@@ -90,7 +91,7 @@ export function init() {
         if (tab === 'ai') { loadSession(); render(); }
     }));
     unsubs.push(events.on('selection:changed', (el) => {
-        if (run) return;                                   // the running target stays put
+        if (run || placing) return;                        // the running target stays put
         if (preview) {
             const inside = el && (preview.node?.contains(el) || preview.wrapper?.contains(el) || preview.compare?.contains(el));
             if (inside) return;                            // a click on the option keeps the option's target
@@ -517,7 +518,10 @@ function place(node, next) {
         node.replaceWith(next);
         placed = next;
     }
-    if (selected && placed !== node) events.emit('selection:request', placed);
+    if (selected && placed !== node) {
+        placing = true;
+        try { events.emit('selection:request', placed); } finally { placing = false; }
+    }
     return placed;
 }
 
