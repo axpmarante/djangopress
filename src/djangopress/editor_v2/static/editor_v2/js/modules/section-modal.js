@@ -3,11 +3,14 @@
  *
  * Listens for `inserter:activated` to open, handles the full
  * generate -> preview A/B/C -> apply flow via the modal UI.
+ * Generation is the Chat pipeline (/chat/stream/, scope "new"): three
+ * directions in the page's own style, design-checked, arriving one by one.
  */
 
 import { events } from '../lib/events.js';
 import { noteSaveAfterReload } from '../lib/save-notes.js';
 import { api } from '../lib/api.js';
+import { SSEClient } from '../lib/sse-client.js';
 import {
     getInsertState,
     previewInPlaceholder,
@@ -26,7 +29,8 @@ function withEditableId(body) {
 let modal, backdrop, closeBtn, promptInput, statusEl;
 let generateBtn, applyBtn, discardBtn, tabsContainer;
 
-let options = [];      // [{html}, ...]
+let options = [];      // [{key, name, html, why}, ...] in arrival order
+let stream = null;
 let activeOption = 0;
 let unsubs = [];
 
@@ -69,6 +73,8 @@ function open() {
 
 function close() {
     if (!modal) return;
+    stream?.abort();
+    stream = null;
     modal.classList.add('hidden');
     options = [];
     activeOption = 0;
@@ -97,10 +103,10 @@ function showResultPhase() {
     applyBtn.style.display = '';
     discardBtn.style.display = '';
     promptInput.disabled = false;
-    if (options.length > 1) {
+    if (options.length >= 1) {
         tabsContainer.style.display = '';
         tabsContainer.innerHTML = options
-            .map((_, i) => `<button class="ev2-option-tab${i === activeOption ? ' active' : ''}" data-option="${i}">${String.fromCharCode(65 + i)}</button>`)
+            .map((o, i) => `<button class="ev2-option-tab${i === activeOption ? ' active' : ''}" data-option="${i}" title="${String(o.name || '').replace(/"/g, '&quot;')}">${String.fromCharCode(65 + i)}</button>`)
             .join('');
         tabsContainer.querySelectorAll('.ev2-option-tab').forEach(btn => {
             btn.addEventListener('click', () => switchTab(parseInt(btn.dataset.option, 10)));
@@ -135,34 +141,49 @@ async function generate() {
     if (!insertState) return;
 
     generateBtn.disabled = true;
-    setStatus('Generating 3 options...', 'loading');
+    options = [];
+    activeOption = 0;
+    let failed = 0;
+    setStatus("Designing 3 options in this page's style…", 'loading');
 
-    try {
-        const res = await api.post('/refine-multi/', withEditableId({
-            page_id: config().pageId,
-            mode: 'create',
-            insert_after: insertState.afterSection || null,
-            instructions: text,
-            conversation_history: [],
-            session_id: null,
-        }));
-
-        if (res.success && res.options) {
-            options = res.options;
-            activeOption = 0;
-            setStatus('Choose an option (A/B/C) then click Apply', 'success');
-            showResultPhase();
-            if (options.length > 0) previewInPlaceholder(options[0].html);
+    const finish = (message, type) => {
+        stream = null;
+        generateBtn.disabled = false;
+        if (options.length) {
+            setStatus(message || `Choose an option (${options.map((_, i) => String.fromCharCode(65 + i)).join('/')}) then click Apply`, type || 'success');
         } else {
-            setStatus('Error: ' + (res.error || 'Generation failed'), 'error');
+            setStatus(message || "Couldn't make any option this time. Try again or change the description.", 'error');
             showGeneratePhase();
         }
-    } catch (err) {
-        setStatus('Request failed: ' + (err.message || err), 'error');
-        showGeneratePhase();
-    }
-
-    generateBtn.disabled = false;
+    };
+    stream = new SSEClient(`${config().apiBase || '/editor-v2/api'}/chat/stream/`, {
+        csrfToken: config().csrfToken,
+        onEvent: (name, data) => {
+            if (name === 'option') {
+                options.push(data);
+                if (options.length === 1) previewInPlaceholder(data.html);
+                showResultPhase();
+                if (options.length < 3) setStatus(`${options.length} of 3 ready — the others are on the way…`, 'loading');
+            } else if (name === 'option_failed') {
+                failed += 1;
+            } else if (name === 'complete') {
+                finish(failed && options.length ? `${options.length} options ready (${failed} couldn't be made). Choose one, then Apply.` : '');
+            } else if (name === 'error') {
+                finish(`Error: ${data.error || 'Generation failed'}`, 'error');
+            }
+        },
+        onError: (data) => finish(`Request failed: ${data?.error || 'network error'}`, 'error'),
+    });
+    await stream.start(withEditableId({
+        page_id: config().pageId,
+        scope: 'new',
+        insert_after: insertState.afterSection || null,
+        instructions: text,
+        mode: 'explore',
+        conversation_history: [],
+        session_id: null,
+    }));
+    if (stream) finish();
 }
 
 // ---------------------------------------------------------------------------
@@ -173,6 +194,8 @@ function switchTab(index) {
     if (index === activeOption || !options[index]) return;
     activeOption = index;
     previewInPlaceholder(options[index].html);
+    const o = options[index];
+    setStatus(`${String.fromCharCode(65 + index)} · ${o.name || ''}${o.why ? ` — ${o.why}` : ''}`, 'success');
 
     tabsContainer.querySelectorAll('.ev2-option-tab').forEach(btn => {
         btn.classList.toggle('active', parseInt(btn.dataset.option, 10) === index);
