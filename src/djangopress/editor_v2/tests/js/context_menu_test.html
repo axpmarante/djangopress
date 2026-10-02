@@ -1,0 +1,126 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>running</title>
+<style>.uppercase{text-transform:uppercase}</style>
+<div class="editor-v2-content" id="host">
+<section data-section="eventos" id="eventos" class="py-10">
+  <div>
+    <h2 class="text-4xl">Celebrações</h2>
+    <p id="para">Uma sala <b>pequena</b>.</p>
+    <a id="btn" class="bg-red-600 px-6 py-3 text-white" href="tel:+351968070776">968 070 776</a>
+    <a id="lnk" class="underline" href="https://wa.me/351968070776">WhatsApp</a>
+    <img id="img" src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==" alt="" class="w-full object-cover">
+  </div>
+  <div class="splide" id="slider"><div class="splide__track"><ul class="splide__list">
+    <li class="splide__slide"><p>Um</p></li><li class="splide__slide"><p>Dois</p></li></ul></div></div>
+  <div id="gallery" data-media-collection="lightbox"><a href="/a.jpg" data-lightbox="g"><img src="/a.jpg" alt=""></a><a href="/b.jpg" data-lightbox="g"><img src="/b.jpg" alt="B"></a></div>
+</section>
+</div>
+<div id="ev2-tab-content"></div>
+<pre id="out"></pre>
+<script type="module">
+import { events } from '../../static/editor_v2/js/lib/events.js';
+import { menuFor } from '../../static/editor_v2/js/modules/context-menu.js';
+
+const fails = [];
+let passed = 0;
+const eq = (name, got, want) => {
+    if (JSON.stringify(got) === JSON.stringify(want)) passed++;
+    else fails.push(`${name}: got ${JSON.stringify(got)}, want ${JSON.stringify(want)}`);
+};
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const requests = [];
+window.fetch = async (url, init = {}) => {
+    requests.push({ url: String(url), body: init.body ? JSON.parse(init.body) : null });
+    return new Response(JSON.stringify({ success: false, error: 'stubbed' }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+};
+const copied = [];
+Object.defineProperty(navigator, 'clipboard', { value: { writeText: async (t) => { copied.push(t); } }, configurable: true });
+window.EDITOR_CONFIG = { pageId: 3, apiBase: '/api', csrfToken: 'x', aiEnabled: true, language: 'pt', languages: ['pt', 'en'] };
+const emitted = [];
+for (const n of ['context:ai-refine', 'change:classes', 'change:attribute', 'change:content', 'selection:request',
+    'sidebar:switch-tab', 'image-picker:open', 'inline-edit:trigger', 'process-images:open']) events.on(n, d => emitted.push([n, d]));
+const last = (n) => [...emitted].reverse().find(([x]) => x === n)?.[1];
+const $ = (id) => document.getElementById(id);
+const labels = (items) => items.filter(Boolean).filter(i => !i.row).map(i => i.label);
+const find = (items, label) => items.filter(Boolean).find(i => i.label === label);
+const sub = (m) => find(m.items, 'More').children;
+
+try {
+    const section = document.querySelector('[data-section="eventos"]');
+    const h2 = section.querySelector('h2');
+
+    let m = menuFor($('btn'));
+    eq('button title', m.title, 'Button · 968 070 776');
+    eq('button menu', labels(m.items), ['Edit label', 'Change link…', 'Ask AI…', 'More']);
+    eq('button more', labels(sub(m)), ['Open in a new tab', 'Copy link', 'Button style…', 'Copy HTML']);
+    eq('button row', m.items.filter(Boolean).find(i => i.row).row.map(b => b.title), ['Move up', 'Move down', 'Duplicate', 'Remove']);
+    find(m.items, 'Ask AI…').action();
+    eq('ask AI aims at the button', last('context:ai-refine'), { section: 'eventos', selector: 'section[data-section="eventos"] > div:nth-child(1) > a:nth-child(3)' });
+    find(sub(m), 'Open in a new tab').action();
+    eq('new tab', [$('btn').getAttribute('target'), $('btn').getAttribute('rel')], ['_blank', 'noopener']);
+    await find(sub(m), 'Copy link').action();
+    eq('copy link', copied.at(-1), 'tel:+351968070776');
+
+    m = menuFor($('lnk'));
+    eq('link title', m.title, 'Link · WhatsApp');
+    eq('link more', labels(sub(m)), ['Open in a new tab', 'Copy link', 'Turn into a button', 'Copy HTML']);
+    find(sub(m), 'Turn into a button').action();
+    eq('link takes the page button classes', $('lnk').className, 'bg-red-600 px-6 py-3 text-white');
+
+    m = menuFor($('para'));
+    eq('text menu', labels(m.items), ['Edit text', 'Ask AI…', 'More']);
+    eq('text more', labels(sub(m)), ['Make it a heading', 'Copy text', 'Clear formatting', 'Copy HTML']);
+    eq('heading levels for text', find(sub(m), 'Make it a heading').children.map(c => c.label), ['H2', 'H3', 'H4']);
+    find(sub(m), 'Clear formatting').action();
+    eq('formatting cleared', $('para').innerHTML, 'Uma sala pequena.');
+    eq('cleared text saved as plain text', [last('change:content')?.value, last('change:content')?.format], ['Uma sala pequena.', 'text']);
+    eq('no clear formatting on plain text', find(sub(menuFor($('para'))), 'Clear formatting').disabled, true);
+
+    m = menuFor(h2);
+    eq('heading title', m.title, 'Heading · H2');
+    eq('heading more has the level row', sub(m).filter(Boolean).find(i => i.row)?.row.map(b => b.title), ['H1', 'H2', 'H3', 'H4', 'Text']);
+
+    m = menuFor($('img'));
+    eq('image menu', labels(m.items), ['Replace image…', 'Edit alt text', 'Ask AI…', 'More']);
+    eq('image more', labels(sub(m)), ['Describe the photo', 'Focus point', 'Open original', 'Copy image address', 'Copy HTML']);
+    find(find(sub(m), 'Focus point').children, 'Top').action();
+    eq('focus point', $('img').className, 'w-full object-cover object-top');
+    find(m.items, 'Replace image…').action();
+    eq('replace selects the image', last('selection:request'), $('img'));
+
+    m = menuFor(document.querySelector('#slider .splide__track'));
+    eq('slider title', m.title, 'Slider · 2 slides');
+    eq('slider menu', labels(m.items), ['Edit slides…', 'Add a slide', 'Ask AI…', 'More']);
+    eq('slider more', labels(sub(m)), ['Slider settings…', 'Copy HTML']);
+    eq('text inside a slide is text', menuFor(document.querySelector('#slider p')).title, 'Text');
+
+    m = menuFor($('gallery'));
+    eq('gallery title', m.title, 'Gallery · 2 photos');
+    eq('gallery menu', labels(m.items), ['Add photos…', 'Edit photos…', 'Ask AI…', 'More']);
+    eq('gallery more', labels(sub(m)), ['Describe missing alts', 'Copy HTML']);
+
+    m = menuFor(section);
+    eq('section title', m.title, 'Section · Eventos');
+    eq('section menu', labels(m.items), ['Ask AI about this section…', 'Add section above', 'Add section below', 'More', 'Remove section']);
+    eq('section row', m.items.filter(Boolean).find(i => i.row).row.map(b => b.title), ['Move up', 'Move down', 'Duplicate', 'Hide on mobile']);
+    eq('section more', labels(sub(m)), ['Fix section images', 'Background…', 'Rename section…', 'Copy HTML']);
+    m.items.filter(Boolean).find(i => i.row).row.find(b => b.title === 'Hide on mobile').action();
+    eq('hide on mobile', section.className, 'py-10 max-md:hidden');
+    find(sub(m), 'Fix section images').action();
+    eq('fix images', last('process-images:open'), { section: 'eventos' });
+    find(sub(m), 'Rename section…').action();
+    await sleep(50);
+    const input = document.querySelector('.ev2-dialog input');
+    input.value = 'Festas';
+    document.querySelector('.ev2-dialog [data-act="ok"]').click();
+    await sleep(100);
+    eq('rename request', requests.find(r => r.url.includes('/rename-section/'))?.body?.new_name, 'Festas');
+
+    eq('nothing about the section on an element', labels(menuFor($('btn')).items).some(l => /section/i.test(l)), false);
+} catch (err) {
+    fails.push('crash: ' + err.message + ' ' + (err.stack || '').split('\n')[1]);
+}
+document.getElementById('out').textContent = fails.join('\n') || 'all good';
+document.title = fails.length ? `FAIL ${fails.length}` : `PASS ${passed}`;
+</script>

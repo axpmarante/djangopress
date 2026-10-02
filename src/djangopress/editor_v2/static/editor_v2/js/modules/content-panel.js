@@ -16,6 +16,7 @@ import { api } from '../lib/api.js';
 import { getCssSelector, findCardScope, isRuntimeInjected } from '../lib/dom.js';
 import { confirmDialog } from '../lib/dialog.js';
 import { retagElement } from '../lib/structural.js';
+import { setText, setAttr, setFocusPoint, setNewTab, opensInNewTab, focusPointOf } from '../lib/edits.js';
 import {
     ROLE_LABELS, itemRole, sectionOutline, describeSection, hasFormatting, parseHref, buildHref,
     imageQuality, isPlaceholder, otherLanguageText,
@@ -36,7 +37,6 @@ const ICONS = {
 const KINDS = [['page', 'Page'], ['section', 'Section'], ['phone', 'Phone'], ['email', 'Email'], ['whatsapp', 'WhatsApp'], ['url', 'Web address']];
 const LEVELS = [['h1', 'H1'], ['h2', 'H2'], ['h3', 'H3'], ['h4', 'H4'], ['p', 'Text']];
 const FOCUS = [['top', 'Top'], ['center', 'Center'], ['bottom', 'Bottom'], ['left', 'Left'], ['right', 'Right']];
-const FOCUS_RE = /^object-(top|bottom|left|right|center|left-top|left-bottom|right-top|right-bottom)$/;
 const ALT_MAX = 125;
 
 let copiesPromise = null;
@@ -89,27 +89,6 @@ export function destroy() {
     shown = null;
     copiesPromise = null;
     targetsPromise = null;
-}
-
-// ── Saving helpers ──
-
-function setText(el, value) {
-    const oldValue = el.textContent;
-    el.textContent = value;
-    events.emit('change:content', { type: 'content', selector: getCssSelector(el) || '', fieldKey: '', value, oldValue });
-}
-function setAttr(el, attribute, value) {
-    const oldValue = el.getAttribute(attribute) || '';
-    if (oldValue === value) return;
-    if (value) el.setAttribute(attribute, value); else el.removeAttribute(attribute);
-    events.emit('change:attribute', { type: 'attribute', selector: getCssSelector(el) || '', attribute, value, oldValue, tagName: el.tagName.toLowerCase() });
-}
-function setClasses(el, classes) {
-    const oldValue = el.getAttribute('class') || '';
-    const value = classes.join(' ');
-    if (value === oldValue) return;
-    el.setAttribute('class', value);
-    events.emit('change:classes', { type: 'classes', selector: getCssSelector(el) || '', value, oldValue });
 }
 
 // ── Pieces ──
@@ -393,13 +372,12 @@ function renderLinkView(container, el, role) {
     if (el.tagName === 'A') {
         const newTab = document.createElement('div');
         newTab.className = 'ev2-cp-toggle';
-        const on = el.getAttribute('target') === '_blank';
+        const on = opensInNewTab(el);
         newTab.innerHTML = `<span>Open in a new tab</span><button type="button" class="ev2-cp-switch" data-action="new-tab" aria-pressed="${on}" aria-label="Open in a new tab"></button>`;
         newTab.querySelector('button').addEventListener('click', (e) => {
             const next = e.currentTarget.getAttribute('aria-pressed') !== 'true';
             e.currentTarget.setAttribute('aria-pressed', String(next));
-            setAttr(el, 'target', next ? '_blank' : '');
-            setAttr(el, 'rel', next ? 'noopener' : '');
+            setNewTab(el, next);
         });
         body.appendChild(newTab);
     }
@@ -475,15 +453,13 @@ function renderImageView(container, el) {
 
     const focus = document.createElement('div');
     focus.className = 'ev2-cp-field';
-    const currentFocus = ([...el.classList].find(c => FOCUS_RE.test(c)) || 'object-center').replace('object-', '');
+    const currentFocus = focusPointOf(el);
     focus.innerHTML = `<div class="ev2-cp-field-top"><label>Focus point</label></div>
         <div class="ev2-cp-seg" role="group" aria-label="Focus point">${FOCUS.map(([k, l]) =>
             `<button type="button" data-focus="${k}" class="${k === currentFocus ? 'is-on' : ''}">${l}</button>`).join('')}</div>
         <div class="ev2-cp-help">Which part stays visible when the photo is cropped.</div>`;
     focus.querySelectorAll('[data-focus]').forEach(b => b.addEventListener('click', () => {
-        const classes = [...el.classList].filter(c => !FOCUS_RE.test(c));
-        if (b.dataset.focus !== 'center') classes.push(`object-${b.dataset.focus}`);
-        setClasses(el, classes);
+        setFocusPoint(el, b.dataset.focus);
         focus.querySelectorAll('[data-focus]').forEach(x => x.classList.toggle('is-on', x === b));
     }));
     body.appendChild(focus);

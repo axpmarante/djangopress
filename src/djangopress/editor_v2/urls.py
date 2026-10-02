@@ -43,6 +43,7 @@ urlpatterns = [
     path('api/duplicate-section/', api_views.duplicate_section, name='api_duplicate_section'),
     path('api/move-section/', api_views.move_section, name='api_move_section'),
     path('api/retag-element/', api_views.retag_element, name='api_retag_element'),
+    path('api/rename-section/', api_views.rename_section, name='api_rename_section'),
     path('api/link-targets/', api_views.link_targets, name='api_link_targets'),
     path('api/page-copies/', api_views.page_copies, name='api_page_copies'),
     path('api/describe-image/', api_views.describe_image, name='api_describe_image'),

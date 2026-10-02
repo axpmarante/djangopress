@@ -2242,3 +2242,39 @@ def describe_image(request):
             _apply_change_to_lang(page, code, lambda s, v=value: set_alt(s, v))
         page.save()
     return JsonResponse({'success': True, 'alts': alts, 'current': alts.get(lang, ''), 'saved_languages': sorted(others)})
+
+
+@editor_required
+@require_http_methods(["POST"])
+def rename_section(request):
+    """Rename a section (its data-section and id) in every language; same-page links to it follow."""
+    try:
+        data = json.loads(request.body)
+    except json.JSONDecodeError:
+        return JsonResponse({'success': False, 'error': 'Invalid JSON'}, status=400)
+    name = data.get('section_name')
+    new_name = slugify(data.get('new_name') or '')
+    if not name or not new_name:
+        return JsonResponse({'success': False, 'error': 'Give the section a name'}, status=400)
+    try:
+        page = _get_editable_object(data)
+    except Exception:
+        page = None
+    if page is None:
+        return JsonResponse({'success': False, 'error': 'Page or editable object not found'}, status=400)
+    used = set()
+    for copy_html in (getattr(page, 'html_content_i18n', None) or {}).values():
+        used |= {s.get('data-section') for s in BeautifulSoup(copy_html or '', 'html.parser').find_all('section')}
+    if new_name != name and new_name in used:
+        return JsonResponse({'success': False, 'error': f'There is already a section called "{new_name}"'}, status=400)
+    outcome = _run_structural_verb(
+        request, data, f'Renamed section "{name}" to "{new_name}"',
+        lambda soup: True if structure.rename_section(soup, name, new_name) else None,
+    )
+    if isinstance(outcome, JsonResponse):
+        return outcome
+    page, ok, skipped = outcome
+    if ok is None:
+        return JsonResponse({'success': False, 'error': f'Section "{name}" not found'}, status=400)
+    return JsonResponse({'success': True, 'section_name': new_name, 'skipped_languages': skipped, 'page_id': page.id,
+                         'label': f'Renamed section to "{new_name}"'})

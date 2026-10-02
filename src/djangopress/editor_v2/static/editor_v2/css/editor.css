@@ -426,61 +426,43 @@ body.ev2-viewport-constrained {
 }
 
 /* --------------------------------------------------------------------------
-   Context Menu
+   Context Menu (modules/context-menu.js): one short menu per kind of thing,
+   a row of move / duplicate / remove buttons, a "More" submenu.
    -------------------------------------------------------------------------- */
 .ev2-context-menu {
   position: fixed;
   z-index: 10001;
-  background: #1e293b;
-  border-radius: var(--ev2-radius-lg);
-  padding: 4px;
-  min-width: 200px;
-  box-shadow: var(--ev2-shadow-lg);
-  max-height: calc(100vh - 8px);
-  overflow-y: auto;
+  background: var(--ev2-bg);
+  border: 1px solid var(--ev2-border);
+  border-radius: 10px;
+  padding: 5px;
+  width: 240px;
+  box-shadow: 0 12px 32px rgba(15, 23, 42, .18);
+  font: 13px/1.4 var(--ev2-font);
+  color: var(--ev2-text);
 }
-
-.ev2-context-menu.hidden {
-  display: none;
-}
-
-.ev2-context-item {
-  padding: 8px 12px;
-  font-size: 13px;
-  color: #e2e8f0;
-  cursor: pointer;
-  border-radius: var(--ev2-radius);
-  white-space: nowrap;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  transition: var(--ev2-transition);
-}
-
-.ev2-context-item:hover {
-  background: #334155;
-}
-
-.ev2-context-item--danger {
-  color: #fca5a5;
-}
-
-.ev2-context-item--danger:hover {
-  background: #7f1d1d;
-  color: #fecaca;
-}
-
-.ev2-context-item--disabled {
-  opacity: 0.4;
-  cursor: default;
-  pointer-events: none;
-}
-
-.ev2-context-sep {
-  height: 1px;
-  background: #334155;
-  margin: 4px 0;
-}
+.ev2-context-menu.hidden { display: none; }
+.ev2-context-head { padding: 5px 9px 4px; font-size: 11px; color: var(--ev2-text-faint); text-transform: uppercase; letter-spacing: .06em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ev2-context-item { position: relative; padding: 6px 9px; border-radius: 6px; cursor: pointer; display: flex; align-items: center; gap: 9px; white-space: nowrap; }
+.ev2-context-item:hover, .ev2-context-item:focus-visible, .ev2-context-item.is-open { background: var(--ev2-bg-subtle); outline: none; }
+.ev2-context-icon { width: 16px; text-align: center; color: var(--ev2-text-muted); flex: none; font-size: 12px; }
+.ev2-context-label { flex: 1; overflow: hidden; text-overflow: ellipsis; }
+.ev2-context-hint, .ev2-context-chev { color: var(--ev2-text-faint); font-size: 11.5px; }
+.ev2-context-item--ai { font-weight: 600; }
+.ev2-context-item--ai .ev2-context-icon { color: var(--ev2-primary); }
+.ev2-context-item--danger, .ev2-context-item--danger .ev2-context-icon { color: #dc2626; }
+.ev2-context-item--danger:hover { background: #fef2f2; }
+.ev2-context-item--disabled { opacity: .45; cursor: default; }
+.ev2-context-sep { height: 1px; background: var(--ev2-border); margin: 4px 6px; }
+.ev2-context-row { display: flex; gap: 4px; padding: 3px 5px; }
+.ev2-context-rowbtn { flex: 1; border: 1px solid var(--ev2-border); background: var(--ev2-bg); border-radius: 6px; padding: 5px 0; font: 600 12.5px var(--ev2-font); color: var(--ev2-text); cursor: pointer; }
+.ev2-context-rowbtn:hover:not(:disabled) { background: var(--ev2-bg-subtle); }
+.ev2-context-rowbtn:disabled { opacity: .4; cursor: default; }
+.ev2-context-rowbtn.is-danger { color: #dc2626; }
+.ev2-context-rowbtn.is-on { background: var(--ev2-primary-light); border-color: #bfdbfe; color: var(--ev2-primary); opacity: 1; }
+.ev2-context-rowbtn:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--ev2-primary-alpha); }
+.ev2-context-sub { position: absolute; display: none; width: 220px; }
+.ev2-context-item.is-open > .ev2-context-sub { display: block; }
 
 /* --------------------------------------------------------------------------
    Command Palette

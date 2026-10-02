@@ -296,6 +296,18 @@ def retag_element(soup, selector, tag):
     return True
 
 
+def rename_section(soup, name, new_name):
+    """data-section and id of section `name` become `new_name`; same-page `#name` links follow."""
+    section = _find_section(soup, name)
+    if section is None:
+        return False
+    section['data-section'] = new_name
+    section['id'] = new_name
+    for a in soup.find_all('a', href=f'#{name}'):
+        a['href'] = f'#{new_name}'
+    return True
+
+
 def place_section(soup, name, before):
     """Move section `name` in front of section `before` (None = last). False when missing or already there."""
     section = _find_section(soup, name)

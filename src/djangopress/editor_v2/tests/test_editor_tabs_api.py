@@ -147,3 +147,29 @@ class ReadEndpointsTest(Base):
         ct = ContentType.objects.get_for_model(post)
         res = self.client.get('/editor-v2/api/page-copies/', {'content_type_id': ct.id, 'object_id': post.pk})
         self.assertEqual(res.json()['copies'], {'pt': '<p>a</p>', 'en': '<p>b</p>'})
+
+
+class RenameSectionTest(Base):
+    def setUp(self):
+        super().setUp()
+        self.page.html_content_i18n = {
+            'pt': PT.replace('<a class="btn" href="/pt/">', '<a class="btn" href="#sobre">'),
+            'en': EN.replace('<a class="btn" href="/en/">', '<a class="btn" href="#sobre">'),
+        }
+        self.page.save()
+
+    def test_rename_in_every_language_with_its_anchors(self):
+        res = self.post('/editor-v2/api/rename-section/', {'section_name': 'sobre', 'new_name': 'Quem Somos'})
+        self.assertTrue(res.json()['success'], res.content)
+        self.assertEqual(res.json()['section_name'], 'quem-somos')
+        for lang in ('pt', 'en'):
+            html = self.html(lang)
+            self.assertIn('<section data-section="quem-somos" id="quem-somos">', html)
+            self.assertIn('href="#quem-somos"', html)
+            self.assertNotIn('"sobre"', html)
+        self.assertEqual(PageVersion.objects.filter(page=self.page, kind='checkpoint').count(), 1)
+
+    def test_a_taken_or_empty_name_is_refused(self):
+        self.assertEqual(self.post('/editor-v2/api/rename-section/', {'section_name': 'sobre', 'new_name': 'Hero'}).status_code, 400)
+        self.assertEqual(self.post('/editor-v2/api/rename-section/', {'section_name': 'sobre', 'new_name': '  '}).status_code, 400)
+        self.assertIn('data-section="sobre"', self.html('pt'))

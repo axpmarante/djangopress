@@ -75,6 +75,11 @@ export function retagElement(selector, tag) {
     return run('/retag-element/', { selector, tag }, r => ({ selector: r.selector }), 'Changed heading level');
 }
 
+export function renameSection(name, newName) {
+    return run('/rename-section/', { section_name: name, new_name: newName },
+        r => ({ selector: `section[data-section="${r.section_name}"]` }), 'Renamed section');
+}
+
 export function placeSection(name, before) {
     return run('/move-section/', { section_name: name, before }, () => ({ selector: `section[data-section="${name}"]` }), 'Moved section');
 }
