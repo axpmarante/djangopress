@@ -13,7 +13,8 @@
  */
 import { events } from '../lib/events.js';
 import { api } from '../lib/api.js';
-import { getCssSelector, findCardScope } from '../lib/dom.js';
+import { getCssSelector, findCardScope, isRuntimeInjected } from '../lib/dom.js';
+import { confirmDialog } from '../lib/dialog.js';
 import { retagElement } from '../lib/structural.js';
 import {
     ROLE_LABELS, itemRole, sectionOutline, describeSection, hasFormatting, parseHref, buildHref,
@@ -41,6 +42,21 @@ const ALT_MAX = 125;
 let copiesPromise = null;
 let targetsPromise = null;
 let unsubs = [];
+let shown = null;               // {container, el, root}: what the tab shows now
+let listening = false;
+
+/** Show the current element again (its text may have gained formatting on the page). */
+function rerender() {
+    if (shown && shown.root.isConnected && shown.container.contains(shown.root) && (!shown.el || shown.el.isConnected)) {
+        renderContentPanel(shown.container, shown.el);
+    }
+}
+
+function listenOnce() {
+    if (listening) return;
+    listening = true;
+    events.on('inline-edit:end', rerender);
+}
 
 function esc(s) { return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
 function icon(name) { return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">${ICONS[name] || ICONS.block}</svg>`; }
@@ -68,6 +84,9 @@ export function init() {
 export function destroy() {
     unsubs.forEach(u => u());
     unsubs = [];
+    if (listening) events.off('inline-edit:end', rerender);
+    listening = false;
+    shown = null;
     copiesPromise = null;
     targetsPromise = null;
 }
@@ -174,6 +193,7 @@ function textField(el, role, { compact = false } = {}) {
         input.value = value;
         input.setAttribute('aria-label', ROLE_LABELS[role] || 'Text');
         input.addEventListener('input', () => {
+            if (hasFormatting(el)) { rerender(); return; }        // formatted on the page meanwhile: never flatten it
             setText(el, input.value);
             const meta = wrap.querySelector('.ev2-cp-meta');
             if (!compact && meta) meta.textContent = `${input.value.length} characters`;
@@ -269,10 +289,13 @@ function renderTextView(container, el, role) {
             <div class="ev2-cp-help ev2-cp-level-note">${tag === 'p' ? 'Make it a heading to give the page structure.' : 'Changes in every language.'}</div>`;
         level.querySelectorAll('[data-tag]').forEach(b => b.addEventListener('click', () => {
             if (b.dataset.tag === tag) return;
-            const others = [...document.querySelectorAll('.editor-v2-content h1')].filter(h => h !== el);
-            const note = level.querySelector('.ev2-cp-level-note');
-            if (b.dataset.tag === 'h1' && others.length) note.textContent = 'This page already has an H1. Search engines expect one per page.';
-            retagElement(getCssSelector(el), b.dataset.tag);
+            const others = [...document.querySelectorAll('.editor-v2-content h1')]
+                .filter(h => h !== el && !h.closest('.splide__slide--clone') && !isRuntimeInjected(h));
+            const go = () => retagElement(getCssSelector(el), b.dataset.tag);
+            if (b.dataset.tag !== 'h1' || !others.length) { go(); return; }
+            confirmDialog({ title: 'Make this a second H1?', confirmLabel: 'Make it H1',
+                message: 'This page already has an H1. Search engines expect one per page.' })
+                .then(ok => { if (ok) go(); });
         }));
         body.appendChild(level);
     }
@@ -435,7 +458,7 @@ function renderImageView(container, el) {
         btn.disabled = true;
         btn.lastChild.textContent = 'Looking at the photo…';
         try {
-            const res = await api.post('/describe-image/', { ...editableParams(), selector: getCssSelector(el) });
+            const res = await api.post('/describe-image/', { ...editableParams(), selector: getCssSelector(el), src: el.getAttribute('src') });
             if (!res.success) throw new Error(res.error);
             area.value = res.current || area.value;
             onAlt();
@@ -498,11 +521,13 @@ function renderNothingSelected(container) {
 
 /** Render the Content tab for `el` (or the page's sections when nothing is selected) into `container`. */
 export function renderContentPanel(container, el) {
+    listenOnce();
     document.querySelectorAll('.ev2-cp-hot').forEach(n => n.classList.remove('ev2-cp-hot'));
     container.innerHTML = '';
     const root = document.createElement('div');
     root.className = 'ev2-cp';
     container.appendChild(root);
+    shown = { container, el, root };
     if (!el) { renderNothingSelected(root); return; }
     const role = roleOf(el);
     root.innerHTML = header(el, role);

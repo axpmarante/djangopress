@@ -78,13 +78,38 @@ try {
     q('[data-action="edit-inline"]').click();
     eq('formatted text goes to inline editing', last('inline-edit:trigger')?.element, para);
 
+    // Formatting added on the page after the panel rendered is never wiped from the sidebar
+    renderContentPanel(box, h2);
+    const contentChanges = emitted.filter(([n]) => n === 'change:content').length;
+    h2.innerHTML = 'Cele<b>bra</b>ções';
+    const stale = q('.ev2-cp-field[data-role="heading"] input');
+    stale.value = 'Celebrações!';
+    stale.dispatchEvent(new Event('input'));
+    eq('formatting kept', h2.innerHTML, 'Cele<b>bra</b>ções');
+    eq('no plain-text change sent', emitted.filter(([n]) => n === 'change:content').length, contentChanges);
+    eq('the field turned read-only', !!q('.ev2-cp-field[data-role="heading"] [data-action="edit-inline"]'), true);
+    h2.textContent = 'Celebrações';
+    renderContentPanel(box, h2);
+    h2.innerHTML = 'Cele<i>bra</i>ções';
+    events.emit('inline-edit:end');
+    eq('inline editing end refreshes the panel', !!q('.ev2-cp-field[data-role="heading"] [data-action="edit-inline"]'), true);
+    h2.textContent = 'Celebrações';
+    box.innerHTML = '<div id="other-tab">Structure</div>';
+    events.emit('inline-edit:end');
+    eq('another tab in the container is left alone', !!document.getElementById('other-tab'), true);
+
     // Heading
     renderContentPanel(box, h2);
     eq('heading level shown', q('.ev2-cp-level button.is-on')?.textContent, 'H2');
     q('.ev2-cp-level [data-tag="h1"]').click();
-    eq('warns about a second H1', /already has an H1/.test(q('.ev2-cp-level-note')?.textContent || ''), true);
+    eq('asks before a second H1', await until(() => /already has an H1/.test(document.querySelector('.ev2-dialog')?.textContent || '')), true);
+    eq('nothing sent before the answer', requests.some(r => r.url.includes('/retag-element/')), false);
+    document.querySelector('.ev2-dialog button[data-act="cancel"]').click();
+    await sleep(50);
+    eq('cancel sends nothing', requests.some(r => r.url.includes('/retag-element/')), false);
+    q('.ev2-cp-level [data-tag="h3"]').click();
     await until(() => requests.some(r => r.url.includes('/retag-element/')));
-    eq('retag request', requests.find(r => r.url.includes('/retag-element/'))?.body?.tag, 'h1');
+    eq('retag request', requests.find(r => r.url.includes('/retag-element/'))?.body?.tag, 'h3');
     eq('siblings as chips', qa('.ev2-cp-chip').map(c => c.textContent), ['Eyebrow', 'Text', 'Button', 'Image']);
 
     // Button: goes to

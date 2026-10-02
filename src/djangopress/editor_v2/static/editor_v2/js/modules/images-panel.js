@@ -146,7 +146,7 @@ export function renderImagesPanel(container) {
             btn.disabled = true;
             btn.textContent = 'Looking at the photo…';
             try {
-                const params = { page_id: config().pageId, selector: openSelector };
+                const params = { page_id: config().pageId, selector: openSelector, src: img?.getAttribute('src') };
                 if (config().contentTypeId) { params.content_type_id = config().contentTypeId; params.object_id = config().objectId; }
                 const res = await api.post('/describe-image/', params);
                 if (!res.success) throw new Error(res.error);

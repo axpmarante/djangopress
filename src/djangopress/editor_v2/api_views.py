@@ -2870,15 +2870,44 @@ def page_copies(request):
 MAX_DESCRIBE_BYTES = 10 * 1024 * 1024
 
 
+def _public_host(host):
+    """True when every address the host resolves to is public (not loopback, private or link-local)."""
+    import ipaddress
+    import socket
+    try:
+        infos = socket.getaddrinfo(host, None)
+    except OSError:
+        return False
+    for info in infos:
+        addr = ipaddress.ip_address(info[4][0])
+        if addr.is_private or addr.is_loopback or addr.is_link_local or addr.is_reserved or addr.is_multicast:
+            return False
+    return bool(infos)
+
+
 def _fetch_image_bytes(url):
-    """(bytes, mime) of an image the page already shows (outside the media library)."""
+    """(bytes, mime) of an image the page already shows (outside the media library). Public http(s)
+    hosts only, no redirects, image content types only."""
     import urllib.request
+    from urllib.parse import urlparse
+    parsed = urlparse(url)
+    if parsed.scheme not in ('http', 'https') or not parsed.hostname or not _public_host(parsed.hostname):
+        raise ValueError('This image address cannot be read')
+
+    class NoRedirect(urllib.request.HTTPRedirectHandler):
+        def redirect_request(self, *args, **kwargs):
+            return None
+
+    opener = urllib.request.build_opener(NoRedirect)
     req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0 (DjangoPress editor)'})
-    with urllib.request.urlopen(req, timeout=10) as res:
+    with opener.open(req, timeout=10) as res:
+        mime = res.headers.get_content_type() or ''
+        if not mime.startswith('image/'):
+            raise ValueError('That address is not an image')
         data = res.read(MAX_DESCRIBE_BYTES + 1)
         if len(data) > MAX_DESCRIBE_BYTES:
             raise ValueError('The image is larger than 10 MB')
-        return data, (res.headers.get_content_type() or 'image/jpeg')
+        return data, mime
 
 
 def _library_image_bytes(src):
@@ -2919,6 +2948,8 @@ def describe_image(request):
     if img is None or img.name != 'img' or not img.get('src'):
         return JsonResponse({'success': False, 'error': 'Image not found on the page'}, status=400)
     src = img['src']
+    if data.get('src') and data['src'] != src:
+        return JsonResponse({'success': False, 'error': 'Save the new photo first, then describe it'}, status=409)
     try:
         found = _library_image_bytes(src)
         if found is None:
@@ -2942,8 +2973,9 @@ def describe_image(request):
         return True
 
     others = {c: v for c, v in alts.items() if c != lang}
-    for code, value in others.items():
-        _apply_change_to_lang(page, code, lambda s, v=value: set_alt(s, v))
     if others:
+        page.refresh_from_db()          # the AI call takes seconds; keep any save made meanwhile
+        for code, value in others.items():
+            _apply_change_to_lang(page, code, lambda s, v=value: set_alt(s, v))
         page.save()
     return JsonResponse({'success': True, 'alts': alts, 'current': alts.get(lang, ''), 'saved_languages': sorted(others)})

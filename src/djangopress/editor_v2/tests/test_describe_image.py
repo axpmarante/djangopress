@@ -68,6 +68,27 @@ class DescribeImageTest(TestCase):
         self.assertTrue(res.json()['success'], res.content)
         f.assert_called_once()
 
+    def test_a_replaced_photo_not_saved_yet_is_refused(self):
+        with mock.patch(DESCRIBE) as d:
+            res = self.post({'src': 'https://example.com/new-photo.jpg'})
+        self.assertEqual(res.status_code, 409)
+        self.assertIn('Save', res.json()['error'])
+        d.assert_not_called()
+
+    def test_a_save_made_during_the_ai_call_is_kept(self):
+        def concurrent_save(*args, **kwargs):
+            page = Page.objects.get(pk=self.page.pk)
+            copies = dict(page.html_content_i18n)
+            copies['pt'] = copies['pt'].replace('</section>', '<p>Novo texto</p></section>')
+            page.html_content_i18n = copies
+            page.save()
+            return {'pt': 'a', 'en': 'Room'}
+        with mock.patch(DESCRIBE, side_effect=concurrent_save):
+            self.post()
+        self.page.refresh_from_db()
+        self.assertIn('Novo texto', self.page.html_content_i18n['pt'])
+        self.assertIn('alt="Room"', self.page.html_content_i18n['en'])
+
     def test_missing_element_is_refused_without_a_fetch(self):
         with mock.patch(FETCH) as f, mock.patch(DESCRIBE) as d:
             res = self.post({'selector': 'section[data-section="sala"] > img:nth-child(5)'})
@@ -93,3 +114,24 @@ class DescribeServiceTest(TestCase):
             out = service.describe_image_alt(b'IMG', 'image/jpeg', ['pt', 'en'])
         self.assertEqual(out, {'pt': 'Mesas', 'en': 'Tables'})
         self.assertEqual(v.call_args.kwargs['file_bytes'], b'IMG')
+
+
+class FetchGuardTest(TestCase):
+    def test_internal_addresses_are_refused(self):
+        from djangopress.editor_v2.api_views import _fetch_image_bytes
+        for url in ('http://127.0.0.1/admin/', 'http://localhost:8000/x.jpg', 'http://169.254.169.254/latest/',
+                    'http://10.0.0.5/a.jpg', 'ftp://example.com/a.jpg'):
+            with self.assertRaises(ValueError, msg=url):
+                _fetch_image_bytes(url)
+
+    def test_only_images_are_read(self):
+        from djangopress.editor_v2 import api_views
+        response = mock.MagicMock()
+        response.headers.get_content_type.return_value = 'text/html'
+        response.read.return_value = b'<html>secret</html>'
+        opener = mock.MagicMock()
+        opener.open.return_value.__enter__.return_value = response
+        with mock.patch.object(api_views, '_public_host', return_value=True), \
+                mock.patch('urllib.request.build_opener', return_value=opener):
+            with self.assertRaises(ValueError):
+                api_views._fetch_image_bytes('https://example.com/page')
