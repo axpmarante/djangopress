@@ -10,11 +10,11 @@
  */
 import { events } from '../lib/events.js';
 import { noteSaveAfterReload } from '../lib/save-notes.js';
-import { $, getElementLabel, getCssSelector, initDynamicComponents } from '../lib/dom.js';
+import { $, getElementLabel, getCssSelector, initDynamicComponents, resolveSelector } from '../lib/dom.js';
 import { api } from '../lib/api.js';
 import { SSEClient } from '../lib/sse-client.js';
 import { classifyIntent, intentLabel } from '../lib/chat-intent.js';
-import { thumbnail, compareView, swapNode, staticHtml } from '../lib/chat-preview.js';
+import { thumbnail, compareView, swapNode, staticHtml, findTarget } from '../lib/chat-preview.js';
 
 const MAX_IMAGES = 5;
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
@@ -55,6 +55,8 @@ function withEditableId(body) {
     if (cfg.contentTypeId && cfg.objectId) { body.content_type_id = cfg.contentTypeId; body.object_id = cfg.objectId; }
     return body;
 }
+/** News posts and other non-Page objects: no one-click Undo, no page-wide refine. */
+const isPage = () => !config().contentTypeId;
 function uid() { return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`; }
 
 // ── State ──
@@ -71,7 +73,7 @@ let thread = [];                   // user | assistant | progress | result | app
 let history = [];                  // [{role, content}] sent to the model
 let mode = 'auto';                 // composer intent: auto | quick | explore
 let attachments = [];              // [{file, url}]
-let refining = null;               // {key, name, html}: the next turn starts from this option
+let refining = null;               // {key, name, html, scope, section, selector}: the next turn starts from this option
 let preview = null;                // {resultId, key, node (in the page), original (the live original node), originalHtml, compare}
 let run = null;                    // the running turn
 let matches = null;
@@ -81,18 +83,26 @@ let matchesKey = null;
 
 export function init() {
     unsubs.push(events.on('sidebar:tab-changed', (tab) => {
+        // An option shown in the page must not be edited by the other tabs: they save by
+        // selector against the stored section.
+        if (tab !== 'ai') restorePreview();
         activeTab = tab;
         if (tab === 'ai') { loadSession(); render(); }
     }));
     unsubs.push(events.on('selection:changed', (el) => {
         if (run) return;                                   // the running target stays put
+        if (preview) {
+            const inside = el && (preview.node?.contains(el) || preview.wrapper?.contains(el) || preview.compare?.contains(el));
+            if (inside) return;                            // a click on the option keeps the option's target
+            restorePreview();
+        }
         const sec = el?.closest?.('[data-section]');
         const isSection = el?.hasAttribute?.('data-section');
         currentSection = sec?.getAttribute('data-section') || null;
         currentSelector = (!isSection && el) ? getCssSelector(el) : null;
         if (isSection && currentSection) scope = 'section';
         else if (currentSelector) scope = 'element';
-        if (activeTab === 'ai' && !preview) render();
+        if (activeTab === 'ai') render();
     }));
     unsubs.push(events.on('context:ai-refine', (data) => {
         restorePreview();
@@ -143,15 +153,10 @@ async function loadSession(targetSessionId) {
 function targetLabel() {
     if (scope === 'section') return `Section · ${currentSection}`;
     if (scope === 'element') {
-        const el = currentSelector && document.querySelector(currentSelector);
+        const el = resolveSelector(currentSelector);
         return `Element · ${el ? getElementLabel(el) : 'element'}`;
     }
     return 'Whole page';
-}
-
-function findTarget(item) {
-    if (item.scope === 'element') return item.selector ? document.querySelector(item.selector) : null;
-    return item.section ? document.querySelector(`[data-section="${CSS.escape(item.section)}"]`) : null;
 }
 
 async function loadMatches() {
@@ -212,7 +217,7 @@ function renderHeader() {
     const seg = [
         currentSelector ? ['element', 'Element'] : null,
         currentSection ? ['section', 'Section'] : null,
-        ['page', 'Page'],
+        isPage() ? ['page', 'Page'] : null,
     ].filter(Boolean).map(([value, label]) =>
         `<button type="button" data-scope="${value}" class="${scope === value ? 'is-on' : ''}" ${run ? 'disabled' : ''}>${label}</button>`).join('');
     let line = '';
@@ -229,12 +234,12 @@ function renderHeader() {
             <div class="ev2-chat-seg" role="group" aria-label="Scope">${seg}</div>
         </div>
         ${line}
-        <div class="ev2-chat-row ev2-chat-sessions">
+        ${config().pageId ? `<div class="ev2-chat-row ev2-chat-sessions">
             <select id="ev2-session-select" aria-label="Conversation" ${run ? 'disabled' : ''}>
                 ${sessionId ? '' : '<option value="" selected>New conversation</option>'}${sessions}
             </select>
             <button type="button" class="ev2-chat-link" id="ev2-new-chat" ${run ? 'disabled' : ''}>New chat</button>
-        </div>`;
+        </div>` : ''}`;
     head.querySelectorAll('[data-scope]').forEach(b => b.addEventListener('click', () => {
         if (b.dataset.scope === scope) return;
         restorePreview();
@@ -321,7 +326,10 @@ function renderResult(item) {
     if (!item.page) {
         add('Refine this one…', '', () => startRefining(item), isOption && !run);
         add(preview?.compare && preview.resultId === item.id ? 'Single view' : 'Compare', '', () => toggleCompare(item), isOption);
-        add('Regenerate', 'is-ghost', () => send(item.instructions, { mode: 'explore', regenerate: true }), !run);
+        add('Regenerate', 'is-ghost', () => send(item.instructions, {
+            mode: 'explore', regenerate: true, target: { scope: item.scope, section: item.section, selector: item.selector },
+            base: item.refine ? item.base : null,
+        }), !run);
     } else {
         add('Discard', 'is-ghost', () => { restorePreview(); item.applied = true; item.appliedLabel = '— discarded'; renderThread(); });
     }
@@ -365,7 +373,11 @@ function renderThread() {
             const langs = item.translated?.length ? ` Updated ${item.translated.join(', ').toUpperCase()}.` : '';
             const missing = item.untranslated?.length ? ` Not translated: ${item.untranslated.join(', ').toUpperCase()}.` : '';
             el.innerHTML = `<span>✓ ${esc(item.text)}${esc(langs)}${esc(missing)}</span>`;
-            if (item.undo) {
+            if (item.undo && !isPage()) {
+                const note = document.createElement('small');
+                note.textContent = 'To undo, restore from Versions.';
+                el.appendChild(note);
+            } else if (item.undo) {
                 const undo = document.createElement('button');
                 undo.type = 'button'; undo.className = 'ev2-chat-btn is-ghost'; undo.textContent = 'Undo';
                 undo.addEventListener('click', () => events.emit('history:undo'));
@@ -424,6 +436,8 @@ function renderComposer() {
             renderComposer();
         }));
     }
+    const clip = $('#ev2-chat-clip');
+    if (clip) clip.hidden = scope !== 'section';           // reference images guide whole sections
     updateIntent();
     const sendBtn = $('#ev2-ai-send');
     if (sendBtn) {
@@ -473,6 +487,10 @@ function bindComposer() {
 }
 
 function addFiles(files) {
+    if (scope !== 'section') {
+        events.emit('toast:show', { text: 'Reference images work on a whole section: select the section first.' });
+        return;
+    }
     const problems = [];
     for (const f of files) {
         if (!f.type.startsWith('image/')) { problems.push(`${f.name} is not an image`); continue; }
@@ -613,13 +631,13 @@ function afterSave(node, text) {
     node?.classList?.add('ev2-chat-flash');
     setTimeout(() => node?.classList?.remove('ev2-chat-flash'), 1200);
     events.emit('history:refresh');
-    events.emit('toast:show', { text, withUndo: true });
+    events.emit('toast:show', { text, withUndo: isPage() });
 }
 
 function startRefining(item) {
     const tile = item.tiles.find(t => t.key === item.active);
     if (!tile || tile.key === 'original') return;
-    refining = { key: tile.key, name: tile.name, html: tile.html };
+    refining = { key: tile.key, name: tile.name, html: tile.html, scope: item.scope, section: item.section, selector: item.selector };
     renderComposer();
     $('#ev2-ai-input')?.focus();
 }
@@ -631,21 +649,24 @@ async function send(textArg, opts = {}) {
     const input = $('#ev2-ai-input');
     const text = (textArg ?? input?.value ?? '').trim();
     if (!text) return;
-    if (scope === 'section' && !currentSection) return;
-    if (scope === 'element' && !currentSelector) return;
+    const base = opts.regenerate ? (opts.base || null) : refining;
+    // A refine or a Regenerate goes to its own card's target, whatever is selected now.
+    const target = opts.target || (base ? { scope: base.scope, section: base.section, selector: base.selector }
+        : { scope, section: currentSection, selector: currentSelector });
+    if (target.scope === 'section' && !target.section) return;
+    if (target.scope === 'element' && !target.selector) return;
     if (input && textArg === undefined) input.value = '';
 
-    const base = opts.regenerate ? null : refining;
     restorePreview();
     const images = opts.regenerate ? [] : attachments;
-    attachments = [];
+    if (!opts.regenerate) attachments = [];
     refining = null;
 
     thread.push({ type: 'user', text, images: images.map(a => a.url) });
     const progress = { type: 'progress', id: uid(), steps: [], state: 'running', started: Date.now() };
     thread.push(progress);
-    run = { runId: `run-${uid()}`, progressId: progress.id, resultId: null, scope, section: currentSection,
-            selector: currentSelector, text, base };
+    run = { runId: `run-${uid()}`, progressId: progress.id, resultId: null, scope: target.scope, section: target.section,
+            selector: target.selector, text, base };
     run.timer = setInterval(() => {
         const el = document.querySelector(`.ev2-chat-progress[data-id="${progress.id}"] [data-elapsed]`);
         if (el) el.textContent = elapsed(progress);
@@ -656,10 +677,10 @@ async function send(textArg, opts = {}) {
     renderThread();
     renderComposer();
 
-    if (scope === 'page') { sendPage(text, progress, priorHistory); return; }
+    if (target.scope === 'page') { sendPage(text, progress, priorHistory); return; }
 
     const payload = withEditableId({
-        page_id: config().pageId, scope, section_name: currentSection, selector: currentSelector,
+        page_id: config().pageId, scope: target.scope, section_name: target.section, selector: target.selector,
         instructions: text, mode: opts.mode || mode, session_id: sessionId, run_id: run.runId,
         conversation_history: priorHistory, base_html: base?.html || null,
     });
@@ -685,7 +706,7 @@ function ensureResult() {
     const item = {
         type: 'result', id: uid(), scope: run.scope, section: run.section, selector: run.selector,
         scopeLabel: run.scope === 'element' ? 'element' : run.section, instructions: run.text,
-        active: 'original', refine: !!base, originalHtml: (() => { const n = findTarget(run); return n ? staticHtml(n) : ''; })(),
+        active: 'original', refine: !!base, base, originalHtml: (() => { const n = findTarget(run); return n ? staticHtml(n) : ''; })(),
         tiles: [{ key: 'original', name: 'Original', state: 'ready' }],
     };
     if (base) {

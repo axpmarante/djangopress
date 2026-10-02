@@ -4,7 +4,7 @@
  * editor's selection and every `[data-section="x"]` lookup still find only the
  * real section.
  */
-import { initDynamicComponents, isRuntimeClass, isRuntimeInjected } from './dom.js';
+import { initDynamicComponents, isRuntimeClass, isRuntimeInjected, resolveSelector } from './dom.js';
 
 const CANVAS = 1280;
 
@@ -80,6 +80,14 @@ export function swapNode(node, html) {
     const next = firstElement(html);
     if (!node || !next) return node;
     node.replaceWith(next);
-    initDynamicComponents(next.parentElement || next);
+    // Only the new node: re-mounting the page's other sliders doubles their handlers.
+    if (window.Splide && next.classList.contains('splide') && !next.__splide) next.__splide = new window.Splide(next).mount();
+    initDynamicComponents(next);
     return next;
+}
+
+/** The live node a Chat result is about; element selectors skip slider clones like the rest of the editor. */
+export function findTarget(item) {
+    if (item.scope === 'element') return resolveSelector(item.selector);
+    return item.section ? document.querySelector(`.editor-v2-content [data-section="${CSS.escape(item.section)}"]`) : null;
 }

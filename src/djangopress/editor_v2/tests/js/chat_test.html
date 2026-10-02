@@ -1,12 +1,12 @@
 <!doctype html>
 <meta charset="utf-8">
 <title>running</title>
-<div class="editor-v2-content" id="host"><section data-section="hero" id="hero" class="py-10"><h1 onclick="alert(1)">Olá</h1></section><section data-section="sobre" id="sobre"><p>x</p></section></div>
+<div class="editor-v2-content" id="host"><section data-section="hero" id="hero" class="py-10"><h1 onclick="alert(1)">Olá</h1></section><section data-section="sobre" id="sobre"><p>x</p></section><section data-section="sl" id="sl"><div class="splide"><div class="splide__slide--clone"><h2>clone</h2></div><div><h2>real</h2></div></div></section></div>
 <div id="side"></div>
 <pre id="out"></pre>
 <script type="module">
 import { classifyIntent, intentLabel } from '../../static/editor_v2/js/lib/chat-intent.js';
-import { cleanClone, thumbnail, compareView, swapNode, staticHtml } from '../../static/editor_v2/js/lib/chat-preview.js';
+import { cleanClone, thumbnail, compareView, swapNode, staticHtml, findTarget } from '../../static/editor_v2/js/lib/chat-preview.js';
 
 const fails = [];
 let passed = 0;
@@ -73,6 +73,20 @@ try {
     eq('swap keeps the place', document.getElementById('host').firstElementChild, next);
     eq('swap: old node gone', document.body.contains(live), false);
     eq('swap: one hero', document.querySelectorAll('[data-section="hero"]').length, 1);
+    const sel = 'section[data-section="sl"] > div:nth-child(1) > div:nth-child(1) > h2:nth-child(1)';
+    eq('element target skips slider clones', findTarget({ scope: 'element', selector: sel })?.textContent, 'real');
+    eq('section target', findTarget({ scope: 'section', section: 'sobre' })?.id, 'sobre');
+    eq('missing target', findTarget({ scope: 'section', section: 'nope' }), null);
+
+    const mounts = [];
+    window.Splide = class { constructor(el) { this.el = el; } mount() { mounts.push(this.el); return this; } };
+    const fresh = swapNode(document.querySelector('[data-section="sobre"]'),
+        '<section data-section="sobre"><div class="splide"><div>a</div></div></section>');
+    eq('only the new slider is mounted', mounts.length, 1);
+    eq('the mounted slider is the new one', fresh.contains(mounts[0]), true);
+    const el = swapNode(fresh.querySelector('.splide'), '<div class="splide"><div>b</div></div>');
+    eq('a swapped slider itself is mounted', mounts.length === 2 && mounts[1] === el, true);
+    delete window.Splide;
 } catch (err) {
     fails.push('crash: ' + err.message);
 }

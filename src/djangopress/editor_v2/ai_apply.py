@@ -105,7 +105,8 @@ def _translations(fragment_html, source, targets):
     return {t: (localize_internal_links(raw[t] or fragment_html, source, t), raw[t] is not None) for t in targets}
 
 
-TEXT_ATTRS = ('alt', 'title', 'aria-label', 'placeholder')
+TEXT_ATTRS = ('alt', 'title', 'aria-label', 'placeholder', 'value', 'label', 'data-alt', 'data-title', 'data-caption',
+              'aria-description', 'aria-valuetext', 'aria-roledescription')
 
 
 def _tags(tag):

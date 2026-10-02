@@ -1,0 +1,128 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>running</title>
+<div class="editor-v2-content" id="host"><section data-section="hero" id="hero"><h1>Olá</h1></section><section data-section="eventos" id="eventos"><h2>Eventos</h2></section></div>
+<div id="ev2-tab-content" style="height:600px"></div>
+<pre id="out"></pre>
+<script type="module">
+// Drives the real Chat panel with a stubbed server: previews must not leak into
+// edits, Regenerate keeps its card's target, news posts get no dead Undo.
+import { events } from '../../static/editor_v2/js/lib/events.js';
+import * as panel from '../../static/editor_v2/js/modules/ai-panel.js';
+
+const fails = [];
+let passed = 0;
+const eq = (name, got, want) => {
+    if (JSON.stringify(got) === JSON.stringify(want)) passed++;
+    else fails.push(`${name}: got ${JSON.stringify(got)}, want ${JSON.stringify(want)}`);
+};
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+async function until(fn, ms = 3000) {
+    const end = Date.now() + ms;
+    while (Date.now() < end) { if (fn()) return true; await sleep(20); }
+    return false;
+}
+
+const requests = [];
+let streamText = '';
+const sse = (events) => events.map(([name, data]) => `event: ${name}\ndata: ${JSON.stringify(data)}\n\n`).join('');
+const opt = (key, h1) => ['option', { key, name: key, html: `<section data-section="hero" id="hero"><h1>${h1}</h1></section>`, why: 'fits', notes: [] }];
+window.fetch = async (url, init = {}) => {
+    let body = null;
+    try { body = init.body ? JSON.parse(init.body) : null; } catch (_) { body = init.body; }
+    requests.push({ url: String(url), body });
+    const json = (data) => new Response(JSON.stringify(data), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    if (url.includes('/chat/stream/')) return new Response(streamText, { status: 200, headers: { 'Content-Type': 'text/event-stream' } });
+    if (url.includes('/chat/context/')) return json({ success: true, matches: { colors: [], fonts: [], references: [] } });
+    if (url.includes('/session/')) return json({ success: true, sessions: [], session_id: null, messages: [] });
+    if (url.includes('/apply-option/')) return json({ success: true, html: body.html, translated_languages: ['en'], untranslated_languages: [] });
+    return json({ success: true });
+};
+const streamBodies = () => requests.filter(r => r.url.includes('/chat/stream/')).map(r => r.body);
+const hero = () => document.querySelector('#host [data-section="hero"]');
+const type = async (text) => {
+    const input = document.getElementById('ev2-ai-input');
+    input.value = text;
+    document.getElementById('ev2-ai-send').click();
+};
+
+try {
+    window.EDITOR_CONFIG = { pageId: 3, apiBase: '/api', csrfToken: 'x', aiEnabled: true, language: 'pt' };
+    panel.init();
+    events.emit('selection:changed', hero());
+    events.emit('sidebar:tab-changed', 'ai');
+    await until(() => document.getElementById('ev2-ai-input'));
+
+    // Three directions arrive; the first is previewed in the page.
+    streamText = sse([opt('refined', 'A'), opt('bold', 'B'), opt('layout', 'C'), ['complete', { session_id: 9, mode: 'explore', message: 'three' }]]);
+    await type('mais elegante');
+    eq('first option previewed', await until(() => hero()?.textContent === 'A'), true);
+    await until(() => !document.querySelector('.ev2-chat-send.is-stop'));
+
+    // A click inside the previewed option does not retarget the Chat at the option's DOM.
+    events.emit('selection:changed', hero().querySelector('h1'));
+    eq('chip still names the section', document.querySelector('.ev2-chat-chip')?.textContent, 'Section · hero');
+
+    // Leaving the Chat tab puts the stored section back.
+    events.emit('sidebar:tab-changed', 'design');
+    eq('original back after leaving the tab', hero().textContent, 'Olá');
+    events.emit('sidebar:tab-changed', 'ai');
+    await until(() => document.querySelector('.ev2-chat-result'));
+
+    // Preview B, then select another section: the preview is undone and the target moves.
+    [...document.querySelectorAll('.ev2-chat-tile')][2].click();
+    eq('B previewed', hero().textContent, 'B');
+    events.emit('selection:changed', document.querySelector('#host [data-section="eventos"]'));
+    eq('selecting elsewhere restores the original', hero().textContent, 'Olá');
+    eq('chip moved to eventos', document.querySelector('.ev2-chat-chip')?.textContent, 'Section · eventos');
+
+    // Regenerate on the hero card regenerates hero, not the current selection.
+    streamText = sse([['complete', { session_id: 9, mode: 'explore', message: 'again' }]]);
+    [...document.querySelectorAll('.ev2-chat-btn')].find(b => b.textContent === 'Regenerate').click();
+    await until(() => streamBodies().length === 2);
+    eq('regenerate keeps the card target', streamBodies()[1]?.section_name, 'hero');
+    eq('regenerate is explore', streamBodies()[1]?.mode, 'explore');
+    await until(() => !document.querySelector('.ev2-chat-send.is-stop'));
+
+    // Refine an option, then click elsewhere: the refine still goes to that option's section.
+    events.emit('selection:changed', hero());
+    events.emit('sidebar:tab-changed', 'ai');
+    streamText = sse([opt('refined', 'A2'), ['complete', { session_id: 9, mode: 'explore', message: 'x' }]]);
+    await type('mais elegante');
+    await until(() => !document.querySelector('.ev2-chat-send.is-stop'));
+    [...document.querySelectorAll('.ev2-chat-btn')].filter(b => b.textContent.startsWith('Refine')).pop().click();
+    events.emit('selection:changed', document.querySelector('#host [data-section="eventos"] h2'));
+    streamText = sse([['complete', { session_id: 9, mode: 'refine', message: 'x' }]]);
+    await type('fundo escuro');
+    await until(() => streamBodies().length === 4);
+    const refine = streamBodies()[3] || {};
+    eq('refine targets the option section', [refine.scope, refine.section_name, refine.selector || null], ['section', 'hero', null]);
+    eq('refine sends the option', (refine.base_html || '').includes('A2'), true);
+    await until(() => !document.querySelector('.ev2-chat-send.is-stop'));
+
+    // News posts: no Page scope, no Undo that would do nothing.
+    panel.destroy();
+    document.getElementById('ev2-tab-content').innerHTML = '';
+    window.EDITOR_CONFIG = { pageId: 0, contentTypeId: 25, objectId: 1, apiBase: '/api', csrfToken: 'x', aiEnabled: true, language: 'pt' };
+    panel.init();
+    events.emit('selection:changed', hero());
+    events.emit('sidebar:tab-changed', 'ai');
+    await until(() => document.getElementById('ev2-ai-input'));
+    eq('no Page scope on a news post', [...document.querySelectorAll('[data-scope]')].map(b => b.dataset.scope), ['section']);
+    eq('no conversation list without a page', document.querySelector('.ev2-chat-sessions'), null);
+    const toasts = [];
+    events.on('toast:show', t => toasts.push(t));
+    streamText = sse([['applied', { html: '<section data-section="hero" id="hero"><h1>Gold</h1></section>', scope: 'section', target: 'hero', message: 'Done.', translated: ['en'], untranslated: [] }],
+                      ['complete', { session_id: 9, mode: 'quick', message: 'Done.' }]]);
+    await type('título a dourado');
+    await until(() => document.querySelector('.ev2-chat-applied'));
+    eq('applied on the news post', hero().textContent, 'Gold');
+    eq('no Undo button on a news post', document.querySelector('.ev2-chat-applied button'), null);
+    eq('the note points to Versions', /Versions/.test(document.querySelector('.ev2-chat-applied').textContent), true);
+    eq('toast has no Undo', toasts.every(t => !t.withUndo), true);
+} catch (err) {
+    fails.push('crash: ' + err.message + ' ' + (err.stack || '').split('\n')[1]);
+}
+document.getElementById('out').textContent = fails.join('\n') || 'all good';
+document.title = fails.length ? `FAIL ${fails.length}` : `PASS ${passed}`;
+</script>

@@ -220,3 +220,17 @@ class ClassOnlyTest(AIApplyTestCase):
         tr.assert_not_called()
         self.assertIn('<h1 class="text-7xl">EN: Hello</h1>', self.html('en'))
         self.assertEqual(result['html'], '<h1 class="text-7xl">PT: Olá</h1>')
+
+
+class TextAttributesTest(AIApplyTestCase):
+    def test_a_changed_button_value_or_lightbox_caption_is_translated(self):
+        for old, new in ((' value="PT: Enviar"', ' value="PT: Reservar"'),
+                         (' data-alt="PT: sala"', ' data-alt="PT: mesa"'),
+                         (' aria-description="PT: a"', ' aria-description="PT: b"')):
+            html = '<section data-section="hero" id="hero"><h1>PT: Olá</h1><input type="submit"{}></section>'
+            self.page.html_content_i18n = {'pt': html.format(old), 'en': html.format(old).replace('PT:', 'EN:')}
+            self.page.save()
+            with mock.patch(TRANSLATE, side_effect=fake_translate) as tr:
+                ai_apply.apply_section_html(self.page, html.format(new), 'pt', section_name='hero', user=self.user)
+            self.assertEqual(tr.call_count, 1, new)
+            self.assertNotIn('PT:', self.html('en'), new)

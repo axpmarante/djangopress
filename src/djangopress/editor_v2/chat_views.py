@@ -68,6 +68,8 @@ def chat_stream(request):
         return _error('Missing instructions')
     if not target:
         return _error('Pick a section or an element first')
+    if images and scope == 'element':
+        return _error('Reference images work on a whole section: select the section and send again')
     try:
         page = _get_editable_object(data)
     except Exception:

@@ -288,3 +288,20 @@ class ContextEndpointTest(ChatBase):
             self.client.get('/editor-v2/api/chat/context/', {'page_id': self.page.id, 'scope': 'element',
                                                              'selector': 'section[data-section="hero"] > h1'})
         self.assertEqual(build.call_args.args[1], 'hero')
+
+
+class ElementImagesTest(ChatBase):
+    def test_reference_images_on_an_element_are_refused_before_any_model_call(self):
+        self.client.force_login(self.user)
+        files = [SimpleUploadedFile('r.png', b'\x89PNG' + bytes(10), content_type='image/png')]
+        payload = {'page_id': self.page.id, 'scope': 'element', 'selector': 'section[data-section="hero"] > h1',
+                   'instructions': 'neste estilo', 'mode': 'auto'}
+        with mock.patch(DIRECTIONS) as d, mock.patch(HANDLE) as h:
+            res = self.client.post('/editor-v2/api/chat/stream/', data={'payload': json.dumps(payload),
+                                                                        'reference_images': files},
+                                   HTTP_REFERER='http://testserver/pt/?edit=v2')
+            text = b''.join(res.streaming_content).decode()
+        self.assertIn('event: error', text)
+        self.assertIn('section', text)
+        d.assert_not_called()
+        h.assert_not_called()
