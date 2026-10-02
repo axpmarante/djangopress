@@ -149,6 +149,36 @@ def refine_section(params, context):
     }
 
 
+def edit_text(params, context):
+    """Change or remove exact wording without regenerating the section (instant; only the
+    changed elements are translated)."""
+    _create_version_if_needed(context)
+    page = _get_page(context)
+    if not page:
+        return {'success': False, 'message': 'Active page not found'}
+    find = params.get('find') or ''
+    if not find.strip():
+        return {'success': False, 'message': 'Give the exact text to find'}
+    from djangopress.editor_v2 import ai_apply
+    lang = _default_lang()
+    section_name = params.get('section_name') or None
+    try:
+        applied = ai_apply.edit_text(page, find, params.get('replace') or '', lang, section_name=section_name,
+                                     user=context.get('user'), checkpoint=False)
+    except ValueError as e:
+        return {'success': False,
+                'message': f'{e}. Sections on this page: {", ".join(_section_names(page, lang)) or "none"}'}
+    if not applied['changed']:
+        where = f'section "{section_name}"' if section_name else 'this page'
+        return {'success': False,
+                'message': f'Text not found in {where}: "{find}". Call read_section and copy the exact wording '
+                           f'(edit_text only changes text, not HTML).'}
+    sections = ', '.join(f'"{n}"' for n in applied['sections'])
+    removed = f'; removed {applied["removed"]} element(s) left empty' if applied['removed'] else ''
+    return {'success': True,
+            'message': f'Changed {applied["changed"]} place(s) in section(s) {sections}{removed}' + _languages_note(applied)}
+
+
 def insert_section(params, context):
     """Generate ONE new section and put it where asked. Only the new section is
     translated; the rest of the page stays byte-identical in every language."""
@@ -255,5 +285,6 @@ PAGE_TOOLS = {
     'insert_section': insert_section,
     'read_section': read_section,
     'refine_section': refine_section,
+    'edit_text': edit_text,
     'refine_page': refine_page,
 }

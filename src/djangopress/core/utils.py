@@ -4,6 +4,7 @@ import os
 from io import BytesIO
 from PIL import Image
 from django.core.files.base import ContentFile
+from djangopress.core.debug_log import debug
 
 
 def resize_and_compress_image(image_field, max_width=1920, quality=80, max_size_kb=500):
@@ -19,16 +20,16 @@ def resize_and_compress_image(image_field, max_width=1920, quality=80, max_size_
     Returns:
         ContentFile: Processed image as ContentFile
     """
-    print(f"\n{'='*60}")
-    print(f"IMAGE PROCESSING STARTED")
-    print(f"{'='*60}")
-    print(f"Original filename: {image_field.name}")
+    debug(f"\n{'='*60}")
+    debug(f"IMAGE PROCESSING STARTED")
+    debug(f"{'='*60}")
+    debug(f"Original filename: {image_field.name}")
 
     # Open the image
     img = Image.open(image_field)
     original_size = image_field.size if hasattr(image_field, 'size') else 0
-    print(f"Original file size: {original_size / 1024:.2f} KB")
-    print(f"Original dimensions: {img.size[0]}x{img.size[1]}px")
+    debug(f"Original file size: {original_size / 1024:.2f} KB")
+    debug(f"Original dimensions: {img.size[0]}x{img.size[1]}px")
 
     # Determine target format early — needed to decide whether to preserve alpha
     filename = image_field.name
@@ -45,18 +46,18 @@ def resize_and_compress_image(image_field, max_width=1920, quality=80, max_size_
     preserves_alpha = format_type in ('PNG', 'WEBP')
 
     # Convert based on mode + target format
-    print(f"Image mode: {img.mode} -> target format: {format_type}")
+    debug(f"Image mode: {img.mode} -> target format: {format_type}")
     if img.mode == 'P':
         # Palette mode: promote to RGBA to handle transparency correctly
         img = img.convert('RGBA')
     if img.mode in ('RGBA', 'LA') and not preserves_alpha:
         # Flatten onto white background only when output can't carry alpha (JPEG)
-        print(f"Flattening {img.mode} to RGB with white background...")
+        debug(f"Flattening {img.mode} to RGB with white background...")
         background = Image.new('RGB', img.size, (255, 255, 255))
         background.paste(img, mask=img.split()[-1])
         img = background
     elif img.mode not in ('RGB', 'RGBA') and img.mode != 'LA':
-        print(f"Converting {img.mode} to RGB...")
+        debug(f"Converting {img.mode} to RGB...")
         img = img.convert('RGB')
 
     # Get original dimensions
@@ -64,23 +65,23 @@ def resize_and_compress_image(image_field, max_width=1920, quality=80, max_size_
 
     # Resize if width exceeds max_width
     if original_width > max_width:
-        print(f"Image width ({original_width}px) exceeds max width ({max_width}px)")
+        debug(f"Image width ({original_width}px) exceeds max width ({max_width}px)")
         # Calculate new height to maintain aspect ratio
         ratio = max_width / original_width
         new_height = int(original_height * ratio)
-        print(f"Resizing to: {max_width}x{new_height}px (ratio: {ratio:.2f})")
+        debug(f"Resizing to: {max_width}x{new_height}px (ratio: {ratio:.2f})")
         img = img.resize((max_width, new_height), Image.Resampling.LANCZOS)
     else:
-        print(f"No resize needed - image width ({original_width}px) is within limit")
+        debug(f"No resize needed - image width ({original_width}px) is within limit")
 
     # Prepare output buffer
     output = BytesIO()
 
     # Save with initial quality
     current_quality = quality
-    print(f"\nCompressing image...")
-    print(f"Format: {format_type}")
-    print(f"Initial quality: {current_quality}%")
+    debug(f"\nCompressing image...")
+    debug(f"Format: {format_type}")
+    debug(f"Initial quality: {current_quality}%")
     img.save(output, format=format_type, quality=current_quality, optimize=True)
 
     # If file is still too large, reduce quality further
@@ -88,24 +89,24 @@ def resize_and_compress_image(image_field, max_width=1920, quality=80, max_size_
     attempts = 0
     max_attempts = 5
     initial_compressed_size = output.tell()
-    print(f"Compressed size at {current_quality}% quality: {initial_compressed_size / 1024:.2f} KB")
+    debug(f"Compressed size at {current_quality}% quality: {initial_compressed_size / 1024:.2f} KB")
 
     while output.tell() > max_size_bytes and current_quality > 50 and attempts < max_attempts:
         output = BytesIO()
         current_quality -= 10
         img.save(output, format=format_type, quality=current_quality, optimize=True)
         attempts += 1
-        print(f"Attempt {attempts}: Reducing quality to {current_quality}% = {output.tell() / 1024:.2f} KB")
+        debug(f"Attempt {attempts}: Reducing quality to {current_quality}% = {output.tell() / 1024:.2f} KB")
 
     # Reset buffer position
     output.seek(0)
 
     final_size = output.tell()
-    print(f"\nPROCESSING COMPLETE")
-    print(f"Final file size: {final_size / 1024:.2f} KB")
-    print(f"Size reduction: {((original_size - final_size) / original_size * 100):.1f}%")
-    print(f"Final quality: {current_quality}%")
-    print(f"{'='*60}\n")
+    debug(f"\nPROCESSING COMPLETE")
+    debug(f"Final file size: {final_size / 1024:.2f} KB")
+    debug(f"Size reduction: {((original_size - final_size) / original_size * 100):.1f}%")
+    debug(f"Final quality: {current_quality}%")
+    debug(f"{'='*60}\n")
 
     # Return as ContentFile
     return ContentFile(output.read(), name=os.path.basename(filename))

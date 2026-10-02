@@ -6,6 +6,7 @@ import urllib.request
 import urllib.parse
 import urllib.error
 from django.conf import settings
+from djangopress.core.debug_log import debug
 
 
 def is_configured():
@@ -46,7 +47,7 @@ def search_photos(query, per_page=9, orientation=None):
         with urllib.request.urlopen(req, timeout=10) as resp:
             data = json.loads(resp.read().decode())
     except (urllib.error.URLError, urllib.error.HTTPError, json.JSONDecodeError) as e:
-        print(f'Unsplash search error: {e}')
+        debug(f'Unsplash search error: {e}')
         return []
 
     results = []
@@ -80,7 +81,7 @@ def get_photo(photo_id):
         with urllib.request.urlopen(req, timeout=10) as resp:
             photo = json.loads(resp.read().decode())
     except (urllib.error.URLError, urllib.error.HTTPError, json.JSONDecodeError) as e:
-        print(f'Unsplash photo error: {e}')
+        debug(f'Unsplash photo error: {e}')
         return None
     urls = photo.get('urls', {})
     user = photo.get('user', {})
@@ -121,7 +122,7 @@ def download_photo(photo_id, regular_url):
         with urllib.request.urlopen(track_req, timeout=10):
             pass
     except (urllib.error.URLError, urllib.error.HTTPError) as e:
-        print(f'Unsplash download tracking error: {e}')
+        debug(f'Unsplash download tracking error: {e}')
 
     # 2. Fetch image bytes from regular_url
     try:
@@ -131,5 +132,5 @@ def download_photo(photo_id, regular_url):
         with urllib.request.urlopen(img_req, timeout=30) as resp:
             return resp.read()
     except (urllib.error.URLError, urllib.error.HTTPError) as e:
-        print(f'Unsplash image download error: {e}')
+        debug(f'Unsplash image download error: {e}')
         return None

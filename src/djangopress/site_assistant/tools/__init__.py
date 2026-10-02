@@ -151,7 +151,7 @@ class ToolRegistry:
 # Tools that change the active page: one labelled checkpoint per page per turn.
 ACTIVE_PAGE_TOOLS = {
     'update_element_styles', 'update_element_attribute', 'remove_section', 'reorder_sections',
-    'refine_section', 'refine_page', 'insert_section', 'set_section_background',
+    'refine_section', 'refine_page', 'edit_text', 'insert_section', 'set_section_background',
     'reorder_items', 'replace_item_image', 'add_item_images', 'remove_item',
 }
 

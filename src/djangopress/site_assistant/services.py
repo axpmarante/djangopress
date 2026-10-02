@@ -19,7 +19,7 @@ MAX_TOOL_ITERATIONS = 12   # read_section / list_components / web_search spend s
 # Tools that mutate page context — refresh system instruction after these
 PAGE_CONTEXT_MUTATIONS = {
     'set_active_page', 'create_page',
-    'refine_section', 'refine_page',
+    'refine_section', 'refine_page', 'edit_text',
     'remove_section', 'reorder_sections',
     'update_element_styles', 'update_element_attribute',
     'refine_header', 'refine_footer',

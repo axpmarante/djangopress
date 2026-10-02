@@ -4,6 +4,7 @@ import json
 from dataclasses import dataclass, field
 from typing import Dict, Any, Optional, List, Literal, Union
 from enum import Enum, auto
+from djangopress.core.debug_log import debug
 
 # Try to use django-environ if available, fallback to os.getenv
 try:
@@ -353,7 +354,7 @@ class LLMBase:
                 elif role == 'assistant':
                     gemini_messages.append({"role": "model", "parts": [content]})
                 else:
-                    print(f"Warning: Unknown message role '{role}', treating as user message")
+                    debug(f"Warning: Unknown message role '{role}', treating as user message")
                     gemini_messages.append({"role": "user", "parts": [content]})
 
             if system_content and gemini_messages and gemini_messages[0]["role"] == "user":
@@ -364,7 +365,7 @@ class LLMBase:
 
             return gemini_messages
         except Exception as e:
-            print(f"Error formatting messages for Gemini: {str(e)}")
+            debug(f"Error formatting messages for Gemini: {str(e)}")
             return [{"role": "user", "parts": ["Hello, can you help me?"]}]
 
     def get_completion(
@@ -383,24 +384,24 @@ class LLMBase:
 
         config = MODEL_CONFIG.get(tool_name, ModelConfig())
 
-        print("\n" + "=" * 80)
-        print("🤖 LLM API CALL STARTED")
-        print("=" * 80)
-        print(f"📍 Provider: {config.provider.value.upper()}")
-        print(f"🔧 Tool Name: {tool_name or 'default'}")
-        print(f"🧠 Model: {config.model_name}")
-        print(f"🌡️  Temperature: {config.temperature}")
+        debug("\n" + "=" * 80)
+        debug("🤖 LLM API CALL STARTED")
+        debug("=" * 80)
+        debug(f"📍 Provider: {config.provider.value.upper()}")
+        debug(f"🔧 Tool Name: {tool_name or 'default'}")
+        debug(f"🧠 Model: {config.model_name}")
+        debug(f"🌡️  Temperature: {config.temperature}")
 
         if config.provider == ModelProvider.GOOGLE:
-            print(f"📊 Max Output Tokens: {config.max_output_tokens}")
+            debug(f"📊 Max Output Tokens: {config.max_output_tokens}")
         else:
-            print(f"📊 Max Tokens: {config.max_tokens}")
+            debug(f"📊 Max Tokens: {config.max_tokens}")
 
         if config.provider_params:
-            print(f"⚙️  Provider Params: {json.dumps(config.provider_params, indent=2)}")
+            debug(f"⚙️  Provider Params: {json.dumps(config.provider_params, indent=2)}")
 
-        print(f"\n💬 Messages ({len(messages)} total):")
-        print("-" * 80)
+        debug(f"\n💬 Messages ({len(messages)} total):")
+        debug("-" * 80)
         for i, msg in enumerate(messages, 1):
             role = msg['role'].upper()
             content = msg['content']
@@ -409,9 +410,9 @@ class LLMBase:
                 content_preview = content
             else:
                 content_preview = content if len(content) <= 200 else content[:200] + "... (truncated)"
-            print(f"\n[{i}] {role}:")
-            print(f"{content_preview}")
-        print("-" * 80)
+            debug(f"\n[{i}] {role}:")
+            debug(f"{content_preview}")
+        debug("-" * 80)
 
         try:
             if config.provider == ModelProvider.OPENAI and not OPENAI_AVAILABLE:
@@ -447,7 +448,7 @@ class LLMBase:
                 if config.provider_params:
                     params.update(config.provider_params)
 
-                print("\n⏳ Calling OpenAI API...")
+                debug("\n⏳ Calling OpenAI API...")
                 response = client.chat.completions.create(**params)
 
                 response_content = response.choices[0].message.content
@@ -458,22 +459,22 @@ class LLMBase:
                 }
 
                 elapsed_time = time.time() - start_time
-                print("\n" + "=" * 80)
-                print("✅ LLM API CALL SUCCESSFUL")
-                print("=" * 80)
-                print(f"⏱️  Time Elapsed: {elapsed_time:.2f}s")
-                print(f"📊 Token Usage:")
-                print(f"   - Prompt: {usage['prompt_tokens']}")
-                print(f"   - Completion: {usage['completion_tokens']}")
-                print(f"   - Total: {usage['total_tokens']}")
-                print(f"📝 Response Length: {len(response_content)} characters")
+                debug("\n" + "=" * 80)
+                debug("✅ LLM API CALL SUCCESSFUL")
+                debug("=" * 80)
+                debug(f"⏱️  Time Elapsed: {elapsed_time:.2f}s")
+                debug(f"📊 Token Usage:")
+                debug(f"   - Prompt: {usage['prompt_tokens']}")
+                debug(f"   - Completion: {usage['completion_tokens']}")
+                debug(f"   - Total: {usage['total_tokens']}")
+                debug(f"📝 Response Length: {len(response_content)} characters")
                 SHOW_FULL_RESPONSE = True
                 if SHOW_FULL_RESPONSE:
-                    print(f"📄 Full Response:\n{response_content}")
+                    debug(f"📄 Full Response:\n{response_content}")
                 else:
-                    print(f"📄 Response Preview: {response_content[:150]}..." if len(
+                    debug(f"📄 Response Preview: {response_content[:150]}..." if len(
                         response_content) > 150 else f"📄 Response: {response_content}")
-                print("=" * 80 + "\n")
+                debug("=" * 80 + "\n")
 
                 return StandardizedLLMResponse(
                     content=response_content,
@@ -498,7 +499,7 @@ class LLMBase:
                 if config.provider_params:
                     params.update(config.provider_params)
 
-                print("\n⏳ Calling Anthropic (Claude) API...")
+                debug("\n⏳ Calling Anthropic (Claude) API...")
                 response = client.messages.create(**params)
 
                 response_content = ""
@@ -514,22 +515,22 @@ class LLMBase:
                 }
 
                 elapsed_time = time.time() - start_time
-                print("\n" + "=" * 80)
-                print("✅ LLM API CALL SUCCESSFUL")
-                print("=" * 80)
-                print(f"⏱️  Time Elapsed: {elapsed_time:.2f}s")
-                print(f"📊 Token Usage:")
-                print(f"   - Prompt: {usage['prompt_tokens']}")
-                print(f"   - Completion: {usage['completion_tokens']}")
-                print(f"   - Total: {usage['total_tokens']}")
-                print(f"📝 Response Length: {len(response_content)} characters")
+                debug("\n" + "=" * 80)
+                debug("✅ LLM API CALL SUCCESSFUL")
+                debug("=" * 80)
+                debug(f"⏱️  Time Elapsed: {elapsed_time:.2f}s")
+                debug(f"📊 Token Usage:")
+                debug(f"   - Prompt: {usage['prompt_tokens']}")
+                debug(f"   - Completion: {usage['completion_tokens']}")
+                debug(f"   - Total: {usage['total_tokens']}")
+                debug(f"📝 Response Length: {len(response_content)} characters")
                 SHOW_FULL_RESPONSE = True
                 if SHOW_FULL_RESPONSE:
-                    print(f"📄 Full Response:\n{response_content}")
+                    debug(f"📄 Full Response:\n{response_content}")
                 else:
-                    print(f"📄 Response Preview: {response_content[:150]}..." if len(
+                    debug(f"📄 Response Preview: {response_content[:150]}..." if len(
                         response_content) > 150 else f"📄 Response: {response_content}")
-                print("=" * 80 + "\n")
+                debug("=" * 80 + "\n")
 
                 return StandardizedLLMResponse(
                     content=response_content,
@@ -568,8 +569,8 @@ class LLMBase:
                 backend = "Vertex AI" if self._using_vertex_ai else "google-genai SDK"
                 for attempt in (1, 2):
                     try:
-                        print(f"\n⏳ Calling Google Gemini API ({backend}), attempt {attempt}...")
-                        print(f"   Model: {resolved_model} · settings: {settings_for(tool_name)}")
+                        debug(f"\n⏳ Calling Google Gemini API ({backend}), attempt {attempt}...")
+                        debug(f"   Model: {resolved_model} · settings: {settings_for(tool_name)}")
                         if on_stream:
                             response_content = ""
                             for chunk in client.models.generate_content_stream(
@@ -610,7 +611,7 @@ class LLMBase:
                         break
                     except Exception as gemini_error:
                         # No switch to another provider: retry a transient error once, then fail loudly.
-                        print(f"❌ Gemini error ({type(gemini_error).__name__}): {gemini_error}")
+                        debug(f"❌ Gemini error ({type(gemini_error).__name__}): {gemini_error}")
                         if attempt == 1 and _is_transient(gemini_error):
                             time.sleep(2)
                             continue
@@ -627,24 +628,24 @@ class LLMBase:
                     }
 
                 elapsed_time = time.time() - start_time
-                print("\n" + "=" * 80)
-                print("✅ LLM API CALL SUCCESSFUL")
-                print("=" * 80)
-                print(f"⏱️  Time Elapsed: {elapsed_time:.2f}s")
-                print(f"📊 Token Usage:")
-                print(f"   - Prompt: ~{usage['prompt_tokens']}")
-                print(f"   - Completion: ~{usage['completion_tokens']}")
-                print(f"   - Total: ~{usage['total_tokens']}")
-                print(f"📝 Response Length: {len(response_content)} characters")
+                debug("\n" + "=" * 80)
+                debug("✅ LLM API CALL SUCCESSFUL")
+                debug("=" * 80)
+                debug(f"⏱️  Time Elapsed: {elapsed_time:.2f}s")
+                debug(f"📊 Token Usage:")
+                debug(f"   - Prompt: ~{usage['prompt_tokens']}")
+                debug(f"   - Completion: ~{usage['completion_tokens']}")
+                debug(f"   - Total: ~{usage['total_tokens']}")
+                debug(f"📝 Response Length: {len(response_content)} characters")
                 SHOW_FULL_RESPONSE = True
                 if SHOW_FULL_RESPONSE:
-                    print(f"📄 Full Response:\n{response_content}")
+                    debug(f"📄 Full Response:\n{response_content}")
                 else:
-                    print(f"📄 Response Preview: {response_content[:150]}..." if len(
+                    debug(f"📄 Response Preview: {response_content[:150]}..." if len(
                         response_content) > 150 else f"📄 Response: {response_content}")
-                print("=" * 80 + "\n")
+                debug("=" * 80 + "\n")
 
-                print(f"🏁 Finish reason: {finish_reason}")
+                debug(f"🏁 Finish reason: {finish_reason}")
                 return StandardizedLLMResponse(
                     content=response_content,
                     usage=usage,
@@ -656,15 +657,15 @@ class LLMBase:
 
         except Exception as e:
             elapsed_time = time.time() - start_time
-            print("\n" + "=" * 80)
-            print("❌ LLM API CALL FAILED")
-            print("=" * 80)
-            print(f"📍 Provider: {config.provider.value.upper()}")
-            print(f"🧠 Model: {config.model_name}")
-            print(f"⏱️  Time Elapsed: {elapsed_time:.2f}s")
-            print(f"❗ Error Type: {type(e).__name__}")
-            print(f"❗ Error Message: {str(e)}")
-            print("=" * 80 + "\n")
+            debug("\n" + "=" * 80)
+            debug("❌ LLM API CALL FAILED")
+            debug("=" * 80)
+            debug(f"📍 Provider: {config.provider.value.upper()}")
+            debug(f"🧠 Model: {config.model_name}")
+            debug(f"⏱️  Time Elapsed: {elapsed_time:.2f}s")
+            debug(f"❗ Error Type: {type(e).__name__}")
+            debug(f"❗ Error Message: {str(e)}")
+            debug("=" * 80 + "\n")
             raise
 
     def web_search(self, query, tool_name=None):
@@ -773,45 +774,45 @@ class LLMBase:
 
         config = MODEL_CONFIG.get(tool_name, MODEL_CONFIG['gemini-pro'])
 
-        print("\n" + "=" * 80)
-        print("🖼️ VISION LLM API CALL STARTED")
-        print("=" * 80)
-        print(f"📍 Provider: {config.provider.value.upper()}")
-        print(f"🔧 Tool Name: {tool_name}")
-        print(f"🧠 Model: {config.model_name}")
+        debug("\n" + "=" * 80)
+        debug("🖼️ VISION LLM API CALL STARTED")
+        debug("=" * 80)
+        debug(f"📍 Provider: {config.provider.value.upper()}")
+        debug(f"🔧 Tool Name: {tool_name}")
+        debug(f"🧠 Model: {config.model_name}")
 
         try:
             if images:
                 images_data = images
                 total_size = sum(len(img['bytes']) for img in images)
-                print(f"📄 Files: {len(images)} images")
-                print(f"📏 Total Size: {total_size / 1024:.2f} KB")
+                debug(f"📄 Files: {len(images)} images")
+                debug(f"📏 Total Size: {total_size / 1024:.2f} KB")
             elif file_path:
                 with open(file_path, 'rb') as f:
                     file_content = f.read()
                 mime_type = mimetypes.guess_type(file_path)[0] or 'application/octet-stream'
-                print(f"📄 File: {file_path}")
+                debug(f"📄 File: {file_path}")
                 images_data = [{'bytes': file_content, 'mime_type': mime_type}]
-                print(f"📋 MIME Type: {mime_type}")
-                print(f"📏 File Size: {len(file_content) / 1024:.2f} KB")
+                debug(f"📋 MIME Type: {mime_type}")
+                debug(f"📏 File Size: {len(file_content) / 1024:.2f} KB")
             elif file_bytes and file_mime_type:
                 file_content = file_bytes
                 mime_type = file_mime_type
-                print(f"📄 File: <bytes> ({len(file_bytes)} bytes)")
+                debug(f"📄 File: <bytes> ({len(file_bytes)} bytes)")
                 images_data = [{'bytes': file_content, 'mime_type': mime_type}]
-                print(f"📋 MIME Type: {mime_type}")
-                print(f"📏 File Size: {len(file_content) / 1024:.2f} KB")
+                debug(f"📋 MIME Type: {mime_type}")
+                debug(f"📏 File Size: {len(file_content) / 1024:.2f} KB")
             else:
                 raise ValueError("Either file_path, (file_bytes and file_mime_type), or images must be provided")
 
-            print(f"💬 Prompt length: {len(prompt)} chars")
+            debug(f"💬 Prompt length: {len(prompt)} chars")
 
             if config.provider == ModelProvider.GOOGLE and GOOGLE_AVAILABLE:
                 try:
                     response_content = self._gemini_vision_call(images_data, prompt, config, tool_name=tool_name)
                 except Exception as gemini_error:
-                    print(f"⚠️ Gemini vision failed: {gemini_error}")
-                    print("🔄 Falling back to OpenAI...")
+                    debug(f"⚠️ Gemini vision failed: {gemini_error}")
+                    debug("🔄 Falling back to OpenAI...")
                     if ModelProvider.OPENAI in self._clients:
                         response_content = self._openai_vision_call(images_data, prompt, config)
                     else:
@@ -831,12 +832,12 @@ class LLMBase:
             }
 
             elapsed_time = time.time() - start_time
-            print("\n" + "=" * 80)
-            print("✅ VISION LLM API CALL SUCCESSFUL")
-            print("=" * 80)
-            print(f"⏱️ Time Elapsed: {elapsed_time:.2f}s")
-            print(f"📝 Response Length: {len(response_content)} characters")
-            print("=" * 80 + "\n")
+            debug("\n" + "=" * 80)
+            debug("✅ VISION LLM API CALL SUCCESSFUL")
+            debug("=" * 80)
+            debug(f"⏱️ Time Elapsed: {elapsed_time:.2f}s")
+            debug(f"📝 Response Length: {len(response_content)} characters")
+            debug("=" * 80 + "\n")
 
             return StandardizedLLMResponse(
                 content=response_content,
@@ -845,13 +846,13 @@ class LLMBase:
 
         except Exception as e:
             elapsed_time = time.time() - start_time
-            print("\n" + "=" * 80)
-            print("❌ VISION LLM API CALL FAILED")
-            print("=" * 80)
-            print(f"⏱️ Time Elapsed: {elapsed_time:.2f}s")
-            print(f"❗ Error Type: {type(e).__name__}")
-            print(f"❗ Error Message: {str(e)}")
-            print("=" * 80 + "\n")
+            debug("\n" + "=" * 80)
+            debug("❌ VISION LLM API CALL FAILED")
+            debug("=" * 80)
+            debug(f"⏱️ Time Elapsed: {elapsed_time:.2f}s")
+            debug(f"❗ Error Type: {type(e).__name__}")
+            debug(f"❗ Error Message: {str(e)}")
+            debug("=" * 80 + "\n")
             raise
 
     def _gemini_vision_call(
@@ -864,7 +865,7 @@ class LLMBase:
         """Make a vision API call using Gemini with native PDF/image support."""
         client = self._clients[ModelProvider.GOOGLE]
 
-        print(f"\n⏳ Calling Gemini Vision API with {len(images_data)} file(s)...")
+        debug(f"\n⏳ Calling Gemini Vision API with {len(images_data)} file(s)...")
 
         if len(images_data) == 1 and images_data[0]['mime_type'] == 'application/pdf':
             import tempfile
@@ -878,9 +879,9 @@ class LLMBase:
                 tmp_path = tmp.name
 
             try:
-                print("📤 Uploading PDF to Gemini Files API...")
+                debug("📤 Uploading PDF to Gemini Files API...")
                 uploaded_file = client.files.upload(file=tmp_path)
-                print(f"✅ File uploaded: {uploaded_file.name}")
+                debug(f"✅ File uploaded: {uploaded_file.name}")
 
                 contents = [
                     types.Content(
@@ -899,7 +900,7 @@ class LLMBase:
         else:
             parts = []
             for i, img in enumerate(images_data):
-                print(f"   📷 Image {i + 1}: {img['mime_type']} ({len(img['bytes']) / 1024:.1f} KB)")
+                debug(f"   📷 Image {i + 1}: {img['mime_type']} ({len(img['bytes']) / 1024:.1f} KB)")
                 parts.append(
                     types.Part.from_bytes(
                         data=img['bytes'],
@@ -947,7 +948,7 @@ class LLMBase:
 
         client = self._clients[ModelProvider.OPENAI]
 
-        print(f"\n⏳ Calling OpenAI Vision API with {len(images_data)} file(s)...")
+        debug(f"\n⏳ Calling OpenAI Vision API with {len(images_data)} file(s)...")
 
         if len(images_data) == 1 and images_data[0]['mime_type'] == 'application/pdf':
             import tempfile
@@ -960,13 +961,13 @@ class LLMBase:
                 tmp_path = tmp.name
 
             try:
-                print("📤 Uploading PDF to OpenAI...")
+                debug("📤 Uploading PDF to OpenAI...")
                 with open(tmp_path, 'rb') as f:
                     uploaded_file = client.files.create(
                         file=f,
                         purpose='assistants'
                     )
-                print(f"✅ File uploaded: {uploaded_file.id}")
+                debug(f"✅ File uploaded: {uploaded_file.id}")
 
                 messages = [
                     {
@@ -989,7 +990,7 @@ class LLMBase:
             content = []
             for i, img in enumerate(images_data):
                 encoded_content = base64.b64encode(img['bytes']).decode('utf-8')
-                print(f"   📷 Image {i + 1}: {img['mime_type']} ({len(img['bytes']) / 1024:.1f} KB)")
+                debug(f"   📷 Image {i + 1}: {img['mime_type']} ({len(img['bytes']) / 1024:.1f} KB)")
                 content.append({
                     "type": "image_url",
                     "image_url": {
@@ -1050,26 +1051,26 @@ class LLMBase:
         else:
             model_id = "gemini-3-pro-image-preview"
 
-        print("\n" + "=" * 80)
-        print("🎨 IMAGE GENERATION API CALL STARTED")
-        print("=" * 80)
+        debug("\n" + "=" * 80)
+        debug("🎨 IMAGE GENERATION API CALL STARTED")
+        debug("=" * 80)
         backend = "Vertex AI" if self._using_vertex_ai else "Public API"
-        print(f"📍 Provider: GOOGLE ({backend})")
-        print(f"🧠 Model: {model_id}")
-        print(f"📐 Aspect Ratio: {aspect_ratio}")
+        debug(f"📍 Provider: GOOGLE ({backend})")
+        debug(f"🧠 Model: {model_id}")
+        debug(f"📐 Aspect Ratio: {aspect_ratio}")
         if reference_images:
-            print(f"🖼️  Reference Images: {len(reference_images)}")
-        print(f"💬 Prompt: {prompt[:200]}..." if len(prompt) > 200 else f"💬 Prompt: {prompt}")
-        print("-" * 80)
+            debug(f"🖼️  Reference Images: {len(reference_images)}")
+        debug(f"💬 Prompt: {prompt[:200]}..." if len(prompt) > 200 else f"💬 Prompt: {prompt}")
+        debug("-" * 80)
 
         if not GOOGLE_AVAILABLE:
             error_msg = "Google GenAI library not available. Install with: pip install google-genai"
-            print(f"❌ {error_msg}")
+            debug(f"❌ {error_msg}")
             return GeneratedImageResponse(success=False, error=error_msg, prompt_used=prompt)
 
         if ModelProvider.GOOGLE not in self._clients:
             error_msg = "Google client not initialized. Check GEMINI_API_KEY or VERTEX_AI_PROJECT."
-            print(f"❌ {error_msg}")
+            debug(f"❌ {error_msg}")
             return GeneratedImageResponse(success=False, error=error_msg, prompt_used=prompt)
 
         try:
@@ -1086,13 +1087,13 @@ class LLMBase:
             elapsed_time = time.time() - start_time
             error_msg = str(e)
 
-            print("\n" + "=" * 80)
-            print("❌ IMAGE GENERATION FAILED")
-            print("=" * 80)
-            print(f"⏱️  Time Elapsed: {elapsed_time:.2f}s")
-            print(f"❗ Error Type: {type(e).__name__}")
-            print(f"❗ Error Message: {error_msg}")
-            print("=" * 80 + "\n")
+            debug("\n" + "=" * 80)
+            debug("❌ IMAGE GENERATION FAILED")
+            debug("=" * 80)
+            debug(f"⏱️  Time Elapsed: {elapsed_time:.2f}s")
+            debug(f"❗ Error Type: {type(e).__name__}")
+            debug(f"❗ Error Message: {error_msg}")
+            debug("=" * 80 + "\n")
 
             return GeneratedImageResponse(
                 success=False,
@@ -1104,7 +1105,7 @@ class LLMBase:
         """Generate image using Imagen 4.0 on Vertex AI."""
         import time
 
-        print(f"\n⏳ Calling Imagen 4.0 API...")
+        debug(f"\n⏳ Calling Imagen 4.0 API...")
 
         response = client.models.generate_images(
             model=model_id,
@@ -1119,12 +1120,12 @@ class LLMBase:
 
         if response.generated_images:
             image_bytes = response.generated_images[0].image.image_bytes
-            print("\n" + "=" * 80)
-            print("✅ IMAGE GENERATION SUCCESSFUL")
-            print("=" * 80)
-            print(f"⏱️  Time Elapsed: {elapsed_time:.2f}s")
-            print(f"📏 Image Size: {len(image_bytes) / 1024:.1f} KB")
-            print("=" * 80 + "\n")
+            debug("\n" + "=" * 80)
+            debug("✅ IMAGE GENERATION SUCCESSFUL")
+            debug("=" * 80)
+            debug(f"⏱️  Time Elapsed: {elapsed_time:.2f}s")
+            debug(f"📏 Image Size: {len(image_bytes) / 1024:.1f} KB")
+            debug("=" * 80 + "\n")
 
             return GeneratedImageResponse(
                 success=True,
@@ -1133,12 +1134,12 @@ class LLMBase:
                 prompt_used=prompt,
             )
         else:
-            print("\n" + "=" * 80)
-            print("❌ IMAGE GENERATION FAILED")
-            print("=" * 80)
-            print(f"⏱️  Time Elapsed: {elapsed_time:.2f}s")
-            print("❗ Error: No image was generated by the model")
-            print("=" * 80 + "\n")
+            debug("\n" + "=" * 80)
+            debug("❌ IMAGE GENERATION FAILED")
+            debug("=" * 80)
+            debug(f"⏱️  Time Elapsed: {elapsed_time:.2f}s")
+            debug("❗ Error: No image was generated by the model")
+            debug("=" * 80 + "\n")
 
             return GeneratedImageResponse(
                 success=False,
@@ -1159,15 +1160,15 @@ class LLMBase:
                 try:
                     img = PILImage.open(BytesIO(img_bytes))
                     contents.append(img)
-                    print(f"   ✅ Added reference image {i+1} ({len(img_bytes) / 1024:.1f} KB)")
+                    debug(f"   ✅ Added reference image {i+1} ({len(img_bytes) / 1024:.1f} KB)")
                 except Exception as e:
-                    print(f"   ⚠️ Failed to load reference image {i+1}: {e}")
+                    debug(f"   ⚠️ Failed to load reference image {i+1}: {e}")
 
         if aspect_ratio != '1:1':
             enhanced_prompt = f"[Image should be {aspect_ratio} aspect ratio] {prompt}"
             contents[0] = enhanced_prompt
 
-        print("\n⏳ Calling Gemini Image Generation API...")
+        debug("\n⏳ Calling Gemini Image Generation API...")
 
         response = client.models.generate_content(
             model=model_id,
@@ -1188,7 +1189,7 @@ class LLMBase:
                         thinking_text = part.text
                     elif hasattr(part, 'inline_data') and part.inline_data:
                         image_bytes = part.inline_data.data
-                        print(f"   ✅ Got image: {part.inline_data.mime_type}, {len(image_bytes) / 1024:.1f} KB")
+                        debug(f"   ✅ Got image: {part.inline_data.mime_type}, {len(image_bytes) / 1024:.1f} KB")
 
         if not image_bytes and hasattr(response, 'parts'):
             for part in response.parts:
@@ -1198,12 +1199,12 @@ class LLMBase:
         elapsed_time = time.time() - start_time
 
         if image_bytes:
-            print("\n" + "=" * 80)
-            print("✅ IMAGE GENERATION SUCCESSFUL")
-            print("=" * 80)
-            print(f"⏱️  Time Elapsed: {elapsed_time:.2f}s")
-            print(f"📏 Image Size: {len(image_bytes) / 1024:.1f} KB")
-            print("=" * 80 + "\n")
+            debug("\n" + "=" * 80)
+            debug("✅ IMAGE GENERATION SUCCESSFUL")
+            debug("=" * 80)
+            debug(f"⏱️  Time Elapsed: {elapsed_time:.2f}s")
+            debug(f"📏 Image Size: {len(image_bytes) / 1024:.1f} KB")
+            debug("=" * 80 + "\n")
 
             return GeneratedImageResponse(
                 success=True,
@@ -1213,14 +1214,14 @@ class LLMBase:
                 thinking_text=thinking_text
             )
         else:
-            print("\n" + "=" * 80)
-            print("❌ IMAGE GENERATION FAILED")
-            print("=" * 80)
-            print(f"⏱️  Time Elapsed: {elapsed_time:.2f}s")
-            print("❗ Error: No image was generated by the model")
+            debug("\n" + "=" * 80)
+            debug("❌ IMAGE GENERATION FAILED")
+            debug("=" * 80)
+            debug(f"⏱️  Time Elapsed: {elapsed_time:.2f}s")
+            debug("❗ Error: No image was generated by the model")
             if thinking_text:
-                print(f"💭 Model response: {thinking_text}")
-            print("=" * 80 + "\n")
+                debug(f"💭 Model response: {thinking_text}")
+            debug("=" * 80 + "\n")
 
             return GeneratedImageResponse(
                 success=False,

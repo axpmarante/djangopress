@@ -174,6 +174,27 @@ REFINE_SECTION = types.FunctionDeclaration(
     ),
 )
 
+EDIT_TEXT = types.FunctionDeclaration(
+    name='edit_text',
+    description=(
+        'Change or remove exact wording on the active page without regenerating anything (instant). '
+        'Finds the text (case and spacing don\'t matter) and replaces it; an empty replace removes it, '
+        'and an element left empty is removed. The other languages get a translation of the changed '
+        'elements only. Use it for wording, mentions, typos and short rewrites; refine_section only '
+        'when the layout or design must change.'
+    ),
+    parameters=S(
+        type=T.OBJECT,
+        properties={
+            'find': S(type=T.STRING, description='Exact text as it appears on the page (copy it from read_section).'),
+            'replace': S(type=T.STRING, description='New text; empty string removes the found text.'),
+            'section_name': S(type=T.STRING,
+                              description='data-section to limit the change to; leave out to change the whole page.'),
+        },
+        required=['find', 'replace'],
+    ),
+)
+
 INSERT_SECTION = types.FunctionDeclaration(
     name='insert_section',
     description=(
@@ -428,6 +449,7 @@ PAGE_EDIT_TOOLS = [
     ADD_ITEM_IMAGES,
     REMOVE_ITEM,
     READ_SECTION,
+    EDIT_TEXT,
     INSERT_SECTION,
     REFINE_SECTION,
     REFINE_PAGE,

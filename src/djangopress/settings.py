@@ -354,6 +354,12 @@ if DEBUG_MODE or ENABLE_DEBUG_LOGGING or ENVIRONMENT != 'development':
                 'level': 'DEBUG',
                 'propagate': False,
             },
+            # Prompts, HTML sizes and timings (core.debug_log.debug): only with ENABLE_DEBUG_LOGGING.
+            'djangopress': {
+                'handlers': ['console'],
+                'level': 'DEBUG' if ENABLE_DEBUG_LOGGING else 'INFO',
+                'propagate': False,
+            },
         },
         'root': {
             'handlers': ['console'],
