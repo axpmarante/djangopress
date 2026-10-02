@@ -1,0 +1,73 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>running</title>
+<div class="editor-v2-content" id="host">
+<section data-section="hero" id="hero">
+  <img id="big" alt="Mesa posta" style="width:100px" src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='800' height='600'><rect width='800' height='600' fill='%23c42014'/></svg>">
+  <img id="tiny" alt="" style="width:200px" src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==">
+</section>
+<section data-section="eventos" id="eventos">
+  <img id="ph" alt="Mesa de grupo" style="width:100px" src="https://placehold.co/600x400?text=Mesa" data-image-prompt="mesa">
+  <img id="never" alt="Sala" style="width:100px" src="about:blank">
+  <div class="splide"><ul><li class="splide__slide splide__slide--clone"><img alt="clone" src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=="></li></ul></div>
+  <img alt="Mesa posta" style="width:100px" src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='800' height='600'><rect width='800' height='600' fill='%23c42014'/></svg>">
+  <img alt="Mesa posta" style="width:100px" src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='800' height='600'><rect width='800' height='600' fill='%23c42014'/></svg>">
+</section>
+</div>
+<div id="ev2-tab-content" style="height:600px;overflow:auto"></div>
+<pre id="out"></pre>
+<script type="module">
+import { events } from '../../static/editor_v2/js/lib/events.js';
+import { renderImagesPanel } from '../../static/editor_v2/js/modules/images-panel.js';
+
+const fails = [];
+let passed = 0;
+const eq = (name, got, want) => {
+    if (JSON.stringify(got) === JSON.stringify(want)) passed++;
+    else fails.push(`${name}: got ${JSON.stringify(got)}, want ${JSON.stringify(want)}`);
+};
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+window.fetch = async () => new Response(JSON.stringify({ success: true, current: 'Mesa com velas', alts: {}, saved_languages: ['en'] }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+window.EDITOR_CONFIG = { pageId: 3, apiBase: '/api', csrfToken: 'x', aiEnabled: true, language: 'pt', languages: ['pt', 'en'] };
+const emitted = [];
+for (const n of ['change:attribute', 'selection:request', 'process-images:open', 'image-picker:open']) events.on(n, d => emitted.push([n, d]));
+const last = (n) => [...emitted].reverse().find(([x]) => x === n)?.[1];
+const box = document.getElementById('ev2-tab-content');
+const q = (s) => box.querySelector(s);
+const qa = (s) => [...box.querySelectorAll(s)];
+
+try {
+    await Promise.all([...document.images].map(i => i.decode ? i.decode().catch(() => {}) : null));
+    await sleep(100);
+    renderImagesPanel(box);
+    eq('total', q('.ev2-mp-total')?.textContent, '5');
+    eq('chip counts', qa('.ev2-mp-chip').map(c => `${c.dataset.filter}:${c.querySelector('b')?.textContent}`),
+        ['all:5', 'alt:1', 'placeholder:1', 'low:1']);
+    eq('groups by section label', qa('.ev2-mp-group-head b').map(b => b.textContent), ['Hero', 'Eventos']);
+    eq('captions are the alt text', qa('.ev2-mp-cap').map(c => c.textContent), ['Mesa posta', 'No alt text', 'Mesa de grupo', 'Sala', 'Mesa posta']);
+    eq('duplicate count', q('.ev2-mp-dup')?.textContent, '×2');
+    eq('flags', qa('.ev2-mp-flag').map(f => f.textContent), ['No alt', 'Low res', 'Placeholder']);
+    eq('generate for placeholders', q('[data-generate]')?.dataset.generate, 'eventos');
+
+    q('.ev2-mp-chip[data-filter="alt"]').click();
+    eq('filter: no alt', qa('.ev2-mp-thumb').length, 1);
+    q('.ev2-mp-chip[data-filter="all"]').click();
+
+    qa('.ev2-mp-thumb')[1].click();
+    eq('selects the image', last('selection:request'), document.getElementById('tiny'));
+    const alt = q('.ev2-mp-detail input');
+    alt.value = 'Ponto de luz';
+    alt.dispatchEvent(new Event('input'));
+    eq('alt saved as a change', [last('change:attribute')?.attribute, last('change:attribute')?.value], ['alt', 'Ponto de luz']);
+    eq('page updated', document.getElementById('tiny').getAttribute('alt'), 'Ponto de luz');
+    q('.ev2-mp-detail [data-action="replace"]').click();
+    await sleep(20);
+    eq('replace opens the picker', !!last('image-picker:open'), true);
+    q('[data-generate]').click();
+    eq('generate opens processing for the section', last('process-images:open')?.section, 'eventos');
+} catch (err) {
+    fails.push('crash: ' + err.message + ' ' + (err.stack || '').split('\n')[1]);
+}
+document.getElementById('out').textContent = fails.join('\n') || 'all good';
+document.title = fails.length ? `FAIL ${fails.length}` : `PASS ${passed}`;
+</script>
