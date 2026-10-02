@@ -150,7 +150,30 @@
                 </div>
             </div>
 
-{% for item in backoffice_extra_nav %}{# tags hug the markup: an empty list renders a byte-identical sidebar #}
+{% for item in backoffice_extra_nav %}{# tags hug the markup: an empty list renders a byte-identical sidebar #}{% if item.children %}
+            <!-- Site-local app group, registered in settings.BACKOFFICE_EXTRA_NAV -->
+            <div x-data="{ open: {% if item.is_active %}true{% else %}false{% endif %} }">
+                <button @click="open = !open"
+                        class="w-full flex items-center justify-between px-4 py-3 text-gray-300 rounded-lg hover:bg-gray-800 hover:text-white transition-colors {% if item.is_active %}bg-gray-800 text-white{% endif %}">
+                    <span class="flex items-center">
+                        {% if item.icon_svg %}{{ item.icon_svg|safe }}{% else %}<svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"/>
+                        </svg>{% endif %}
+                        <span>{{ item.label }}</span>
+                    </span>
+                    <svg class="w-4 h-4 transition-transform" :class="{ 'rotate-90': open }" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                    </svg>
+                </button>
+                <div x-show="open" x-cloak class="ml-4 mt-1 space-y-1">
+                    {% for child in item.children %}<a href="{% url child.url_name %}"
+                       class="flex items-center px-4 py-2 text-sm text-gray-400 rounded-lg hover:bg-gray-800 hover:text-white transition-colors {% if child.is_active %}text-white bg-gray-800{% endif %}">
+                        {% if child.icon_svg %}{{ child.icon_svg|safe }}{% endif %}{{ child.label }}
+                    </a>
+                    {% endfor %}
+                </div>
+            </div>
+{% else %}
             <!-- Site-local app, registered in settings.BACKOFFICE_EXTRA_NAV -->
             <a href="{% url item.url_name %}"
                class="{% if item.is_active %}flex items-center px-4 py-3 text-gray-300 rounded-lg hover:bg-gray-800 hover:text-white transition-colors bg-gray-800 text-white{% else %}flex items-center px-4 py-3 text-gray-300 rounded-lg hover:bg-gray-800 hover:text-white transition-colors{% endif %}">
@@ -159,7 +182,7 @@
                 </svg>{% endif %}
                 <span>{{ item.label }}</span>
             </a>
-{% endfor %}            {% comment %}
+{% endif %}{% endfor %}            {% comment %}
             Tools kept in code but out of the menu (2026-10-01) — open them by URL:
                /site-assistant/  /backoffice/overview/  /backoffice/blueprint/
                /backoffice/ai/logs/  /backoffice/benchmarks/

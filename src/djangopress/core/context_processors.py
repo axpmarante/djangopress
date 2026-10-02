@@ -203,8 +203,20 @@ def backoffice_nav(request):
     semantics is here, in Python, rather than a new filter and a {% load %}
     tag in the sidebar.
     """
+    def matches(entry):
+        prefix = entry.get('url_prefix') or ''
+        return bool(prefix) and request.path.startswith(prefix)
+
     items = []
     for item in getattr(django_settings, 'BACKOFFICE_EXTRA_NAV', []):
-        prefix = item.get('url_prefix') or ''
-        items.append({**item, 'is_active': bool(prefix) and request.path.startswith(prefix)})
+        entry = {**item, 'is_active': matches(item)}
+        if item.get('children'):
+            # A group's first child usually owns the group root ('/x/'), which
+            # every sibling's prefix ('/x/products/') also starts with; only
+            # the longest matching prefix lights up.
+            hits = [c for c in item['children'] if matches(c)]
+            winner = max(hits, key=lambda c: len(c['url_prefix'])) if hits else None
+            entry['children'] = [{**c, 'is_active': c is winner} for c in item['children']]
+            entry['is_active'] = entry['is_active'] or winner is not None
+        items.append(entry)
     return {'backoffice_extra_nav': items}
