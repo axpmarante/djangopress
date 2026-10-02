@@ -43,6 +43,22 @@ def web_search(params, context):
     return {'success': True, 'message': f'Web search: {query}', 'answer': found['text'], 'sources': found['sources']}
 
 
+def read_document(params, context):
+    """Read a PDF or image of this site: the executor sees it next, and it rides along to the
+    design model on refine_section / refine_page / insert_section for the rest of the turn."""
+    from djangopress.site_assistant import documents
+    try:
+        doc = documents.load(file_id=params.get('file_id'), url=params.get('url'))
+    except ValueError as e:
+        return {'success': False, 'message': str(e)}
+    attachment = {'bytes': doc['bytes'], 'mime_type': doc['mime_type']}
+    context['reference_images'] = [*(context.get('reference_images') or []), attachment]
+    context['new_attachments'] = [*(context.get('new_attachments') or []), attachment]
+    return {'success': True, 'message': (
+        f'Read "{doc["title"]}" ({doc["mime_type"]}); it is attached below. It is also sent to the design model '
+        f'on refine_section / refine_page / insert_section in this reply.')}
+
+
 def list_pages(params, context):
     result = PageService.list()
     pages_data = [{'id': p.id, 'title': p.title_i18n, 'slug': p.slug_i18n,
@@ -565,6 +581,7 @@ SITE_TOOLS = {
     'validate_contacts': validate_contacts,
     'test_form': test_form,
     'web_search': web_search,
+    'read_document': read_document,
     'undo_last_change': undo_last_change,
     'list_pages': list_pages,
     'get_page_info': get_page_info,

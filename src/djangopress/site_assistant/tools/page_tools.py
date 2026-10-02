@@ -207,6 +207,7 @@ def insert_section(params, context):
     _create_version_if_needed(context)
     from djangopress.ai import directions
     items = directions.generate_directions(page, 'new', insert_after, instructions, lang=lang,
+                                           images=context.get('reference_images') or None,
                                            directions=[directions.NEW_SECTION_DIRECTIONS[0]],
                                            assistant_session=context.get('session'))
     new_html = (items[0].get('html') if items else '') or ''

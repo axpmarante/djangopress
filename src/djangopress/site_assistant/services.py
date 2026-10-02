@@ -320,6 +320,10 @@ class AssistantService:
                     types.Part.from_function_response(name=fc_name, response=result)
                 )
 
+            # Files read with read_document go right after the tool results, so the model sees them next
+            for doc in context.pop('new_attachments', None) or []:
+                function_response_parts.append(types.Part.from_bytes(data=doc['bytes'], mime_type=doc['mime_type']))
+
             all_executed_actions.extend(iteration_actions)
             steps.append({
                 'iteration': iteration + 1,

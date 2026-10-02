@@ -1420,6 +1420,7 @@ Return ONLY the corrected, complete JSON. No markdown, no explanation."""
         direction: dict = None,
         design_context: str = '',
         base_html: str = None,
+        reference_images: list = None,
     ) -> Dict:
         """
         Generate a brand new section (3 variations) to insert into a page.
@@ -1516,6 +1517,7 @@ Return ONLY the corrected, complete JSON. No markdown, no explanation."""
             direction=direction,
             design_context=design_context,
             base_html=base_html,
+            has_reference_images=bool(reference_images),
         )
 
         messages = [
@@ -1526,7 +1528,11 @@ Return ONLY the corrected, complete JSON. No markdown, no explanation."""
         actual_model, provider_str = self._get_model_info(model)
         t0 = time.time()
         try:
-            response = self.llm.get_completion(messages, tool_name=model)
+            if reference_images:
+                response = self.llm.get_vision_completion(prompt=system_prompt + "\n\n" + user_prompt,
+                                                          images=reference_images, tool_name=model)
+            else:
+                response = self.llm.get_completion(messages, tool_name=model)
             usage = self._extract_usage(response)
             self._log(
                 action='generate_section', model_name=actual_model, provider=provider_str,

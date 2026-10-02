@@ -5,6 +5,19 @@ Streamlined prompts for page-level HTML architecture
 import json
 
 
+REFERENCE_FILES_PROMPT = """
+
+## Reference Images
+The user has provided reference design images. Use them as visual inspiration for:
+- Layout structure and section arrangement
+- Color scheme and visual style
+- Typography and spacing patterns
+- Overall aesthetic and mood
+Match the design style shown in the images while following all other technical requirements.
+
+A document among them (a PDF menu, price list, schedule, brochure) is the content source, not only a style reference: use its content faithfully for what was asked — every item, name, description and price, in its categories and order, with nothing invented or left out — written in the page's language. Notes, captions and footnotes may only repeat facts from the document, the request or the existing site: no new claims about sourcing, preparation, awards or quality."""
+
+
 class PromptTemplates:
     """Prompt templates for AI content generation"""
 
@@ -573,15 +586,7 @@ This page joins an existing site. Build its sections the way the site builds its
 Keep the site's type scale: headings and body text use the same font, weight, size, leading and tracking classes as the design vocabulary and the type scale listed in the request."""
 
         if has_reference_images:
-            system_prompt += """
-
-## Reference Images
-The user has provided reference design images. Use them as visual inspiration for:
-- Layout structure and section arrangement
-- Color scheme and visual style
-- Typography and spacing patterns
-- Overall aesthetic and mood
-Match the design style shown in the images while following all other technical requirements."""
+            system_prompt += REFERENCE_FILES_PROMPT
 
         pages_info = PromptTemplates._format_pages_info(pages, languages or [])
 
@@ -691,15 +696,7 @@ Edit the provided HTML page by applying the requested changes. Return the comple
 {component_references}"""
 
         if has_reference_images:
-            system_prompt += """
-
-## Reference Images
-The user has provided reference design images. Use them as visual inspiration for:
-- Layout structure and section arrangement
-- Color scheme and visual style
-- Typography and spacing patterns
-- Overall aesthetic and mood
-Match the design style shown in the images while following all other technical requirements."""
+            system_prompt += REFERENCE_FILES_PROMPT
 
         pages_info = PromptTemplates._format_pages_info(pages, languages or [])
 
@@ -918,15 +915,7 @@ Edit ONLY the `<section data-section="{section_name}">` section based on the use
 {component_references}"""
 
         if has_reference_images:
-            system_prompt += """
-
-## Reference Images
-The user has provided reference design images. Use them as visual inspiration for:
-- Layout structure and section arrangement
-- Color scheme and visual style
-- Typography and spacing patterns
-- Overall aesthetic and mood
-Match the design style shown in the images while following all other technical requirements."""
+            system_prompt += REFERENCE_FILES_PROMPT
 
         pages_info = PromptTemplates._format_pages_info(pages, languages or [])
 
@@ -999,6 +988,7 @@ Return ONLY the updated `<section data-section="{section_name}">...</section>` b
         direction: dict = None,
         design_context: str = '',
         base_html: str = None,
+        has_reference_images: bool = False,
     ) -> tuple:
         """
         Generate prompt for creating a brand new section on a page.
@@ -1066,6 +1056,9 @@ IMPORTANT: Keep output concise to fit all 3 options. For SVG icons, use simple p
 
 {component_index}
 {component_references}"""
+
+        if has_reference_images:
+            system_prompt += REFERENCE_FILES_PROMPT
 
         pages_info = PromptTemplates._format_pages_info(pages, languages or [])
 
