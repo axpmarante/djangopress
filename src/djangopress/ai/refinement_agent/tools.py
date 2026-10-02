@@ -70,6 +70,8 @@ def update_styles(params, context):
 
     soup = BeautifulSoup(target_html, 'html.parser')
 
+    if not selector and context.get('scope') == 'element':
+        selector = context['target_name']        # "the root" of an element edit is the element, not its section
     if selector:
         element = soup.select_one(selector)
     else:

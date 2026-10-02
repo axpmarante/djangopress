@@ -170,12 +170,18 @@ class RefinementAgent:
                 routing_ms = int((time.time() - t0) * 1000)
                 print(f"Agent: direct edit complete in {routing_ms}ms")
                 edited = context['target_html']
+                before = target_html
                 if scope == 'element':
                     # The agent edits the parent section; the option is the element itself.
                     from bs4 import BeautifulSoup
                     element = BeautifulSoup(edited, 'html.parser').select_one(target_name)
                     if element is not None:
                         edited = str(element)
+                    original = BeautifulSoup(target_html, 'html.parser').select_one(target_name)
+                    before = str(original) if original is not None else target_html
+                if edited == before and not delegate:
+                    # The edit touched something else (or nothing): don't report it as done.
+                    return {'delegate': True, 'assistant_message': '', 'routing_ms': routing_ms}
                 return {
                     'options': [{'html': edited}],
                     'assistant_message': response_text or 'Applied the change directly.',

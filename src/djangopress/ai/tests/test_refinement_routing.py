@@ -64,3 +64,38 @@ class RoutingTest(TestCase):
         self.assertEqual(log.section_name, 'hero')
         self.assertEqual(log.total_tokens, 5)
         self.assertIn('Redesenha', log.user_prompt)
+
+
+class ElementRootTest(TestCase):
+    """'podes meter este botão com cor?' on an element: update_styles without a selector targets the element."""
+    def setUp(self):
+        s = SiteSettings.load()
+        s.enabled_languages = [{'code': 'pt', 'name': 'PT'}]
+        s.default_language = 'pt'
+        s.save()
+        self.page = Page.objects.create(title_i18n={'pt': 'P'}, slug_i18n={'pt': 'p'}, is_active=True, html_content_i18n={
+            'pt': '<section data-section="hero" id="hero" class="py-10"><div><h1>Olá</h1>'
+                  '<a class="inline-flex text-[#E3A11C]" href="/pt/">Reservar</a></div></section>'})
+
+    def test_the_element_gets_the_classes(self):
+        agent = RefinementAgent()
+        answer = reply('<response>Cor dourada.</response><actions>[{"tool": "update_styles", "params": '
+                       '{"add_classes": "bg-[#E3A11C] text-[#122538]", "remove_classes": "text-[#E3A11C]"}}]</actions>')
+        with mock.patch.object(agent.llm, 'get_completion', return_value=answer):
+            result = agent.handle('podes meter este botão com cor?', 'element',
+                                  'section[data-section="hero"] > div:nth-child(1) > a:nth-child(2)', self.page,
+                                  lang='pt', delegate=False)
+        html = result['options'][0]['html']
+        self.assertTrue(html.startswith('<a '), html)
+        self.assertIn('bg-[#E3A11C]', html)
+        self.assertNotIn('text-[#E3A11C]', html)
+
+    def test_an_edit_that_changes_nothing_is_not_reported_as_done(self):
+        agent = RefinementAgent()
+        answer = reply('<response>Feito.</response><actions>[{"tool": "update_styles", "params": '
+                       '{"selector": "h1", "add_classes": "italic"}}]</actions>')
+        with mock.patch.object(agent.llm, 'get_completion', return_value=answer):
+            result = agent.handle('botão com cor', 'element',
+                                  'section[data-section="hero"] > div:nth-child(1) > a:nth-child(2)', self.page,
+                                  lang='pt', delegate=False)
+        self.assertTrue(result.get('delegate'), result)
