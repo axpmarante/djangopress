@@ -2,7 +2,7 @@
 URL configuration for the editor.
 """
 from django.urls import path
-from . import api_views, component_views, unsplash_views
+from . import api_views, chat_views, component_views, unsplash_views
 
 app_name = 'editor_v2'
 
@@ -34,6 +34,8 @@ urlpatterns = [
     path('api/refine-multi/', api_views.refine_multi, name='api_refine_multi'),
     path('api/refine-multi/stream/', api_views.refine_multi_stream, name='api_refine_multi_stream'),
     path('api/apply-option/', api_views.apply_option, name='api_apply_option'),
+    path('api/chat/stream/', chat_views.chat_stream, name='api_chat_stream'),
+    path('api/chat/cancel/', chat_views.chat_cancel, name='api_chat_cancel'),
 
     # Remove section/element endpoints
     path('api/remove-section/', api_views.remove_section, name='api_remove_section'),

@@ -1350,6 +1350,25 @@ def _refinement_session(page, session_id):
     except RefinementSession.DoesNotExist:
         return None
 
+
+def _get_or_create_session(page, session_id, title, user):
+    """The editor's RefinementSession for a page or any editable object (news posts)."""
+    session = _refinement_session(page, session_id)
+    if session:
+        return session
+    kwargs = {'title': title, 'model_used': get_ai_model('refinement_section'),
+              'created_by': user if user is not None and user.is_authenticated else None}
+    if isinstance(page, Page):
+        kwargs['page'] = page
+    else:
+        from django.contrib.contenttypes.models import ContentType
+        kwargs['content_type'] = ContentType.objects.get_for_model(page)
+        kwargs['object_id'] = page.pk
+    session = RefinementSession(**kwargs)
+    session.save()
+    return session
+
+
 @superuser_required
 @require_http_methods(["POST"])
 def apply_option(request):
@@ -1409,6 +1428,7 @@ def apply_option(request):
             'section_name': result.get('section_name'),
             'translated_languages': result['translated_languages'],
             'untranslated_languages': result['untranslated_languages'],
+            'html': result.get('html'),
         })
 
     except Page.DoesNotExist:
@@ -2409,9 +2429,9 @@ def refine_multi_stream(request):
         insert_after = data.get('insert_after')
         multi_option = data.get('multi_option', True)
 
-        if not page_id or not instructions:
+        if not instructions:
             return sse_response(iter([
-                sse_event({'error': 'Missing page_id or instructions'}, event='error')
+                sse_event({'error': 'Missing instructions'}, event='error')
             ]))
 
         if mode != 'create':
@@ -2425,34 +2445,21 @@ def refine_multi_stream(request):
                 ]))
 
         try:
-            page = Page.objects.get(pk=page_id)
-        except Page.DoesNotExist:
+            page = _get_editable_object(data)
+        except Exception:
+            page = None
+        if page is None:
             return sse_response(iter([
-                sse_event({'error': 'Page not found'}, event='error')
+                sse_event({'error': 'Page or editable object not found'}, event='error')
             ]))
 
-        # Load or create RefinementSession
-        session = None
-        if session_id:
-            try:
-                session = RefinementSession.objects.get(id=session_id, page=page)
-            except RefinementSession.DoesNotExist:
-                session = None
-
-        if not session:
-            if mode == 'create':
-                prefix = '[new section]'
-            elif scope == 'element':
-                prefix = '[element]'
-            else:
-                prefix = f'[{section_name}]'
-            session = RefinementSession(
-                page=page,
-                title=f'{prefix} {instructions[:60]}',
-                model_used=get_ai_model('refinement_section'),
-                created_by=request.user if request.user.is_authenticated else None,
-            )
-            session.save()
+        if mode == 'create':
+            prefix = '[new section]'
+        elif scope == 'element':
+            prefix = '[element]'
+        else:
+            prefix = f'[{section_name}]'
+        session = _get_or_create_session(page, session_id, f'{prefix} {instructions[:60]}', request.user)
 
         session.add_user_message(instructions)
 
@@ -2504,7 +2511,7 @@ def refine_multi_stream(request):
                         )
                     elif scope == 'element':
                         result = service.refine_element_only(
-                            page_id=page_id,
+                            page_id=page_id, page=page,
                             selector=selector,
                             instructions=instructions,
                             conversation_history=conversation_history,
@@ -2514,7 +2521,7 @@ def refine_multi_stream(request):
                         )
                     else:
                         result = service.refine_section_only(
-                            page_id=page_id,
+                            page_id=page_id, page=page,
                             section_name=section_name,
                             instructions=instructions,
                             conversation_history=conversation_history,
