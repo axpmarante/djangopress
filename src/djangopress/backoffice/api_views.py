@@ -24,6 +24,7 @@ from django.utils.text import slugify
 from django.db import connection
 from bs4 import BeautifulSoup
 from djangopress.core.models import SiteSettings, SiteImage, Page, MenuItem, Blueprint, BlueprintPage
+from djangopress.core.debug_log import debug
 
 logger = logging.getLogger(__name__)
 from djangopress.core.utils import resize_and_compress_image
@@ -226,7 +227,7 @@ def upload_images(request):
                 uploaded_count += 1
 
             except Exception as e:
-                print(f"Error uploading {uploaded_file.name}: {str(e)}")
+                debug(f"Error uploading {uploaded_file.name}: {str(e)}")
                 continue
 
         if uploaded_count == 0:

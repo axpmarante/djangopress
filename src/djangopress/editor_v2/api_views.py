@@ -25,6 +25,7 @@ from bs4 import BeautifulSoup
 from djangopress.editor_v2 import components
 from djangopress.editor_v2 import structure
 from djangopress.editor_v2 import history
+from djangopress.core.debug_log import debug
 
 
 # ---------------------------------------------------------------------------
@@ -366,7 +367,7 @@ def _enrich_instructions(instructions, page):
 
             if parsed['done']:
                 enriched = parsed['instructions']
-                print(f"[Enrich] Done after {iteration} tool calls. Enriched: {enriched[:200]}...")
+                debug(f"[Enrich] Done after {iteration} tool calls. Enriched: {enriched[:200]}...")
                 return enriched
 
             # Execute tool calls
@@ -394,15 +395,15 @@ def _enrich_instructions(instructions, page):
         parsed = _parse_enrichment_response(raw)
         if parsed['done']:
             enriched = parsed['instructions']
-            print(f"[Enrich] Done after final call. Enriched: {enriched[:200]}...")
+            debug(f"[Enrich] Done after final call. Enriched: {enriched[:200]}...")
             return enriched
 
         # True fallback
-        print("[Enrich] Could not extract enriched instructions, using original")
+        debug("[Enrich] Could not extract enriched instructions, using original")
         return instructions
 
     except Exception as e:
-        print(f"[Enrich] Error during enrichment: {e}")
+        debug(f"[Enrich] Error during enrichment: {e}")
         return instructions
 
 
@@ -420,14 +421,14 @@ def update_page_content(request):
         "value": "New Title"
     }
     """
-    print(f'[API] update_page_content called: {request.method} {request.path}')
+    debug(f'[API] update_page_content called: {request.method} {request.path}')
     try:
         data = json.loads(request.body)
         page_id = data.get('page_id')
         field_key = data.get('field_key')
         language = data.get('language', 'pt')
 
-        print(f'[API] update_page_content data: page_id={page_id}, field_key={field_key}, lang={language}')
+        debug(f'[API] update_page_content data: page_id={page_id}, field_key={field_key}, lang={language}')
         value = data.get('value', '').strip() if isinstance(data.get('value'), str) else data.get('value')
 
         selector = data.get('selector')
@@ -508,10 +509,10 @@ def update_page_element_classes(request):
         "new_classes": "text-5xl font-black text-white"
     }
     """
-    print(f'[API] update_page_element_classes called: {request.method} {request.path}')
+    debug(f'[API] update_page_element_classes called: {request.method} {request.path}')
     try:
         data = json.loads(request.body)
-        print(f'[API] update_page_element_classes data: page_id={data.get("page_id")}, selector={data.get("selector")}')
+        debug(f'[API] update_page_element_classes data: page_id={data.get("page_id")}, selector={data.get("selector")}')
         page_id = data.get('page_id')
         selector = data.get('selector')
         new_classes = data.get('new_classes', '').strip()
@@ -608,10 +609,10 @@ def update_page_element_attribute(request):
         "tag_name": "img"                 (optional, fallback when selector missing)
     }
     """
-    print(f'[API] update_page_element_attribute called: {request.method} {request.path}')
+    debug(f'[API] update_page_element_attribute called: {request.method} {request.path}')
     try:
         data = json.loads(request.body)
-        print(f'[API] update_page_element_attribute data: page_id={data.get("page_id")}, selector={data.get("selector")}, attr={data.get("attribute")}')
+        debug(f'[API] update_page_element_attribute data: page_id={data.get("page_id")}, selector={data.get("selector")}, attr={data.get("attribute")}')
         page_id = data.get('page_id')
         selector = data.get('selector')
         attribute = data.get('attribute')

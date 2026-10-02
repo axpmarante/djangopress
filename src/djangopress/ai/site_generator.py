@@ -18,6 +18,7 @@ from typing import Dict, List, Optional, Tuple
 from bs4 import BeautifulSoup
 
 from djangopress.ai.utils.llm_config import get_ai_model
+from djangopress.core.debug_log import debug
 
 logger = logging.getLogger(__name__)
 
@@ -229,7 +230,7 @@ class SiteGenerator:
         if self.stdout:
             self.stdout.write(message)
         else:
-            print(message)
+            debug(message)
 
     def _elapsed(self):
         """Return formatted elapsed time since pipeline start."""

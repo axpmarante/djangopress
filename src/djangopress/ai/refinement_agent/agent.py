@@ -8,6 +8,7 @@ import logging
 from djangopress.ai.utils.llm_config import LLMBase, get_ai_model
 from . import tools as agent_tools
 from .prompts import build_system_prompt, build_user_prompt
+from djangopress.core.debug_log import debug
 
 logger = logging.getLogger(__name__)
 
@@ -115,7 +116,7 @@ class RefinementAgent:
                 raw_content = response.choices[0].message.content
             except Exception as e:
                 logger.exception('Agent LLM call failed at iteration %d', iteration)
-                print(f"Agent: LLM error at iteration {iteration}: {e}")
+                debug(f"Agent: LLM error at iteration {iteration}: {e}")
                 self._log_routing(routing_model, messages, '', t_call, page, scope, target_name, error=str(e))
                 break  # Fall through to fallback
             self._log_routing(routing_model, messages, raw_content, t_call, page, scope, target_name, response=response)
@@ -125,11 +126,11 @@ class RefinementAgent:
             response_text = parsed['response']
             actions_data = parsed['actions']
 
-            print(f"Agent iteration {iteration + 1}: has_response={has_response}, actions={[a.get('tool') for a in actions_data]}")
+            debug(f"Agent iteration {iteration + 1}: has_response={has_response}, actions={[a.get('tool') for a in actions_data]}")
 
             if not actions_data and has_response:
                 # Agent responded without any tool call — treat as needing AI delegation
-                print(f"Agent: response only, no tools — falling back to AI delegation")
+                debug(f"Agent: response only, no tools — falling back to AI delegation")
                 break
 
             # Execute tools
@@ -140,7 +141,7 @@ class RefinementAgent:
                 tool_name = action.get('tool', '')
                 params = action.get('params', {})
 
-                print(f"Agent: executing {tool_name}({json.dumps(params, default=str)[:200]})")
+                debug(f"Agent: executing {tool_name}({json.dumps(params, default=str)[:200]})")
 
                 if not delegate and tool_name in agent_tools.DELEGATION_TOOLS:
                     return {'delegate': True, 'assistant_message': response_text,
@@ -153,7 +154,7 @@ class RefinementAgent:
                 if result.get('_is_delegation'):
                     routing_ms = int((time.time() - t0) * 1000)
                     tier = f"ai_{params.get('model', 'gemini-flash').split('-')[-1]}"
-                    print(f"Agent: delegated to AI pipeline ({tier}) after {routing_ms}ms routing")
+                    debug(f"Agent: delegated to AI pipeline ({tier}) after {routing_ms}ms routing")
                     delegated = result['result']
                     delegated['routing_tier'] = tier
                     delegated['routing_ms'] = routing_ms
@@ -168,7 +169,7 @@ class RefinementAgent:
             # If we have a final response and a direct edit was performed, return it
             if has_response and final_result:
                 routing_ms = int((time.time() - t0) * 1000)
-                print(f"Agent: direct edit complete in {routing_ms}ms")
+                debug(f"Agent: direct edit complete in {routing_ms}ms")
                 edited = context['target_html']
                 before = target_html
                 if scope == 'element':
@@ -191,7 +192,7 @@ class RefinementAgent:
 
             # If we have a final response but no edit was done, break to fallback
             if has_response:
-                print(f"Agent: has response but no edit — falling back")
+                debug(f"Agent: has response but no edit — falling back")
                 break
 
             # Tool call mode — feed results back and loop
@@ -216,7 +217,7 @@ class RefinementAgent:
         routing_ms = int((time.time() - t0) * 1000)
         if not delegate:
             return {'delegate': True, 'assistant_message': '', 'routing_ms': routing_ms}
-        print(f"Agent: fallback to full AI pipeline after {routing_ms}ms ({iteration} iterations)")
+        debug(f"Agent: fallback to full AI pipeline after {routing_ms}ms ({iteration} iterations)")
 
         service = ContentGenerationService(model_name='gemini-pro')
 

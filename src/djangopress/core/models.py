@@ -2,6 +2,7 @@ from django.db import models
 from django.core.cache import cache
 from django.conf import settings as django_settings
 from django.db.models import Max
+from djangopress.core.debug_log import debug
 
 
 # Google Fonts choices - Popular fonts for web design
@@ -1062,7 +1063,7 @@ class Page(models.Model):
             deleted_count = self.versions.exclude(id__in=versions_to_keep).delete()[0]
 
             if deleted_count > 0:
-                print(f"🗑️  Cleaned up {deleted_count} old version(s) for page {self.id}")
+                debug(f"🗑️  Cleaned up {deleted_count} old version(s) for page {self.id}")
 
         return total_versions - max_versions if total_versions > max_versions else 0
 

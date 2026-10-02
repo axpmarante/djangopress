@@ -12,6 +12,7 @@ from .utils.llm_config import LLMBase, MODEL_CONFIG, get_ai_model
 from .utils.prompts import PromptTemplates
 from .utils.components import ComponentRegistry
 from .models import log_ai_call
+from djangopress.core.debug_log import debug
 
 logger = logging.getLogger(__name__)
 
@@ -196,18 +197,18 @@ class ContentGenerationService:
         try:
             return json.loads(json_str)
         except json.JSONDecodeError as e:
-            print(f"  JSON parse failed: {e.msg} at line {e.lineno}, col {e.colno}")
+            debug(f"  JSON parse failed: {e.msg} at line {e.lineno}, col {e.colno}")
 
         # Fallback: regex-extract html_template_i18n values from broken JSON
         # This handles the common case where HTML with double quotes breaks JSON escaping
         extracted = self._extract_html_template_i18n(content)
         if extracted:
-            print(f"  Recovered html_template_i18n via regex extraction: {list(extracted.keys())}")
+            debug(f"  Recovered html_template_i18n via regex extraction: {list(extracted.keys())}")
             return {'html_template_i18n': extracted}
 
         # Last resort: ask LLM to fix (1 retry max)
         if retry_count < max_retries:
-            print(f"  Asking LLM to fix JSON...")
+            debug(f"  Asking LLM to fix JSON...")
             fixed = self._ask_llm_to_fix_json(json_str, str(e), e.lineno, e.colno)
             if fixed:
                 return self._extract_json_from_response(fixed, retry_count + 1, max_retries)
@@ -298,10 +299,10 @@ Return ONLY the corrected, complete JSON. No markdown, no explanation."""
                 tool_name=get_ai_model('refinement_section')
             )
             if response and hasattr(response, 'choices') and len(response.choices) > 0:
-                print(f"  LLM returned fix attempt")
+                debug(f"  LLM returned fix attempt")
                 return response.choices[0].message.content
         except Exception as e:
-            print(f"  LLM fix failed: {e}")
+            debug(f"  LLM fix failed: {e}")
         return None
 
     def _make_stream_callback(self, on_progress, step_name, throttle_chars=500):
@@ -487,7 +488,7 @@ Return ONLY the corrected, complete JSON. No markdown, no explanation."""
         Returns:
             Dict with 'title_i18n' and 'slug_i18n'
         """
-        print(f"\n--- Generating page metadata (title/slug) ---")
+        debug(f"\n--- Generating page metadata (title/slug) ---")
 
         # Always use a lightweight model for metadata — title/slug generation is a trivial task
         model = get_ai_model('metadata')
@@ -527,8 +528,8 @@ Return ONLY the corrected, complete JSON. No markdown, no explanation."""
                     slug = re.sub(r'-+', '-', slug).strip('-')
                     slug_i18n[lang] = slug
 
-            print(f"Suggested titles: {title_i18n}")
-            print(f"Suggested slugs: {slug_i18n}")
+            debug(f"Suggested titles: {title_i18n}")
+            debug(f"Suggested slugs: {slug_i18n}")
             return {'title_i18n': title_i18n, 'slug_i18n': slug_i18n}
 
         except Exception as e:
@@ -538,7 +539,7 @@ Return ONLY the corrected, complete JSON. No markdown, no explanation."""
                 duration_ms=int((time.time() - t0) * 1000),
                 success=False, error_message=str(e),
             )
-            print(f"WARNING: Metadata generation failed: {e}")
+            debug(f"WARNING: Metadata generation failed: {e}")
             return {'title_i18n': {}, 'slug_i18n': {}}
 
     def generate_page(
@@ -577,9 +578,9 @@ Return ONLY the corrected, complete JSON. No markdown, no explanation."""
                 except Exception:
                     pass
 
-        print(f"\n=== Generating Page (HTML + Metadata) ===")
-        print(f"Brief: {brief}")
-        print(f"Language: {language}")
+        debug(f"\n=== Generating Page (HTML + Metadata) ===")
+        debug(f"Brief: {brief}")
+        debug(f"Language: {language}")
 
         # Get site context
         from djangopress.core.models import SiteSettings, Page
@@ -592,7 +593,7 @@ Return ONLY the corrected, complete JSON. No markdown, no explanation."""
         model = model_override or self.model_name
 
         # --- Step 1: Generate clean HTML with real text ---
-        print(f"\n--- Step 1: Generate HTML in {default_language.upper()} ---")
+        debug(f"\n--- Step 1: Generate HTML in {default_language.upper()} ---")
 
         design_guide = site_settings.design_guide if site_settings else ''
 
@@ -631,7 +632,7 @@ Return ONLY the corrected, complete JSON. No markdown, no explanation."""
         user_token_estimate = len(user_prompt.split()) * 1.3
         total_token_estimate = system_token_estimate + user_token_estimate
 
-        print(f"GENERATION PROMPT (≈{int(total_token_estimate)} tokens)")
+        debug(f"GENERATION PROMPT (≈{int(total_token_estimate)} tokens)")
 
         notify("html_generation", "running", model=model)
         actual_model, provider = self._get_model_info(model)
@@ -639,7 +640,7 @@ Return ONLY the corrected, complete JSON. No markdown, no explanation."""
         try:
             if reference_images:
                 # Use vision call with images — combine system + user prompt
-                print(f"Using vision call with {len(reference_images)} reference image(s)")
+                debug(f"Using vision call with {len(reference_images)} reference image(s)")
                 combined_prompt = system_prompt + "\n\n" + user_prompt
                 response = self.llm.get_vision_completion(
                     prompt=combined_prompt,
@@ -675,12 +676,12 @@ Return ONLY the corrected, complete JSON. No markdown, no explanation."""
         if not raw_html or len(raw_html.strip()) < 50:
             raise ValueError("Step 1 returned empty or too-short HTML")
 
-        print(f"Step 1 produced {len(raw_html)} chars of HTML")
+        debug(f"Step 1 produced {len(raw_html)} chars of HTML")
         notify("html_generation", "done", chars=len(raw_html))
 
         # --- Step 2: Generate metadata only (templatize/translate removed) ---
         notify("metadata_generation", "running")
-        print(f"\nRunning Step 2 (metadata) only — templatize/translate removed")
+        debug(f"\nRunning Step 2 (metadata) only — templatize/translate removed")
         metadata = self._generate_page_metadata(brief, languages, model)
         notify("metadata_generation", "done")
 
@@ -691,7 +692,7 @@ Return ONLY the corrected, complete JSON. No markdown, no explanation."""
         page_data['title_i18n'] = metadata.get('title_i18n', {})
         page_data['slug_i18n'] = metadata.get('slug_i18n', {})
 
-        print(f"Successfully generated page")
+        debug(f"Successfully generated page")
         notify("complete", "done")
         return page_data
 
@@ -725,9 +726,9 @@ Return ONLY the corrected, complete JSON. No markdown, no explanation."""
                 except Exception:
                     pass
 
-        print(f"\n=== Refining Global Section ===")
-        print(f"Section Key: {section_key}")
-        print(f"Instructions: {refinement_instructions}")
+        debug(f"\n=== Refining Global Section ===")
+        debug(f"Section Key: {section_key}")
+        debug(f"Instructions: {refinement_instructions}")
 
         # Get or create GlobalSection
         notify("load_section", "running")
@@ -742,7 +743,7 @@ Return ONLY the corrected, complete JSON. No markdown, no explanation."""
             },
         )
         if created:
-            print(f"Auto-created GlobalSection '{section_key}'")
+            debug(f"Auto-created GlobalSection '{section_key}'")
 
         # Convert to dict — read from html_template_i18n with fallback
         from djangopress.core.models import SiteSettings, Page
@@ -751,7 +752,7 @@ Return ONLY the corrected, complete JSON. No markdown, no explanation."""
         current_lang = default_language  # get_language() unreliable in AJAX context
         template_i18n = section.html_template_i18n or {}
         current_template = template_i18n.get(current_lang) or template_i18n.get(default_language) or ''
-        print(f"Reading html_template from html_template_i18n[{current_lang}] ({len(current_template or '')} chars)")
+        debug(f"Reading html_template from html_template_i18n[{current_lang}] ({len(current_template or '')} chars)")
 
         existing_data = {
             'key': section.key,
@@ -818,17 +819,17 @@ Return ONLY the corrected, complete JSON. No markdown, no explanation."""
         user_token_estimate = len(user_prompt.split()) * 1.3
         total_token_estimate = system_token_estimate + user_token_estimate
 
-        print("\n" + "="*80)
-        print(f"SYSTEM PROMPT (≈{int(system_token_estimate)} tokens):")
-        print("="*80)
-        print(system_prompt)
-        print("\n" + "="*80)
-        print(f"USER PROMPT (≈{int(user_token_estimate)} tokens):")
-        print("="*80)
-        print(user_prompt)
-        print("="*80)
-        print(f"TOTAL ESTIMATED TOKENS: ≈{int(total_token_estimate)}")
-        print("="*80 + "\n")
+        debug("\n" + "="*80)
+        debug(f"SYSTEM PROMPT (≈{int(system_token_estimate)} tokens):")
+        debug("="*80)
+        debug(system_prompt)
+        debug("\n" + "="*80)
+        debug(f"USER PROMPT (≈{int(user_token_estimate)} tokens):")
+        debug("="*80)
+        debug(user_prompt)
+        debug("="*80)
+        debug(f"TOTAL ESTIMATED TOKENS: ≈{int(total_token_estimate)}")
+        debug("="*80 + "\n")
 
         messages = [
             {'role': 'system', 'content': system_prompt},
@@ -898,14 +899,14 @@ Return ONLY the corrected, complete JSON. No markdown, no explanation."""
                     # Strip any accidental {{ trans.xxx }} vars
                     remaining = re.findall(r'\{\{\s*trans\.(\w+)\s*\}\}', html)
                     if remaining:
-                        print(f"  ⚠️  {lang.upper()}: stripping {len(remaining)} unexpected trans vars")
+                        debug(f"  ⚠️  {lang.upper()}: stripping {len(remaining)} unexpected trans vars")
                         html = re.sub(r'\{\{\s*trans\.\w+\s*\}\}', '', html)
                     result_template_i18n[lang] = html
-                    print(f"  {lang.upper()}: {len(html)} chars")
+                    debug(f"  {lang.upper()}: {len(html)} chars")
 
         elif 'html_template' in refined_data:
             # Legacy format: single template with {{ trans.xxx }} + content.translations
-            print("  ⚠️  LLM returned legacy format (html_template + content) — resolving trans vars")
+            debug("  ⚠️  LLM returned legacy format (html_template + content) — resolving trans vars")
             html_template = refined_data['html_template']
             translations = refined_data.get('content', {}).get('translations', {})
 
@@ -921,10 +922,10 @@ Return ONLY the corrected, complete JSON. No markdown, no explanation."""
                             )
                         remaining = re.findall(r'\{\{\s*trans\.(\w+)\s*\}\}', resolved)
                         if remaining:
-                            print(f"  ⚠️  {lang.upper()}: stripping {len(remaining)} unresolved trans vars")
+                            debug(f"  ⚠️  {lang.upper()}: stripping {len(remaining)} unresolved trans vars")
                             resolved = re.sub(r'\{\{\s*trans\.\w+\s*\}\}', '', resolved)
                         result_template_i18n[lang] = resolved
-                        print(f"  Resolved trans vars for {lang.upper()}: {len(resolved)} chars")
+                        debug(f"  Resolved trans vars for {lang.upper()}: {len(resolved)} chars")
             else:
                 result_template_i18n[current_lang] = html_template
         else:
@@ -947,7 +948,7 @@ Return ONLY the corrected, complete JSON. No markdown, no explanation."""
         refined_data['html_template_i18n'] = result_template_i18n
         notify("templatize_translate", "done")
 
-        print(f"Successfully refined global section: {section_key}")
+        debug(f"Successfully refined global section: {section_key}")
         notify("complete", "done")
         return refined_data
 
@@ -994,11 +995,11 @@ Return ONLY the corrected, complete JSON. No markdown, no explanation."""
                 except Exception:
                     pass
 
-        print(f"\n=== Refining Page ===")
-        print(f"Page ID: {page_id}")
-        print(f"Instructions: {instructions}")
-        print(f"Section: {section_name or 'entire page'}")
-        print(f"Language: {language}")
+        debug(f"\n=== Refining Page ===")
+        debug(f"Page ID: {page_id}")
+        debug(f"Instructions: {instructions}")
+        debug(f"Section: {section_name or 'entire page'}")
+        debug(f"Language: {language}")
 
         # Get page or use content_override
         notify("prepare", "running")
@@ -1052,11 +1053,11 @@ Return ONLY the corrected, complete JSON. No markdown, no explanation."""
         else:
             html_i18n = page.html_content_i18n or {}
             clean_html = html_i18n.get(current_lang) or html_i18n.get(default_language) or ''
-        print(f"Reading HTML from html_content_i18n[{current_lang}] ({len(clean_html)} chars)")
+        debug(f"Reading HTML from html_content_i18n[{current_lang}] ({len(clean_html)} chars)")
         notify("prepare", "done")
 
         # --- Step 1: Refine the clean HTML ---
-        print(f"\n--- Step 1: Refine HTML in {default_language.upper()} ---")
+        debug(f"\n--- Step 1: Refine HTML in {default_language.upper()} ---")
 
         # Pass 1: Select relevant component skills
         notify("component_selection", "running")
@@ -1111,7 +1112,7 @@ Return ONLY the corrected, complete JSON. No markdown, no explanation."""
         user_token_estimate = len(user_prompt.split()) * 1.3
         total_token_estimate = system_token_estimate + user_token_estimate
 
-        print(f"REFINEMENT PROMPT (≈{int(total_token_estimate)} tokens)")
+        debug(f"REFINEMENT PROMPT (≈{int(total_token_estimate)} tokens)")
 
         notify("refine_html", "running", model=model)
         actual_model, provider_str = self._get_model_info(model)
@@ -1120,7 +1121,7 @@ Return ONLY the corrected, complete JSON. No markdown, no explanation."""
         try:
             if reference_images:
                 # Use vision call with images — combine system + user prompt
-                print(f"Using vision call with {len(reference_images)} reference image(s)")
+                debug(f"Using vision call with {len(reference_images)} reference image(s)")
                 combined_prompt = system_prompt + "\n\n" + user_prompt
                 response = self.llm.get_vision_completion(
                     prompt=combined_prompt,
@@ -1158,7 +1159,7 @@ Return ONLY the corrected, complete JSON. No markdown, no explanation."""
         if not refined_html or len(refined_html.strip()) < 50:
             raise ValueError("Step 1 returned empty or too-short HTML")
 
-        print(f"Step 1 produced {len(refined_html)} chars of refined HTML")
+        debug(f"Step 1 produced {len(refined_html)} chars of refined HTML")
         notify("refine_html", "done", chars=len(refined_html))
 
         # Save refined HTML to html_content_i18n for current language
@@ -1168,7 +1169,7 @@ Return ONLY the corrected, complete JSON. No markdown, no explanation."""
             result_html_i18n = dict(page.html_content_i18n or {})
         result_html_i18n[current_lang] = refined_html
 
-        print(f"Successfully refined page")
+        debug(f"Successfully refined page")
         notify("complete", "done")
         return {
             'html_content_i18n': result_html_i18n,
@@ -1221,9 +1222,9 @@ Return ONLY the corrected, complete JSON. No markdown, no explanation."""
         from django.utils.translation import get_language
         from bs4 import BeautifulSoup
 
-        print(f"\n=== Refining Section Only ===")
-        print(f"Page ID: {page_id}, Section: {section_name}")
-        print(f"Instructions: {instructions}")
+        debug(f"\n=== Refining Section Only ===")
+        debug(f"Page ID: {page_id}, Section: {section_name}")
+        debug(f"Instructions: {instructions}")
 
         notify("prepare", "running")
         if page is None:
@@ -1266,7 +1267,7 @@ Return ONLY the corrected, complete JSON. No markdown, no explanation."""
             if stored is not None and new_section is not None:
                 stored.replace_with(new_section)
                 clean_html = str(page_soup)
-        print(f"Reading HTML from html_content_i18n[{current_lang}] ({len(clean_html)} chars)")
+        debug(f"Reading HTML from html_content_i18n[{current_lang}] ({len(clean_html)} chars)")
         notify("prepare", "done")
 
         # Build conversation history string for prompt
@@ -1281,7 +1282,7 @@ Return ONLY the corrected, complete JSON. No markdown, no explanation."""
                     history_text += f"\nAssistant: {content}"
 
         # Step 1: Refine section HTML (section-only prompt — LLM returns just the target section)
-        print(f"\n--- Step 1: Refine section '{section_name}' in {default_language.upper()} ---")
+        debug(f"\n--- Step 1: Refine section '{section_name}' in {default_language.upper()} ---")
 
         # Pass 1: Select relevant component skills
         notify("component_selection", "running")
@@ -1322,7 +1323,7 @@ Return ONLY the corrected, complete JSON. No markdown, no explanation."""
         t0 = time.time()
         try:
             if reference_images:
-                print(f"Using vision call with {len(reference_images)} reference image(s)")
+                debug(f"Using vision call with {len(reference_images)} reference image(s)")
                 combined_prompt = system_prompt + "\n\n" + user_prompt
                 response = self.llm.get_vision_completion(
                     prompt=combined_prompt,
@@ -1359,7 +1360,7 @@ Return ONLY the corrected, complete JSON. No markdown, no explanation."""
         if not refined_html or len(refined_html.strip()) < 50:
             raise ValueError("Step 1 returned empty or too-short HTML")
 
-        print(f"Step 1 produced {len(refined_html)} chars of refined section HTML")
+        debug(f"Step 1 produced {len(refined_html)} chars of refined section HTML")
         notify("refine_html", "done", chars=len(refined_html))
 
         if multi_option:
@@ -1368,7 +1369,7 @@ Return ONLY the corrected, complete JSON. No markdown, no explanation."""
             options = self._split_multi_options(refined_html)
             validated = self._validate_options(options, scope='section', section_name=section_name)
             for i, opt in enumerate(validated):
-                print(f"  Option {i+1}: {len(opt['html'])} chars")
+                debug(f"  Option {i+1}: {len(opt['html'])} chars")
 
             notify("processing_options", "done")
             notify("complete", "done")
@@ -1390,7 +1391,7 @@ Return ONLY the corrected, complete JSON. No markdown, no explanation."""
             if len(all_sections) == 1:
                 section_html = str(all_sections[0])
             elif len(all_sections) > 1:
-                print(f"WARNING: LLM returned {len(all_sections)} sections, extracting target")
+                debug(f"WARNING: LLM returned {len(all_sections)} sections, extracting target")
                 target = soup.find('section', attrs={'data-section': section_name})
                 if target:
                     section_html = str(target)
@@ -1399,7 +1400,7 @@ Return ONLY the corrected, complete JSON. No markdown, no explanation."""
             else:
                 section_html = refined_html
 
-        print(f"Section '{section_name}': {len(section_html)} chars")
+        debug(f"Section '{section_name}': {len(section_html)} chars")
 
         notify("complete", "done")
         return {
@@ -1438,9 +1439,9 @@ Return ONLY the corrected, complete JSON. No markdown, no explanation."""
         from django.utils.translation import get_language
         from bs4 import BeautifulSoup
 
-        print(f"\n=== Generating New Section ===")
-        print(f"Page ID: {page_id}, Insert after: {insert_after or '(top of page)'}")
-        print(f"Instructions: {instructions}")
+        debug(f"\n=== Generating New Section ===")
+        debug(f"Page ID: {page_id}, Insert after: {insert_after or '(top of page)'}")
+        debug(f"Instructions: {instructions}")
 
         if page is None:
             try:
@@ -1473,7 +1474,7 @@ Return ONLY the corrected, complete JSON. No markdown, no explanation."""
         html_i18n = page.html_content_i18n or {}
         clean_html = html_i18n.get(current_lang) or html_i18n.get(default_language) or ''
         clean_html = self._strip_legacy_attrs(clean_html)
-        print(f"Reading HTML from html_content_i18n[{current_lang}] ({len(clean_html)} chars)")
+        debug(f"Reading HTML from html_content_i18n[{current_lang}] ({len(clean_html)} chars)")
 
         # Build conversation history string for prompt
         history_text = ''
@@ -1487,7 +1488,7 @@ Return ONLY the corrected, complete JSON. No markdown, no explanation."""
                     history_text += f"\nAssistant: {content}"
 
         # Generate new section HTML (3 variations)
-        print(f"\n--- Generating new section (insert after '{insert_after or 'top'}') in {default_language.upper()} ---")
+        debug(f"\n--- Generating new section (insert after '{insert_after or 'top'}') in {default_language.upper()} ---")
 
         # Pass 1: Select relevant component skills
         selected_components = ComponentRegistry.select_components(
@@ -1549,7 +1550,7 @@ Return ONLY the corrected, complete JSON. No markdown, no explanation."""
         if not generated_html or len(generated_html.strip()) < 50:
             raise ValueError("AI returned empty or too-short HTML for new section")
 
-        print(f"AI produced {len(generated_html)} chars of new section HTML")
+        debug(f"AI produced {len(generated_html)} chars of new section HTML")
 
         if direction:
             section = BeautifulSoup(generated_html, 'html.parser').find('section')
@@ -1561,7 +1562,7 @@ Return ONLY the corrected, complete JSON. No markdown, no explanation."""
         options = self._split_multi_options(generated_html)
         validated = self._validate_options(options, scope='section')
         for i, opt in enumerate(validated):
-            print(f"  Option {i+1}: {len(opt['html'])} chars")
+            debug(f"  Option {i+1}: {len(opt['html'])} chars")
 
         assistant_message = f"Here are {len(validated)} design options for the new section."
         return {
@@ -1603,9 +1604,9 @@ Return ONLY the corrected, complete JSON. No markdown, no explanation."""
         from django.utils.translation import get_language
         from bs4 import BeautifulSoup
 
-        print(f"\n=== Refining Element Only ===")
-        print(f"Page ID: {page_id}, Selector: {selector}")
-        print(f"Instructions: {instructions}")
+        debug(f"\n=== Refining Element Only ===")
+        debug(f"Page ID: {page_id}, Selector: {selector}")
+        debug(f"Instructions: {instructions}")
 
         notify("prepare", "running")
         if page is None:
@@ -1631,7 +1632,7 @@ Return ONLY the corrected, complete JSON. No markdown, no explanation."""
         html_i18n = page.html_content_i18n or {}
         clean_html = html_i18n.get(current_lang) or html_i18n.get(default_language) or ''
         clean_html = self._strip_legacy_attrs(clean_html)
-        print(f"Reading HTML from html_content_i18n[{current_lang}] ({len(clean_html)} chars)")
+        debug(f"Reading HTML from html_content_i18n[{current_lang}] ({len(clean_html)} chars)")
         notify("prepare", "done")
 
         # Find the target element by CSS selector
@@ -1670,7 +1671,7 @@ Return ONLY the corrected, complete JSON. No markdown, no explanation."""
                     history_text += f"\nAssistant: {content}"
 
         # Step 1: Refine element HTML
-        print(f"\n--- Step 1: Refine element in {default_language.upper()} ---")
+        debug(f"\n--- Step 1: Refine element in {default_language.upper()} ---")
 
         # Pass 1: Select relevant component skills
         notify("component_selection", "running")
@@ -1735,7 +1736,7 @@ Return ONLY the corrected, complete JSON. No markdown, no explanation."""
         if not refined_html or len(refined_html.strip()) < 10:
             raise ValueError("Step 1 returned empty or too-short HTML")
 
-        print(f"Step 1 produced {len(refined_html)} chars of refined element HTML")
+        debug(f"Step 1 produced {len(refined_html)} chars of refined element HTML")
         notify("refine_html", "done", chars=len(refined_html))
 
         if multi_option:
@@ -1744,7 +1745,7 @@ Return ONLY the corrected, complete JSON. No markdown, no explanation."""
             options = self._split_multi_options(refined_html)
             validated = self._validate_options(options, scope='element')
             for i, opt in enumerate(validated):
-                print(f"  Option {i+1}: {len(opt['html'])} chars")
+                debug(f"  Option {i+1}: {len(opt['html'])} chars")
 
             notify("processing_options", "done")
             notify("complete", "done")
@@ -1763,10 +1764,10 @@ Return ONLY the corrected, complete JSON. No markdown, no explanation."""
             del target_el['data-target']
             element_result_html = str(target_el)
         else:
-            print("WARNING: data-target not found in response, using full response")
+            debug("WARNING: data-target not found in response, using full response")
             element_result_html = refined_html
 
-        print(f"Refined element: {len(element_result_html)} chars")
+        debug(f"Refined element: {len(element_result_html)} chars")
 
         notify("complete", "done")
         return {
@@ -1808,9 +1809,9 @@ Return ONLY the corrected, complete JSON. No markdown, no explanation."""
         from django.core.files.base import ContentFile
         from django.utils.text import slugify
 
-        print(f"\n=== Processing Page Images ===")
-        print(f"Page ID: {page_id}")
-        print(f"Decisions: {len(image_decisions)}")
+        debug(f"\n=== Processing Page Images ===")
+        debug(f"Page ID: {page_id}")
+        debug(f"Decisions: {len(image_decisions)}")
 
         try:
             page = Page.objects.get(id=page_id)
@@ -1829,7 +1830,7 @@ Return ONLY the corrected, complete JSON. No markdown, no explanation."""
         current_lang = default_language  # get_language() unreliable in AJAX context
         html_i18n = page.html_content_i18n or {}
         html = html_i18n.get(current_lang) or html_i18n.get(default_language) or ''
-        print(f"Reading HTML from html_content_i18n[{current_lang}] ({len(html)} chars)")
+        debug(f"Reading HTML from html_content_i18n[{current_lang}] ({len(html)} chars)")
         processed = []
         failed = []
 
@@ -1870,7 +1871,7 @@ Return ONLY the corrected, complete JSON. No markdown, no explanation."""
                 return (decision, None, 'Missing prompt')
 
             image_label = image_name or image_src.split('/')[-1] or 'image'
-            print(f"Generating image for '{image_label}': {prompt[:80]}...")
+            debug(f"Generating image for '{image_label}': {prompt[:80]}...")
 
             thread_llm = LLMService()
             result = thread_llm.generate_image(prompt=prompt, aspect_ratio=aspect_ratio)
@@ -1898,12 +1899,12 @@ Return ONLY the corrected, complete JSON. No markdown, no explanation."""
             )
             filename = f"{file_slug}.jpg"
             site_image.image.save(filename, ContentFile(optimized_bytes), save=True)
-            print(f"Saved generated image: {key} -> {site_image.image.url}")
+            debug(f"Saved generated image: {key} -> {site_image.image.url}")
             return (decision, site_image.image.url, None)
 
         # Process 'generate' decisions in parallel
         if generate_decisions:
-            print(f"Generating {len(generate_decisions)} images in parallel (max 3 workers)...")
+            debug(f"Generating {len(generate_decisions)} images in parallel (max 3 workers)...")
             with ThreadPoolExecutor(max_workers=3) as pool:
                 futures = {pool.submit(_generate_single_image, d): d for d in generate_decisions}
                 for future in as_completed(futures):
@@ -1925,7 +1926,7 @@ Return ONLY the corrected, complete JSON. No markdown, no explanation."""
                 if action == 'library':
                     library_image_id = decision.get('library_image_id')
                     if not library_image_id:
-                        print(f"Auto-matching library image for '{image_name or image_src}'...")
+                        debug(f"Auto-matching library image for '{image_name or image_src}'...")
                         site_settings_obj = SiteSettings.objects.first()
                         default_lang = site_settings_obj.get_default_language() if site_settings_obj else 'pt'
                         library_catalog = self._build_library_catalog(default_lang)
@@ -1948,7 +1949,7 @@ Return ONLY the corrected, complete JSON. No markdown, no explanation."""
                         if not library_image_id:
                             failed.append({'image_name': image_name, 'error': 'Auto-match found no suitable library image'})
                             continue
-                        print(f"Auto-matched to library image ID {library_image_id}")
+                        debug(f"Auto-matched to library image ID {library_image_id}")
                     site_image = SiteImage.objects.get(id=library_image_id)
                     new_url = site_image.image.url
 
@@ -1963,7 +1964,7 @@ Return ONLY the corrected, complete JSON. No markdown, no explanation."""
                         failed.append({'image_name': image_name, 'error': 'Missing Unsplash photo data'})
                         continue
 
-                    print(f"Downloading Unsplash photo '{unsplash_photo_id}' by {photographer}...")
+                    debug(f"Downloading Unsplash photo '{unsplash_photo_id}' by {photographer}...")
                     image_bytes = download_photo(unsplash_photo_id, unsplash_url)
 
                     if not image_bytes:
@@ -1994,7 +1995,7 @@ Return ONLY the corrected, complete JSON. No markdown, no explanation."""
                     filename = f"{file_slug}.jpg"
                     site_image.image.save(filename, ContentFile(optimized_bytes), save=True)
                     new_url = site_image.image.url
-                    print(f"Saved Unsplash image: {key} -> {new_url}")
+                    debug(f"Saved Unsplash image: {key} -> {new_url}")
 
                 else:
                     failed.append({'image_name': image_name, 'error': f'Unknown action: {action}'})
@@ -2058,7 +2059,7 @@ Return ONLY the corrected, complete JSON. No markdown, no explanation."""
         page.html_content_i18n = result_html_i18n
         page.save()
 
-        print(f"Processed {len(processed)} images, {len(failed)} failed")
+        debug(f"Processed {len(processed)} images, {len(failed)} failed")
         return {
             'processed': processed,
             'failed': failed,
@@ -2404,7 +2405,7 @@ Keep the translations natural and fluent — these are website UI strings.
                 duration_ms=int((time.time() - t0) * 1000),
                 success=False, error_message=str(e),
             )
-            print(f"Auto-match failed: {e}")
+            debug(f"Auto-match failed: {e}")
             return None
 
     def analyze_page_images(
@@ -2426,9 +2427,9 @@ Keep the translations natural and fluent — these are website UI strings.
         """
         from djangopress.core.models import Page, SiteSettings, SiteImage
 
-        print(f"\n=== Analyzing Page Images ===")
-        print(f"Page ID: {page_id}")
-        print(f"Images: {len(images)}")
+        debug(f"\n=== Analyzing Page Images ===")
+        debug(f"Page ID: {page_id}")
+        debug(f"Images: {len(images)}")
 
         try:
             page = Page.objects.get(id=page_id)
@@ -2447,7 +2448,7 @@ Keep the translations natural and fluent — these are website UI strings.
         html_i18n = page.html_content_i18n or {}
         clean_html = html_i18n.get(current_lang) or html_i18n.get(default_language) or ''
         clean_html = self._strip_legacy_attrs(clean_html)
-        print(f"Reading HTML from html_content_i18n[{current_lang}] ({len(clean_html)} chars)")
+        debug(f"Reading HTML from html_content_i18n[{current_lang}] ({len(clean_html)} chars)")
 
         # Build library catalog (metadata only, no URLs)
         library_catalog = self._build_library_catalog(default_language)
@@ -2510,7 +2511,7 @@ Keep the translations natural and fluent — these are website UI strings.
             matches = suggestion.get('library_matches', [])
             suggestion['library_matches'] = [mid for mid in matches if mid in valid_ids]
 
-        print(f"Generated {len(suggestions)} image suggestions")
+        debug(f"Generated {len(suggestions)} image suggestions")
         return suggestions
 
     def describe_image_alt(self, image_bytes: bytes, mime_type: str, languages: List[str]) -> Dict[str, str]:
@@ -2665,10 +2666,10 @@ Keep the translations natural and fluent — these are website UI strings.
                     'status': 'ok',
                 }
                 results.append(result)
-                print(f"  Described image #{img.id}: {description[:80]}...")
+                debug(f"  Described image #{img.id}: {description[:80]}...")
 
             except Exception as e:
-                print(f"  Error describing image #{img.id}: {e}")
+                debug(f"  Error describing image #{img.id}: {e}")
                 results.append({
                     'id': img.id,
                     'status': 'error',

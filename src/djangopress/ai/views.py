@@ -15,6 +15,7 @@ from .services import ContentGenerationService
 from .models import log_ai_call
 from .utils.llm_config import get_ai_model
 from .utils.sse import run_with_progress, sse_response, sse_event
+from djangopress.core.debug_log import debug
 
 
 def _get_model_info(tool_name):
@@ -235,10 +236,10 @@ def analyze_bulk_pages_api(request):
         from .utils.llm_config import LLMBase
         from .utils.prompts import PromptTemplates
 
-        print(f"\n=== Analyzing Bulk Pages Description ===")
-        print(f"Description length: {len(description)} characters")
-        print(f"Language: {language}")
-        print(f"Model: {model}")
+        debug(f"\n=== Analyzing Bulk Pages Description ===")
+        debug(f"Description length: {len(description)} characters")
+        debug(f"Language: {language}")
+        debug(f"Model: {model}")
 
         # Get enabled languages from SiteSettings
         from djangopress.core.models import SiteSettings
@@ -337,7 +338,7 @@ def analyze_bulk_pages_api(request):
                 page['title_i18n'] = {lang: page['title'] for lang in enabled_languages}
                 page['slug_i18n'] = {lang: page['slug'] for lang in enabled_languages}
 
-        print(f"✓ Successfully analyzed description and extracted {len(pages)} pages")
+        debug(f"✓ Successfully analyzed description and extracted {len(pages)} pages")
 
         return JsonResponse({
             'success': True,
@@ -345,7 +346,7 @@ def analyze_bulk_pages_api(request):
         })
 
     except Exception as e:
-        print(f"Error in analyze_bulk_pages_api: {e}")
+        debug(f"Error in analyze_bulk_pages_api: {e}")
         import traceback
         traceback.print_exc()
         return JsonResponse({
@@ -806,7 +807,7 @@ The design_guide value must have newlines as \\n within the JSON string."""
         })
 
     except Exception as e:
-        print(f"Error in generate_design_guide_ai_api: {e}")
+        debug(f"Error in generate_design_guide_ai_api: {e}")
         import traceback
         traceback.print_exc()
         return JsonResponse({
@@ -984,7 +985,7 @@ def analyze_page_images_api(request):
         })
 
     except Exception as e:
-        print(f"Error in analyze_page_images_api: {e}")
+        debug(f"Error in analyze_page_images_api: {e}")
         import traceback
         traceback.print_exc()
         return JsonResponse({
@@ -1056,7 +1057,7 @@ def process_page_images_api(request):
         })
 
     except Exception as e:
-        print(f"Error in process_page_images_api: {e}")
+        debug(f"Error in process_page_images_api: {e}")
         import traceback
         traceback.print_exc()
         return JsonResponse({
@@ -1360,7 +1361,7 @@ def suggest_page_sections_api(request):
     except BlueprintPage.DoesNotExist:
         return JsonResponse({'success': False, 'error': 'Blueprint page not found'}, status=400)
     except Exception as e:
-        print(f"Error in suggest_page_sections_api: {e}")
+        debug(f"Error in suggest_page_sections_api: {e}")
         import traceback
         traceback.print_exc()
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
@@ -1457,7 +1458,7 @@ def fill_section_content_api(request):
     except BlueprintPage.DoesNotExist:
         return JsonResponse({'success': False, 'error': 'Blueprint page not found'}, status=400)
     except Exception as e:
-        print(f"Error in fill_section_content_api: {e}")
+        debug(f"Error in fill_section_content_api: {e}")
         import traceback
         traceback.print_exc()
         return JsonResponse({'success': False, 'error': str(e)}, status=500)

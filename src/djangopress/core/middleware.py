@@ -6,6 +6,7 @@ from django.utils import translation
 from django.conf import settings
 from django.core.cache import cache
 from .models import SiteSettings
+from djangopress.core.debug_log import debug
 
 # Paths outside i18n_patterns that should never get language-prefix redirects
 NON_I18N_PATHS = ('/django-admin/', '/backoffice/', '/ai/', '/editor-v2/',
@@ -131,11 +132,11 @@ class DynamicLanguageMiddleware:
         # Skip processing for specific paths
         if any(path.startswith(bp) for bp in self.bypass_paths):
             if 'editor-v2' in path:
-                print(f'[MW] BYPASS editor-v2: {request.method} {path}')
+                debug(f'[MW] BYPASS editor-v2: {request.method} {path}')
             return self.get_response(request)
 
         if 'editor-v2' in path:
-            print(f'[MW] NOT BYPASSED: {request.method} {path} — this should not happen!')
+            debug(f'[MW] NOT BYPASSED: {request.method} {path} — this should not happen!')
 
         # Get default language from SiteSettings (with caching)
         default_language = cache.get('default_language_code')
