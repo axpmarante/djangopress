@@ -43,6 +43,8 @@ OUT = Path(os.environ.get('EVAL_OUT', '/tmp/ai-eval/run')).resolve()
 OUT.mkdir(parents=True, exist_ok=True)
 SITE_URL = os.environ.get('EVAL_SITE_URL', 'http://localhost:8134').rstrip('/')
 ONLY = [c.strip() for c in os.environ.get('EVAL_CASES', '').split(',') if c.strip()]
+ENDPOINT = os.environ.get('EVAL_ENDPOINT', 'refine-multi')      # 'chat': the editor Chat (editor_v2/chat.py)
+CHAT_MODE = os.environ.get('EVAL_CHAT_MODE', 'auto')
 SNAPSHOT = OUT / 'snapshot.sqlite3'
 SHOTS = OUT / 'shots'
 SHOTS.mkdir(exist_ok=True)
@@ -219,6 +221,8 @@ def editor_turn(c, turn, history):
         payload = res.json() if res['Content-Type'].startswith('application/json') else {'error': f'HTTP {res.status_code}'}
         if not payload.get('success', bool(payload.get('options'))):
             payload.setdefault('error', payload.get('error') or f'HTTP {res.status_code}')
+    elif ENDPOINT == 'chat':
+        return chat_turn(c, turn, history, page, referer, record, t0)
     else:
         body = {'page_id': page.id, 'scope': 'section', 'instructions': turn['text'],
                 'conversation_history': history, 'session_id': None, 'multi_option': True}
@@ -250,6 +254,51 @@ def editor_turn(c, turn, history):
     if not ok:
         record['error'] = f'apply-option failed: {res.status_code} {res.content[:300]!r}'
     return record, payload.get('assistant_message', '')
+
+def chat_turn(c, turn, history, page, referer, record, t0):
+    """One editor Chat turn: quick edits are applied by the server; directions are applied here."""
+    body = {'page_id': page.id, 'scope': 'section', 'instructions': turn['text'], 'mode': CHAT_MODE,
+            'conversation_history': history, 'session_id': None}
+    if turn['kind'] == 'element':
+        sec = sections(page.html_content_i18n.get('pt'))[turn['section']]
+        body.update(scope='element', selector=css_path(sec.find(turn['element'])))
+    else:
+        body['section_name'] = turn['section']
+    response = post(c, '/editor-v2/api/chat/stream/', body, referer)
+    events, first = [], None
+    for name, data in read_sse(response):
+        if name == 'option' and first is None:
+            first = round(time.time() - t0, 1)
+        events.append((name, data))
+    record['seconds'] = round(time.time() - t0, 1)
+    record['first_option_seconds'] = first
+    done = [d for n, d in events if n == 'complete']
+    errors = [d.get('error') for n, d in events if n in ('error', 'option_failed')]
+    options = [d for n, d in events if n == 'option']
+    applied = [d for n, d in events if n == 'applied']
+    record['mode'] = done[-1].get('mode') if done else None
+    record['options'] = len(options)
+    record['option_notes'] = [{'key': o['key'], 'why': o.get('why', ''), 'notes': o.get('notes', [])} for o in options]
+    record['assistant_message'] = (done[-1].get('message') if done else '') or ''
+    (OUT / 'options').mkdir(exist_ok=True)
+    for o in options:
+        (OUT / 'options' / f"{turn['section']}-{len(history)}-{o['key']}.html").write_text(o['html'])
+    if errors:
+        record['direction_errors'] = errors
+    if applied:
+        record['applied_option'] = 'quick'
+        return record, record['assistant_message']
+    if not done or not options:
+        record['error'] = str((errors[-1] if errors else None) or 'no options returned')[:500]
+        return record, None
+    chosen = options[min(turn['apply'], len(options) - 1)]
+    apply_body = {'page_id': page.id, 'scope': body['scope'], 'section_name': turn.get('section'),
+                  'selector': body.get('selector'), 'html': chosen['html'], 'option_index': turn['apply'] + 1}
+    res = post(c, '/editor-v2/api/apply-option/', apply_body, referer)
+    record['applied_option'] = f"{turn['apply'] + 1} ({chosen['key']})"
+    if not (res.status_code == 200 and res.json().get('success')):
+        record['error'] = f'apply-option failed: {res.status_code} {res.content[:300]!r}'
+    return record, record['assistant_message'] + f" Applied {chosen['key']}."
 
 def assistant_turn(c, turn, session_id):
     t0 = time.time()
@@ -405,6 +454,8 @@ def write_report(results):
             + (f"<div>{esc(t.get('response', '')[:600])}</div>" if t.get('response') else '')
             + (f"<div class=meta>{esc('; '.join(t.get('actions', [])))}</div>" if t.get('actions') else '')
             + (f"<div class=meta>{t.get('options')} options · applied #{t.get('applied_option')}</div>" if t.get('options') else '')
+            + (f"<div class=meta>mode {esc(str(t.get('mode')))} · first option {t.get('first_option_seconds')} s</div>" if 'mode' in t else '')
+            + ''.join(f"<div class=meta>{esc(o['key'])}: {esc(o['why'])} {esc(' · '.join(o['notes']))}</div>" for o in t.get('option_notes', []))
             + '</li>' for t in r['turns'])
         ck = r['checks']
         checks = (f"changed: {esc(', '.join(ck['changed']) or '—')}<br>new: {esc(', '.join(ck['new']) or '—')}"
