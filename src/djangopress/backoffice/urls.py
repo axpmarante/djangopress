@@ -47,8 +47,6 @@ urlpatterns = [
     path('news/layouts/<int:pk>/edit/', news_views.LayoutUpdateView.as_view(), name='news_layout_edit'),
     path('news/ai/generate/', news_views.NewsGenerateView.as_view(), name='news_ai_generate'),
     path('news/ai/bulk/', news_views.NewsBulkView.as_view(), name='news_ai_bulk'),
-    path('news/ai/chat/refine/<int:pk>/', news_views.NewsRefineView.as_view(), name='news_ai_refine'),
-    path('news/<int:pk>/images/', news_views.NewsImagesView.as_view(), name='news_images'),
 
     # Pages Management
     path('pages/', views.PagesView.as_view(), name='pages'),
@@ -57,7 +55,6 @@ urlpatterns = [
     path('api/page-screenshots/<int:page_id>/', api_views.get_page_section_screenshots, name='api_page_screenshots'),
     path('api/update-page-settings/<int:page_id>/', api_views.update_page_settings, name='api_update_page_settings'),
     path('page/<int:page_id>/edit/', views.PageEditView.as_view(), name='page_edit'),
-    path('page/<int:page_id>/images/', views.ProcessImagesView.as_view(), name='process_images'),
 
     # Forms
     path('forms/', views.FormsView.as_view(), name='forms'),
@@ -90,16 +87,12 @@ urlpatterns = [
 
     # AI Content Studio
     path('ai/generate/page/', views.AIGeneratePageView.as_view(), name='ai_generate_page'),
-    path('ai/bulk/pages/', views.AIBulkPagesView.as_view(), name='ai_bulk_pages'),
     path('ai/bulk-translate/', views.AIBulkTranslateView.as_view(), name='ai_bulk_translate'),
     path('ai/design-consistency/', views.DesignConsistencyView.as_view(), name='design_consistency'),
     path('ai/design-consistency/reports/', views.ConsistencyReportsView.as_view(), name='consistency_reports'),
     path('ai/design-consistency/reports/<int:pk>/', views.ConsistencyReportDetailView.as_view(), name='consistency_report_detail'),
     path('ai/design-consistency/reports/<int:pk>/update-status/', views.update_issue_status, name='consistency_update_status'),
     path('ai/design-consistency/reports/<int:pk>/delete/', views.delete_consistency_report, name='consistency_report_delete'),
-    path('ai/refine/page/', views.AIRefinePageView.as_view(), name='ai_refine_page'),
-    path('ai/refine/page/<str:page_slug>/', views.AIRefinePageView.as_view(), name='ai_refine_page_with_slug'),
-    path('ai/chat/refine/<int:page_id>/', views.AIChatRefineView.as_view(), name='ai_chat_refine'),
     path('ai/logs/', views.AICallLogsView.as_view(), name='ai_call_logs'),
 
     # Benchmarks

@@ -96,7 +96,7 @@ python manage.py createsuperuser
 
 ### 4. Configure & generate
 
-Go to `/backoffice/settings/` to configure branding, languages, design system. Then use `/generate-site` or `/backoffice/ai/` to generate content.
+Go to `/backoffice/settings/` to configure branding, languages, design system. Then use `/generate-site` (or the backoffice Home assistant) to generate content, and the visual editor (`?edit=v2`) to refine it.
 
 ### 5. Project structure
 

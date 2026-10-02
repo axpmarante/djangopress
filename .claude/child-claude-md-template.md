@@ -55,8 +55,7 @@ If deployed on Railway: `railway up -d` after upgrading to redeploy.
 | URL | What It Does |
 |-----|-------------|
 | `/backoffice/ai/generate/page/` | Generate a new page from a brief |
-| `/backoffice/ai/bulk/pages/` | Describe multiple pages at once, generate in bulk |
-| `/backoffice/ai/chat/refine/<page_id>/` | Chat-based page refinement — iterative conversation with AI |
+| `<page>?edit=v2` | Visual editor: edit, and refine with AI in its Chat tab |
 | `/backoffice/ai/bulk-translate/` | Translate pages to other languages |
 | `/backoffice/ai/design-consistency/` | Analyze and fix design consistency across pages |
 | `/backoffice/ai/logs/` | Browse AI call history (model, tokens, duration) |

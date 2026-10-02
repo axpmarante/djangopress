@@ -391,7 +391,7 @@ Create templates in `backoffice/templates/backoffice/` following the news patter
 - `<app>_list.html`, `<app>_form.html`, `<app>_confirm_delete.html`
 - `<app>_categories.html`, `<app>_category_form.html`, `<app>_category_confirm_delete.html`
 - `<app>_layouts.html`, `<app>_layout_form.html`
-- `ai_generate_<app>.html`, `ai_bulk_<app>.html`, `ai_refine_<app>.html`, `<app>_images.html`
+- `ai_generate_<app>.html`, `ai_bulk_<app>.html` (refining and images happen in the visual editor: give the model `html_content_i18n` and a `get_absolute_url`, and `?edit=v2` works on it)
 
 ### Form Template Pattern (`<app>_form.html`)
 
@@ -678,10 +678,7 @@ Add API endpoints in `ai/views.py` and `ai/urls.py`:
 # ai/urls.py
 path('api/generate-<item>/', views.generate_<item>_api, name='generate_<item>'),
 path('api/generate-<item>/stream/', views.generate_<item>_stream, name='generate_<item>_stream'),
-path('api/chat-refine-<item>/', views.chat_refine_<item>_api, name='chat_refine_<item>'),
-path('api/chat-refine-<item>/stream/', views.chat_refine_<item>_stream, name='chat_refine_<item>_stream'),
 path('api/save-<item>/', views.save_<item>_api, name='save_<item>'),
-path('api/<item>-sessions/<int:id>/', views.list_<item>_sessions_api, name='list_<item>_sessions'),
 ```
 
 Use `RefinementSession` with generic FK for chat history:

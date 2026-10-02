@@ -163,13 +163,9 @@
                     <div x-show="open" @click.away="open = false" x-transition
                          class="absolute right-0 mt-1 w-44 bg-white border border-gray-200 rounded-lg shadow-lg z-10 py-1">
                         {% if user.is_superuser %}
-                        <a href="{% url 'backoffice:news_ai_refine' pk=post.pk %}"
+                        <a href="{{ post.get_absolute_url }}?edit=v2"
                            class="block px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors">
-                            AI Refine
-                        </a>
-                        <a href="{% url 'backoffice:news_images' pk=post.pk %}"
-                           class="block px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors">
-                            Process Images
+                            Edit with AI
                         </a>
                         {% endif %}
                         <button @click="open = false; confirmDelete('{{ post.pk }}', '{{ post.default_title|escapejs }}')"

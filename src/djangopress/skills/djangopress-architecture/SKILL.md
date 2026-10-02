@@ -251,17 +251,18 @@ Configured in `ai/utils/llm_config.py`. Supports OpenAI, Anthropic, and Google (
 
 | Endpoint | Method | Purpose |
 |----------|--------|---------|
-| `/ai/api/generate-page/` | POST | Generate a new page (HTML + auto-translate to other languages) |
-| `/ai/api/refine-page-with-html/` | POST | Refine existing page via form |
-| `/ai/api/chat-refine-page/` | POST | Chat-based iterative refinement (with session history) |
+| `/ai/api/generate-page/stream/` | POST | Generate a new page (HTML + auto-translate), streamed |
 | `/ai/api/analyze-page-images/` | POST | AI suggests generation prompts, aspect ratios, and library matches per image |
 | `/ai/api/process-page-images/` | POST | Replace image placeholders with library, AI-generated, or Unsplash images |
 | `/ai/api/search-unsplash/` | POST | Search Unsplash photos (proxied, staff-only) |
 | `/ai/api/save-page/` | POST | Save generated page to DB |
-| `/ai/api/refine-header/` | POST | Refine header GlobalSection |
-| `/ai/api/refine-footer/` | POST | Refine footer GlobalSection |
-| `/ai/api/analyze-bulk-pages/` | POST | Analyze description, extract page structure |
+| `/ai/api/refine-header/stream/`, `/refine-footer/stream/` | POST | Refine the header / footer GlobalSection (header/footer editors) |
+| `/ai/api/analyze-bulk-pages/` | POST | Analyze description, extract page structure (bulk news) |
 | `/ai/api/generate-design-guide/` | POST | AI-generate a design guide from existing pages |
+
+Refining pages, sections and elements (and news posts) happens in the visual editor's Chat tab
+(`/editor-v2/api/chat/stream/`, see `editor_v2/chat.py`) and in the site assistant. The old backoffice
+chat-refine screens and their `/ai/api/` endpoints were removed in 4.0.
 
 ### Generation Flow
 
