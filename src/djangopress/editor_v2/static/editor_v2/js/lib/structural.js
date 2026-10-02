@@ -71,6 +71,14 @@ export function moveSection(name, direction) {
         () => ({ selector: `section[data-section="${name}"]` }), 'Moved section');
 }
 
+export function retagElement(selector, tag) {
+    return run('/retag-element/', { selector, tag }, r => ({ selector: r.selector }), 'Changed heading level');
+}
+
+export function placeSection(name, before) {
+    return run('/move-section/', { section_name: name, before }, () => ({ selector: `section[data-section="${name}"]` }), 'Moved section');
+}
+
 export async function removeElement(selector) {
     const ok = await confirmDialog({ title: 'Remove this element?', danger: true, confirmLabel: 'Remove',
         message: 'It is removed in every language. You can bring it back with Undo or from the version history.' });

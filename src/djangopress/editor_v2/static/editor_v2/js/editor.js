@@ -22,6 +22,7 @@ import * as sectionModal     from './modules/section-modal.js';
 import * as processImages    from './modules/process-images.js';
 import * as viewport         from './modules/viewport.js';
 import * as componentPanel   from './modules/component-panel.js';
+import * as contentPanel     from './modules/content-panel.js';
 import * as deviceFrame      from './modules/device-frame.js';
 import { restoreSelection }  from './lib/structural.js';
 
@@ -43,6 +44,7 @@ document.addEventListener('DOMContentLoaded', () => {
     processImages.init();
     viewport.init();
     componentPanel.init();
+    contentPanel.init();
     deviceFrame.init();
 
     restoreSelection();

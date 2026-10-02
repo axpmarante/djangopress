@@ -700,6 +700,12 @@ def update_page_element_attribute(request):
             m = re.match(r'^/([a-z]{2})(?=/|$)', value)
             codes = [c for c, h in (page.html_content_i18n or {}).items() if h]
             source = m.group(1) if m and m.group(1) in codes else _edit_lang(page, lang)
+            if not (m and m.group(1) in codes):
+                # "/reservas/" (no language) is read as the editing language's page, when it is one.
+                first = value.split('?')[0].split('#')[0].strip('/').split('/')[0]
+                slugs = {(p.slug_i18n or {}).get(source) for p in Page.objects.all()}
+                if value.split('#')[0] == '/' or first in slugs:
+                    value = f'/{source}{value}'
             for code in codes:
                 localized = _localized_href(value, source, code)
                 _apply_change_to_lang(page, code, lambda s, v=localized: apply_attribute(s, v))
@@ -2832,13 +2838,19 @@ def _section_label(name):
 def link_targets(request):
     """Pages (URL in the editing language) and their sections, for the Content tab's link picker."""
     lang = _detect_language_from_request(request, request.GET)
+    settings_obj = SiteSettings.load()
+    active = Page.objects.filter(is_active=True).order_by('sort_order', 'pk')
+    home_id = (settings_obj.homepage_id if settings_obj and settings_obj.homepage_id else
+               getattr(active.first(), 'pk', None))
     pages = []
-    for page in Page.objects.filter(is_active=True).order_by('sort_order', 'pk'):
+    for page in active:
         html, _lang = _get_page_html(page, lang)
         sections = [{'name': s.get('data-section'), 'label': _section_label(s.get('data-section'))}
                     for s in BeautifulSoup(html or '', 'html.parser').find_all('section', attrs={'data-section': True})]
         title = (page.title_i18n or {}).get(lang) or page.default_title
-        pages.append({'id': page.id, 'title': title, 'url': page.get_absolute_url(lang), 'sections': sections})
+        slug = (page.slug_i18n or {}).get(lang) or page.default_slug
+        url = f'/{lang}/' if page.pk == home_id else f'/{lang}/{slug}/'
+        pages.append({'id': page.id, 'title': title, 'url': url, 'sections': sections})
     return JsonResponse({'success': True, 'pages': pages})
 
 
@@ -2877,8 +2889,11 @@ def _library_image_bytes(src):
     for img in SiteImage.objects.exclude(image=''):
         name = img.image.name or ''
         if name and path.endswith('/' + name):
-            with img.image.open('rb') as fh:
-                return fh.read(), mimetypes.guess_type(name)[0] or 'image/jpeg'
+            try:
+                with img.image.open('rb') as fh:
+                    return fh.read(), mimetypes.guess_type(name)[0] or 'image/jpeg'
+            except Exception:
+                return None             # the row's file is gone: read the URL the page shows instead
     return None
 
 

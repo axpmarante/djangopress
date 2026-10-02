@@ -56,6 +56,16 @@ class HrefTest(Base):
         self.assertIn('href="/pt/reservas/#grupos"', self.html('pt'))
         self.assertIn('href="/en/book-a-table/#grupos"', self.html('en'))
 
+    def test_a_page_path_without_language_is_read_as_the_editing_language(self):
+        self.post('/editor-v2/api/update-page-attribute/', {'selector': A, 'attribute': 'href', 'value': '/reservas/'})
+        self.assertIn('href="/pt/reservas/"', self.html('pt'))
+        self.assertIn('href="/en/book-a-table/"', self.html('en'))
+
+    def test_other_site_paths_are_left_alone(self):
+        self.post('/editor-v2/api/update-page-attribute/', {'selector': A, 'attribute': 'href', 'value': '/media/menu.pdf'})
+        self.assertIn('href="/media/menu.pdf"', self.html('pt'))
+        self.assertIn('href="/media/menu.pdf"', self.html('en'))
+
     def test_phone_and_external_links_are_the_same_everywhere(self):
         for value in ('tel:+351968070776', 'https://wa.me/351968070776?text=Ol%C3%A1', '#contactos'):
             self.post('/editor-v2/api/update-page-attribute/', {'selector': A, 'attribute': 'href', 'value': value})
@@ -120,6 +130,11 @@ class ReadEndpointsTest(Base):
         book = pages[1]
         self.assertEqual(book['url'], '/en/book-a-table/')
         self.assertEqual(book['sections'], [{'name': 'grupos', 'label': 'Grupos'}])
+        self.assertEqual(pages[0]['url'], '/en/')
+
+    def test_link_targets_always_carry_the_language(self):
+        pages = self.client.get('/editor-v2/api/link-targets/', HTTP_REFERER='http://testserver/pt/?edit=v2').json()['pages']
+        self.assertEqual([p['url'] for p in pages], ['/pt/', '/pt/reservas/'])
 
     def test_page_copies(self):
         res = self.client.get('/editor-v2/api/page-copies/', {'page_id': self.page.id})

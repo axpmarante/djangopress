@@ -76,7 +76,8 @@ function open(data) {
     activeModalTab = 'library';
     setStatus('');
     updateButtons();
-    switchModalTab('library');
+    const startTab = data && ['library', 'upload', 'unsplash'].includes(data.tab) ? data.tab : 'library';
+    switchModalTab(startTab === 'unsplash' && !unsplashEnabled() ? 'library' : startTab);
     modal.classList.remove('hidden');
 
     // Load images

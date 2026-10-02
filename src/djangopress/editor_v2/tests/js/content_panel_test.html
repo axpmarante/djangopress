@@ -1,0 +1,130 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>running</title>
+<style>.uppercase{text-transform:uppercase}</style>
+<div class="editor-v2-content" id="host">
+<section data-section="hero" id="hero"><h1>Bem-vindo</h1></section>
+<section data-section="eventos" id="eventos">
+  <div>
+    <p class="uppercase tracking-wide">Grupos</p>
+    <h2 class="text-4xl">Celebrações</h2>
+    <p>Uma sala <b>pequena</b>.</p>
+    <a class="bg-red-600 px-6 py-3" href="tel:+351968070776">968 070 776</a>
+    <img src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==" alt="Sala" class="w-full object-cover" style="width:300px">
+  </div>
+</section>
+</div>
+<div id="ev2-tab-content"></div>
+<pre id="out"></pre>
+<script type="module">
+import { events } from '../../static/editor_v2/js/lib/events.js';
+import { renderContentPanel } from '../../static/editor_v2/js/modules/content-panel.js';
+
+const fails = [];
+let passed = 0;
+const eq = (name, got, want) => {
+    if (JSON.stringify(got) === JSON.stringify(want)) passed++;
+    else fails.push(`${name}: got ${JSON.stringify(got)}, want ${JSON.stringify(want)}`);
+};
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+async function until(fn, ms = 2000) { const end = Date.now() + ms; while (Date.now() < end) { if (fn()) return true; await sleep(20); } return false; }
+
+const requests = [];
+const host = document.getElementById('host');
+const enCopy = host.innerHTML.replace('Celebrações', 'Celebrations').replace('Grupos', 'Groups').replace('alt="Sala"', 'alt="Room"');
+window.fetch = async (url, init = {}) => {
+    let body = null;
+    try { body = init.body ? JSON.parse(init.body) : null; } catch (_) { body = init.body; }
+    requests.push({ url: String(url), body });
+    const json = (d) => new Response(JSON.stringify(d), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    if (url.includes('/page-copies/')) return json({ success: true, copies: { pt: host.innerHTML, en: enCopy } });
+    if (url.includes('/link-targets/')) return json({ success: true, pages: [
+        { id: 3, title: 'Início', url: '/pt/', sections: [{ name: 'eventos', label: 'Eventos' }] },
+        { id: 4, title: 'Reservas', url: '/pt/reservas/', sections: [{ name: 'grupos', label: 'Grupos' }] }] });
+    if (url.includes('/retag-element/')) return json({ success: false, error: 'stubbed' });
+    if (url.includes('/describe-image/')) return json({ success: true, current: 'Mesas postas', alts: { pt: 'Mesas postas', en: 'Set tables' }, saved_languages: ['en'] });
+    return json({ success: true });
+};
+window.EDITOR_CONFIG = { pageId: 3, apiBase: '/api', csrfToken: 'x', aiEnabled: true, language: 'pt', languages: ['pt', 'en'], languageNames: { pt: 'Português', en: 'English' } };
+
+const emitted = [];
+for (const name of ['change:content', 'change:attribute', 'change:classes', 'inline-edit:trigger', 'image-picker:open', 'selection:request', 'process-images:open']) {
+    events.on(name, d => emitted.push([name, d]));
+}
+const last = (name) => [...emitted].reverse().find(([n]) => n === name)?.[1];
+const box = document.getElementById('ev2-tab-content');
+const q = (s) => box.querySelector(s);
+const qa = (s) => [...box.querySelectorAll(s)];
+const section = host.querySelector('[data-section="eventos"]');
+const [eyebrow, h2, para, btn, img] = section.querySelectorAll('div > *');
+
+try {
+    // Section form
+    renderContentPanel(box, section);
+    eq('section title', q('.ev2-cp-title h2')?.textContent, 'Eventos');
+    eq('section description', q('.ev2-cp-sub')?.textContent, 'Title + text + button + photo');
+    eq('fields by role', qa('.ev2-cp-field [data-role-label]').map(l => l.textContent), ['Eyebrow', 'Heading', 'Text', 'Button', 'Image']);
+    const headingInput = q('.ev2-cp-field[data-role="heading"] input');
+    headingInput.value = 'Festas';
+    headingInput.dispatchEvent(new Event('input'));
+    eq('typing updates the page', h2.textContent, 'Festas');
+    eq('typing emits a content change', last('change:content')?.value, 'Festas');
+    eq('formatted text is read-only', !!q('.ev2-cp-field[data-role="text"] textarea, .ev2-cp-field[data-role="text"] input'), false);
+    eq('the other language under the eyebrow', await until(() => /Groups/.test(q('.ev2-cp-field[data-role="eyebrow"] .ev2-cp-other')?.textContent || '')), true);
+    h2.textContent = 'Celebrações';
+
+    // Formatted paragraph
+    renderContentPanel(box, para);
+    q('[data-action="edit-inline"]').click();
+    eq('formatted text goes to inline editing', last('inline-edit:trigger')?.element, para);
+
+    // Heading
+    renderContentPanel(box, h2);
+    eq('heading level shown', q('.ev2-cp-level button.is-on')?.textContent, 'H2');
+    q('.ev2-cp-level [data-tag="h1"]').click();
+    eq('warns about a second H1', /already has an H1/.test(q('.ev2-cp-level-note')?.textContent || ''), true);
+    await until(() => requests.some(r => r.url.includes('/retag-element/')));
+    eq('retag request', requests.find(r => r.url.includes('/retag-element/'))?.body?.tag, 'h1');
+    eq('siblings as chips', qa('.ev2-cp-chip').map(c => c.textContent), ['Eyebrow', 'Text', 'Button', 'Image']);
+
+    // Button: goes to
+    renderContentPanel(box, btn);
+    eq('link kind parsed', q('.ev2-cp-kinds button.is-on')?.dataset.kind, 'phone');
+    q('.ev2-cp-kinds [data-kind="page"]').click();
+    await until(() => q('.ev2-cp-linkbody select'));
+    const select = q('.ev2-cp-linkbody select');
+    select.value = '/pt/reservas/';
+    select.dispatchEvent(new Event('change'));
+    eq('page link saved', [last('change:attribute')?.attribute, last('change:attribute')?.value], ['href', '/pt/reservas/']);
+    eq('the page has it', btn.getAttribute('href'), '/pt/reservas/');
+    q('.ev2-cp-kinds [data-kind="whatsapp"]').click();
+    const [num, msg] = qa('.ev2-cp-linkbody input');
+    num.value = '+351 968 070 776'; num.dispatchEvent(new Event('input'));
+    msg.value = 'Olá!'; msg.dispatchEvent(new Event('input'));
+    eq('whatsapp link built', btn.getAttribute('href'), 'https://wa.me/351968070776?text=Ol%C3%A1!');
+    q('[data-action="new-tab"]').click();
+    eq('new tab', [btn.getAttribute('target'), btn.getAttribute('rel')], ['_blank', 'noopener']);
+
+    // Image
+    renderContentPanel(box, img);
+    q('[data-focus="top"]').click();
+    eq('focus point swaps the class', img.className, 'w-full object-cover object-top');
+    eq('class change emitted', last('change:classes')?.value, 'w-full object-cover object-top');
+    q('[data-focus="center"]').click();
+    eq('center removes the class', img.className, 'w-full object-cover');
+    q('[data-action="describe"]').click();
+    await until(() => q('.ev2-cp-alt')?.value === 'Mesas postas');
+    eq('described alt in the field and the page', [q('.ev2-cp-alt').value, img.getAttribute('alt')], ['Mesas postas', 'Mesas postas']);
+    eq('alt change emitted', last('change:attribute')?.attribute, 'alt');
+    q('[data-picker="upload"]').click();
+    eq('picker opened on a tab', last('image-picker:open')?.tab, 'upload');
+
+    // Nothing selected: the page's sections
+    renderContentPanel(box, null);
+    eq('section list', qa('.ev2-cp-section-row b').map(b => b.textContent), ['Hero', 'Eventos']);
+} catch (err) {
+    fails.push('crash: ' + err.message + ' ' + (err.stack || '').split('\n')[1]);
+}
+document.getElementById('out').textContent = fails.join('\n') || 'all good';
+document.title = fails.length ? `FAIL ${fails.length}` : `PASS ${passed}`;
+</script>

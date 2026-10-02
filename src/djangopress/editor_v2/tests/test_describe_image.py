@@ -57,6 +57,17 @@ class DescribeImageTest(TestCase):
         self.assertTrue(res.json()['success'], res.content)
         self.assertEqual(f.call_args.args[0], src)
 
+    def test_a_library_row_whose_file_is_missing_falls_back_to_the_url(self):
+        SiteImage.objects.create(title_i18n={'pt': 'x'}, key='gone', image='site_images/gone.jpg')
+        src = 'https://storage.googleapis.com/bucket/site/site_images/gone.jpg'
+        self.page.html_content_i18n = {'pt': html(src, ''), 'en': html(src, '')}
+        self.page.save()
+        with mock.patch(FETCH, return_value=(b'IMG', 'image/jpeg')) as f, \
+                mock.patch(DESCRIBE, return_value={'pt': 'a', 'en': 'b'}):
+            res = self.post()
+        self.assertTrue(res.json()['success'], res.content)
+        f.assert_called_once()
+
     def test_missing_element_is_refused_without_a_fetch(self):
         with mock.patch(FETCH) as f, mock.patch(DESCRIBE) as d:
             res = self.post({'selector': 'section[data-section="sala"] > img:nth-child(5)'})

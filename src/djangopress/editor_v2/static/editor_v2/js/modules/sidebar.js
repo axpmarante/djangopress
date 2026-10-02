@@ -6,6 +6,7 @@ import { insertAfterSection } from './section-inserter.js';
 import { findComponent } from '../lib/components.js';
 import { prependComponentCard } from './component-panel.js';
 import { renderDesignPanel, unmountDesignPanel } from './design-panel.js';
+import { renderContentPanel } from './content-panel.js';
 
 let activeTab = 'content';
 let selectedEl = null;
@@ -92,243 +93,19 @@ function renderMediaCollection(container, collectionEl) {
 function renderContentTab() {
     const c = $('#ev2-tab-content');
     if (!c) return;
-    if (!selectedEl) {
-        c.innerHTML = '<p class="ev2-placeholder ev2-empty-state">Select an element to edit</p>';
-        return;
-    }
-    const tag = selectedEl.tagName;
-    const selector = getCssSelector(selectedEl) || '';
-
-    if (tag === 'IMG') {
-        renderImageFields(c, selector);
-    } else if (isTextElement(selectedEl) && tag !== 'A') {
-        renderTextField(c, selector);
-        appendChildrenPanel(c);
-    } else if (tag === 'A') {
-        renderLinkFields(c, selector);
-        appendChildrenPanel(c);
-    } else {
-        const collectionEl = findComponent(selectedEl) ? null : findMediaCollection(selectedEl);
+    // A container inside a media collection keeps its thumbnail grid (gallery-like blocks
+    // that are not a recognised component).
+    if (selectedEl && selectedEl.tagName !== 'IMG' && !isTextElement(selectedEl) && !findComponent(selectedEl)
+        && !selectedEl.hasAttribute('data-section')) {
+        const collectionEl = findMediaCollection(selectedEl);
         if (collectionEl) {
             renderMediaCollection(c, collectionEl);
-        } else {
-            const descendants = getEditableTopLevelDescendants(selectedEl);
-            if (descendants.length > 0) {
-                c.innerHTML = '';
-                appendChildrenPanel(c);
-            } else {
-                c.innerHTML = '<p class="ev2-placeholder ev2-empty-state">Select a text element to edit content</p>';
-            }
+            return;
         }
     }
-
-    prependComponentCard(c, selectedEl);
-    prependContentBreadcrumb(c);
+    renderContentPanel(c, selectedEl);
+    if (selectedEl) prependComponentCard(c, selectedEl);
 }
-
-/**
- * Show a mini-breadcrumb at the top of the Content tab (sticky) so the
- * user can navigate UP without re-clicking the page. Clicking a crumb
- * re-selects that ancestor; the Content tab re-renders showing its
- * children panel, giving back the overview list.
- */
-function prependContentBreadcrumb(container) {
-    if (!selectedEl) return;
-
-    // Trim ancestors to start at the closest [data-section] (inclusive).
-    // The wrapper / main / outer divs aren't useful navigation targets —
-    // sections are the meaningful editing scope.
-    const ancestors = getAncestors(selectedEl).reverse();
-    const sectionIdx = ancestors.findIndex(a => a.hasAttribute('data-section'));
-    const trimmed = sectionIdx >= 0 ? ancestors.slice(sectionIdx) : [];
-
-    // If selectedEl IS the section, trimmed is empty and we render just the
-    // current crumb. If selectedEl is outside any section, render nothing.
-    if (trimmed.length === 0 && !selectedEl.hasAttribute('data-section')) return;
-
-    const wrap = document.createElement('div');
-    wrap.className = 'ev2-content-breadcrumb';
-
-    for (let i = 0; i < trimmed.length; i++) {
-        const a = trimmed[i];
-        const crumb = document.createElement('button');
-        crumb.type = 'button';
-        crumb.className = 'ev2-content-crumb';
-        crumb.textContent = getTagLabel(a);
-        crumb.title = 'Select this parent';
-        crumb.addEventListener('click', () => events.emit('selection:request', a));
-        wrap.appendChild(crumb);
-
-        const sep = document.createElement('span');
-        sep.className = 'ev2-content-crumb-sep';
-        sep.textContent = '›';
-        wrap.appendChild(sep);
-    }
-
-    const here = document.createElement('span');
-    here.className = 'ev2-content-crumb ev2-content-crumb-current';
-    here.textContent = getTagLabel(selectedEl);
-    wrap.appendChild(here);
-
-    container.insertBefore(wrap, container.firstChild);
-}
-
-function appendChildrenPanel(container) {
-    // Use the card scope around selectedEl, not just its descendants — that
-    // way image-as-background patterns surface (the <img> sibling of an
-    // overlay div is in the same card, even though it isn't a descendant).
-    const scope = findCardScope(selectedEl) || selectedEl;
-    const items = getEditableTopLevelDescendants(scope).filter(i => i !== selectedEl);
-    if (items.length === 0) return;
-
-    const wrap = document.createElement('div');
-    wrap.className = 'ev2-children-panel';
-
-    const heading = document.createElement('div');
-    heading.className = 'ev2-children-heading';
-    const scopeLabel = scope === selectedEl
-        ? ''
-        : ` in this ${getTagLabel(scope)}`;
-    heading.textContent = `${items.length} ${items.length === 1 ? 'element' : 'elements'}${scopeLabel}`;
-    wrap.appendChild(heading);
-
-    const list = document.createElement('div');
-    list.className = 'ev2-children-list';
-
-    for (const child of items) {
-        const sel = getCssSelector(child) || '';
-        if (!sel) continue;
-        const row = document.createElement('button');
-        row.type = 'button';
-        row.className = 'ev2-children-row';
-        row.dataset.childSelector = sel;
-        row.title = `Edit ${child.tagName.toLowerCase()}`;
-
-        if (child.tagName === 'IMG') {
-            const src = child.getAttribute('src') || '';
-            const alt = child.getAttribute('alt') || '';
-            row.innerHTML = `
-                <img class="ev2-children-thumb" src="${esc(src)}" alt="" loading="lazy" />
-                <span class="ev2-children-tag">img</span>
-                <span class="ev2-children-preview">${esc(alt || (src.split('/').pop() || '').split('?')[0])}</span>`;
-        } else {
-            const tag = child.tagName.toLowerCase();
-            const text = (child.textContent || '').trim().slice(0, 80);
-            row.innerHTML = `
-                <span class="ev2-children-tag">${esc(tag)}</span>
-                <span class="ev2-children-preview">${esc(text || '(empty)')}</span>`;
-        }
-
-        row.addEventListener('click', () => {
-            const target = resolveSelector(sel);
-            if (!target) return;
-            events.emit('selection:request', target);
-            target.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        });
-        list.appendChild(row);
-    }
-
-    wrap.appendChild(list);
-    container.appendChild(wrap);
-}
-
-function renderTextField(container, selector) {
-    const fieldKey = '';
-    const label = selectedEl.tagName.toLowerCase();
-    const text = selectedEl.textContent.trim();
-    const isLong = text.length > 80;
-
-    let html = `<div class="ev2-field"><label class="ev2-label">${esc(label)}</label>`;
-    if (isLong) {
-        html += `<textarea class="ev2-textarea" data-field-key="${esc(fieldKey)}" data-selector="${esc(selector)}">${esc(text)}</textarea>`;
-    } else {
-        html += `<input class="ev2-input" type="text" data-field-key="${esc(fieldKey)}" data-selector="${esc(selector)}" value="${esc(text)}" />`;
-    }
-    html += '</div>';
-
-    container.innerHTML = html;
-    attachContentListeners(container);
-}
-
-function renderImageFields(container, selector) {
-    const src = selectedEl.getAttribute('src') || '';
-    const alt = selectedEl.getAttribute('alt') || '';
-    container.innerHTML = `
-        <div class="ev2-img-preview-wrap">
-            <img src="${esc(src)}" alt="${esc(alt)}" class="ev2-img-preview" />
-        </div>
-        <div class="ev2-field">
-            <button type="button" class="ev2-btn-change-img" id="ev2-change-img-btn">Change Image</button>
-        </div>
-        <div class="ev2-field"><label class="ev2-label">Alt text</label>
-            <input class="ev2-input" type="text" data-attr="alt" data-selector="${esc(selector)}" value="${esc(alt)}" /></div>
-        <div class="ev2-field"><label class="ev2-label">Image URL</label>
-            <input class="ev2-input ev2-input-mono" type="text" data-attr="src" data-selector="${esc(selector)}" value="${esc(src)}" /></div>`;
-    attachContentListeners(container);
-    const changeBtn = container.querySelector('#ev2-change-img-btn');
-    if (changeBtn) changeBtn.addEventListener('click', () => events.emit('image-picker:open'));
-}
-
-function renderLinkFields(container, selector) {
-    const fieldKey = '';
-    const label = selectedEl.tagName.toLowerCase();
-    const text = selectedEl.textContent.trim();
-    const href = selectedEl.getAttribute('href') || '';
-    container.innerHTML = `
-        <div class="ev2-field"><label class="ev2-label">${esc(label)}</label>
-            <input class="ev2-input" type="text" data-field-key="${esc(fieldKey)}" data-selector="${esc(selector)}" value="${esc(text)}" />
-            </div>
-        <div class="ev2-field"><label class="ev2-label">Link URL</label>
-            <input class="ev2-input" type="text" data-attr="href" data-selector="${esc(selector)}" value="${esc(href)}" /></div>`;
-    attachContentListeners(container);
-}
-
-function attachContentListeners(container) {
-    for (const input of $$('.ev2-input, .ev2-textarea', container)) {
-        input.addEventListener('input', () => onContentInput(input));
-    }
-}
-
-function onContentInput(input) {
-    const selector = input.dataset.selector;
-    const attr = input.dataset.attr;
-    const fieldKey = input.dataset.fieldKey;
-    const value = input.value;
-
-    if (attr) {
-        const oldValue = selectedEl.getAttribute(attr) || '';
-        selectedEl.setAttribute(attr, value);
-        events.emit('change:attribute', {
-            type: 'attribute', selector, attribute: attr,
-            value, oldValue, tagName: selectedEl.tagName.toLowerCase(),
-        });
-
-        // Keep <a data-lightbox> href in sync when an <img src> is edited
-        // manually, so the lightbox opens the same image as the thumbnail.
-        if (attr === 'src' && selectedEl.tagName === 'IMG') {
-            const anchor = selectedEl.parentElement;
-            if (anchor && anchor.tagName === 'A' && anchor.hasAttribute('data-lightbox')) {
-                const anchorSelector = getCssSelector(anchor);
-                const oldHref = anchor.getAttribute('href') || '';
-                if (anchorSelector && oldHref !== value) {
-                    anchor.setAttribute('href', value);
-                    events.emit('change:attribute', {
-                        type: 'attribute', selector: anchorSelector,
-                        attribute: 'href', value, oldValue: oldHref, tagName: 'a',
-                    });
-                }
-            }
-        }
-    } else {
-        const oldValue = selectedEl.textContent;
-        selectedEl.textContent = value;
-        events.emit('change:content', {
-            type: 'content', selector, fieldKey: fieldKey || '', value, oldValue,
-        });
-    }
-}
-
-// --- Design tab ---
 
 function renderDesignTab() {
     const container = $('#ev2-tab-content');
