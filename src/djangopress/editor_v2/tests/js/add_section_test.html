@@ -1,0 +1,184 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>running</title>
+<link rel="stylesheet" href="../../static/editor_v2/css/editor.css">
+<style>h3 { font-family: Georgia, serif; }</style>
+<div class="editor-v2-content" id="host"><main><section data-section="hero" id="hero"><h1>Olá</h1></section><section data-section="carta" id="carta"><h2>Carta</h2></section></main></div>
+<pre id="out"></pre>
+<script type="module">
+// Drives the real Add section popover + result dock with a stubbed server: describe → three
+// options → pick → add without a reload; refine one; paste as copied; paste and fit.
+import { events } from '../../static/editor_v2/js/lib/events.js';
+import * as inserter from '../../static/editor_v2/js/modules/section-inserter.js';
+import * as modal from '../../static/editor_v2/js/modules/section-modal.js';
+
+const fails = [];
+let passed = 0;
+const eq = (name, got, want) => {
+    if (JSON.stringify(got) === JSON.stringify(want)) passed++;
+    else fails.push(`${name}: got ${JSON.stringify(got)}, want ${JSON.stringify(want)}`);
+};
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+async function until(fn, ms = 3000) {
+    const end = Date.now() + ms;
+    while (Date.now() < end) { if (fn()) return true; await sleep(20); }
+    return false;
+}
+
+const requests = [];
+let streamText = '';
+let clipboardText = '';
+let applyDelay = 0;
+const sse = (list) => list.map(([name, data]) => `event: ${name}\ndata: ${JSON.stringify(data)}\n\n`).join('');
+const sec = (name, text) => `<section data-section="${name}" id="${name}"><h2>${text}</h2></section>`;
+const opt = (key, text, why = 'fits') => ['option', { key, name: key, html: sec('livro', text), why, notes: [] }];
+window.fetch = async (url, init = {}) => {
+    let body = null;
+    try { body = init.body ? JSON.parse(init.body) : null; } catch (_) { body = init.body; }
+    requests.push({ url: String(url), body });
+    const json = (data) => new Response(JSON.stringify(data), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    if (url.includes('/chat/stream/')) return new Response(streamText, { status: 200, headers: { 'Content-Type': 'text/event-stream' } });
+    if (url.includes('/chat/context/')) return json({ success: true, matches: { colors: ['#C42014'], fonts: ['Fraunces'], references: ['Hero'] } });
+    if (url.includes('/apply-option/')) return json({ success: true, section_name: 'livro', html: body.html, translated_languages: ['en'], untranslated_languages: [] });
+    if (url.includes('/paste-section/inspect/')) return json({ success: true, name: 'visitas', html: sec('visitas', 'Visitas'),
+        source: { site: 'Adega Serra', section: 'visitas', lang: 'pt' }, images: 2,
+        checks: [{ level: 'ok', text: "2 images will be copied to this site's library" }, { level: 'warn', text: 'Form "marcacoes" doesn\'t exist here: it will post to Reserva' }] });
+    if (url.includes('/paste-section/apply/') && applyDelay) await sleep(applyDelay);
+    if (url.includes('/paste-section/apply/')) return json({ success: true, section_name: 'visitas', html: body.html.replace('Visitas', 'Visitas ✓'),
+        translated_languages: ['en'], untranslated_languages: [], copied_images: 2, kept_images: 0 });
+    return json({ success: true });
+};
+Object.defineProperty(navigator, 'clipboard', { value: { readText: async () => clipboardText, writeText: async () => {} }, configurable: true });
+let reloaded = false;
+const toasts = [];
+events.on('toast:show', t => toasts.push(t.text));
+const selected = [];
+events.on('selection:request', el => selected.push(el));
+const $ = (s) => document.querySelector(s);
+const pop = () => $('#ev2-add-pop');
+const dock = () => $('#ev2-add-dock');
+const visible = (el) => !!el && !el.hidden;
+const click = (sel) => { const el = $(sel); if (!el) throw new Error(`missing ${sel}`); el.click(); };
+const cards = () => [...document.querySelectorAll('#ev2-add-dock .ev2-add-card')];
+const placeholder = () => $('.ev2-section-placeholder');
+const sections = () => [...document.querySelectorAll('#host section[data-section]')]
+    .filter(s => !s.closest('.ev2-section-placeholder')).map(s => s.dataset.section);   // previews live inside the placeholder
+const streams = () => requests.filter(r => r.url.includes('/chat/stream/')).map(r => r.body);
+
+try {
+    window.EDITOR_CONFIG = { pageId: 3, apiBase: '/api', csrfToken: 'x', aiEnabled: true, language: 'pt', languages: ['pt', 'en'] };
+    try { Object.defineProperty(window.location, 'reload', { value: () => { reloaded = true; } }); } catch (_) { /* not redefinable: a reload would end the test */ }
+    inserter.init();
+    modal.init();
+
+    // ── Describe ──
+    inserter.insertAfterSection('hero');
+    eq('the popover opens on Describe', [visible(pop()), pop()?.dataset.tab], [true, 'describe']);
+    eq('no dark backdrop', !!$('.ev2-section-modal-backdrop'), false);
+    eq('the title uses the editor font, not the site font', getComputedStyle(pop().querySelector('h3')).fontFamily.includes('Georgia'), false);
+    await until(() => pop().querySelector('.ev2-add-matches')?.textContent.includes('Fraunces'));
+    eq('it shows what it will match', pop().querySelector('.ev2-add-matches').textContent.includes('Fraunces'), true);
+    pop().querySelector('.ev2-add-starter').click();
+    eq('a starter fills the description', $('#ev2-add-prompt').value.length > 0, true);
+    $('#ev2-add-prompt').value = 'Uma secção sobre o livro do chef';
+
+    streamText = sse([opt('refined', 'A', 'mesma grelha'), ['option_failed', { key: 'bold', name: 'bold', error: 'x' }], opt('layout', 'C'), ['complete', { mode: 'explore', message: 'ok' }]]);
+    click('#ev2-add-pop [data-act="design"]');
+    eq('the popover closes and the dock opens', [visible(pop()), visible(dock())], [false, true]);
+    eq('it asks for a new section after hero', [streams()[0].scope, streams()[0].insert_after, streams()[0].mode], ['new', 'hero', 'explore']);
+    await until(() => cards().filter(c => c.classList.contains('is-ready')).length === 2);
+    eq('three named cards', cards().map(c => c.querySelector('.ev2-add-card-name').textContent),
+       ["A · In the page's style", 'B · Bolder', 'C · Another layout']);
+    eq('a failed direction says so', cards()[1].classList.contains('is-failed'), true);
+    eq('the first ready option is previewed in the page', placeholder()?.textContent, 'A');
+    eq('why it fits', dock().querySelector('.ev2-add-why').textContent.includes('mesma grelha'), true);
+    cards()[2].click();
+    eq('clicking a card previews it', [placeholder()?.textContent, cards()[2].classList.contains('is-on')], ['C', true]);
+
+    // ── Refine one ──
+    click('#ev2-add-dock [data-act="refine"]');
+    $('#ev2-add-refine').value = 'Título maior';
+    streamText = sse([opt('next', 'C2'), ['complete', { mode: 'refine', message: 'ok' }]]);
+    click('#ev2-add-dock [data-act="refine-send"]');
+    await until(() => cards().length === 4 && cards()[3].classList.contains('is-ready'));
+    eq('refine starts from the chosen option', [streams()[1].base_html, streams()[1].instructions], [sec('livro', 'C'), 'Título maior']);
+    eq('the refined version is a new card and is previewed', [cards()[3].querySelector('.ev2-add-card-name').textContent, placeholder()?.textContent],
+       ['C · refined', 'C2']);
+
+    // ── Add without a reload ──
+    click('#ev2-add-dock [data-act="add"]');
+    await until(() => !placeholder() && sections().includes('livro'));
+    const apply = requests.find(r => r.url.includes('/apply-option/'))?.body;
+    eq('it saves the chosen version as an insert', [apply.scope, apply.mode, apply.insert_after, apply.html], ['new-section', 'insert', 'hero', sec('livro', 'C2')]);
+    eq('the section is in the page where the placeholder was', sections(), ['hero', 'livro', 'carta']);
+    eq('no reload', reloaded, false);
+    eq('the new section is selected', selected.at(-1)?.dataset?.section, 'livro');
+    eq('everything is closed', [visible(pop()), visible(dock())], [false, false]);
+    eq('a toast confirms it', toasts.at(-1), 'Section added');
+
+    // ── Paste as copied ──
+    clipboardText = '<!-- djangopress:section {"site":"Adega Serra","section":"visitas"} -->\n' + sec('visitas', 'Visitas');
+    inserter.insertAfterSection('livro');
+    click('#ev2-add-pop .ev2-add-tab[data-tab="paste"]');
+    await until(() => pop().querySelector('.ev2-add-clip'));
+    eq('the clipboard is read and inspected', requests.filter(r => r.url.includes('/paste-section/inspect/')).at(-1)?.body?.html, clipboardText);
+    eq('the clip card names the source', pop().querySelector('.ev2-add-clip').textContent.includes('Adega Serra'), true);
+    eq('the checks are listed', [...pop().querySelectorAll('.ev2-add-checks li')].map(li => li.className), ['ok', 'warn']);
+    eq('the pasted section is previewed as copied', placeholder()?.textContent, 'Visitas');
+    pop().querySelector('input[name="ev2-paste-mode"][value="copied"]').click();
+    eq('the button says what it does', pop().querySelector('[data-act="paste"]').textContent, 'Paste');
+    applyDelay = 300;
+    click('#ev2-add-pop [data-act="paste"]');
+    click('#ev2-add-pop [data-act="paste"]');
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    eq('while adding, Esc does not close it', visible(pop()), true);
+    eq('while adding, the button is disabled', pop().querySelector('[data-act="paste"]').disabled, true);
+    await until(() => sections().includes('visitas'));
+    eq('pasted after livro with its images copied', [requests.find(r => r.url.includes('/paste-section/apply/'))?.body?.insert_after, sections()],
+       ['livro', ['hero', 'livro', 'visitas', 'carta']]);
+    eq('a double click adds it once', requests.filter(r => r.url.includes('/paste-section/apply/')).length, 1);
+    applyDelay = 0;
+    eq('no AI was asked', streams().length, 2);
+    eq('the toast counts the images', toasts.at(-1), 'Section added · 2 images copied to the library');
+
+    // ── Paste and fit ──
+    inserter.insertAfterSection('carta');
+    click('#ev2-add-pop .ev2-add-tab[data-tab="paste"]');
+    await until(() => pop().querySelector('.ev2-add-clip'));
+    eq('Fit is the default', pop().querySelector('input[name="ev2-paste-mode"]:checked')?.value, 'fit');
+    eq('the button says Fit and paste', pop().querySelector('[data-act="paste"]').textContent, 'Fit and paste');
+    streamText = sse([['option', { key: 'fit', name: 'Fitted to this site', html: sec('visitas', 'Fitted'), why: 'red', notes: [] }], ['complete', { mode: 'fit' }]]);
+    click('#ev2-add-pop [data-act="paste"]');
+    await until(() => cards().length === 2 && cards()[1].classList.contains('is-ready'));
+    eq('it asks the AI to fit the pasted section', [streams()[2].mode, streams()[2].base_html, streams()[2].insert_after],
+       ['fit', sec('visitas', 'Visitas'), 'carta']);
+    eq('as copied and fitted side by side', cards().map(c => c.querySelector('.ev2-add-card-name').textContent), ['As copied', 'Fitted to this site']);
+    eq('the fitted one is previewed', placeholder()?.textContent, 'Fitted');
+    cards()[0].click();
+    eq('as copied can be previewed too', placeholder()?.textContent, 'Visitas');
+    cards()[1].click();
+    applyDelay = 200;
+    click('#ev2-add-dock [data-act="add"]');
+    eq('Discard is off while adding', dock().querySelector('[data-act="discard"]').disabled, true);
+    click('#ev2-add-dock [data-act="discard"]');
+    eq('and clicking it does nothing', visible(dock()), true);
+    await until(() => requests.filter(r => r.url.includes('/paste-section/apply/')).length === 2);
+    eq('the fitted version is added', requests.filter(r => r.url.includes('/paste-section/apply/')).at(-1).body.html, sec('visitas', 'Fitted'));
+    await until(() => !visible(dock()));
+    applyDelay = 0;
+    eq('the fitted section is in the page', sections(), ['hero', 'livro', 'visitas', 'carta', 'visitas']);
+
+    // ── Discard ──
+    inserter.insertAfterSection('hero');
+    $('#ev2-add-prompt').value = 'x';
+    streamText = sse([opt('refined', 'Z'), ['complete', {}]]);
+    click('#ev2-add-pop [data-act="design"]');
+    await until(() => cards().some(c => c.classList.contains('is-ready')));
+    click('#ev2-add-dock [data-act="discard"]');
+    eq('discard removes the placeholder and closes', [!!placeholder(), visible(dock()), visible(pop())], [false, false, false]);
+} catch (err) {
+    fails.push('crash: ' + err.message + ' ' + (err.stack || '').split('\n')[1]);
+}
+document.getElementById('out').textContent = fails.join('\n') || 'all good';
+document.title = fails.length ? `FAIL ${fails.length}` : `PASS ${passed}`;
+</script>

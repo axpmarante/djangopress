@@ -16,7 +16,7 @@ import unicodedata
 from bs4 import BeautifulSoup
 
 from djangopress.ai.design_context import build_design_context, matches_summary
-from djangopress.ai.directions import DIRECTIONS, NEW_SECTION_DIRECTIONS, REFINED, generate_directions
+from djangopress.ai.directions import DIRECTIONS, FIT, NEW_SECTION_DIRECTIONS, REFINED, generate_directions
 from djangopress.editor_v2 import ai_apply
 from djangopress.site_assistant import cancel
 
@@ -35,6 +35,7 @@ LABELS = {
     'context': "Reading the site's style",
     'directions': 'Designing 3 directions',
     'refine': 'Making a new version of this option',
+    'fit': "Fitting it to this site's design",
     'generate': 'Making the change',
     'check': "Checking against the site's palette and fonts",
     'apply': 'Saving and updating the other languages',
@@ -103,15 +104,19 @@ def run_turn(page, *, scope, target, instructions, mode='auto', lang=None, histo
         return ctx
 
     if base_html:
+        kind = 'fit' if mode == 'fit' else 'refine'
         ctx = context()
-        step('refine', 'running')
+        step(kind, 'running')
         items = generate_directions(page, scope, target, instructions, lang=lang, history=history, base_html=base_html,
                                     images=images, context=ctx, on_option=emit_option, is_cancelled=cancelled,
-                                    directions=[REFINED])
-        step('refine', 'done')
+                                    directions=[FIT if kind == 'fit' else REFINED])
+        step(kind, 'done')
         if cancelled():
-            return stopped('refine')
+            return stopped(kind)
         ok = [i for i in items if 'html' in i]
+        if kind == 'fit':
+            return {'mode': 'fit', 'cancelled': False,
+                    'message': "Here it is in this site's style." if ok else "Couldn't fit it to this site."}
         return {'mode': 'refine', 'cancelled': False,
                 'message': 'Here is a new version of that option.' if ok else "Couldn't make a new version."}
 

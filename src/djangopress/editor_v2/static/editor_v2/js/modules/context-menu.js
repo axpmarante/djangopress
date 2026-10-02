@@ -24,6 +24,7 @@ import { itemRole, hasFormatting } from '../lib/content-model.js';
 import { setText, setAttr, setClasses, setFocusPoint, setNewTab, opensInNewTab, focusPointOf } from '../lib/edits.js';
 import { confirmDialog, promptDialog } from '../lib/dialog.js';
 import { api } from '../lib/api.js';
+import { makeClip } from '../lib/section-clip.js';
 
 const handlers = {};
 let menu;
@@ -34,10 +35,10 @@ function plain(el) { return (el.textContent || '').replace(/\s+/g, ' ').trim(); 
 function short(text, n = 26) { return text.length > n ? `${text.slice(0, n - 1)}…` : text; }
 function label(name) { const s = (name || '').replace(/[-_]+/g, ' ').trim(); return s.charAt(0).toUpperCase() + s.slice(1); }
 
-function copy(text) {
+function copy(text, done = 'Copied') {
     return Promise.resolve()
         .then(() => navigator.clipboard.writeText(text))
-        .then(() => events.emit('toast:show', { text: 'Copied' }))
+        .then(() => events.emit('toast:show', { text: done }))
         .catch(() => events.emit('toast:show', { text: "Couldn't copy" }));
 }
 
@@ -109,6 +110,8 @@ function sectionMenu(el, ai) {
     const own = [...el.classList].filter(c => !isRuntimeClass(c));
     return { title: `Section · ${label(name)}`, items: [
         ai && { label: 'Ask AI about this section…', icon: '✦', cls: 'ai', action: () => events.emit('context:ai-refine', { section: name }) },
+        { label: 'Copy section', icon: '⎘', hint: 'Paste it on any DjangoPress site',
+          action: async () => copy(await makeClip(el), 'Section copied. Paste it with Add a section → Paste, on this site or another.') },
         { label: 'Add section above', icon: '↥', action: () => insertBefore(name) },
         { label: 'Add section below', icon: '↧', action: () => insertAfterSection(name) },
         { row: [

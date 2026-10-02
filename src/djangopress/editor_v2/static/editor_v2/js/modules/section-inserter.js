@@ -13,6 +13,7 @@
 
 import { events } from '../lib/events.js';
 import { getContentWrapper, getSections, initDynamicComponents } from '../lib/dom.js';
+import { swapNode } from '../lib/chat-preview.js';
 
 // ---------------------------------------------------------------------------
 // Module state
@@ -29,7 +30,7 @@ function buildPlaceholderContent(el) {
     el.innerHTML = '';
     const label = document.createElement('span');
     label.className = 'ev2-placeholder-label';
-    label.textContent = 'New section \u2014 describe it in the modal';
+    label.textContent = 'New section \u2014 describe it or paste one';
     el.appendChild(label);
 
     const cancelBtn = document.createElement('button');
@@ -120,6 +121,19 @@ export function resetPlaceholder() {
     if (!placeholder) return;
     placeholder.classList.remove('ev2-preview-active');
     buildPlaceholderContent(placeholder);
+}
+
+/** Put the saved section where the placeholder is (no reload) and return its node. */
+export function commitPlaceholder(html) {
+    if (!placeholder) return null;
+    const slot = placeholder;
+    const node = swapNode(slot, html);
+    if (node === slot) return null;              // nothing to put there: keep the placeholder as it was
+    placeholder = null;
+    insertAfter = null;
+    setInserting(false);
+    renderBars();
+    return node;
 }
 
 /** Remove the placeholder from the DOM and reset state. */

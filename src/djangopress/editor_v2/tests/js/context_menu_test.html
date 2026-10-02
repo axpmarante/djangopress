@@ -30,13 +30,17 @@ const eq = (name, got, want) => {
 };
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const requests = [];
+let storedCopies = null;
 window.fetch = async (url, init = {}) => {
     requests.push({ url: String(url), body: init.body ? JSON.parse(init.body) : null });
+    if (String(url).includes('/page-copies/') && storedCopies) {
+        return new Response(JSON.stringify({ success: true, copies: storedCopies }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
     return new Response(JSON.stringify({ success: false, error: 'stubbed' }), { status: 200, headers: { 'Content-Type': 'application/json' } });
 };
 const copied = [];
 Object.defineProperty(navigator, 'clipboard', { value: { writeText: async (t) => { copied.push(t); } }, configurable: true });
-window.EDITOR_CONFIG = { pageId: 3, apiBase: '/api', csrfToken: 'x', aiEnabled: true, language: 'pt', languages: ['pt', 'en'] };
+window.EDITOR_CONFIG = { siteName: 'Adega Serra', pageId: 3, apiBase: '/api', csrfToken: 'x', aiEnabled: true, language: 'pt', languages: ['pt', 'en'] };
 const emitted = [];
 for (const n of ['context:ai-refine', 'change:classes', 'change:attribute', 'change:content', 'selection:request',
     'sidebar:switch-tab', 'image-picker:open', 'inline-edit:trigger', 'process-images:open']) events.on(n, d => emitted.push([n, d]));
@@ -102,7 +106,19 @@ try {
 
     m = menuFor(section);
     eq('section title', m.title, 'Section · Eventos');
-    eq('section menu', labels(m.items), ['Ask AI about this section…', 'Add section above', 'Add section below', 'More', 'Remove section']);
+    eq('section menu', labels(m.items), ['Ask AI about this section…', 'Copy section', 'Add section above', 'Add section below', 'More', 'Remove section']);
+    await find(m.items, 'Copy section').action();
+    const clip = copied.at(-1) || '';
+    eq('the clip names the source', JSON.parse(clip.match(/<!-- djangopress:section (\{.*?\}) -->/)[1]),
+       { site: 'Adega Serra', section: 'eventos', lang: 'pt', origin: location.origin });
+    eq('without a stored copy the live section is used', clip.includes('<section data-section="eventos"') && !clip.includes('ev2-'), true);
+    section.insertAdjacentHTML('beforeend', '<form id="f"><input type="hidden" name="csrfmiddlewaretoken" value="SECRET"></form>');
+    await find(menuFor(section).items, 'Copy section').action();
+    eq('a rendered CSRF token never leaves the page', [copied.at(-1).includes('SECRET'), copied.at(-1).includes('{% csrf_token %}')], [false, true]);
+    $('f').remove();
+    storedCopies = { pt: '<section data-section="eventos" id="eventos" class="py-10"><form>{% csrf_token %}<p>{{ SITE_NAME }}</p></form></section>' };
+    await find(menuFor(section).items, 'Copy section').action();
+    eq('the clip carries the section as stored', copied.at(-1).endsWith(storedCopies.pt), true);
     eq('section row', m.items.filter(Boolean).find(i => i.row).row.map(b => b.title), ['Move up', 'Move down', 'Duplicate', 'Hide on mobile']);
     eq('section more', labels(sub(m)), ['Fix section images', 'Background…', 'Rename section…', 'Copy HTML']);
     m.items.filter(Boolean).find(i => i.row).row.find(b => b.title === 'Hide on mobile').action();

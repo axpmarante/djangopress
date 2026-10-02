@@ -29,7 +29,7 @@
     <link href="{% static 'css/marquee.css' %}" rel="stylesheet">
     {% if edit_mode == 'v2' or ev2_frame %}{% load editor_assets %}{% editor_importmap %}{% endif %}
     {% if edit_mode == 'v2' %}
-    <link href="{% static 'editor_v2/css/editor.css' %}?v=27" rel="stylesheet">
+    <link href="{% static 'editor_v2/css/editor.css' %}?v=28" rel="stylesheet">
     {% endif %}
     <style>[x-cloak] { display: none !important; }</style>
     <script defer src="https://cdn.jsdelivr.net/npm/@alpinejs/intersect@3.x.x/dist/cdn.min.js"></script>
@@ -124,6 +124,7 @@
       window.EDITOR_CONFIG = {
         pageId: {{ page_obj.id|default:"0" }},
         pageTitle: '{{ page_obj.default_title|default:""|escapejs }}',
+        siteName: '{{ SITE_NAME|default:""|escapejs }}',
         language: '{{ LANGUAGE_CODE }}',
         languages: [{% for code, name in SITE_LANGUAGES %}'{{ code }}'{% if not forloop.last %}, {% endif %}{% endfor %}],
         languageNames: { {% for code, name in SITE_LANGUAGES %}'{{ code }}': '{{ name }}'{% if not forloop.last %}, {% endif %}{% endfor %} },
@@ -133,7 +134,7 @@
         apiBase: '/editor-v2/api',
       };
     </script>
-    <script type="module" src="{% static 'editor_v2/js/editor.js' %}?v=45"></script>
+    <script type="module" src="{% static 'editor_v2/js/editor.js' %}?v=46"></script>
     {% endif %}
     {% block extra_js %}{% endblock %}
     {% include "partials/cookie_consent.html" %}
