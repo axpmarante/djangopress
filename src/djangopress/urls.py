@@ -12,14 +12,26 @@ from django.conf import settings
 from django.conf.urls.static import static
 from django.conf.urls.i18n import i18n_patterns
 from django.contrib.sitemaps.views import sitemap
+from django.core.exceptions import ImproperlyConfigured
+from django.utils.module_loading import import_string
 from django.http import HttpResponse
 
 from djangopress.core.sitemaps import PageSitemap
 from djangopress.core.views import set_language, form_submit
 
-sitemaps = {
-    'pages': PageSitemap,
-}
+def build_sitemaps(extra=None):
+    """The engine's sitemaps plus the site's SITEMAPS_EXTRA ({name: 'dotted.path'})."""
+    extra = getattr(settings, 'SITEMAPS_EXTRA', {}) if extra is None else extra
+    result = {'pages': PageSitemap}
+    for name, dotted in extra.items():
+        try:
+            result[name] = import_string(dotted)
+        except ImportError as exc:
+            raise ImproperlyConfigured(f'SITEMAPS_EXTRA[{name!r}] = {dotted!r} cannot be imported: {exc}') from exc
+    return result
+
+
+sitemaps = build_sitemaps()
 
 
 def robots_txt(request):

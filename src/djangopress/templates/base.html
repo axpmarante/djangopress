@@ -36,7 +36,7 @@
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 
     <!-- Open Graph meta tags -->
-    <meta property="og:type" content="website">
+    <meta property="og:type" content="{% block og_type %}website{% endblock %}">
     <meta property="og:title" content="{% block og_title %}{{ SITE_NAME_I18N|get_translation:LANGUAGE_CODE }}{% endblock %}">
     {% if DEFAULT_OG_DESCRIPTION_I18N %}<meta property="og:description" content="{% block og_description %}{{ DEFAULT_OG_DESCRIPTION_I18N|get_translation:LANGUAGE_CODE }}{% endblock %}">{% endif %}
     {% if OG_IMAGE %}<meta property="og:image" content="{% block og_image %}{{ OG_IMAGE.url }}{% endblock %}">{% endif %}

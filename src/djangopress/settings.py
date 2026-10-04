@@ -277,6 +277,9 @@ LOGOUT_REDIRECT_URL = '/backoffice/login/'
 # NoReverseMatch and takes the whole backoffice down, not just this link.
 BACKOFFICE_EXTRA_NAV = []
 
+# Extra sitemaps a site adds to /sitemap.xml: {'name': 'dotted.path.SitemapClass'}.
+SITEMAPS_EXTRA = {}
+
 # Extra unprefixed path prefixes contributed by site-local apps (webhooks,
 # machine endpoints). Sites append to this in their own config/settings.py.
 # Honoured by the locale middlewares only: check_site and the build adapter
