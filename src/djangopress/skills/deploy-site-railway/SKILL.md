@@ -1,6 +1,6 @@
 ---
 name: deploy-site-railway
-description: Deploy a DjangoPress site to Railway with SQLite + Litestream + GCS. Handles first-time deployments and redeployments. No Postgres needed — database is SQLite replicated to Google Cloud Storage via Litestream. Use this skill when deploying any DjangoPress site to production.
+description: Deploy a DjangoPress site to Railway with SQLite + Litestream + GCS. Handles first-time deployments and redeployments. No Postgres needed — database is SQLite replicated to Google Cloud Storage via Litestream. Use this skill when deploying any DjangoPress site to production, and when taking a deployed site live on its final custom domain (Cloudflare DNS in front of Railway, via the djangopress-manager's go_live).
 argument-hint: [project-name]
 allowed-tools: Bash, Read, Write, Edit, Grep, Glob, AskUserQuestion
 ---
@@ -37,6 +37,7 @@ git remote -v
 railway status
 ```
 
+- **If linked to a project and the user asked to go live on a domain:** Jump to **Go Live on the Final Domain**.
 - **If linked to a project:** This is a redeployment. Jump to the **Redeployment Flow** section.
 - **If not linked / command fails:** This is a first-time deployment. Continue with Phase 2.
 
@@ -232,12 +233,7 @@ Capture the `*.railway.app` URL.
 
 ### Custom Domain Setup
 
-If the site has a custom domain (e.g. `example.pt`), remind the user to add **both** the root domain and the `www` subdomain as custom domains in Railway:
-
-1. `example.pt` — the main domain
-2. `www.example.pt` — so visitors using `www.` don't get a 404
-
-Railway allows multiple custom domains per service. Both need corresponding DNS records (CNAME) in the DNS provider (e.g. Cloudflare) pointing to the Railway-provided targets. If using Cloudflare, enable the orange cloud (proxy) on both records.
+Don't add custom domains here by hand. Taking the site live on its final domain is its own flow, run after the site works on `*.up.railway.app`: see **Go Live on the Final Domain** below.
 
 ---
 
@@ -299,8 +295,87 @@ Sync commands:
 Next steps:
   - Visit the live site and verify all pages render correctly
   - Test the contact form
-  - Set up a custom domain in Railway dashboard if needed (remember to add BOTH root and www)
+  - Go live on the final domain: /deploy-site-railway go-live <domain>
   - Monitor logs: railway logs
+```
+
+---
+
+## Go Live on the Final Domain
+
+Use when the user wants the deployed site on its own domain (e.g. "mete online no domínio final", "go live on example.pt"). Cloudflare is the DNS in front of Railway. The **djangopress-manager** already implements this end to end (`manage.py go_live <slug>`); use it, don't hand-roll Cloudflare API calls. It gets the details right that a manual setup gets wrong:
+
+- copies the domain's existing mail/service records (MX, SPF, DKIM, DMARC, `mail.`/`webmail.` …) into the new zone, and pins anything that pointed at the old apex to its old IP;
+- creates the Railway CNAMEs **DNS-only** — Railway can't validate a proxied CNAME, so the proxy is turned on only after Railway issues the certificate (the manager's **Verificar** does that);
+- adds the `_railway-verify` ownership TXTs (the CLI never returns them; without them Railway doesn't route the domain);
+- SSL **Full**, a `www → apex` 301, and `CUSTOM_DOMAINS=<domain>,www.<domain>` on Railway (which the engine settings add to `ALLOWED_HOSTS` and `CSRF_TRUSTED_ORIGINS`).
+
+Paths below assume the manager lives next to the sites: `MANAGER=~/Documents/djangopress-sites/djangopress-manager`. The Cloudflare token (`CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`) lives in the manager's `.env` — never print it.
+
+### Step 1: Read-only checks (do these yourself)
+
+```bash
+dig +short NS <domain>          # who serves DNS today
+dig +short A <domain>           # is an old site live there? It goes offline when the nameservers switch
+dig +short MX <domain>          # mail that must keep working
+curl -sI https://<domain> | head -3
+```
+
+Tell the user what's live on the domain today and that it will be replaced. `SiteSettings.gcs_folder` must be set (media stays in that folder whatever the domain); if it's empty, set it to the current folder before anything else.
+
+### Step 2: Preparar (local manager DB only)
+
+The site must be registered in the manager (`Site` with `slug` = the project folder). Run the same thing the Domain card's **Preparar** does:
+
+```bash
+cd $MANAGER && .venv/bin/python manage.py shell -c "
+from manager.models import Site
+from manager.domain_views import _preconditions
+from manager.services.domains.dns_snapshot import snapshot_with_warnings
+site = Site.objects.get(slug='<slug>')
+problem = _preconditions(site)
+print('preconditions:', problem or 'OK')
+if not problem:
+    found, warnings = snapshot_with_warnings('<domain>')
+    site.live_domain, site.domain_records = '<domain>', [r.to_dict() for r in found]
+    site.domain_status, site.domain_error = Site.DomainStatus.PREPARED, ''
+    site.save()
+    for d in site.domain_records: print('  ', d)
+    print('warnings:', warnings)
+"
+```
+
+Show the user the records that will be copied and any warnings. Fix any precondition problem first (engine version, settings overriding `ALLOWED_HOSTS`, no Railway project).
+
+If the Railway custom domains were **already added by hand**, `go_live` stops ("já existe no Railway mas não tenho os registos DNS"). Either remove them in Railway, or save the targets the `railway domain <host> --json` output gave you: `site.railway_dns = {'<domain>': [{'name': '<domain>', 'type': 'CNAME', 'value': '<target>.up.railway.app'}], 'www.<domain>': [...]}`.
+
+### Step 3: Executar — the user runs it
+
+Creating a Cloudflare zone and DNS records is an outward-facing change, and auto mode blocks it. Give the user the commands **one per line**, ready to paste into their terminal:
+
+```
+cd ~/Documents/djangopress-sites/djangopress-manager
+source .venv/bin/activate
+python manage.py go_live <slug>
+```
+
+(Or, inside Claude Code, one line: `! ~/Documents/djangopress-sites/djangopress-manager/.venv/bin/python ~/Documents/djangopress-sites/djangopress-manager/manage.py go_live <slug>`.) Alternatively the user can press **Executar** on the site's Domain card in the manager (`http://localhost:9000`).
+
+The command ends by printing the two Cloudflare nameservers.
+
+### Step 4: Switch the nameservers (user, at the registrar)
+
+At the domain's registrar, replace the current nameservers with the two Cloudflare ones. For `.pt` domains this is done at DNS.PT (or the registrar's panel) — leave the IP/glue fields empty.
+
+### Step 5: Verify
+
+Once the nameservers propagate (`dig +short NS <domain>` shows Cloudflare — minutes to a few hours), the user presses **Verificar** on the Domain card. It checks that Railway routes the domain, both certificates are VALID (and only then turns the Cloudflare proxy on for `@`/`www`), HTTPS, the www 301, MX and SPF, and marks the site live. Don't turn the proxy on by hand before Railway's certificate is valid.
+
+Then confirm yourself:
+
+```bash
+curl -s -o /dev/null -w "%{http_code}\n" https://<domain>/
+curl -sI https://www.<domain>/ | grep -iE '^(HTTP|location)'
 ```
 
 ---
