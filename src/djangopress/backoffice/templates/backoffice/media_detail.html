@@ -2,6 +2,19 @@
 
 {% block title %}Media Detail{% endblock %}
 
+{% block extra_head %}
+{% if editable %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/cropperjs@1.6.2/dist/cropper.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/cropperjs@1.6.2/dist/cropper.min.js"></script>
+<style>
+    /* Image editor: the checkerboard shows transparent areas of PNG/WebP images */
+    .ie-checker { background-color: #2a2a2e; background-image: linear-gradient(45deg, #333338 25%, transparent 25%), linear-gradient(-45deg, #333338 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #333338 75%), linear-gradient(-45deg, transparent 75%, #333338 75%); background-size: 20px 20px; background-position: 0 0, 0 10px, 10px -10px, -10px 0; }
+    .ie-stage canvas { max-width: 100%; max-height: 100%; display: block; }
+    .ie-stage .cropper-container { max-width: 100%; max-height: 100%; }
+</style>
+{% endif %}
+{% endblock %}
+
 {% block content %}
 <div class="max-w-7xl mx-auto space-y-6" x-data="imageDetail()">
     <!-- Header -->
@@ -60,9 +73,26 @@
                 <iframe src="{{ image.file.url }}" class="w-full rounded" style="height: 500px;"></iframe>
             </div>
             {% elif image.image %}
-            <div class="bg-gray-100 flex items-center justify-center p-4" style="min-height: 300px;">
+            <div class="bg-gray-100 flex items-center justify-center p-4 relative" style="min-height: 300px;">
                 <img src="{{ image.image.url }}" alt="{{ image }}" class="max-w-full max-h-[500px] object-contain rounded">
+                {% if editable %}
+                <button type="button" @click="$dispatch('open-image-editor')"
+                        class="absolute top-3 right-3 inline-flex items-center gap-2 px-3 py-2 bg-white/95 text-gray-800 text-sm font-medium rounded-lg shadow hover:bg-white">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/></svg>
+                    Edit image
+                </button>
+                {% endif %}
             </div>
+            {% if image.original_image %}
+            <div class="px-4 py-3 border-t bg-amber-50 flex items-center justify-between gap-3">
+                <p class="text-sm text-amber-800">This image was edited. The original file is kept.</p>
+                <form method="post" action="{% url 'backoffice:media_restore_original' pk=image.pk %}"
+                      onsubmit="return confirm('Put the original image back on every page that uses this one?');">
+                    {% csrf_token %}
+                    <button type="submit" class="text-sm font-medium text-amber-900 underline hover:no-underline">Restore original</button>
+                </form>
+            </div>
+            {% endif %}
             {% else %}
             <div class="bg-gray-100 flex items-center justify-center p-4" style="min-height: 300px;">
                 <div class="text-gray-400">
@@ -295,6 +325,130 @@
         </div>
     </div>
 
+    {% if editable %}
+    <!-- Image Editor (margin reset: the parent's space-y would push this fixed overlay down) -->
+    <div x-data="imageEditor({ sourceUrl: '{% url 'backoffice:media_source' pk=image.pk %}', saveUrl: '{% url 'backoffice:media_edit' pk=image.pk %}' })"
+         @open-image-editor.window="open()"
+         @keydown.window="onKey($event)"
+         x-show="isOpen" x-cloak @wheel.prevent
+         style="margin: 0"
+         class="fixed inset-0 z-[100] flex flex-col bg-gray-950 text-gray-100">
+
+        <!-- Top bar -->
+        <div class="flex items-center justify-between gap-3 px-4 py-3 border-b border-white/10">
+            <div class="flex items-center gap-3 min-w-0">
+                <h3 class="text-base font-semibold whitespace-nowrap">Edit image</h3>
+                <span class="text-xs text-gray-400 font-mono" x-show="width" x-text="width + ' × ' + height + ' px'"></span>
+                <span class="text-xs text-gray-500" x-show="steps.length" x-text="steps.length + (steps.length === 1 ? ' change' : ' changes')"></span>
+            </div>
+            <div class="flex items-center gap-2">
+                <button type="button" @click="undo()" :disabled="!canUndo || busy" title="Undo (Ctrl+Z)"
+                        class="inline-flex items-center gap-1.5 px-3 py-2 text-sm rounded-lg hover:bg-white/10 disabled:opacity-30 disabled:hover:bg-transparent">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h10a5 5 0 015 5v2M3 10l5-5M3 10l5 5"/></svg>
+                    Undo
+                </button>
+                <button type="button" @click="redo()" :disabled="!canRedo || busy" title="Redo (Ctrl+Shift+Z)"
+                        class="inline-flex items-center gap-1.5 px-3 py-2 text-sm rounded-lg hover:bg-white/10 disabled:opacity-30 disabled:hover:bg-transparent">
+                    Redo
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 10H11a5 5 0 00-5 5v2m15-7l-5-5m5 5l-5 5"/></svg>
+                </button>
+                <span class="w-px h-6 bg-white/10 mx-1"></span>
+                <button type="button" @click="close()" :disabled="saving"
+                        class="px-3 py-2 text-sm rounded-lg hover:bg-white/10 disabled:opacity-30">Cancel</button>
+                <button type="button" @click="save()" :disabled="!steps.length || busy"
+                        class="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium bg-blue-600 rounded-lg hover:bg-blue-500 disabled:opacity-40 disabled:hover:bg-blue-600">
+                    <svg x-show="saving" class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
+                    <span x-text="saving ? 'Saving…' : 'Save'"></span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Stage -->
+        <div class="flex-1 min-h-0 relative ie-checker">
+            <div class="ie-stage absolute inset-6 flex items-center justify-center">
+                <canvas x-ref="stage"></canvas>
+            </div>
+            <div x-show="loading" class="absolute inset-0 flex items-center justify-center text-sm text-gray-300">Loading image…</div>
+        </div>
+
+        <!-- Error -->
+        <div x-show="error" class="px-4 py-2 bg-red-900/60 text-red-100 text-sm flex items-center justify-between">
+            <span x-text="error"></span>
+            <button type="button" @click="error = ''" class="text-red-200 hover:text-white">Dismiss</button>
+        </div>
+
+        <!-- Tool bar -->
+        <div class="border-t border-white/10 px-4 py-3">
+            <!-- Main tools -->
+            <div x-show="!mode" class="flex flex-wrap items-center justify-center gap-1">
+                <button type="button" @click="push({op: 'rotate', deg: -90})" :disabled="busy" class="inline-flex items-center gap-2 px-3 py-2 text-sm rounded-lg hover:bg-white/10 disabled:opacity-30">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h5M4.6 9A8 8 0 1112 20"/></svg>
+                    Rotate left
+                </button>
+                <button type="button" @click="push({op: 'rotate', deg: 90})" :disabled="busy" class="inline-flex items-center gap-2 px-3 py-2 text-sm rounded-lg hover:bg-white/10 disabled:opacity-30">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 4v5h-5M19.4 9A8 8 0 1012 20"/></svg>
+                    Rotate right
+                </button>
+                <button type="button" @click="push({op: 'flip', axis: 'h'})" :disabled="busy" class="inline-flex items-center gap-2 px-3 py-2 text-sm rounded-lg hover:bg-white/10 disabled:opacity-30">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v18M8 7l-5 5 5 5V7zm8 0l5 5-5 5V7z"/></svg>
+                    Flip horizontal
+                </button>
+                <button type="button" @click="push({op: 'flip', axis: 'v'})" :disabled="busy" class="inline-flex items-center gap-2 px-3 py-2 text-sm rounded-lg hover:bg-white/10 disabled:opacity-30">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12h18M7 8l5-5 5 5H7zm0 8l5 5 5-5H7z"/></svg>
+                    Flip vertical
+                </button>
+                <span class="w-px h-6 bg-white/10 mx-1"></span>
+                <button type="button" @click="startCrop()" :disabled="busy" class="inline-flex items-center gap-2 px-3 py-2 text-sm rounded-lg hover:bg-white/10 disabled:opacity-30">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 2v14a2 2 0 002 2h14M2 6h14a2 2 0 012 2v14"/></svg>
+                    Crop
+                </button>
+                <button type="button" @click="startResize()" :disabled="busy" class="inline-flex items-center gap-2 px-3 py-2 text-sm rounded-lg hover:bg-white/10 disabled:opacity-30">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4h4M20 8V4h-4M4 16v4h4M20 16v4h-4"/></svg>
+                    Resize
+                </button>
+                <span class="w-px h-6 bg-white/10 mx-1"></span>
+                <button type="button" @click="reset()" :disabled="busy || !steps.length" class="inline-flex items-center gap-2 px-3 py-2 text-sm rounded-lg hover:bg-white/10 disabled:opacity-30">
+                    Reset
+                </button>
+            </div>
+
+            <!-- Crop tools -->
+            <div x-show="mode === 'crop'" class="flex flex-wrap items-center justify-center gap-2">
+                <span class="text-sm text-gray-400 mr-1">Aspect</span>
+                <template x-for="r in ratios" :key="r.label">
+                    <button type="button" @click="setRatio(r.value)"
+                            :class="aspect === r.value || (isNaN(aspect) && isNaN(r.value)) ? 'bg-white text-gray-900' : 'hover:bg-white/10'"
+                            class="px-3 py-1.5 text-sm rounded-lg" x-text="r.label"></button>
+                </template>
+                <span class="w-px h-6 bg-white/10 mx-2"></span>
+                <span class="text-xs text-gray-400 font-mono w-28 text-center" x-text="cropLabel"></span>
+                <button type="button" @click="cancelMode()" class="px-3 py-2 text-sm rounded-lg hover:bg-white/10">Cancel</button>
+                <button type="button" @click="applyCrop()" class="px-4 py-2 text-sm font-medium bg-white text-gray-900 rounded-lg hover:bg-gray-200">Apply crop</button>
+            </div>
+
+            <!-- Resize tools -->
+            <div x-show="mode === 'resize'" class="flex flex-wrap items-center justify-center gap-2">
+                <label class="text-sm text-gray-400">Width</label>
+                <input type="number" min="1" max="10000" x-model.number="resizeW" @input="syncResize('w')"
+                       class="w-24 px-2 py-1.5 text-sm text-gray-900 rounded-lg">
+                <span class="text-gray-500">×</span>
+                <label class="text-sm text-gray-400">Height</label>
+                <input type="number" min="1" max="10000" x-model.number="resizeH" @input="syncResize('h')"
+                       class="w-24 px-2 py-1.5 text-sm text-gray-900 rounded-lg">
+                <span class="text-sm text-gray-400">px</span>
+                <label class="inline-flex items-center gap-2 text-sm text-gray-300 ml-2">
+                    <input type="checkbox" x-model="lockRatio" class="rounded"> Keep proportions
+                </label>
+                <span class="w-px h-6 bg-white/10 mx-2"></span>
+                <button type="button" @click="cancelMode()" class="px-3 py-2 text-sm rounded-lg hover:bg-white/10">Cancel</button>
+                <button type="button" @click="applyResize()" class="px-4 py-2 text-sm font-medium bg-white text-gray-900 rounded-lg hover:bg-gray-200">Apply size</button>
+            </div>
+
+            <p class="text-center text-xs text-gray-500 mt-2">Saving replaces this image everywhere the site uses it. The original is kept, so you can restore it later.</p>
+        </div>
+    </div>
+    {% endif %}
+
     {% endif %}
 </div>
 
@@ -307,6 +461,270 @@ function copyUrl() {
         btn.textContent = 'Copied!';
         setTimeout(() => btn.textContent = original, 2000);
     });
+}
+
+// Image editor. Every change is a step; the history is a list of step lists,
+// so undo/redo just move the index and the preview is redrawn from the
+// original. Save sends the current steps and the server replays them with
+// Pillow on the full-size file. The preview works on a copy scaled down to
+// PREVIEW_MAX, so steps are always stored in full-size pixels.
+const PREVIEW_MAX = 2400;
+const MAX_SIZE = 10000;
+
+function imageEditor(cfg) {
+    // Kept out of Alpine's reactive state: proxies break canvases and Cropper.
+    let base = null;      // original, drawn once at preview scale
+    let scale = 1;        // preview pixels per full-size pixel of the original
+    let cropper = null;
+
+    function canvas(w, h) {
+        const c = document.createElement('canvas');
+        c.width = Math.max(1, Math.round(w));
+        c.height = Math.max(1, Math.round(h));
+        return c;
+    }
+
+    return {
+        isOpen: false, loading: false, saving: false, error: '',
+        history: [[]], index: 0,
+        mode: null, aspect: NaN, cropLabel: '',
+        resizeW: 0, resizeH: 0, lockRatio: true,
+        width: 0, height: 0,
+        ratios: [
+            { label: 'Free', value: NaN }, { label: '1:1', value: 1 }, { label: '4:3', value: 4 / 3 },
+            { label: '3:2', value: 3 / 2 }, { label: '16:9', value: 16 / 9 },
+        ],
+
+        get steps() { return this.history[this.index]; },
+        get canUndo() { return this.index > 0; },
+        get canRedo() { return this.index < this.history.length - 1; },
+        get busy() { return this.loading || this.saving; },
+
+        init() {
+            window.addEventListener('beforeunload', (e) => {
+                if (this.isOpen && this.steps.length && !this.saving) e.preventDefault();
+            });
+        },
+
+        open() {
+            this.isOpen = true;
+            this.error = '';
+            this.history = [[]];
+            this.index = 0;
+            this.mode = null;
+            if (base) { this.render(); return; }
+            this.loading = true;
+            const img = new Image();
+            img.onload = () => {
+                scale = Math.min(1, PREVIEW_MAX / Math.max(img.naturalWidth, img.naturalHeight));
+                base = canvas(img.naturalWidth * scale, img.naturalHeight * scale);
+                base.getContext('2d').drawImage(img, 0, 0, base.width, base.height);
+                base.fullWidth = img.naturalWidth;
+                base.fullHeight = img.naturalHeight;
+                this.loading = false;
+                this.render();
+            };
+            img.onerror = () => { this.loading = false; this.error = 'Could not load the image.'; };
+            img.src = cfg.sourceUrl + '?t=' + Date.now();
+        },
+
+        close() {
+            if (this.saving) return;
+            if (this.steps.length && !confirm('Discard your changes to this image?')) return;
+            this.cancelMode();
+            this.isOpen = false;
+            this.history = [[]];
+            this.index = 0;
+        },
+
+        // Replay the current steps on the preview. Mirrors apply_operations()
+        // in core/services/image_edit.py, including the crop clamping.
+        render() {
+            if (!base) return;
+            let c = base, fw = base.fullWidth, fh = base.fullHeight;
+            for (const op of this.steps) {
+                let n;
+                if (op.op === 'rotate') {
+                    const deg = ((op.deg % 360) + 360) % 360;
+                    if (!deg) continue;
+                    const swap = deg === 90 || deg === 270;
+                    n = swap ? canvas(c.height, c.width) : canvas(c.width, c.height);
+                    const ctx = n.getContext('2d');
+                    ctx.translate(n.width / 2, n.height / 2);
+                    ctx.rotate(deg * Math.PI / 180);
+                    ctx.drawImage(c, -c.width / 2, -c.height / 2);
+                    if (swap) [fw, fh] = [fh, fw];
+                } else if (op.op === 'flip') {
+                    n = canvas(c.width, c.height);
+                    const ctx = n.getContext('2d');
+                    if (op.axis === 'h') { ctx.translate(n.width, 0); ctx.scale(-1, 1); }
+                    else { ctx.translate(0, n.height); ctx.scale(1, -1); }
+                    ctx.drawImage(c, 0, 0);
+                } else if (op.op === 'crop') {
+                    const left = Math.max(0, op.x), top = Math.max(0, op.y);
+                    const right = Math.min(fw, op.x + op.width), bottom = Math.min(fh, op.y + op.height);
+                    if (right - left < 1 || bottom - top < 1) continue;
+                    const r = c.width / fw;
+                    n = canvas((right - left) * r, (bottom - top) * r);
+                    n.getContext('2d').drawImage(c, left * r, top * r, (right - left) * r, (bottom - top) * r,
+                                                 0, 0, n.width, n.height);
+                    fw = right - left; fh = bottom - top;
+                } else if (op.op === 'resize') {
+                    n = canvas(op.width * scale, op.height * scale);
+                    const ctx = n.getContext('2d');
+                    ctx.imageSmoothingQuality = 'high';
+                    ctx.drawImage(c, 0, 0, n.width, n.height);
+                    fw = op.width; fh = op.height;
+                } else {
+                    continue;
+                }
+                c = n;
+            }
+            const stage = this.$refs.stage;
+            stage.width = c.width;
+            stage.height = c.height;
+            stage.getContext('2d').drawImage(c, 0, 0);
+            this.width = fw;
+            this.height = fh;
+        },
+
+        commit(steps) {
+            this.history = this.history.slice(0, this.index + 1);
+            this.history.push(steps);
+            this.index = this.history.length - 1;
+            this.render();
+        },
+        push(op) { this.commit([...this.steps, op]); },
+        reset() { if (this.steps.length) this.commit([]); },
+
+        undo() {
+            if (this.mode) this.cancelMode();
+            if (!this.canUndo) return;
+            this.index--;
+            this.render();
+        },
+        redo() {
+            if (this.mode) this.cancelMode();
+            if (!this.canRedo) return;
+            this.index++;
+            this.render();
+        },
+
+        // --- Crop ---
+        startCrop() {
+            this.mode = 'crop';
+            this.aspect = NaN;
+            this.$nextTick(() => {
+                const ratio = () => this.$refs.stage.width / this.width;
+                cropper = new Cropper(this.$refs.stage, {
+                    viewMode: 1, autoCropArea: 0.9, background: false,
+                    zoomable: false, movable: false, rotatable: false, scalable: false,
+                    aspectRatio: this.aspect,
+                    crop: (e) => {
+                        const r = ratio();
+                        this.cropLabel = Math.round(e.detail.width / r) + ' × ' + Math.round(e.detail.height / r);
+                    },
+                });
+            });
+        },
+        setRatio(value) {
+            this.aspect = value;
+            if (cropper) cropper.setAspectRatio(value);
+        },
+        applyCrop() {
+            if (!cropper) return;
+            const d = cropper.getData();
+            const r = this.$refs.stage.width / this.width;
+            const box = {
+                op: 'crop',
+                x: Math.max(0, Math.round(d.x / r)),
+                y: Math.max(0, Math.round(d.y / r)),
+                width: Math.round(d.width / r),
+                height: Math.round(d.height / r),
+            };
+            box.width = Math.min(box.width, this.width - box.x);
+            box.height = Math.min(box.height, this.height - box.y);
+            this.cancelMode();
+            const whole = box.x === 0 && box.y === 0 && box.width === this.width && box.height === this.height;
+            if (box.width >= 1 && box.height >= 1 && !whole) this.push(box);
+        },
+
+        // --- Resize ---
+        startResize() {
+            this.mode = 'resize';
+            this.resizeW = this.width;
+            this.resizeH = this.height;
+        },
+        syncResize(changed) {
+            if (!this.lockRatio) return;
+            const ratio = this.width / this.height;
+            if (changed === 'w' && this.resizeW > 0) this.resizeH = Math.max(1, Math.round(this.resizeW / ratio));
+            if (changed === 'h' && this.resizeH > 0) this.resizeW = Math.max(1, Math.round(this.resizeH * ratio));
+        },
+        applyResize() {
+            const w = Math.round(this.resizeW), h = Math.round(this.resizeH);
+            if (!(w >= 1 && h >= 1 && w <= MAX_SIZE && h <= MAX_SIZE)) {
+                this.error = 'Width and height must be between 1 and ' + MAX_SIZE + ' pixels.';
+                return;
+            }
+            this.error = '';
+            this.mode = null;
+            if (w !== this.width || h !== this.height) this.push({ op: 'resize', width: w, height: h });
+        },
+
+        cancelMode() {
+            if (cropper) { cropper.destroy(); cropper = null; }
+            this.mode = null;
+        },
+
+        onKey(e) {
+            if (!this.isOpen || this.saving) return;
+            const inField = e.target.tagName === 'INPUT';
+            const mod = e.metaKey || e.ctrlKey;
+            const key = e.key.toLowerCase();
+            if (mod && key === 'z' && !inField) {
+                e.preventDefault();
+                e.shiftKey ? this.redo() : this.undo();
+            } else if (mod && key === 'y' && !inField) {
+                e.preventDefault();
+                this.redo();
+            } else if (key === 'escape') {
+                e.preventDefault();
+                this.mode ? this.cancelMode() : this.close();
+            } else if (key === 'enter' && this.mode) {
+                e.preventDefault();
+                this.mode === 'crop' ? this.applyCrop() : this.applyResize();
+            }
+        },
+
+        async save() {
+            if (this.mode === 'crop') this.applyCrop();
+            else if (this.mode === 'resize') { this.applyResize(); if (this.mode) return; }
+            if (!this.steps.length) return;
+            this.saving = true;
+            this.error = '';
+            try {
+                const resp = await fetch(cfg.saveUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+                    },
+                    body: JSON.stringify({ operations: this.steps }),
+                });
+                const data = await resp.json().catch(() => ({}));
+                if (!resp.ok || !data.success) {
+                    this.error = data.error || ('Could not save the image (' + resp.status + ').');
+                    this.saving = false;
+                    return;
+                }
+                window.location.reload();
+            } catch (e) {
+                this.error = 'Could not save the image: ' + e.message;
+                this.saving = false;
+            }
+        },
+    };
 }
 
 function imageDetail() {
