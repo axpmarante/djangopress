@@ -708,6 +708,8 @@ class SiteImage(models.Model):
 
     key = models.SlugField('Key', unique=True, blank=True, help_text='Optional unique identifier to reference this image in templates')
     image = models.ImageField('Image', upload_to='site_images/', blank=True)
+    original_image = models.CharField('Original image', max_length=255, blank=True, default='',
+        help_text='Storage name of the file before the first edit in the image editor, kept for "Restore original".')
     file = models.FileField('File', upload_to='site_files/', blank=True, null=True,
         help_text='For non-image files (PDFs). Images use the image field above.')
     file_type = models.CharField('File Type', max_length=20, choices=FILE_TYPE_CHOICES,

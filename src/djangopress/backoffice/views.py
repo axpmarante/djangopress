@@ -1,20 +1,22 @@
 import json
+import mimetypes
 
 from django.views.generic import TemplateView, ListView, CreateView
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth import authenticate, login
 from django.contrib.auth.decorators import login_required
 from djangopress.core.decorators import SuperuserRequiredMixin, superuser_required
-from django.http import HttpResponseForbidden, JsonResponse
+from django.http import FileResponse, Http404, HttpResponseForbidden, JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 from django.contrib import messages
-from django.shortcuts import redirect
+from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse_lazy
 
 from django.conf.global_settings import LANGUAGES as ALL_LANGUAGES
 from djangopress.core.models import SiteSettings, SiteImage, Page, GOOGLE_FONTS_CHOICES, GlobalSection, Blueprint, BlueprintPage, DynamicForm, FormSubmission
 from djangopress.core.utils import resize_and_compress_image
+from djangopress.core.services import image_edit
 from django.utils.text import slugify
 from djangopress.news.models import NewsPost
 
@@ -38,6 +40,7 @@ class MediaDetailView(LoginRequiredMixin, TemplateView):
             return context
 
         context['image'] = image
+        context['editable'] = image_edit.is_editable(image)
 
         # Languages
         site_settings = SiteSettings.load()
@@ -142,6 +145,49 @@ class MediaDetailView(LoginRequiredMixin, TemplateView):
             return redirect('backoffice:media_detail', pk=pk)
 
         return redirect('backoffice:media_detail', pk=pk)
+
+
+@login_required
+def media_source(request, pk):
+    """Stream the stored image from this origin, so the editor's canvas can read
+    its pixels (a bucket URL is cross-origin and would taint the canvas)."""
+    image = get_object_or_404(SiteImage, pk=pk)
+    if not image_edit.is_editable(image):
+        raise Http404
+    content_type = mimetypes.guess_type(image.image.name)[0] or 'application/octet-stream'
+    response = FileResponse(image.image.open('rb'), content_type=content_type)
+    response['Cache-Control'] = 'no-store'
+    return response
+
+
+@login_required
+@require_http_methods(['POST'])
+def media_edit(request, pk):
+    """Save the image editor's steps: new file, every reference swapped."""
+    image = get_object_or_404(SiteImage, pk=pk)
+    try:
+        operations = json.loads(request.body or b'{}').get('operations')
+    except (ValueError, AttributeError):
+        return JsonResponse({'success': False, 'error': 'Invalid request.'}, status=400)
+    try:
+        result = image_edit.save_edited(image, operations, user=request.user)
+    except image_edit.ImageEditError as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=400)
+    messages.success(request, f'Image saved — {image_edit.describe_changes(result)}.')
+    return JsonResponse({'success': True, **result})
+
+
+@login_required
+@require_http_methods(['POST'])
+def media_restore_original(request, pk):
+    """Put the file from before the first edit back everywhere."""
+    image = get_object_or_404(SiteImage, pk=pk)
+    try:
+        result = image_edit.restore_original(image, user=request.user)
+        messages.success(request, f'Original image restored — {image_edit.describe_changes(result)}.')
+    except image_edit.ImageEditError as e:
+        messages.error(request, str(e))
+    return redirect('backoffice:media_detail', pk=pk)
 
 
 class HomeView(LoginRequiredMixin, TemplateView):

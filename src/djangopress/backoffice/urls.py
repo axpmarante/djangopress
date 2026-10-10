@@ -30,6 +30,9 @@ urlpatterns = [
     # Media Management
     path('media/', views.MediaView.as_view(), name='media'),
     path('media/<int:pk>/', views.MediaDetailView.as_view(), name='media_detail'),
+    path('media/<int:pk>/source/', views.media_source, name='media_source'),
+    path('media/<int:pk>/edit/', views.media_edit, name='media_edit'),
+    path('media/<int:pk>/restore-original/', views.media_restore_original, name='media_restore_original'),
     path('media/upload/', views.MediaUploadView.as_view(), name='media_upload'),
     path('media/bulk-upload/', views.MediaBulkUploadView.as_view(), name='media_bulk_upload'),
 
