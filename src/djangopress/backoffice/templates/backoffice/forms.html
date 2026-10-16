@@ -49,7 +49,7 @@
                 {% for item in forms %}
                 <tr class="hover:bg-gray-50">
                     <td class="px-6 py-4 text-sm font-medium text-gray-900">
-                        <a href="{% url 'backoffice:form_edit' form_id=item.form.id %}" class="text-blue-600 hover:underline">{{ item.form.name }}</a>
+                        <a href="{% url 'backoffice:form_submissions' form_id=item.form.id %}" class="text-blue-600 hover:underline">{{ item.form.name }}</a>
                     </td>
                     <td class="px-6 py-4 text-sm text-gray-500 font-mono">{{ item.form.slug }}</td>
                     <td class="px-6 py-4 text-sm text-gray-500">
@@ -69,7 +69,8 @@
                         <span class="px-2 py-0.5 bg-gray-100 text-gray-500 rounded-full text-xs font-semibold">Inactive</span>
                         {% endif %}
                     </td>
-                    <td class="px-6 py-4 text-sm text-right">
+                    <td class="px-6 py-4 text-sm text-right space-x-3">
+                        <a href="{% url 'backoffice:form_edit' form_id=item.form.id %}" class="text-blue-600 hover:text-blue-800 text-xs">Edit</a>
                         <form method="post" class="inline" onsubmit="return confirm('Delete this form and all its submissions?')">
                             {% csrf_token %}
                             <input type="hidden" name="action" value="delete">
