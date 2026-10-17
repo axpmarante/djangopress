@@ -340,10 +340,44 @@ class SiteSettingsAdmin(admin.ModelAdmin):
         return False
 
 
+class DynamicFormAdminForm(forms.ModelForm):
+    """The webhook secret is never shown: a password box that comes back empty, where blank keeps the current one
+    (the same rule as the backoffice's form edit page)."""
+
+    webhook_secret = forms.CharField(
+        label='Webhook Secret', required=False,
+        max_length=DynamicForm._meta.get_field('webhook_secret').max_length,
+        widget=forms.PasswordInput(render_value=False, attrs={'class': 'vTextField', 'autocomplete': 'new-password'}),
+    )
+
+    class Meta:
+        model = DynamicForm
+        fields = '__all__'
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Not even in the form's initial data; and a blank box is then "unchanged" in the admin's history.
+        self.initial['webhook_secret'] = ''
+        has_secret = bool(self.instance.pk and self.instance.webhook_secret)
+        self.fields['webhook_secret'].help_text = (
+            'A secret is set (hidden). Leave blank to keep the current one; type a new one to replace it.'
+            if has_secret else
+            'Signs the webhook body (HMAC-SHA256); the receiver verifies it with the same secret. '
+            'Hidden once saved. Leave blank to keep the current one.'
+        )
+
+    def clean_webhook_secret(self):
+        secret = self.cleaned_data.get('webhook_secret', '')
+        if not secret and self.instance.pk:
+            return self.instance.webhook_secret  # still the stored value: the form only writes it after cleaning
+        return secret
+
+
 @admin.register(DynamicForm)
 class DynamicFormAdmin(admin.ModelAdmin):
     """Admin for dynamic form definitions"""
 
+    form = DynamicFormAdminForm
     list_display = ('name', 'slug', 'notification_email', 'is_active', 'created_at')
     list_filter = ('is_active',)
     search_fields = ('name', 'slug')
