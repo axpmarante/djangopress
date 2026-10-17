@@ -4,6 +4,7 @@ import hmac
 import hashlib
 import io
 import json
+import os
 import socket
 import urllib.error
 from datetime import datetime, timedelta, timezone as dt_timezone
@@ -70,6 +71,20 @@ class SignatureTest(WebhookTestCase):
 
 class PayloadTest(WebhookTestCase):
 
+    def setUp(self):
+        super().setUp()
+        # Railway sets RAILWAY_PUBLIC_DOMAIN on a deployed site; start every test without it.
+        environ = patch.dict(os.environ)
+        environ.start()
+        self.addCleanup(environ.stop)
+        os.environ.pop('RAILWAY_PUBLIC_DOMAIN', None)
+
+    def with_page(self):
+        page = Page.objects.create(title_i18n={'pt': 'Contacto'}, slug_i18n={'pt': 'contacto'}, sort_order=5)
+        self.submission.source_page = page
+        self.submission.save()
+        return page
+
     @override_settings(CUSTOM_DOMAINS=['pwd.example.pt', 'www.pwd.example.pt'],
                        ALLOWED_HOSTS=['localhost', '.railway.app', 'pwd.example.pt', 'www.pwd.example.pt'])
     def test_payload_has_spec_keys_and_drops_honeypot(self):
@@ -104,6 +119,30 @@ class PayloadTest(WebhookTestCase):
     @override_settings(CUSTOM_DOMAINS=[], ALLOWED_HOSTS=['localhost', '.railway.app', 'pwd-landing.up.railway.app'])
     def test_site_falls_back_to_the_railway_host(self):
         self.assertEqual(webhooks.build_payload(self.submission)['site'], 'pwd-landing.up.railway.app')
+
+    @override_settings(CUSTOM_DOMAINS=[], ALLOWED_HOSTS=['localhost', '.railway.app'])
+    def test_site_uses_railway_public_domain_when_there_is_no_custom_domain(self):
+        os.environ['RAILWAY_PUBLIC_DOMAIN'] = 'pwd-landing-production.up.railway.app'
+        page = self.with_page()
+        payload = webhooks.build_payload(self.submission)
+        self.assertEqual(payload['site'], 'pwd-landing-production.up.railway.app')
+        self.assertEqual(payload['source_page'],
+                         'https://pwd-landing-production.up.railway.app' + page.get_absolute_url('pt'))
+
+    @override_settings(CUSTOM_DOMAINS=['pwd.example.pt'])
+    def test_custom_domain_wins_over_railway_public_domain(self):
+        os.environ['RAILWAY_PUBLIC_DOMAIN'] = 'pwd-landing-production.up.railway.app'
+        self.assertEqual(webhooks.build_payload(self.submission)['site'], 'pwd.example.pt')
+
+    @override_settings(CUSTOM_DOMAINS=[], ALLOWED_HOSTS=['localhost', '.railway.app', 'other.up.railway.app'])
+    def test_railway_public_domain_wins_over_allowed_hosts(self):
+        os.environ['RAILWAY_PUBLIC_DOMAIN'] = 'pwd-landing-production.up.railway.app'
+        self.assertEqual(webhooks.build_payload(self.submission)['site'], 'pwd-landing-production.up.railway.app')
+
+    @override_settings(CUSTOM_DOMAINS=[], ALLOWED_HOSTS=['localhost', '.railway.app'])
+    def test_blank_railway_public_domain_is_ignored(self):
+        os.environ['RAILWAY_PUBLIC_DOMAIN'] = '  '
+        self.assertEqual(webhooks.build_payload(self.submission)['site'], '')
 
     @override_settings(CUSTOM_DOMAINS=['pwd.example.pt'])
     def test_source_page_is_empty_without_a_page(self):
@@ -143,8 +182,9 @@ class DeliverTest(WebhookTestCase):
 
     def test_deliver_error_schedules_retry_by_delay_table(self):
         self.assertEqual(webhooks.RETRY_DELAYS, (60, 300, 1800, 7200, 43200))
-        self.assertEqual(webhooks.MAX_ATTEMPTS, 5)
-        for attempts, delay in [(1, 60), (2, 300), (3, 1800), (4, 7200)]:
+        # 1 initial attempt + 5 retries: every delay in the table is used, in order.
+        self.assertEqual(webhooks.MAX_ATTEMPTS, 6)
+        for attempts, delay in [(1, 60), (2, 300), (3, 1800), (4, 7200), (5, 43200)]:
             with self.subTest(attempts=attempts):
                 self.submission.webhook_status = Status.PENDING
                 self.submission.webhook_attempts = attempts - 1
@@ -158,14 +198,14 @@ class DeliverTest(WebhookTestCase):
                 self.assertIn('500', sub.webhook_last_error)
                 self.assertIsNone(sub.webhook_delivered_at)
 
-    def test_fifth_failed_attempt_marks_failed(self):
-        self.submission.webhook_attempts = 4
+    def test_sixth_failed_attempt_marks_failed(self):
+        self.submission.webhook_attempts = 5
         self.submission.save()
         with patch_http(side_effect=http_error(503)):
             self.assertFalse(webhooks.deliver(self.submission, now=NOW))
         sub = self.reload()
         self.assertEqual(sub.webhook_status, Status.FAILED)
-        self.assertEqual(sub.webhook_attempts, 5)
+        self.assertEqual(sub.webhook_attempts, 6)
         self.assertIsNone(sub.webhook_next_attempt_at)
         self.assertIn('503', sub.webhook_last_error)
 
@@ -268,6 +308,59 @@ class DeliverDueTest(WebhookTestCase):
         self.assertIn('1 submissões entregues', out.getvalue())
         self.assertEqual(self.reload().webhook_status, Status.DELIVERED)
 
+    def test_command_leaves_failed_rows_alone_without_the_flag(self):
+        failed = self.make(Status.FAILED)
+        failed.webhook_attempts = webhooks.MAX_ATTEMPTS
+        failed.save()
+        out = io.StringIO()
+        with patch_http(return_value=ok()) as opener:
+            call_command('deliver_form_webhooks', stdout=out)
+        self.assertEqual(opener.call_count, 1)
+        self.assertIn('1 submissões entregues', out.getvalue())
+        failed.refresh_from_db()
+        self.assertEqual(failed.webhook_status, Status.FAILED)
+        self.assertEqual(failed.webhook_attempts, webhooks.MAX_ATTEMPTS)
+
+    def test_command_include_failed_resends_failed_rows_too(self):
+        failed = self.make(Status.FAILED)
+        failed.webhook_attempts = webhooks.MAX_ATTEMPTS
+        failed.webhook_last_error = 'HTTP 503 Service Unavailable'
+        failed.save()
+        delivered = self.make(Status.DELIVERED)
+        out = io.StringIO()
+        with patch_http(return_value=ok()) as opener:
+            call_command('deliver_form_webhooks', '--include-failed', stdout=out)
+        # the due pending row (setUp) and the failed one; the delivered one is not sent again
+        self.assertEqual(opener.call_count, 2)
+        self.assertIn('2 submissões entregues', out.getvalue())
+        self.assertEqual(self.reload().webhook_status, Status.DELIVERED)
+        failed.refresh_from_db()
+        self.assertEqual(failed.webhook_status, Status.DELIVERED)
+        self.assertEqual(failed.webhook_attempts, 0)
+        delivered.refresh_from_db()
+        self.assertEqual(delivered.webhook_attempts, 0)
+
+    def test_include_failed_that_fails_again_starts_the_schedule_over(self):
+        failed = self.make(Status.FAILED)
+        failed.webhook_attempts = webhooks.MAX_ATTEMPTS
+        failed.save()
+        self.submission.delete()
+        with patch_http(side_effect=http_error(500)):
+            self.assertEqual(webhooks.deliver_due(now=NOW, include_failed=True), 0)
+        failed.refresh_from_db()
+        self.assertEqual(failed.webhook_status, Status.PENDING)
+        self.assertEqual(failed.webhook_attempts, 1)
+
+    def test_include_failed_does_not_resend_a_row_that_failed_during_the_same_run(self):
+        self.submission.webhook_attempts = webhooks.MAX_ATTEMPTS - 1   # this attempt is its last
+        self.submission.save()
+        with patch_http(side_effect=http_error(500)) as opener:
+            self.assertEqual(webhooks.deliver_due(now=NOW, include_failed=True), 0)
+        self.assertEqual(opener.call_count, 1)
+        sub = self.reload()
+        self.assertEqual(sub.webhook_status, Status.FAILED)
+        self.assertEqual(sub.webhook_attempts, webhooks.MAX_ATTEMPTS)
+
 
 class ProcessSubmissionTest(WebhookTestCase):
 
@@ -353,7 +446,7 @@ class ResendTest(WebhookTestCase):
 
     def test_resend_resets_attempts_and_delivers(self):
         self.submission.webhook_status = Status.FAILED
-        self.submission.webhook_attempts = 5
+        self.submission.webhook_attempts = 6
         self.submission.webhook_last_error = 'HTTP 503'
         self.submission.save()
 
@@ -368,7 +461,7 @@ class ResendTest(WebhookTestCase):
 
     def test_resend_that_fails_again_starts_the_schedule_over(self):
         self.submission.webhook_status = Status.FAILED
-        self.submission.webhook_attempts = 5
+        self.submission.webhook_attempts = 6
         self.submission.save()
 
         with patch_http(side_effect=http_error(500)):

@@ -3,8 +3,9 @@
 The visitor never waits for this: process_submission saves the submission as
 `pending` and a daemon thread delivers it after the commit. A failed delivery is
 retried on the RETRY_DELAYS schedule (by the next submission's thread, or by
-`manage.py deliver_form_webhooks` from a cron) until MAX_ATTEMPTS, then it is
-`failed` and only `resend` sends it again.
+`manage.py deliver_form_webhooks` from a cron): 1 initial attempt plus 5 retries,
+and the 6th failure (MAX_ATTEMPTS) marks it `failed`. After that only `resend`
+(or `deliver_form_webhooks --include-failed`) sends it again.
 
 The receiver verifies X-DjangoPress-Signature = HMAC-SHA256 hex of
 "{X-DjangoPress-Timestamp}.{raw body}" with the shared secret.
@@ -15,6 +16,7 @@ import hashlib
 import hmac
 import json
 import logging
+import os
 import threading
 import urllib.error
 import urllib.request
@@ -31,7 +33,7 @@ from djangopress.core.models import FormSubmission
 logger = logging.getLogger(__name__)
 
 RETRY_DELAYS = (60, 300, 1800, 7200, 43200)   # seconds to wait after the 1st, 2nd... failed attempt
-MAX_ATTEMPTS = 5
+MAX_ATTEMPTS = 6                               # 1 initial attempt + len(RETRY_DELAYS) retries
 TIMEOUT = 5                                    # seconds
 HONEYPOT_FIELD = 'website_url'                 # same as core.views.form_submit
 ERROR_MAX_LENGTH = 500
@@ -51,11 +53,14 @@ _opener = urllib.request.build_opener(_NoRedirect)
 
 
 def _site_host():
-    """The public host: the first custom domain, else the Railway host in ALLOWED_HOSTS
-    (not the '.railway.app' wildcard), else ''."""
+    """The public host: the first custom domain, else Railway's RAILWAY_PUBLIC_DOMAIN,
+    else the Railway host in ALLOWED_HOSTS (not the '.railway.app' wildcard), else ''."""
     domains = [d for d in getattr(settings, 'CUSTOM_DOMAINS', None) or [] if d]
     if domains:
         return domains[0]
+    railway = os.environ.get('RAILWAY_PUBLIC_DOMAIN', '').strip()
+    if railway:
+        return railway
     for host in settings.ALLOWED_HOSTS:
         if host.endswith('.railway.app') and not host.startswith(('.', '*')):
             return host
@@ -154,22 +159,29 @@ def deliver(submission, *, now=None):
     return False
 
 
-def deliver_due(*, now=None):
-    """Deliver the pending submissions whose time has come. Returns how many were delivered."""
+def deliver_due(*, now=None, include_failed=False):
+    """Deliver the pending submissions whose time has come. Returns how many were delivered.
+
+    include_failed also `resend`s the submissions that were already `failed` when the
+    call started (one that fails for the last time during this call is left alone)."""
     now = now or timezone.now()
+    rows = FormSubmission.objects.select_related('form', 'source_page').order_by('created_at', 'pk')
     due = list(
-        FormSubmission.objects
-        .filter(webhook_status=Status.PENDING)
+        rows.filter(webhook_status=Status.PENDING)
         .filter(Q(webhook_next_attempt_at__isnull=True) | Q(webhook_next_attempt_at__lte=now))
-        .select_related('form', 'source_page')
-        .order_by('created_at', 'pk')
     )
+    failed = list(rows.filter(webhook_status=Status.FAILED)) if include_failed else []
     delivered = 0
     for submission in due:
         try:
             delivered += bool(deliver(submission, now=now))
         except Exception:
             logger.exception('Webhook for submission %s could not be recorded', submission.pk)
+    for submission in failed:
+        try:
+            delivered += bool(resend(submission))
+        except Exception:
+            logger.exception('Webhook for submission %s could not be resent', submission.pk)
     return delivered
 
 
