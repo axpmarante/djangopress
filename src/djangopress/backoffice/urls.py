@@ -64,6 +64,7 @@ urlpatterns = [
     path('forms/<int:form_id>/edit/', views.FormEditView.as_view(), name='form_edit'),
     path('forms/<int:form_id>/submissions/', views.FormSubmissionsView.as_view(), name='form_submissions'),
     path('forms/submission/<int:submission_id>/', views.SubmissionDetailView.as_view(), name='submission_detail'),
+    path('forms/submission/<int:submission_id>/webhook/resend/', views.submission_webhook_resend, name='submission_webhook_resend'),
 
     # Blueprint
     path('blueprint/', views.BlueprintView.as_view(), name='blueprint'),

@@ -5,18 +5,20 @@ from django.views.generic import TemplateView, ListView, CreateView
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth import authenticate, login
 from django.contrib.auth.decorators import login_required
-from djangopress.core.decorators import SuperuserRequiredMixin, superuser_required
+from djangopress.core.decorators import SuperuserRequiredMixin, superuser_required, editor_required
 from django.http import FileResponse, Http404, HttpResponseForbidden, JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 from django.contrib import messages
+from django.core.exceptions import ValidationError
+from django.core.validators import URLValidator
 from django.shortcuts import get_object_or_404, redirect
-from django.urls import reverse_lazy
+from django.urls import reverse, reverse_lazy
 
 from django.conf.global_settings import LANGUAGES as ALL_LANGUAGES
 from djangopress.core.models import SiteSettings, SiteImage, Page, GOOGLE_FONTS_CHOICES, GlobalSection, Blueprint, BlueprintPage, DynamicForm, FormSubmission
 from djangopress.core.utils import resize_and_compress_image
-from djangopress.core.services import image_edit
+from djangopress.core.services import image_edit, webhooks
 from django.utils.text import slugify
 from djangopress.news.models import NewsPost
 
@@ -1735,6 +1737,42 @@ class FormsView(LoginRequiredMixin, TemplateView):
         return redirect('backoffice:forms')
 
 
+def _is_staff(user):
+    return user.is_active and user.is_staff
+
+
+def _mask_secret(secret):
+    """Bullets with the last 4 characters visible. A secret shorter than 8 characters is
+    all bullets: showing 4 of them would give too much away."""
+    if not secret:
+        return ''
+    if len(secret) < 8:
+        return '\u2022' * len(secret)
+    return '\u2022' * 8 + secret[-4:]
+
+
+def _apply_webhook_settings(form, post):
+    """Set form.webhook_url / webhook_secret from the POST. Returns an error text, or None.
+    Nothing is changed when there is an error."""
+    url = post.get('webhook_url', '').strip()
+    secret = post.get('webhook_secret', '').strip()
+    if url:
+        max_length = DynamicForm._meta.get_field('webhook_url').max_length
+        try:
+            URLValidator(schemes=['http', 'https'])(url)
+        except ValidationError:
+            return 'Webhook URL must be a full http:// or https:// address.'
+        if len(url) > max_length:
+            return f'Webhook URL can have at most {max_length} characters.'
+    max_length = DynamicForm._meta.get_field('webhook_secret').max_length
+    if len(secret) > max_length:
+        return f'Webhook Secret can have at most {max_length} characters.'
+    form.webhook_url = url
+    if secret:
+        form.webhook_secret = secret
+    return None
+
+
 class FormEditView(LoginRequiredMixin, TemplateView):
     """Edit a dynamic form definition."""
     template_name = 'backoffice/form_edit.html'
@@ -1754,6 +1792,9 @@ class FormEditView(LoginRequiredMixin, TemplateView):
             context['confirmation_subject_json'] = json.dumps(form.confirmation_subject_i18n or {})
             context['confirmation_body_json'] = json.dumps(form.confirmation_body_i18n or {})
             context['fields_schema_json'] = json.dumps(form.fields_schema or [], indent=2)
+            # The webhook is staff only; the page never gets the secret, only its masked tail.
+            context['can_edit_webhook'] = _is_staff(self.request.user)
+            context['webhook_secret_masked'] = _mask_secret(form.webhook_secret) if context['can_edit_webhook'] else ''
         except DynamicForm.DoesNotExist:
             context['form_obj'] = None
             context['languages'] = [('en', 'English')]
@@ -1772,6 +1813,13 @@ class FormEditView(LoginRequiredMixin, TemplateView):
         form.notification_email = request.POST.get('notification_email', '').strip()
         form.is_active = 'is_active' in request.POST
         form.send_confirmation_email = 'send_confirmation_email' in request.POST
+
+        # Webhook (staff only). A blank secret keeps the current one.
+        if _is_staff(request.user):
+            error = _apply_webhook_settings(form, request.POST)
+            if error:
+                messages.error(request, error)
+                return redirect('backoffice:form_edit', form_id=form_id)
 
         # Fields schema JSON
         fields_schema_raw = request.POST.get('fields_schema', '').strip()
@@ -1831,6 +1879,8 @@ class FormSubmissionsView(LoginRequiredMixin, TemplateView):
             context['submissions'] = page_obj
             context['total'] = qs.count()
             context['unread'] = qs.filter(is_read=False).count()
+            context['webhook_max_attempts'] = webhooks.MAX_ATTEMPTS
+            context['can_resend_webhook'] = bool(form.webhook_url) and _is_staff(self.request.user)
         except DynamicForm.DoesNotExist:
             context['form_obj'] = None
             context['submissions'] = []
@@ -1849,6 +1899,25 @@ class FormSubmissionsView(LoginRequiredMixin, TemplateView):
             messages.success(request, f'{len(ids)} submission(s) deleted.')
 
         return redirect('backoffice:form_submissions', form_id=form_id)
+
+
+@editor_required
+@require_http_methods(['POST'])
+def submission_webhook_resend(request, submission_id):
+    """Send one submission to its form's webhook again, now, from the first attempt."""
+    submission = get_object_or_404(FormSubmission.objects.select_related('form', 'source_page'), pk=submission_id)
+    target = reverse('backoffice:form_submissions', args=[submission.form_id])
+    page = request.POST.get('page', '')
+    if page.isdigit() and int(page) > 1:
+        target += f'?page={int(page)}'
+
+    if not submission.form.webhook_url:
+        messages.error(request, f'Form "{submission.form.name}" has no webhook URL; set one on its Edit page first.')
+    elif webhooks.resend(submission):
+        messages.success(request, f'Webhook for submission #{submission.pk} delivered.')
+    else:
+        messages.error(request, f'Webhook for submission #{submission.pk} failed again: {submission.webhook_last_error}')
+    return redirect(target)
 
 
 class SubmissionDetailView(LoginRequiredMixin, TemplateView):

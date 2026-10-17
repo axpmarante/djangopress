@@ -55,6 +55,29 @@
                     </div>
                 </div>
 
+                {% if can_edit_webhook %}
+                <!-- Webhook (staff only) -->
+                <div class="bg-white rounded-lg shadow p-6">
+                    <h2 class="text-lg font-semibold text-gray-900 mb-2">Webhook</h2>
+                    <p class="text-xs text-gray-500 mb-4">Each submission is also sent to this address as signed JSON (header <code>X-DjangoPress-Signature</code>, HMAC-SHA256 of the timestamp and the body). Leave the URL empty for no webhook.</p>
+                    <div class="space-y-4">
+                        <div>
+                            <label for="webhook_url" class="block text-sm font-medium text-gray-700 mb-1">Webhook URL</label>
+                            <input type="url" name="webhook_url" id="webhook_url" value="{{ form_obj.webhook_url }}" maxlength="200" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-mono" placeholder="https://">
+                        </div>
+                        <div>
+                            <label for="webhook_secret" class="block text-sm font-medium text-gray-700 mb-1">Webhook Secret</label>
+                            <input type="password" name="webhook_secret" id="webhook_secret" value="" maxlength="128" autocomplete="new-password" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-mono" placeholder="{% if webhook_secret_masked %}Leave empty to keep the current secret{% else %}Shared secret{% endif %}">
+                            {% if webhook_secret_masked %}
+                            <p class="text-xs text-gray-500 mt-1">Current secret: <code class="bg-gray-100 px-1.5 py-0.5 rounded">{{ webhook_secret_masked }}</code>. Leave the field empty to keep it; type a new one to replace it.</p>
+                            {% else %}
+                            <p class="text-xs text-gray-500 mt-1">No secret set yet. The receiver verifies the signature with the same secret.</p>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+
                 <!-- Fields Schema -->
                 <div class="bg-white rounded-lg shadow p-6">
                     <h2 class="text-lg font-semibold text-gray-900 mb-2">Fields Schema</h2>
