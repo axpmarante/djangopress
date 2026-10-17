@@ -1,4 +1,8 @@
-"""Deliver the form webhooks that are pending and due. Safe to run from a cron every few minutes."""
+"""Deliver the form webhooks that are pending and due, now.
+
+A site does not need a cron for this: the retry sweep (core.services.webhook_sweep) runs
+the same pass every 5 minutes in each process that serves requests. The command is for a
+manual run, and for --include-failed."""
 
 from django.core.management.base import BaseCommand
 

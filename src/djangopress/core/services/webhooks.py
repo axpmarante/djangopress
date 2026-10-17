@@ -2,10 +2,12 @@
 
 The visitor never waits for this: process_submission saves the submission as
 `pending` and a daemon thread delivers it after the commit. A failed delivery is
-retried on the RETRY_DELAYS schedule (by the next submission's thread, or by
-`manage.py deliver_form_webhooks` from a cron): 1 initial attempt plus 5 retries,
-and the 6th failure (MAX_ATTEMPTS) marks it `failed`. After that only `resend`
-(or `deliver_form_webhooks --include-failed`) sends it again.
+retried on the RETRY_DELAYS schedule, with no traffic and no cron: the retry sweep
+(core.services.webhook_sweep) runs deliver_due() every 5 minutes in each process
+that serves requests; the next submission's thread and `manage.py
+deliver_form_webhooks` do it too. 1 initial attempt plus 5 retries, and the 6th
+failure (MAX_ATTEMPTS) marks it `failed`. After that only `resend` (or
+`deliver_form_webhooks --include-failed`) sends it again.
 
 The receiver verifies X-DjangoPress-Signature = HMAC-SHA256 hex of
 "{X-DjangoPress-Timestamp}.{raw body}" with the shared secret.

@@ -8,6 +8,13 @@ class CoreConfig(AppConfig):
 
     def ready(self):
         import djangopress.core.signals  # noqa
+        from django.core.signals import request_started
+
+        from djangopress.core.services import webhook_sweep
+
+        # Form webhooks retry by themselves in the processes that serve requests (see webhook_sweep).
+        request_started.connect(webhook_sweep.on_request_started, dispatch_uid='djangopress.form_webhook_sweep')
+        webhook_sweep.start_at_boot()
 
         # Auto-fix: swap Django's LocaleMiddleware with our custom one that
         # skips redirects for non-i18n paths (backoffice, ai, editor, etc.)
