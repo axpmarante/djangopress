@@ -553,6 +553,14 @@ class DynamicForm(models.Model):
         "Confirmation Body", default=dict, blank=True,
         help_text='Auto-reply body per language'
     )
+    webhook_url = models.URLField(
+        "Webhook URL", blank=True,
+        help_text="Each submission is also POSTed here as signed JSON. Empty = no webhook."
+    )
+    webhook_secret = models.CharField(
+        "Webhook Secret", max_length=128, blank=True,
+        help_text="Signs the webhook body (HMAC-SHA256); the receiver verifies it with the same secret."
+    )
     is_active = models.BooleanField("Active", default=True)
     created_at = models.DateTimeField("Created At", auto_now_add=True)
     updated_at = models.DateTimeField("Updated At", auto_now=True)
@@ -663,6 +671,20 @@ class FormSubmission(models.Model):
     is_read = models.BooleanField("Read", default=False)
     notification_sent = models.BooleanField("Notification Sent", default=False)
     created_at = models.DateTimeField("Created At", auto_now_add=True)
+
+    class WebhookStatus(models.TextChoices):
+        NONE = 'none', 'No webhook'
+        PENDING = 'pending', 'Pending'
+        DELIVERED = 'delivered', 'Delivered'
+        FAILED = 'failed', 'Failed'
+
+    webhook_status = models.CharField(
+        "Webhook Status", max_length=16, choices=WebhookStatus.choices, default=WebhookStatus.NONE,
+    )
+    webhook_attempts = models.PositiveSmallIntegerField("Webhook Attempts", default=0)
+    webhook_last_error = models.TextField("Webhook Last Error", blank=True)
+    webhook_delivered_at = models.DateTimeField("Webhook Delivered At", null=True, blank=True)
+    webhook_next_attempt_at = models.DateTimeField("Webhook Next Attempt At", null=True, blank=True)
 
     class Meta:
         ordering = ['-created_at']

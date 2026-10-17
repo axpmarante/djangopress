@@ -1,7 +1,11 @@
 """FormService — dynamic form management."""
 
 import logging
+
+from django.db import transaction
+
 from djangopress.core.models import DynamicForm, FormSubmission
+from djangopress.core.services import webhooks
 
 logger = logging.getLogger(__name__)
 
@@ -111,8 +115,9 @@ class FormService:
 
 
 def process_submission(form_def, data, lang, ip, user_agent, *, source_page=None, notify_to=None, subject_prefix=''):
-    """Validate → save → notify → confirm. The public form view and the assistant's
-    test_form share it. notify_to sends both emails only to that address.
+    """Validate → save → notify → confirm (and queue the form's webhook, if it has one).
+    The public form view and the assistant's test_form share it. notify_to sends both
+    emails only to that address and skips the webhook.
 
     Returns {'errors', 'submission', 'notification_sent', 'confirmation_sent'};
     with errors nothing is saved or sent.
@@ -122,10 +127,16 @@ def process_submission(form_def, data, lang, ip, user_agent, *, source_page=None
     errors = form_def.validate_submission(data)
     if errors:
         return {'errors': errors, 'submission': None, 'notification_sent': False, 'confirmation_sent': False}
+    # A test send (notify_to) is deleted by its caller and must not reach the webhook.
+    send_webhook = bool(form_def.webhook_url) and not notify_to
     submission = FormSubmission.objects.create(
         form=form_def, data=data, source_page=source_page, language=lang or '',
         ip_address=ip, user_agent=user_agent or '',
+        webhook_status=FormSubmission.WebhookStatus.PENDING if send_webhook else FormSubmission.WebhookStatus.NONE,
     )
+    if send_webhook:
+        # After the commit, in a thread: the visitor never waits for the webhook.
+        transaction.on_commit(lambda: webhooks.deliver_in_background(submission.pk))
     notified = send_form_notification(form_def, submission, to_override=notify_to, subject_prefix=subject_prefix)
     confirmed = False
     if form_def.send_confirmation_email:
