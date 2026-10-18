@@ -70,6 +70,8 @@
                             <input type="password" name="webhook_secret" id="webhook_secret" value="" maxlength="128" autocomplete="new-password" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-mono" placeholder="{% if webhook_secret_masked %}Leave empty to keep the current secret{% else %}Shared secret{% endif %}">
                             {% if webhook_secret_masked %}
                             <p class="text-xs text-gray-500 mt-1">Current secret: <code class="bg-gray-100 px-1.5 py-0.5 rounded">{{ webhook_secret_masked }}</code>. Leave the field empty to keep it; type a new one to replace it.</p>
+                            {% elif webhook_secret_from_env %}
+                            <p class="text-xs text-gray-500 mt-1">Signed with the <code class="bg-gray-100 px-1.5 py-0.5 rounded">FORM_WEBHOOK_SECRET</code> environment variable. Type a secret here only to override it for this form.</p>
                             {% else %}
                             <p class="text-xs text-gray-500 mt-1">No secret set yet. The receiver verifies the signature with the same secret.</p>
                             {% endif %}

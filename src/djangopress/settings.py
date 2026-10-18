@@ -307,6 +307,10 @@ else:
 DEFAULT_FROM_EMAIL = env('DEFAULT_FROM_EMAIL', default='noreply@mg.sendermail.io')
 SERVER_EMAIL = DEFAULT_FROM_EMAIL
 
+# Signs the form webhooks of every form whose own webhook secret is blank. In the
+# environment, the secret stays out of db.sqlite3, which sites commit to git and push to GCS.
+FORM_WEBHOOK_SECRET = env('FORM_WEBHOOK_SECRET', default='')
+
 # Blind copy of every form notification, for whoever maintains the site. Comma-separated;
 # empty (the default) sends no copy, so sites that do not set it are unaffected.
 FORM_NOTIFICATION_BCC = env('FORM_NOTIFICATION_BCC', default='')

@@ -5,7 +5,7 @@ from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.contrib.messages import get_messages
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
 
 from djangopress.core.models import DynamicForm, FormSubmission, SiteSettings
@@ -104,6 +104,20 @@ class FormEditWebhookTest(WebhookUITestCase):
         self.assertEqual(response.context['webhook_secret_masked'], '')
         self.assertContains(response, 'Webhook URL')
         self.assertContains(response, 'Webhook Secret')
+
+    @override_settings(FORM_WEBHOOK_SECRET='from-env-secret')
+    def test_page_says_the_environment_secret_is_used_when_the_form_has_none(self):
+        response = self.client.get(self.edit_url())
+        self.assertTrue(response.context['webhook_secret_from_env'])
+        self.assertContains(response, 'FORM_WEBHOOK_SECRET')
+        self.assertNotContains(response, 'from-env-secret')
+
+    @override_settings(FORM_WEBHOOK_SECRET='from-env-secret')
+    def test_page_does_not_claim_the_environment_secret_when_the_form_has_its_own(self):
+        self.form.webhook_secret = 'own-secret-123456'
+        self.form.save()
+        response = self.client.get(self.edit_url())
+        self.assertFalse(response.context['webhook_secret_from_env'])
 
     def test_invalid_url_is_refused_and_nothing_changes(self):
         self.form.webhook_url = URL

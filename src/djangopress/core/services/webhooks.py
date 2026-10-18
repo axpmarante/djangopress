@@ -10,7 +10,8 @@ failure (MAX_ATTEMPTS) marks it `failed`. After that only `resend` (or
 `deliver_form_webhooks --include-failed`) sends it again.
 
 The receiver verifies X-DjangoPress-Signature = HMAC-SHA256 hex of
-"{X-DjangoPress-Timestamp}.{raw body}" with the shared secret.
+"{X-DjangoPress-Timestamp}.{raw body}" with the shared secret: the form's own
+webhook_secret, else the FORM_WEBHOOK_SECRET setting (secret_for).
 """
 
 import contextlib
@@ -96,6 +97,11 @@ def build_payload(submission):
     }
 
 
+def secret_for(form):
+    """The form's own webhook secret, else the site-wide FORM_WEBHOOK_SECRET from the environment."""
+    return form.webhook_secret or getattr(settings, 'FORM_WEBHOOK_SECRET', '')
+
+
 def sign(secret, timestamp, body):
     """HMAC-SHA256 hex of b"{timestamp}." + body."""
     return hmac.new(secret.encode(), timestamp.encode() + b'.' + body, hashlib.sha256).hexdigest()
@@ -124,7 +130,7 @@ def _post(submission, now):
             'Content-Type': 'application/json; charset=utf-8',
             'User-Agent': 'DjangoPress-Webhook',
             'X-DjangoPress-Timestamp': timestamp,
-            'X-DjangoPress-Signature': sign(submission.form.webhook_secret, timestamp, body),
+            'X-DjangoPress-Signature': sign(secret_for(submission.form), timestamp, body),
         })
         with _opener.open(request, timeout=TIMEOUT) as response:
             status = response.status

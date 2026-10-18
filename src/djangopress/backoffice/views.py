@@ -1795,6 +1795,9 @@ class FormEditView(LoginRequiredMixin, TemplateView):
             # The webhook is staff only; the page never gets the secret, only its masked tail.
             context['can_edit_webhook'] = _is_staff(self.request.user)
             context['webhook_secret_masked'] = _mask_secret(form.webhook_secret) if context['can_edit_webhook'] else ''
+            context['webhook_secret_from_env'] = bool(
+                context['can_edit_webhook'] and not form.webhook_secret and webhooks.secret_for(form)
+            )
         except DynamicForm.DoesNotExist:
             context['form_obj'] = None
             context['languages'] = [('en', 'English')]

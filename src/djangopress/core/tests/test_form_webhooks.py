@@ -180,6 +180,28 @@ class DeliverTest(WebhookTestCase):
         self.assertEqual(sub.webhook_last_error, '')
         self.assertEqual(sub.webhook_attempts, 0)
 
+    def sent_signature(self, opener):
+        (request,), _ = opener.call_args
+        headers = {k.lower(): v for k, v in request.header_items()}
+        return headers['x-djangopress-signature'], headers['x-djangopress-timestamp'], request.data
+
+    @override_settings(FORM_WEBHOOK_SECRET='from-env')
+    def test_blank_form_secret_signs_with_the_environment_secret(self):
+        # The secret can live in the environment, so it never sits in db.sqlite3 (committed, pushed to GCS).
+        self.form.webhook_secret = ''
+        self.form.save()
+        with patch_http(return_value=ok()) as opener:
+            self.assertTrue(webhooks.deliver(self.submission, now=NOW))
+        signature, timestamp, body = self.sent_signature(opener)
+        self.assertEqual(signature, webhooks.sign('from-env', timestamp, body))
+
+    @override_settings(FORM_WEBHOOK_SECRET='from-env')
+    def test_the_form_secret_wins_over_the_environment_secret(self):
+        with patch_http(return_value=ok()) as opener:
+            self.assertTrue(webhooks.deliver(self.submission, now=NOW))
+        signature, timestamp, body = self.sent_signature(opener)
+        self.assertEqual(signature, webhooks.sign('s3cr3t', timestamp, body))
+
     def test_deliver_error_schedules_retry_by_delay_table(self):
         self.assertEqual(webhooks.RETRY_DELAYS, (60, 300, 1800, 7200, 43200))
         # 1 initial attempt + 5 retries: every delay in the table is used, in order.
